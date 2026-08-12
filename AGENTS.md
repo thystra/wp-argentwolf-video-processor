@@ -1,26 +1,73 @@
 # ArgentWolf Video Processor agent instructions
 
 This file contains public, project-specific guidance for contributors and coding
-agents. Private hostnames, user names, deployment paths, and production state do
-not belong in this repository.
+agents. Private hostnames, user names, deployment paths, credentials, and
+production state do not belong in this repository.
 
-## Canonical identity
+## Project identity
 
-- Product name: `ArgentWolf Video Processor`
-- GitHub repository: `https://github.com/thystra/wp-argentwolf-video-processor`
-- WordPress.org target slug: `argentwolf-video-processor`
-- Main plugin file: `argentwolf-video-processor.php`
-- Text domain: `argentwolf-video-processor`
-- PHP namespace retained for compatibility: `ArgentVideo`
-- WP-CLI command retained for compatibility: `wp argent-video`
-- Current submission-preparation version: `0.3.0`
+- Product name: `ArgentWolf Video Processor`.
+- Canonical development repository:
+  `https://forgejo.argentwolf.org/alan/wp-argentwolf-video-processor`.
+- Public GitHub mirror, public issue tracker, and funding surface:
+  `https://github.com/thystra/wp-argentwolf-video-processor`.
+- Primary branch: `main`.
+- WordPress.org target slug: `argentwolf-video-processor`.
+- Main plugin file: `argentwolf-video-processor.php`.
+- Text domain: `argentwolf-video-processor`.
+- PHP namespace retained for compatibility: `ArgentVideo`.
+- WP-CLI command retained for compatibility: `wp argent-video`.
 
 Do not shorten the public product name to “Argent Video Processor.”
 
+Forgejo is authoritative for development history, branches, CI decisions, and
+release preparation. GitHub is a downstream public mirror and the preferred
+public issue/funding surface. A public GitHub issue may be promoted manually
+into a Forgejo development issue when implementation work begins.
+
+## Safety and workflow
+
+- Verify host, repository, branch, remotes, HEAD, and worktree before mutation.
+- Use prospective staging and validation before applying broad changes.
+- Keep backups, validation reports, applicators, migration utilities, and other
+  maintainer-only artifacts outside the tracked checkout. If `.project-local/`
+  is used inside a checkout, it must be excluded locally and never committed.
+- Preserve unexpected local work and stop rather than guessing.
+- Distinguish applied, tested, committed, pushed, mirrored, packaged,
+  submitted, approved, released, installed, and deployed. One state does not
+  imply another.
+- Treat documentation review as part of every implemented change, milestone,
+  and tranche. Before declaring work complete, compare affected Markdown,
+  examples, configuration references, CLI descriptions, release notes, source
+  comments, and WordPress.org `readme.txt` with the resulting code; update
+  stale text and verify local documentation links.
+- Do not publish, deploy, activate migrations, or upload a WordPress.org release
+  merely because code exists or CI is green.
+- Repository-only tooling and evidence must never leak into the installable
+  WordPress plugin ZIP.
+
+## AI-assisted maintenance
+
+AI-assisted tools may help draft, inspect, test, and review changes. The human
+maintainer must inspect the result, approve the design, execute or review
+validation, control releases and deployments, and remain accountable for the
+software.
+
+## WordPress development policy
+
+`wordpress-development.md` is a required companion to this file. Review it
+before changing WordPress-facing behavior, filesystem usage, settings, security
+boundaries, third-party dependencies, packaging, `readme.txt`, or release
+workflow.
+
+When project-specific instructions and general WordPress guidance differ, use
+the stricter safe rule unless a deliberate, documented project decision says
+otherwise.
+
 ## Compatibility invariants
 
-The public rename must not reset or migrate established installation data without
-a separately reviewed migration. Retain the existing:
+The public rename must not reset or migrate established installation data
+without a separately reviewed migration. Retain the existing:
 
 - `argent_video_processor_*` options;
 - `_argent_video_*` attachment metadata;
@@ -32,6 +79,11 @@ a separately reviewed migration. Retain the existing:
 The directory and main-file rename requires an explicit upgrade test from the
 legacy `wp-argent-video-processor/wp-argent-video-processor.php` basename.
 
+Temporary operator migration utilities used to validate a development change
+must remain outside the submitted plugin package. Do not retain a legacy
+migration path in the public runtime unless that compatibility behavior has
+been intentionally designed, reviewed, and tested as a supported feature.
+
 ## Architecture invariants
 
 - Preserve every original WordPress attachment.
@@ -41,12 +93,29 @@ legacy `wp-argent-video-processor/wp-argent-video-processor.php` basename.
 - Run at most one worker per WordPress site.
 - Claim jobs atomically and recover stale jobs safely.
 - Build output in temporary locations and validate it before atomic installation.
+- Keep temporary and final plugin-created media inside the same managed uploads
+  boundary so promotion can remain same-filesystem and atomic.
+- Resolve the uploads base dynamically with `wp_upload_dir()`; never assume
+  `wp-content/uploads`.
+- All plugin-created media belongs under:
+  `wp_upload_dir()['basedir']/argentwolf-video-processor/<attachment-id>/`.
+- Validate that every destination is inside the managed plugin uploads root
+  before `wp_mkdir_p()`, FFmpeg output, `file_put_contents()`, `rename()`,
+  `wp_delete_file()`, recursive deletion, or another filesystem mutation.
+- Path validation must reject traversal, sibling-prefix tricks, and unsafe
+  symlink resolution. Do not rely on a later URL conversion as the first
+  confinement check.
+- Do not write generated media into the plugin directory, WordPress core,
+  another plugin or theme, or an arbitrary path outside the managed uploads
+  root.
 - Strip generated-file metadata when enabled, but do not claim the original was
   sanitized.
 - Keep progressive fallbacks when adaptive HLS is enabled.
 - Use administrator-configured system FFmpeg, FFprobe, and WP-CLI binaries. Do
   not bundle FFmpeg.
-- Treat shell arguments as untrusted and quote or validate them before execution.
+- Treat shell command paths and arguments as untrusted. Validate configuration,
+  use fixed argument construction, and quote arguments safely before execution.
+- Public requests must never directly execute FFmpeg.
 
 ## Source layout
 
@@ -54,30 +123,43 @@ legacy `wp-argent-video-processor/wp-argent-video-processor.php` basename.
   bootstrap only.
 - `includes/`: runtime services.
 - `assets/js/`: locally maintained browser player integration.
-- `assets/vendor/`: generated, pinned hls.js release assets.
+- `assets/vendor/`: runtime third-party browser assets that are actually shipped.
 - `build/`: deterministic release tooling.
-- `tests/`: dependency-free, open_basedir, smoke, vendor, and FFmpeg tests.
-- `.github/workflows/`: CI and tagged-release workflows.
+- `tests/`: dependency-free, open_basedir, smoke, vendor, storage-boundary, and
+  FFmpeg tests.
+- `.github/workflows/`: workflow definitions shared with the public mirror and
+  usable by Forgejo where compatible.
+- `wordpress-org-assets/`: source-controlled WordPress.org directory artwork;
+  never part of the installable plugin ZIP.
 - `ARCHITECTURE.md`: design and invariants.
+- `wordpress-development.md`: WordPress.org/security/packaging guidance for
+  contributors and agents.
 - `TODO.md`: milestones and release gates.
 
 Prefer focused classes over adding substantial logic to the main plugin file.
+Filesystem ownership and path confinement should be centralized rather than
+reimplemented ad hoc by individual callers.
 
 ## Editing and patching
 
 - Require a clean worktree before broad transformations.
-- Back up outside the checkout, preferably under
-  `~/src/backups/wp-argentwolf-video-processor-backups/`.
+- Back up outside the checkout, preferably under the project workspace rather
+  than inside the Git repository.
 - Build and validate a prospective tree before modifying the checkout.
-- Prefer complete-file installation or reviewed unified patches over global
-  substring-count anchors.
+- Prefer complete-file installation or reviewed unified patches over fragile
+  global substring replacements.
+- Review the staged diff independently of the applicator that produced it.
 - Do not add private operator information to public documentation.
-- Do not commit generated hls.js files or release ZIPs.
-- Preserve unexpected local work and stop rather than guessing.
+- Do not commit release ZIPs or transient validation output.
+- Build-time verification metadata may exist in build/test workspaces, but only
+  runtime-required files belong in the release ZIP.
+- A one-time production migration utility for the legacy derivative layout may
+  be retained in maintainer-local project support storage, but must not be
+  shipped in the WordPress.org package.
 
 ## Validation
 
-Before commit:
+Before commit, run the applicable complete suite. At minimum:
 
 ```bash
 find . -type f -name '*.php' -not -path './dist/*' -print0 |
@@ -93,31 +175,102 @@ node --check assets/js/argent-video-player.js
 git diff --check
 ```
 
-Build the installable ZIP with:
+Storage or deletion changes also require focused tests proving that:
 
-```bash
-bash build/build-plugin.sh 0.3.0
-```
+- custom WordPress upload locations work;
+- generated, temporary, and final paths stay under the managed plugin root;
+- traversal and sibling-prefix paths fail closed;
+- unsafe symlink targets fail closed;
+- no write, rename, or delete operation can escape the managed root;
+- attachment cleanup refuses unmanaged legacy/arbitrary paths;
+- HLS playlist writes use the same confinement policy.
 
-The release ZIP must contain one top-level `argentwolf-video-processor/`
-directory and only runtime files, `LICENSE`, and `readme.txt`. It must contain
-the pinned hls.js runtime, license, version, and checksum records.
+Run tests against the staged prospective tree when practical, not only the
+developer's mutable working copy.
+
+## Distribution package invariants
+
+Build the installable ZIP with the reviewed release builder and an explicit
+version matching the main plugin header and `readme.txt` Stable Tag.
+
+The release ZIP must:
+
+- contain exactly one top-level `argentwolf-video-processor/` directory;
+- contain only runtime plugin files plus required license/readme material;
+- exclude tests, CI, build tooling, AGENTS files, maintainer documentation,
+  migration utilities, backups, reports, repository metadata, and
+  `wordpress-org-assets/`;
+- include the pinned `hls.min.js` runtime and its distributable license;
+- exclude `hls.VERSION` and `hls.SHA256` from the runtime package unless a future
+  runtime feature genuinely requires them. They may remain build-time integrity
+  evidence.
+
+Inspect the final ZIP manifest and checksum. The artifact that passes Plugin
+Check and final install testing is the artifact that is submitted; do not
+silently rebuild equivalent-looking bytes afterward.
 
 ## WordPress.org release gate
 
-Before submission:
+Before an initial submission or corrected review upload:
 
+- re-read `wordpress-development.md` and the current official WordPress.org
+  plugin guidelines;
 - run the official Plugin Check plugin against the exact release ZIP;
-- resolve or document every finding;
-- test a clean installation;
-- test an upgrade from version `0.2.3`, including the basename transition;
+- treat Plugin Check as one gate, not proof of complete compliance;
+- resolve or deliberately document every finding;
+- manually review common WordPress.org issues that automated checks can miss;
+- test a clean installation with `WP_DEBUG` enabled;
+- test supported upgrades, including the basename transition where applicable;
 - verify settings, queue rows, attachment metadata, generated outputs, cron
   scheduling, CLI commands, rendering, and uninstall behavior;
-- confirm no custom update checker or telemetry is present;
-- confirm all external requirements and privacy behavior are disclosed;
-- verify the settings page and plugin action links point to the GitHub project;
+- verify capabilities, nonces, validation/sanitization, contextual escaping,
+  filesystem confinement, and destructive operations;
+- confirm no custom update checker or telemetry is present unless intentionally
+  designed and compliant;
+- confirm all external requirements, services, bundled dependencies, licenses,
+  and privacy behavior are disclosed;
+- verify plugin headers, `readme.txt`, Stable Tag, changelog, and package version
+  agree;
 - inspect the final package manifest and checksum;
-- tag only after the reviewed commit is pushed.
+- preserve the exact reviewed artifact until the review cycle is complete.
 
-GitHub publication, WordPress.org submission, WordPress.org approval, staging
-installation, and production deployment are separate states.
+When the Plugins Team requests corrections, review the whole codebase for the
+same class of issue, not only the cited line. Upload the complete corrected ZIP
+through the submission page and reply briefly in the existing review email
+thread.
+
+## Release discipline
+
+- Forgejo is authoritative. GitHub is the downstream public mirror, public issue
+  tracker, and funding surface.
+- Public GitHub issue intake does not make GitHub the development authority.
+- Push/PR package jobs are validation unless a release workflow explicitly
+  produces canonical release artifacts.
+- Canonical release bytes should be built once from an exact reviewed Forgejo
+  commit and promoted unchanged to downstream release surfaces.
+- Every code release increments the plugin version. Keep the main plugin header,
+  `readme.txt` Stable Tag, changelog, Git tag, release artifact name, and
+  WordPress.org SVN tag aligned.
+- Tag only after the reviewed commit is pushed and required validation passes.
+- Do not rebuild the WordPress.org ZIP separately for GitHub, Forgejo, or SVN.
+- WordPress.org approval, SVN publication, Git/Forgejo release publication,
+  staging installation, and production deployment are separate gates.
+- After WordPress.org approval, keep directory artwork in top-level SVN
+  `assets/`, not `trunk/assets`, plugin runtime `assets/`, or a version tag.
+- Do not edit a released SVN tag. Create a new version for code changes.
+
+## Validation control maturity
+
+- Match validation depth to the maturity and risk of the function being
+  validated. New, destructive, security-sensitive, authority, data-integrity,
+  filesystem-boundary, and release-immutability controls should begin
+  fail-closed with strong independent checks.
+- Once a control has been independently proven and is reliable, retire
+  redundant implementation-level checks and rely on the appropriate higher-level
+  contract unless there is a documented reason for continued strict validation.
+- Do not retain stale or duplicative controls merely because they were useful
+  during initial validation. False failures, brittleness, and avoidable rework
+  are operational risks.
+- If unusually strict or redundant checks are retained after a function is
+  proven, document the reason and the condition or review point for relaxing
+  them.
