@@ -52,7 +52,9 @@ priority. When automatic detached launch is unavailable, an operator may invoke
 
 `Probe` and `Diagnostics` inspect the configured system binaries and available
 codecs. `Command_Builder`, `Process_Runner`, `Transcoder`, and `Adaptive_HLS`
-construct and execute FFmpeg/FFprobe operations.
+construct and execute FFmpeg/FFprobe operations. `Storage` owns plugin-created
+filesystem paths, URL conversion, confinement checks, atomic promotion, and
+destructive cleanup.
 
 FFmpeg is not bundled. The administrator is responsible for installing and
 maintaining the system binaries. Paths are configurable because shared-host and
@@ -93,8 +95,8 @@ The plugin stores:
 - settings and worker state in WordPress options;
 - job state in the `argent_video_jobs` table;
 - processing status, errors, and output metadata in attachment post metadata;
-- generated derivative files beside the original upload according to the output
-  naming service.
+- generated derivative files under
+  `wp_upload_dir()['basedir']/argentwolf-video-processor/<attachment-id>/`.
 
 Uninstall preserves data and derivative files by default. Destructive uninstall
 requires an explicit operator-defined constant.
@@ -106,6 +108,9 @@ requires an explicit operator-defined constant.
   types.
 - Shell commands must be constructed from validated settings and safely quoted
   arguments.
+- Every plugin-created write, rename, directory creation, and deletion is
+  validated against the plugin-owned uploads root before the filesystem
+  operation.
 - Public requests do not directly execute FFmpeg.
 - No telemetry or remote processing service is used.
 - hls.js is fetched only during controlled builds from the pinned official npm

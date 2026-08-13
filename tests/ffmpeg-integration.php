@@ -5,12 +5,45 @@
 
 declare(strict_types=1);
 
+$GLOBALS['argent_video_integration_uploads'] = array(
+    'basedir' => '',
+    'baseurl' => 'https://example.test/media',
+    'error'   => false,
+);
+
+function wp_upload_dir(): array
+{
+    return $GLOBALS['argent_video_integration_uploads'];
+}
+
+function wp_normalize_path(string $path): string
+{
+    return str_replace('\\\\', '/', $path);
+}
+
+function trailingslashit(string $value): string
+{
+    return rtrim($value, "/\\\\") . '/';
+}
+
+function wp_mkdir_p(string $target): bool
+{
+    return is_dir($target) || mkdir($target, 0755, true);
+}
+
+function wp_delete_file(string $file): void
+{
+    @unlink($file);
+}
+
+require_once dirname(__DIR__) . '/includes/Storage.php';
 require_once dirname(__DIR__) . '/includes/Command_Builder.php';
 require_once dirname(__DIR__) . '/includes/Probe.php';
 require_once dirname(__DIR__) . '/includes/Adaptive_HLS.php';
 
 use ArgentVideo\Adaptive_HLS;
 use ArgentVideo\Command_Builder;
+use ArgentVideo\Storage;
 
 $ffmpeg = '/usr/bin/ffmpeg';
 $ffprobe = '/usr/bin/ffprobe';
@@ -19,8 +52,11 @@ if (! is_executable($ffmpeg) || ! is_executable($ffprobe)) {
     exit(0);
 }
 
-$directory = sys_get_temp_dir() . '/argent-video-test-' . bin2hex(random_bytes(6));
-mkdir($directory, 0700, true);
+$test_root = sys_get_temp_dir() . '/argent-video-test-' . bin2hex(random_bytes(6));
+mkdir($test_root, 0700, true);
+$GLOBALS['argent_video_integration_uploads']['basedir'] = $test_root . '/uploads';
+mkdir((string) $GLOBALS['argent_video_integration_uploads']['basedir'], 0700, true);
+$directory = Storage::ensure_attachment_directory(9001);
 $remove_tree = static function (string $path) use (&$remove_tree): void {
     if (is_dir($path)) {
         foreach (scandir($path) ?: array() as $item) {
@@ -33,7 +69,7 @@ $remove_tree = static function (string $path) use (&$remove_tree): void {
         @unlink($path);
     }
 };
-register_shutdown_function(static function () use ($directory, $remove_tree): void { $remove_tree($directory); });
+register_shutdown_function(static function () use ($test_root, $remove_tree): void { $remove_tree($test_root); });
 
 $run = static function (array $command): array {
     $descriptors = array(0 => array('file', '/dev/null', 'r'), 1 => array('pipe', 'w'), 2 => array('pipe', 'w'));
@@ -47,8 +83,8 @@ $run = static function (array $command): array {
     return array('exit_code' => proc_close($process), 'stdout' => $stdout ?: '', 'stderr' => $stderr ?: '');
 };
 
-$base = $directory . '/base.mp4';
-$source = $directory . '/source.mp4';
+$base = $test_root . '/base.mp4';
+$source = $test_root . '/source.mp4';
 $mp4 = $directory . '/output.mp4';
 $webm = $directory . '/output.webm';
 $hls_directory = $directory . '/hls';

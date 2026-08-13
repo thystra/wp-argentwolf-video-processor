@@ -79,46 +79,17 @@ final class Queue
 
     public function delete_attachment(int $attachment_id): void
     {
-        $outputs = get_post_meta($attachment_id, '_argent_video_outputs', true);
-        if (is_array($outputs)) {
-            $this->delete_outputs($outputs);
+        $directory = Storage::attachment_directory($attachment_id);
+        if (is_dir($directory)) {
+            Storage::remove_tree($directory);
         }
 
         $this->jobs->delete_by_attachment($attachment_id);
     }
 
-    /** @param array<string, mixed> $outputs */
-    private function delete_outputs(array $outputs): void
-    {
-        foreach ($outputs as $output) {
-            if (! is_array($output)) {
-                continue;
-            }
-            if (! empty($output['directory']) && is_dir((string) $output['directory'])) {
-                $this->remove_tree((string) $output['directory']);
-            } elseif (! empty($output['path']) && is_file((string) $output['path'])) {
-                wp_delete_file((string) $output['path']);
-            }
-        }
-    }
 
-    private function remove_tree(string $directory): void
-    {
-        $iterator = new \RecursiveIteratorIterator(
-            new \RecursiveDirectoryIterator($directory, \FilesystemIterator::SKIP_DOTS),
-            \RecursiveIteratorIterator::CHILD_FIRST
-        );
-        foreach ($iterator as $item) {
-            if ($item->isDir()) {
-                // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_rmdir -- Attachment deletion removes only plugin-created derivative directories.
-                @rmdir($item->getPathname());
-            } else {
-                wp_delete_file($item->getPathname());
-            }
-        }
-        // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_rmdir -- Attachment deletion removes only a plugin-created derivative directory.
-        @rmdir($directory);
-    }
+
+
 }
 
 // EOF: includes/Queue.php

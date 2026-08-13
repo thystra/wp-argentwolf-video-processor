@@ -36,7 +36,8 @@ final class Transcoder
             throw new RuntimeException('Source video changed after it was queued; queue it again before processing.');
         }
 
-        $free_space = disk_free_space(dirname($source));
+        $output_directory = Storage::ensure_attachment_directory($attachment_id);
+        $free_space = disk_free_space($output_directory);
         $minimum_space = max(1073741824, (int) filesize($source) * 2);
         if (false !== $free_space && $free_space < $minimum_space) {
             throw new RuntimeException('Insufficient free disk space for temporary video derivatives and adaptive segments.');
@@ -53,15 +54,16 @@ final class Transcoder
         $adaptive_only = 'adaptive-only' === $job_profile;
         $previous = get_post_meta($attachment_id, '_argent_video_outputs', true);
         $previous = is_array($previous) ? $previous : array();
-        $validated = $adaptive_only ? $previous : array();
-        $plans = $this->progressive_plans($source, $progressive_profile);
+        $validated = $adaptive_only ? $this->managed_previous_progressive_outputs($previous) : array();
+        $plans = $this->progressive_plans($output_directory, $progressive_profile);
         $temporary_paths = array();
         $temporary_directories = array();
         $hls_plan = null;
 
         try {
             foreach ($plans as $key => $plan) {
-                $temporary_paths[] = $plan['temporary'];
+                $temporary_paths[] = Storage::assert_managed_path($plan['temporary']);
+                Storage::assert_managed_path($plan['final']);
                 $command = 'mp4' === $key
                     ? Command_Builder::mp4($source, $plan['temporary'], $settings)
                     : Command_Builder::webm($source, $plan['temporary'], $settings);
@@ -80,26 +82,23 @@ final class Transcoder
             }
 
             if (Settings::job_has_hls($job_profile)) {
-                $hls_plan = $this->encode_hls($source, $source_probe, $settings);
+                $hls_plan = $this->encode_hls($source, $output_directory, $source_probe, $settings);
                 $temporary_directories[] = $hls_plan['temporary_directory'];
                 $validated['hls'] = $hls_plan['manifest'];
             }
 
             foreach ($plans as $key => $plan) {
                 if (is_file($plan['final'])) {
-                    wp_delete_file($plan['final']);
+                    Storage::delete_file($plan['final']);
                     clearstatcache(true, $plan['final']);
                     if (is_file($plan['final'])) {
                         // phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped -- Internal worker exception; escaped at every administrative display boundary.
                         throw new RuntimeException('Could not replace existing derivative: ' . $plan['final']);
                     }
                 }
-                // phpcs:ignore WordPress.WP.AlternativeFunctions.rename_rename -- Atomic same-filesystem promotion prevents partially installed validated media.
-                if (! @rename($plan['temporary'], $plan['final'])) {
-                    throw new RuntimeException('Could not move validated derivative into place: ' . $plan['final']);
-                }
+                Storage::rename_path($plan['temporary'], $plan['final']);
                 $validated[$key]['path'] = $plan['final'];
-                $validated[$key]['url'] = $this->path_to_url($plan['final']);
+                $validated[$key]['url'] = Storage::url_for_path($plan['final']);
                 $validated[$key]['size'] = (int) filesize($plan['final']);
             }
 
@@ -107,23 +106,23 @@ final class Transcoder
                 $this->promote_directory($hls_plan['temporary_directory'], $hls_plan['final_directory']);
                 $validated['hls']['path'] = $hls_plan['final_directory'] . '/master.m3u8';
                 $validated['hls']['directory'] = $hls_plan['final_directory'];
-                $validated['hls']['url'] = $this->path_to_url($validated['hls']['path']);
+                $validated['hls']['url'] = Storage::url_for_path((string) $validated['hls']['path']);
                 $validated['hls']['size'] = Adaptive_HLS::directory_size($hls_plan['final_directory']);
                 foreach ($validated['hls']['renditions'] as &$rendition) {
                     $label = (string) $rendition['label'];
                     $rendition['path'] = $hls_plan['final_directory'] . '/' . $label . '/index.m3u8';
-                    $rendition['url'] = $this->path_to_url((string) $rendition['path']);
+                    $rendition['url'] = Storage::url_for_path((string) $rendition['path']);
                 }
                 unset($rendition);
             }
         } catch (Throwable $error) {
             foreach ($temporary_paths as $temporary_path) {
                 if (is_file($temporary_path)) {
-                    wp_delete_file($temporary_path);
+                    Storage::delete_file($temporary_path);
                 }
             }
             foreach ($temporary_directories as $temporary_directory) {
-                $this->remove_tree($temporary_directory);
+                Storage::remove_tree($temporary_directory);
             }
             throw $error;
         }
@@ -138,15 +137,15 @@ final class Transcoder
     }
 
     /** @return array<string, array{final:string,temporary:string}> */
-    private function progressive_plans(string $source, string $profile): array
+    private function progressive_plans(string $output_directory, string $profile): array
     {
         $plans = array();
         if (in_array($profile, array('compatibility', 'dual'), true)) {
-            $final = Output_Namer::derivative($source, '720p', 'mp4');
+            $final = Output_Namer::derivative($output_directory, '720p', 'mp4');
             $plans['mp4'] = array('final' => $final, 'temporary' => Output_Namer::temporary($final));
         }
         if (in_array($profile, array('open', 'dual'), true)) {
-            $final = Output_Namer::derivative($source, '720p-vp9', 'webm');
+            $final = Output_Namer::derivative($output_directory, '720p-vp9', 'webm');
             $plans['webm'] = array('final' => $final, 'temporary' => Output_Namer::temporary($final));
         }
         return $plans;
@@ -157,14 +156,11 @@ final class Transcoder
      * @param array<string, mixed> $settings
      * @return array{temporary_directory:string,final_directory:string,manifest:array<string,mixed>}
      */
-    private function encode_hls(string $source, array $source_probe, array $settings): array
+    private function encode_hls(string $source, string $output_directory, array $source_probe, array $settings): array
     {
-        $final_directory = Output_Namer::adaptive_directory($source);
-        $temporary_directory = Output_Namer::temporary_directory($final_directory);
-        if (! wp_mkdir_p($temporary_directory)) {
-            // phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped -- Internal worker exception; escaped at every administrative display boundary.
-            throw new RuntimeException('Could not create temporary HLS directory: ' . $temporary_directory);
-        }
+        $final_directory = Storage::assert_managed_path(Output_Namer::adaptive_directory($output_directory));
+        $temporary_directory = Storage::assert_managed_path(Output_Namer::temporary_directory($final_directory));
+        Storage::make_directory($temporary_directory);
 
         try {
             $renditions = Adaptive_HLS::renditions($settings, $source_probe);
@@ -173,15 +169,13 @@ final class Transcoder
 
             foreach ($renditions as $rendition) {
                 $label = (string) $rendition['label'];
-                $directory = $temporary_directory . '/' . $label;
-                if (! wp_mkdir_p($directory)) {
-                    throw new RuntimeException('Could not create HLS rendition directory: ' . $directory);
-                }
-                $playlist = $directory . '/index.m3u8';
+                $directory = Storage::make_directory($temporary_directory . '/' . $label);
+                $playlist = Storage::assert_managed_path($directory . '/index.m3u8');
+                $segment_template = Storage::assert_managed_path($directory . '/segment-%05d.m4s');
                 $command = Command_Builder::hls(
                     $source,
                     $playlist,
-                    $directory . '/segment-%05d.m4s',
+                    $segment_template,
                     $settings,
                     $rendition,
                     $has_audio
@@ -221,7 +215,7 @@ final class Transcoder
                 ),
             );
         } catch (Throwable $error) {
-            $this->remove_tree($temporary_directory);
+            Storage::remove_tree($temporary_directory);
             throw $error;
         }
     }
@@ -307,56 +301,41 @@ final class Transcoder
         $backup = '';
         if (is_dir($final)) {
             $backup = $final . '.old-' . bin2hex(random_bytes(4));
-            // phpcs:ignore WordPress.WP.AlternativeFunctions.rename_rename -- Atomic directory swap preserves the last valid HLS tree.
-            if (! @rename($final, $backup)) {
-                throw new RuntimeException('Could not preserve the existing HLS directory before replacement.');
-            }
+            Storage::rename_path($final, $backup);
         }
-        // phpcs:ignore WordPress.WP.AlternativeFunctions.rename_rename -- Atomic directory promotion prevents partially installed HLS output.
-        if (! @rename($temporary, $final)) {
-            if ('' !== $backup) {
-                // phpcs:ignore WordPress.WP.AlternativeFunctions.rename_rename -- Atomic rollback restores the previously validated HLS tree.
-                @rename($backup, $final);
+        try {
+            Storage::rename_path($temporary, $final);
+        } catch (RuntimeException $error) {
+            if ('' !== $backup && is_dir($backup)) {
+                Storage::rename_path($backup, $final);
             }
-            throw new RuntimeException('Could not move validated HLS output into place.');
+            throw $error;
         }
         if ('' !== $backup) {
-            $this->remove_tree($backup);
+            Storage::remove_tree($backup);
         }
     }
 
-    private function path_to_url(string $path): string
+    /** @param array<string, mixed> $previous
+     *  @return array<string, mixed>
+     */
+    private function managed_previous_progressive_outputs(array $previous): array
     {
-        $uploads = wp_get_upload_dir();
-        $base_dir = wp_normalize_path((string) $uploads['basedir']);
-        $normalized = wp_normalize_path($path);
-        if (! str_starts_with($normalized, $base_dir . '/')) {
-            throw new RuntimeException('Derivative is outside the WordPress uploads directory.');
-        }
-        $relative = ltrim(substr($normalized, strlen($base_dir)), '/');
-        return trailingslashit((string) $uploads['baseurl']) . str_replace('%2F', '/', rawurlencode($relative));
-    }
-
-    private function remove_tree(string $directory): void
-    {
-        if (! is_dir($directory)) {
-            return;
-        }
-        $iterator = new \RecursiveIteratorIterator(
-            new \RecursiveDirectoryIterator($directory, \FilesystemIterator::SKIP_DOTS),
-            \RecursiveIteratorIterator::CHILD_FIRST
-        );
-        foreach ($iterator as $item) {
-            if ($item->isDir()) {
-                // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_rmdir -- Recursive worker cleanup removes only plugin-created output directories.
-                @rmdir($item->getPathname());
-            } else {
-                wp_delete_file($item->getPathname());
+        $managed = array();
+        foreach (array('mp4', 'webm') as $key) {
+            $output = $previous[$key] ?? null;
+            if (! is_array($output) || empty($output['path'])) {
+                continue;
+            }
+            $path = (string) $output['path'];
+            if (Storage::is_managed_path($path) && is_file($path)) {
+                $managed[$key] = $output;
             }
         }
-        // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_rmdir -- Recursive worker cleanup removes only a plugin-created output directory.
-        @rmdir($directory);
+        return $managed;
     }
+
+
 
     private function error_tail(string $error): string
     {

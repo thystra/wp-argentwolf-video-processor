@@ -27,6 +27,7 @@ define('ARGENT_VIDEO_URL', plugin_dir_url(__FILE__));
 require_once ARGENT_VIDEO_DIR . 'includes/Settings.php';
 require_once ARGENT_VIDEO_DIR . 'includes/Activator.php';
 require_once ARGENT_VIDEO_DIR . 'includes/Job_Repository.php';
+require_once ARGENT_VIDEO_DIR . 'includes/Storage.php';
 require_once ARGENT_VIDEO_DIR . 'includes/Output_Namer.php';
 require_once ARGENT_VIDEO_DIR . 'includes/Command_Builder.php';
 require_once ARGENT_VIDEO_DIR . 'includes/Shell_Probe.php';

@@ -42,6 +42,7 @@ jobs:
       - name: Run tests
         run: |
           php tests/run.php
+          php tests/storage-boundary.php
           php -d open_basedir="${GITHUB_WORKSPACE}:/tmp" tests/open-basedir.php
           php tests/smoke-load.php
           php tests/ffmpeg-integration.php

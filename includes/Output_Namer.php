@@ -9,19 +9,21 @@ namespace ArgentVideo;
 
 final class Output_Namer
 {
-    public static function derivative(string $source, string $label, string $extension): string
+    public static function derivative(string $directory, string $label, string $extension): string
     {
-        $directory = dirname($source);
-        $filename = pathinfo($source, PATHINFO_FILENAME);
         $safe_label = preg_replace('/[^a-z0-9-]+/i', '-', $label) ?: 'processed';
         $safe_extension = preg_replace('/[^a-z0-9]+/i', '', $extension) ?: 'bin';
 
-        return $directory . DIRECTORY_SEPARATOR . $filename . '-argent-' . strtolower($safe_label) . '.' . strtolower($safe_extension);
+        return rtrim(wp_normalize_path($directory), '/')
+            . '/video-'
+            . strtolower($safe_label)
+            . '.'
+            . strtolower($safe_extension);
     }
 
-    public static function adaptive_directory(string $source): string
+    public static function adaptive_directory(string $directory): string
     {
-        return dirname($source) . DIRECTORY_SEPARATOR . pathinfo($source, PATHINFO_FILENAME) . '-argent-hls';
+        return rtrim(wp_normalize_path($directory), '/') . '/hls';
     }
 
     public static function temporary(string $final_path): string

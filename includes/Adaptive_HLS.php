@@ -76,13 +76,12 @@ final class Adaptive_HLS
             $lines[] = rawurlencode((string) $rendition['label']) . '/index.m3u8';
         }
 
-        if (false === file_put_contents($path, implode("\n", $lines) . "\n")) {
-            throw new RuntimeException('Could not write HLS master playlist.');
-        }
+        Storage::write_file($path, implode("\n", $lines) . "\n");
     }
 
     public static function validate_media_playlist(string $playlist): void
     {
+        $playlist = Storage::assert_managed_path($playlist);
         $contents = is_file($playlist) ? file_get_contents($playlist) : false;
         if (false === $contents || ! str_contains($contents, '#EXTM3U')) {
             // phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped -- Internal worker exception; escaped at every administrative display boundary.
@@ -102,6 +101,7 @@ final class Adaptive_HLS
 
     public static function directory_size(string $directory): int
     {
+        $directory = Storage::assert_managed_path($directory);
         $size = 0;
         if (! is_dir($directory)) {
             return 0;
