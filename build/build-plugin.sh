@@ -67,6 +67,13 @@ install -m 0644 "${ROOT_DIR}/uninstall.php" "${STAGE_DIR}/uninstall.php"
 rsync -a "${ROOT_DIR}/includes/" "${STAGE_DIR}/includes/"
 rsync -a "${ROOT_DIR}/assets/" "${STAGE_DIR}/assets/"
 
+# hls.VERSION and hls.SHA256 are build-time integrity evidence only. The
+# WordPress.org runtime package ships the verified hls.js runtime and license,
+# but not internal build metadata.
+rm -f \
+    "${STAGE_DIR}/assets/vendor/hls.VERSION" \
+    "${STAGE_DIR}/assets/vendor/hls.SHA256"
+
 find "${STAGE_DIR}" -type f -name '*.php' -print0 |
     sort -z |
     xargs -0 -n1 php -l >/dev/null
@@ -115,9 +122,7 @@ fi
 
 for required in \
     hls.min.js \
-    hls.LICENSE \
-    hls.VERSION \
-    hls.SHA256
+    hls.LICENSE
 do
     if ! unzip -Z1 "${DIST_DIR}/${ZIP_NAME}" |
         grep -qx "${SLUG}/assets/vendor/${required}"; then
@@ -125,6 +130,17 @@ do
             echo "Release ZIP is missing assets/vendor/${required}." >&2
             exit 1
         fi
+    fi
+done
+
+for forbidden_vendor_metadata in \
+    hls.VERSION \
+    hls.SHA256
+do
+    if unzip -Z1 "${DIST_DIR}/${ZIP_NAME}" |
+        grep -qx "${SLUG}/assets/vendor/${forbidden_vendor_metadata}"; then
+        echo "Release ZIP contains build-only assets/vendor/${forbidden_vendor_metadata}." >&2
+        exit 1
     fi
 done
 

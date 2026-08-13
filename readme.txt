@@ -4,7 +4,7 @@ Tags: video, ffmpeg, hls, adaptive streaming, media
 Requires at least: 6.4
 Tested up to: 7.0
 Requires PHP: 8.1
-Stable tag: 0.3.0
+Stable tag: 0.3.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -24,7 +24,9 @@ The default configuration creates:
 
 Generated outputs strip embedded GPS, device, chapter, and other metadata by
 default and normalize rotation metadata into the encoded pixels. The original
-attachment is not modified.
+attachment is not modified. Generated derivatives are stored under the active
+WordPress uploads directory in the plugin-owned
+`argentwolf-video-processor/<attachment-id>/` subtree.
 
 Native HLS is used where the browser supports it. Other compatible browsers use
 the locally bundled, pinned hls.js player. Progressive sources remain available
@@ -129,12 +131,27 @@ plugin-update workflow and confirm the plugin remains active.
 
 == Upgrade Notice ==
 
+= 0.3.1 =
+
+Moves generated derivatives into a plugin-owned uploads subtree and removes
+build-only hls.js integrity metadata from the runtime package. Original video
+attachments remain unchanged.
+
 = 0.3.0 =
 
 Renames the public plugin and package to ArgentWolf Video Processor and prepares
 the project for WordPress.org review while retaining existing data identifiers.
 
 == Changelog ==
+
+= 0.3.1 =
+
+* Store generated MP4, WebM, HLS, and temporary output under `wp_upload_dir()['basedir']/argentwolf-video-processor/<attachment-id>/`.
+* Centralize generated-media path confinement, URL conversion, atomic promotion, and cleanup in the Storage service.
+* Reject traversal, sibling-prefix, and unsafe symlink escapes before managed filesystem mutations.
+* Make attachment cleanup derive the managed attachment directory instead of trusting stored output paths.
+* Keep hls.js version/checksum records as build-time integrity evidence while excluding `hls.VERSION` and `hls.SHA256` from the installable ZIP.
+* Add storage-boundary regression coverage for custom uploads, path escapes, symlinks, HLS writes, and cleanup.
 
 = 0.3.0 =
 

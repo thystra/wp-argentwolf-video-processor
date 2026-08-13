@@ -130,8 +130,14 @@ disabled must invoke due events through a system scheduler.
 
 ## Compatibility and renaming
 
-Version `0.3.0` changes the public name, directory slug, main filename, text
+Version `0.3.0` changed the public name, directory slug, main filename, text
 domain, and release package root to `argentwolf-video-processor`.
+
+Version `0.3.1` confines all generated derivatives to the plugin-owned uploads
+root, `wp_upload_dir()['basedir']/argentwolf-video-processor/<attachment-id>/`,
+while leaving original Media Library attachments untouched. Legacy output
+migration is an operator-controlled one-time maintenance action and is not part
+of the normal public runtime.
 
 Persisted option names, table names, post-meta keys, hook names, cron names,
 namespace, settings-page slug, and CLI command remain unchanged. The basename
@@ -145,7 +151,8 @@ tools. The release builder uses an allowlist and packages only:
 
 - `argentwolf-video-processor.php`;
 - `includes/`;
-- `assets/`, including generated pinned hls.js files;
+- `assets/`, including the verified pinned `hls.min.js` runtime and
+  `hls.LICENSE`, but excluding build-only `hls.VERSION` and `hls.SHA256`;
 - `uninstall.php`;
 - `LICENSE`;
 - `readme.txt`.

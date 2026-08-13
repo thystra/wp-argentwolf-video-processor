@@ -57,7 +57,7 @@
 
 ## Milestone 6 — runtime upgrade validation
 
-- [ ] Install `0.3.0` on a clean WordPress test site.
+- [ ] Install `0.3.1` on a clean WordPress test site with `WP_DEBUG` enabled.
 - [ ] Upgrade a test site from active `0.2.3`.
 - [ ] Verify the old-to-new plugin basename transition.
 - [ ] Verify all settings are preserved.

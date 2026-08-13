@@ -34,6 +34,23 @@ Where the source dimensions permit, the default configuration creates:
 Native browser HLS is used when available. Other compatible browsers use the
 locally bundled and pinned hls.js runtime.
 
+## Managed generated-media storage
+
+Plugin-created media is stored below the active WordPress uploads directory at:
+
+```text
+wp_upload_dir()['basedir']/argentwolf-video-processor/<attachment-id>/
+```
+
+Temporary and final outputs stay inside that plugin-owned boundary so validated
+promotion can remain same-filesystem and atomic. The original Media Library
+attachment remains in its normal WordPress-managed location and is not moved or
+rewritten.
+
+Version 0.3.1 introduces this storage model for generated derivatives. Legacy
+installations may require a separately reviewed one-time operator migration;
+that migration utility is not part of the public plugin runtime or release ZIP.
+
 ## Requirements
 
 - WordPress 6.4 or newer.
@@ -88,7 +105,9 @@ original uploaded attachment is preserved and may retain its original metadata.
 
 The plugin does not upload videos or usage information to an external service
 and contains no telemetry. hls.js is fetched only during controlled release
-builds, verified, and served locally from the installed plugin.
+builds, verified, and served locally from the installed plugin. Build-time
+`hls.VERSION` and `hls.SHA256` integrity records are not shipped in the runtime
+package.
 
 ## Development and releases
 

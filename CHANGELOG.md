@@ -1,6 +1,24 @@
 <!-- File: CHANGELOG.md -->
 # Changelog
 
+## 0.3.1 - 2026-08-13
+
+- Confine generated MP4, WebM, HLS, and temporary files to the plugin-owned
+  `wp_upload_dir()['basedir']/argentwolf-video-processor/<attachment-id>/`
+  storage boundary while preserving original Media Library attachments.
+- Centralize generated-media path creation, confinement, URL conversion, atomic
+  promotion, and destructive cleanup in `Storage`.
+- Reject traversal, sibling-prefix, and unsafe symlink escapes before filesystem
+  mutations and derive attachment cleanup from the managed attachment directory
+  rather than stored arbitrary paths.
+- Add storage-boundary coverage for custom upload locations, path escapes,
+  symlinks, HLS writes, cleanup, and FFmpeg integration.
+- Keep hls.js version/checksum records as controlled build-time integrity
+  evidence while excluding `hls.VERSION` and `hls.SHA256` from the installable
+  WordPress.org package.
+- Retain legacy-output migration as maintainer/operator tooling outside the
+  public runtime and distribution package.
+
 ## 0.3.0 - 2026-07-29
 
 - Resolve WordPress Plugin Check findings with identifier placeholders,
