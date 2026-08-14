@@ -207,8 +207,8 @@ final class Storage
 
         // phpcs:ignore WordPress.WP.AlternativeFunctions.rename_rename -- Same-filesystem atomic promotion is required for validated media.
         if (! @rename($source, $destination)) {
-            // phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped -- Exception text is internal diagnostic data; the validated filesystem path must remain literal.
             throw new RuntimeException(
+                // phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped -- Exception text is internal diagnostic data; the validated filesystem path must remain literal.
                 'Could not atomically move managed video storage path into place: ' . $destination
             );
         }
