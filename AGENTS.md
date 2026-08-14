@@ -129,8 +129,10 @@ been intentionally designed, reviewed, and tested as a supported feature.
 - `build/`: deterministic release tooling.
 - `tests/`: dependency-free, open_basedir, smoke, vendor, storage-boundary, and
   FFmpeg tests.
-- `.github/workflows/`: workflow definitions shared with the public mirror and
-  usable by Forgejo where compatible.
+- `.forgejo/workflows/`: canonical Forgejo CI and release-candidate workflow
+  definitions.
+- `.github/workflows/`: downstream public-mirror validation workflows only;
+  they must not independently rebuild or publish canonical release bytes.
 - `wordpress-org-assets/`: source-controlled WordPress.org directory artwork;
   never part of the installable plugin ZIP.
 - `ARCHITECTURE.md`: design and invariants.
@@ -248,12 +250,24 @@ thread.
 - Public GitHub issue intake does not make GitHub the development authority.
 - Push/PR package jobs are validation unless a release workflow explicitly
   produces canonical release artifacts.
-- Canonical release bytes should be built once from an exact reviewed Forgejo
-  commit and promoted unchanged to downstream release surfaces.
+- Canonical release bytes must be built once from an exact reviewed Forgejo
+  commit by the manually dispatched native Forgejo release-candidate workflow.
+  The workflow requires the requested version, full approved commit SHA, and an
+  explicit `BUILD-CANONICAL` confirmation, and refuses to rebuild after the
+  corresponding Git tag exists.
+- Forgejo Actions artifacts are temporary transport/evidence, not the permanent
+  release archive. Download and preserve the canonical ZIP, checksum, and
+  provenance immediately after the approved build, then promote those exact
+  bytes unchanged to the Forgejo Release, GitHub Release, and WordPress.org
+  surfaces as their separate gates permit.
 - Every code release increments the plugin version. Keep the main plugin header,
   `readme.txt` Stable Tag, changelog, Git tag, release artifact name, and
   WordPress.org SVN tag aligned.
-- Tag only after the reviewed commit is pushed and required validation passes.
+- Tag only after the reviewed commit is pushed, native CI passes, and the exact
+  canonical release-candidate bytes pass the required package/WordPress gates.
+- The downstream GitHub mirror must not auto-build release bytes from a tag.
+  Create its release by uploading the already-preserved canonical ZIP and
+  checksum without rebuilding them.
 - Do not rebuild the WordPress.org ZIP separately for GitHub, Forgejo, or SVN.
 - WordPress.org approval, SVN publication, Git/Forgejo release publication,
   staging installation, and production deployment are separate gates.

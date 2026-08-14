@@ -1,0 +1,232 @@
+# File: .forgejo/workflows/release.yml
+name: Build canonical release candidate
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Plugin version to build (X.Y.Z)'
+        required: true
+        type: string
+      expected_commit:
+        description: 'Full 40-character reviewed commit SHA'
+        required: true
+        type: string
+      confirmation:
+        description: 'Type BUILD-CANONICAL to confirm a one-time canonical build'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: argentwolf-video-processor-canonical-release
+  cancel-in-progress: false
+
+jobs:
+  release-candidate:
+    runs-on: forgejo-build
+    timeout-minutes: 60
+    env:
+      ARGENT_VIDEO_CI_FFMPEG_VERSION: '8.1.2'
+      ARGENT_VIDEO_CI_FFMPEG_PREFIX: /tmp/argentwolf-ci-ffmpeg-8.1.2
+      ARGENT_VIDEO_CI_FFMPEG_JOBS: '2'
+      ARGENT_VIDEO_TEST_FFMPEG: /tmp/argentwolf-ci-ffmpeg-8.1.2/bin/ffmpeg
+      ARGENT_VIDEO_TEST_FFPROBE: /tmp/argentwolf-ci-ffmpeg-8.1.2/bin/ffprobe
+      REQUESTED_VERSION: ${{ inputs.version }}
+      REQUESTED_COMMIT: ${{ inputs.expected_commit }}
+      RELEASE_CONFIRMATION: ${{ inputs.confirmation }}
+
+    steps:
+      - name: Check out reviewed source
+        uses: https://data.forgejo.org/actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Validate canonical-build request
+        id: release
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          VERSION="${REQUESTED_VERSION}"
+          EXPECTED_COMMIT="${REQUESTED_COMMIT,,}"
+
+          if [[ "${RELEASE_CONFIRMATION}" != 'BUILD-CANONICAL' ]]; then
+            echo 'Canonical build confirmation did not match BUILD-CANONICAL.' >&2
+            exit 1
+          fi
+          if [[ ! "${VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
+            echo "Invalid release version: ${VERSION}" >&2
+            exit 1
+          fi
+          if [[ ! "${EXPECTED_COMMIT}" =~ ^[0-9a-f]{40}$ ]]; then
+            echo 'expected_commit must be a full 40-character hexadecimal commit SHA.' >&2
+            exit 1
+          fi
+
+          ACTUAL_COMMIT="$(git rev-parse HEAD)"
+          SOURCE_TREE="$(git rev-parse 'HEAD^{tree}')"
+          PLUGIN_VERSION="$(sed -n 's/^ \* Version: //p' argentwolf-video-processor.php | head -n1)"
+          STABLE_TAG="$(sed -n 's/^Stable tag: //p' readme.txt | head -n1)"
+          TAG="v${VERSION}"
+
+          if [[ "${ACTUAL_COMMIT}" != "${EXPECTED_COMMIT}" ]]; then
+            echo "Checked-out commit ${ACTUAL_COMMIT} does not match approved ${EXPECTED_COMMIT}." >&2
+            exit 1
+          fi
+          if [[ "${FORGEJO_SHA}" != "${EXPECTED_COMMIT}" ]]; then
+            echo "Forgejo dispatch SHA ${FORGEJO_SHA} does not match approved ${EXPECTED_COMMIT}." >&2
+            exit 1
+          fi
+          if [[ "${PLUGIN_VERSION}" != "${VERSION}" || "${STABLE_TAG}" != "${VERSION}" ]]; then
+            echo "Plugin/readme version does not match requested ${VERSION}." >&2
+            exit 1
+          fi
+          if ! grep -Fq "## ${VERSION} - " CHANGELOG.md; then
+            echo "CHANGELOG.md has no ${VERSION} release entry." >&2
+            exit 1
+          fi
+          if ! grep -Fq "= ${VERSION} =" readme.txt; then
+            echo "readme.txt has no ${VERSION} changelog/upgrade entry." >&2
+            exit 1
+          fi
+          if git show-ref --verify --quiet "refs/tags/${TAG}"; then
+            echo "Tag ${TAG} already exists; refusing to rebuild canonical release bytes." >&2
+            exit 1
+          fi
+
+          printf 'version=%s\n' "${VERSION}" >> "${FORGEJO_OUTPUT}"
+          printf 'commit=%s\n' "${ACTUAL_COMMIT}" >> "${FORGEJO_OUTPUT}"
+          printf 'tree=%s\n' "${SOURCE_TREE}" >> "${FORGEJO_OUTPUT}"
+
+          printf 'Canonical build request: PASS\n'
+          printf 'Version: %s\n' "${VERSION}"
+          printf 'Commit:  %s\n' "${ACTUAL_COMMIT}"
+          printf 'Tree:    %s\n' "${SOURCE_TREE}"
+
+      - name: Install build tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install --yes --no-install-recommends \
+            build-essential \
+            ca-certificates \
+            curl \
+            git \
+            gnupg \
+            libopus-dev \
+            libvpx-dev \
+            libx264-dev \
+            nasm \
+            php-cli \
+            pkg-config \
+            rsync \
+            unzip \
+            yasm \
+            zip
+          rm -rf /var/lib/apt/lists/*
+
+      - name: Build verified security-patched FFmpeg
+        run: bash build/install-ci-ffmpeg.sh "${ARGENT_VIDEO_CI_FFMPEG_VERSION}"
+
+      - name: Verify toolchain
+        run: |
+          node --version
+          npm --version
+          php --version
+          "${ARGENT_VIDEO_TEST_FFMPEG}" -version
+          "${ARGENT_VIDEO_TEST_FFPROBE}" -version
+
+      - name: PHP syntax check
+        run: find . -type f -name '*.php' -not -path './dist/*' -print0 | sort -z | xargs -0 -n1 php -l
+
+      - name: Run release tests
+        run: |
+          php tests/run.php
+          php tests/storage-boundary.php
+          php -d open_basedir="${FORGEJO_WORKSPACE}:/tmp" tests/open-basedir.php
+          php tests/smoke-load.php
+          php tests/ffmpeg-security.php
+          ARGENT_VIDEO_EXPECT_SECURITY=allow php tests/ffmpeg-security-binary.php
+          php tests/ffmpeg-integration.php
+          bash tests/vendor-fetch.sh
+          node --check assets/js/argent-video-player.js
+
+      - name: Check whitespace errors
+        run: git diff --check
+
+      - name: Build canonical installable ZIP
+        run: bash build/build-plugin.sh '${{ steps.release.outputs.version }}'
+
+      - name: Verify canonical release contents
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION='${{ steps.release.outputs.version }}'
+          ZIP="dist/argentwolf-video-processor-${VERSION}.zip"
+
+          test -f "${ZIP}"
+          test "$(unzip -Z1 "${ZIP}" | awk -F/ 'NF {print $1}' | sort -u)" = 'argentwolf-video-processor'
+          unzip -Z1 "${ZIP}" | grep -qx 'argentwolf-video-processor/argentwolf-video-processor.php'
+          unzip -Z1 "${ZIP}" | grep -qx 'argentwolf-video-processor/assets/vendor/hls.min.js'
+          unzip -Z1 "${ZIP}" | grep -qx 'argentwolf-video-processor/assets/vendor/hls.LICENSE'
+          ! unzip -Z1 "${ZIP}" | grep -qx 'argentwolf-video-processor/assets/vendor/hls.VERSION'
+          ! unzip -Z1 "${ZIP}" | grep -qx 'argentwolf-video-processor/assets/vendor/hls.SHA256'
+          ! unzip -Z1 "${ZIP}" | grep -Eq '/(AGENTS|ARCHITECTURE|TODO|tests|build|ops|\.github|\.forgejo)'
+          (cd dist && sha256sum --check SHA256SUMS)
+
+      - name: Record release provenance
+        id: provenance
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION='${{ steps.release.outputs.version }}'
+          COMMIT='${{ steps.release.outputs.commit }}'
+          TREE='${{ steps.release.outputs.tree }}'
+          ZIP="dist/argentwolf-video-processor-${VERSION}.zip"
+          PACKAGE_SHA="$(sha256sum "${ZIP}" | awk '{print $1}')"
+
+          cat > dist/RELEASE-PROVENANCE.txt <<EOF
+          product=ArgentWolf Video Processor
+          version=${VERSION}
+          canonical_commit=${COMMIT}
+          canonical_tree=${TREE}
+          package=argentwolf-video-processor-${VERSION}.zip
+          package_sha256=${PACKAGE_SHA}
+          forgejo_run_id=${FORGEJO_RUN_ID}
+          forgejo_run_number=${FORGEJO_RUN_NUMBER}
+          forgejo_repository=${FORGEJO_REPOSITORY}
+          forgejo_server=${FORGEJO_SERVER_URL}
+          ffmpeg_ci_version=${ARGENT_VIDEO_CI_FFMPEG_VERSION}
+          canonical_tag_created=NO
+          EOF
+
+          printf 'package_sha256=%s\n' "${PACKAGE_SHA}" >> "${FORGEJO_OUTPUT}"
+          cat dist/RELEASE-PROVENANCE.txt
+
+      - name: Upload canonical release candidate
+        uses: https://code.forgejo.org/actions/upload-artifact@ff15f0306b3f739f7b6fd43fb5d26cd321bd4de5
+        with:
+          name: canonical-argentwolf-video-processor-${{ steps.release.outputs.version }}-${{ steps.release.outputs.commit }}
+          path: |
+            dist/argentwolf-video-processor-${{ steps.release.outputs.version }}.zip
+            dist/SHA256SUMS
+            dist/RELEASE-PROVENANCE.txt
+          if-no-files-found: error
+
+      - name: Canonical-build summary
+        shell: bash
+        run: |
+          printf 'CANONICAL_RELEASE_CANDIDATE=PASS\n'
+          printf 'version=%s\n' '${{ steps.release.outputs.version }}'
+          printf 'commit=%s\n' '${{ steps.release.outputs.commit }}'
+          printf 'tree=%s\n' '${{ steps.release.outputs.tree }}'
+          printf 'package_sha256=%s\n' '${{ steps.provenance.outputs.package_sha256 }}'
+          printf 'tag_created=NO\n'
+          printf 'Download and preserve these exact bytes before tagging or publishing.\n'
+
+# EOF: .forgejo/workflows/release.yml
