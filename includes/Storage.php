@@ -57,11 +57,13 @@ final class Storage
         $directory = self::assert_managed_path($directory);
 
         if (! is_dir($directory) && ! wp_mkdir_p($directory)) {
+            // phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped -- Exception text is internal diagnostic data; the validated filesystem path must remain literal.
             throw new RuntimeException('Could not create managed video storage directory: ' . $directory);
         }
 
         $directory = self::assert_managed_path($directory);
         if (! is_dir($directory)) {
+            // phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped -- Exception text is internal diagnostic data; the validated filesystem path must remain literal.
             throw new RuntimeException('Managed video storage directory was not created: ' . $directory);
         }
 
@@ -176,6 +178,7 @@ final class Storage
 
         // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents -- HLS manifests are plugin-generated files inside the validated managed uploads boundary.
         if (false === file_put_contents($path, $contents, LOCK_EX)) {
+            // phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped -- Exception text is internal diagnostic data; the validated filesystem path must remain literal.
             throw new RuntimeException('Could not write managed video storage file: ' . $path);
         }
     }
@@ -192,6 +195,7 @@ final class Storage
         clearstatcache(true, $path);
 
         if (is_file($path)) {
+            // phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped -- Exception text is internal diagnostic data; the validated filesystem path must remain literal.
             throw new RuntimeException('Could not delete managed video storage file: ' . $path);
         }
     }
@@ -203,6 +207,7 @@ final class Storage
 
         // phpcs:ignore WordPress.WP.AlternativeFunctions.rename_rename -- Same-filesystem atomic promotion is required for validated media.
         if (! @rename($source, $destination)) {
+            // phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped -- Exception text is internal diagnostic data; the validated filesystem path must remain literal.
             throw new RuntimeException(
                 'Could not atomically move managed video storage path into place: ' . $destination
             );
@@ -230,6 +235,7 @@ final class Storage
             if ($item->isDir()) {
                 // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_rmdir -- Recursive cleanup is confined to the validated plugin-owned uploads tree.
                 if (! @rmdir($path) && is_dir($path)) {
+                    // phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped -- Exception text is internal diagnostic data; the validated filesystem path must remain literal.
                     throw new RuntimeException('Could not remove managed video storage directory: ' . $path);
                 }
             } else {
@@ -239,6 +245,7 @@ final class Storage
 
         // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_rmdir -- Recursive cleanup is confined to the validated plugin-owned uploads tree.
         if (! @rmdir($directory) && is_dir($directory)) {
+            // phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped -- Exception text is internal diagnostic data; the validated filesystem path must remain literal.
             throw new RuntimeException('Could not remove managed video storage directory: ' . $directory);
         }
     }

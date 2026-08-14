@@ -273,8 +273,10 @@ final class FFmpeg_Security
         }
 
         $stdout = stream_get_contents($pipes[1]);
+        // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose -- proc_open() pipe resources must be closed directly; WP_Filesystem does not manage process pipes.
         fclose($pipes[1]);
         $stderr = stream_get_contents($pipes[2]);
+        // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose -- proc_open() pipe resources must be closed directly; WP_Filesystem does not manage process pipes.
         fclose($pipes[2]);
         $exit_code = proc_close($process);
         $output = trim(

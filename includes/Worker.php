@@ -26,6 +26,7 @@ final class Worker
         $limit = max(1, min(25, $limit));
         $security = FFmpeg_Security::assess((string) Settings::get('ffmpeg_path', ''));
         if (empty($security['processing_allowed'])) {
+            // phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped -- RuntimeException text is not rendered output; the security gate message is preserved for diagnostics.
             throw new RuntimeException(FFmpeg_Security::blocking_message($security));
         }
         $token = wp_generate_uuid4();

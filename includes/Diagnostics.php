@@ -95,7 +95,13 @@ final class Diagnostics
             $actions[] = sprintf(
                 '<a href="%s" target="_blank" rel="noopener noreferrer">%s</a>',
                 esc_url((string) $advisory['url']),
-                esc_html(sprintf(__('%s details at NVD', 'argentwolf-video-processor'), (string) $advisory['id']))
+                esc_html(
+                    sprintf(
+                        /* translators: %s: Security advisory identifier, for example CVE-2026-8461. */
+                        __('%s details at NVD', 'argentwolf-video-processor'),
+                        (string) $advisory['id']
+                    )
+                )
             );
         }
 
