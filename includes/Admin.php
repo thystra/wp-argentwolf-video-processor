@@ -163,6 +163,7 @@ final class Admin
 
     public function notices(): void
     {
+        $this->ffmpeg_security_notice();
         /*
          * These sanitized query parameters select a read-only notice after
          * nonce-protected action handlers redirect back to the settings page.
@@ -244,7 +245,7 @@ final class Admin
             <h2><?php esc_html_e('Diagnostics', 'argentwolf-video-processor'); ?></h2>
             <table class="widefat striped" style="max-width:900px"><thead><tr><th>Check</th><th>Status</th><th>Detail</th></tr></thead><tbody>
                 <?php foreach ($this->diagnostics->checks() as $check) : ?>
-                    <tr><td><?php echo esc_html($check['check']); ?></td><td><?php echo esc_html(strtoupper($check['status'])); ?></td><td><code><?php echo esc_html($check['detail']); ?></code></td></tr>
+                    <tr><td><?php echo esc_html($check['check']); ?></td><td><?php echo esc_html(strtoupper($check['status'])); ?></td><td><code><?php echo esc_html($check['detail']); ?></code><?php if (! empty($check['url'])) : ?> <a href="<?php echo esc_url((string) $check['url']); ?>" target="_blank" rel="noopener noreferrer"><?php echo esc_html((string) ($check['url_label'] ?? __('Security advisory', 'argentwolf-video-processor'))); ?></a><?php endif; ?></td></tr>
                 <?php endforeach; ?>
             </tbody></table>
 
@@ -303,6 +304,29 @@ wp argent-video worker --once</pre>
             <p><a class="button button-secondary" href="<?php echo esc_url('https://github.com/thystra/wp-argentwolf-video-processor'); ?>" target="_blank" rel="noopener noreferrer"><?php esc_html_e('View project on GitHub', 'argentwolf-video-processor'); ?></a></p>
         </div>
         <?php
+    }
+
+    private function ffmpeg_security_notice(): void
+    {
+        $assessment = $this->diagnostics->ffmpeg_security();
+        if (! empty($assessment['processing_allowed'])) {
+            return;
+        }
+
+        echo '<div class="notice notice-error"><p><strong>'
+            . esc_html__('ArgentWolf Video Processor: FFmpeg security gate is blocking new transcoding.', 'argentwolf-video-processor')
+            . '</strong></p><ul>';
+        foreach ((array) ($assessment['advisories'] ?? array()) as $advisory) {
+            if (! is_array($advisory) || empty($advisory['blocking'])) {
+                continue;
+            }
+            echo '<li><a href="' . esc_url((string) $advisory['url']) . '" target="_blank" rel="noopener noreferrer">'
+                . esc_html((string) $advisory['id'])
+                . '</a>: ' . esc_html((string) $advisory['reason']) . '</li>';
+        }
+        echo '</ul><p>'
+            . esc_html__('Update FFmpeg to a fixed build or use a build where the affected decoder is not enabled. Existing generated media is not removed.', 'argentwolf-video-processor')
+            . '</p></div>';
     }
 
     /** @param array<string, mixed> $settings */

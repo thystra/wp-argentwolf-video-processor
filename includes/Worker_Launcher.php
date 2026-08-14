@@ -33,6 +33,11 @@ final class Worker_Launcher
     /** @return array<string, mixed> */
     public function launch(): array
     {
+        $security = FFmpeg_Security::assess((string) Settings::get('ffmpeg_path', ''));
+        if (empty($security['processing_allowed'])) {
+            return $this->failure(FFmpeg_Security::blocking_message($security));
+        }
+
         $wp = (string) Settings::get('wp_cli_path', '/usr/local/bin/wp');
         if (! Shell_Probe::path_executable($wp)) {
             return $this->failure('WP-CLI is missing or not executable: ' . $wp);

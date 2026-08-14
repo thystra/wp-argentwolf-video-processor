@@ -113,6 +113,8 @@ been intentionally designed, reviewed, and tested as a supported feature.
 - Keep progressive fallbacks when adaptive HLS is enabled.
 - Use administrator-configured system FFmpeg, FFprobe, and WP-CLI binaries. Do
   not bundle FFmpeg.
+- Treat FFmpeg security advisories as capability-aware runtime gates. Record the CVE ID and NVD URL, check whether the affected decoder/encoder is compiled in, recognize known fixed release floors, and block new transcoding when an affected enabled capability is not known patched.
+- CI must not process media with an FFmpeg build that the runtime security gate would block. `build/install-ci-ffmpeg.sh` pins a reviewed security-patched FFmpeg release, verifies the official release signature and signing-key fingerprint, and keeps MagicYUV enabled so CVE-2026-8461 tests exercise the patched decoder path. Review current advisories before changing that pin.
 - Treat shell command paths and arguments as untrusted. Validate configuration,
   use fixed argument construction, and quote arguments safely before execution.
 - Public requests must never directly execute FFmpeg.

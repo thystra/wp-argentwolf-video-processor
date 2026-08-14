@@ -40,16 +40,23 @@ require_once dirname(__DIR__) . '/includes/Storage.php';
 require_once dirname(__DIR__) . '/includes/Command_Builder.php';
 require_once dirname(__DIR__) . '/includes/Probe.php';
 require_once dirname(__DIR__) . '/includes/Adaptive_HLS.php';
+require_once dirname(__DIR__) . '/includes/Shell_Probe.php';
+require_once dirname(__DIR__) . '/includes/FFmpeg_Security.php';
 
 use ArgentVideo\Adaptive_HLS;
 use ArgentVideo\Command_Builder;
 use ArgentVideo\Storage;
 
-$ffmpeg = '/usr/bin/ffmpeg';
-$ffprobe = '/usr/bin/ffprobe';
+$ffmpeg = getenv('ARGENT_VIDEO_TEST_FFMPEG') ?: '/usr/bin/ffmpeg';
+$ffprobe = getenv('ARGENT_VIDEO_TEST_FFPROBE') ?: '/usr/bin/ffprobe';
 if (! is_executable($ffmpeg) || ! is_executable($ffprobe)) {
     fwrite(STDOUT, "FFmpeg integration test skipped: ffmpeg or ffprobe is unavailable.\n");
     exit(0);
+}
+$security = \ArgentVideo\FFmpeg_Security::assess($ffmpeg);
+if (empty($security['processing_allowed'])) {
+    fwrite(STDERR, 'FAIL: ' . \ArgentVideo\FFmpeg_Security::blocking_message($security) . "\n");
+    exit(1);
 }
 
 $test_root = sys_get_temp_dir() . '/argent-video-test-' . bin2hex(random_bytes(6));
@@ -99,14 +106,57 @@ $result = $run(array(
 if (0 !== $result['exit_code']) {
     fwrite(STDERR, "FAIL: synthetic source encode failed: {$result['stderr']}\n"); exit(1);
 }
+$help = $run(array($ffmpeg, '-hide_banner', '-h', 'full'));
+$help_text = $help['stdout'] . "\n" . $help['stderr'];
+if (str_contains($help_text, '-display_rotation')) {
+    $rotation_fixture_mode = 'display_rotation';
+    $metadata_command = array(
+        $ffmpeg, '-hide_banner', '-loglevel', 'error', '-y',
+        '-display_rotation:v:0', '90', '-i', $base, '-map', '0', '-c', 'copy',
+        '-metadata', 'location=+30.1161-081.8837/', $source,
+    );
+} else {
+    $rotation_fixture_mode = 'legacy_rotate_metadata';
+    $metadata_command = array(
+        $ffmpeg, '-hide_banner', '-loglevel', 'error', '-y',
+        '-i', $base, '-map', '0', '-c', 'copy',
+        '-metadata:s:v:0', 'rotate=90',
+        '-metadata', 'location=+30.1161-081.8837/', $source,
+    );
+}
+$result = $run($metadata_command);
+if (0 !== $result['exit_code']) {
+    fwrite(STDERR, "FAIL: synthetic metadata remux failed ({$rotation_fixture_mode}): {$result['stderr']}\n"); exit(1);
+}
+
 $result = $run(array(
-    $ffmpeg, '-hide_banner', '-loglevel', 'error', '-y',
-    '-display_rotation:v:0', '90', '-i', $base, '-map', '0', '-c', 'copy',
-    '-metadata', 'location=+30.1161-081.8837/', $source,
+    $ffprobe, '-v', 'error',
+    '-show_entries', 'stream_tags=rotate:stream_side_data=rotation',
+    '-of', 'json', $source,
 ));
 if (0 !== $result['exit_code']) {
-    fwrite(STDERR, "FAIL: synthetic metadata remux failed: {$result['stderr']}\n"); exit(1);
+    fwrite(STDERR, "FAIL: synthetic source rotation probe failed: {$result['stderr']}\n"); exit(1);
 }
+$rotation_probe = json_decode($result['stdout'], true);
+$rotation_value = null;
+foreach ((array) ($rotation_probe['streams'] ?? array()) as $stream) {
+    if (! is_array($stream)) { continue; }
+    if (isset($stream['tags']['rotate']) && is_numeric($stream['tags']['rotate'])) {
+        $rotation_value = (float) $stream['tags']['rotate'];
+        break;
+    }
+    foreach ((array) ($stream['side_data_list'] ?? array()) as $side_data) {
+        if (is_array($side_data) && isset($side_data['rotation']) && is_numeric($side_data['rotation'])) {
+            $rotation_value = (float) $side_data['rotation'];
+            break 2;
+        }
+    }
+}
+if (null === $rotation_value || abs(abs($rotation_value) - 90.0) > 0.01) {
+    fwrite(STDERR, "FAIL: synthetic source did not contain 90-degree rotation metadata ({$rotation_fixture_mode}).\n");
+    exit(1);
+}
+fwrite(STDOUT, "FFmpeg rotation fixture mode: {$rotation_fixture_mode}.\n");
 
 $settings = array(
     'ffmpeg_path' => $ffmpeg, 'max_width' => 1280, 'max_height' => 720,

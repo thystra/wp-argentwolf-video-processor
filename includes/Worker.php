@@ -24,6 +24,10 @@ final class Worker
     public function run(int $limit = 1): array
     {
         $limit = max(1, min(25, $limit));
+        $security = FFmpeg_Security::assess((string) Settings::get('ffmpeg_path', ''));
+        if (empty($security['processing_allowed'])) {
+            throw new RuntimeException(FFmpeg_Security::blocking_message($security));
+        }
         $token = wp_generate_uuid4();
         if (! $this->acquire_lock($token)) {
             throw new RuntimeException('Another Argent Video worker is already active.');

@@ -12,7 +12,13 @@ permissions:
 jobs:
   validate:
     runs-on: forgejo-pilot
-    timeout-minutes: 30
+    timeout-minutes: 45
+    env:
+      ARGENT_VIDEO_CI_FFMPEG_VERSION: '8.1.2'
+      ARGENT_VIDEO_CI_FFMPEG_PREFIX: /tmp/argentwolf-ci-ffmpeg-8.1.2
+      ARGENT_VIDEO_CI_FFMPEG_JOBS: '2'
+      ARGENT_VIDEO_TEST_FFMPEG: /tmp/argentwolf-ci-ffmpeg-8.1.2/bin/ffmpeg
+      ARGENT_VIDEO_TEST_FFPROBE: /tmp/argentwolf-ci-ffmpeg-8.1.2/bin/ffprobe
 
     steps:
       - name: Check out repository
@@ -38,21 +44,33 @@ jobs:
           set -euo pipefail
           apt-get update
           DEBIAN_FRONTEND=noninteractive apt-get install --yes --no-install-recommends \
+            build-essential \
             ca-certificates \
             curl \
-            ffmpeg \
             git \
+            gnupg \
+            libopus-dev \
+            libvpx-dev \
+            libx264-dev \
+            nasm \
             php-cli \
+            pkg-config \
             rsync \
             unzip \
+            yasm \
             zip
           rm -rf /var/lib/apt/lists/*
 
-      - name: Verify Node, npm, and PHP
+      - name: Build verified security-patched FFmpeg
+        run: bash build/install-ci-ffmpeg.sh "${ARGENT_VIDEO_CI_FFMPEG_VERSION}"
+
+      - name: Verify Node, npm, PHP, and FFmpeg
         run: |
           node --version
           npm --version
           php --version
+          "${ARGENT_VIDEO_TEST_FFMPEG}" -version
+          "${ARGENT_VIDEO_TEST_FFPROBE}" -version
 
       - name: PHP syntax check
         run: find . -type f -name '*.php' -not -path './dist/*' -print0 | sort -z | xargs -0 -n1 php -l
@@ -63,6 +81,8 @@ jobs:
           php tests/storage-boundary.php
           php -d open_basedir="${GITHUB_WORKSPACE}:/tmp" tests/open-basedir.php
           php tests/smoke-load.php
+          php tests/ffmpeg-security.php
+          ARGENT_VIDEO_EXPECT_SECURITY=allow php tests/ffmpeg-security-binary.php
           php tests/ffmpeg-integration.php
           bash tests/vendor-fetch.sh
           node --check assets/js/argent-video-player.js

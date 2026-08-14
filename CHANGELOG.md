@@ -3,6 +3,9 @@
 
 ## 0.3.1 - 2026-08-13
 
+- Add a capability-aware FFmpeg security gate with explicit CVE-2026-8461 / NVD reporting; block new transcoding when MagicYUV is enabled on an unpatched or unverifiable build.
+- Add Site Health/admin/CLI security status and cross-version FFmpeg security matrix adapters.
+
 - Confine generated MP4, WebM, HLS, and temporary files to the plugin-owned
   `wp_upload_dir()['basedir']/argentwolf-video-processor/<attachment-id>/`
   storage boundary while preserving original Media Library attachments.

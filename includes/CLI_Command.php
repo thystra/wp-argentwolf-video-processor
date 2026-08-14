@@ -67,6 +67,10 @@ final class CLI_Command
     public function diagnose(): void
     {
         Utils\format_items('table', $this->diagnostics->checks(), array('check', 'status', 'detail'));
+        $security = $this->diagnostics->ffmpeg_security();
+        if (empty($security['processing_allowed'])) {
+            WP_CLI::error(FFmpeg_Security::blocking_message($security));
+        }
     }
 
     /**

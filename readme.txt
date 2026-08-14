@@ -83,6 +83,10 @@ worker performs the encode.
 Adaptive HLS uses H.264/AAC fragmented MP4. The default progressive fallbacks
 use VP9/Opus WebM followed by H.264/AAC MP4.
 
+= Does the plugin check FFmpeg security advisories? =
+
+Yes. Before starting a new transcode, the plugin checks the configured FFmpeg version and relevant compiled capabilities. Known-vulnerable or unverifiable builds are blocked. CVE-2026-8461 is checked against the MagicYUV decoder and linked from Diagnostics and Site Health: https://nvd.nist.gov/vuln/detail/CVE-2026-8461
+
 = Does the plugin bundle FFmpeg? =
 
 No. It uses administrator-configured system FFmpeg and FFprobe binaries and

@@ -127,3 +127,21 @@ Project source, issues, and funding links are available at:
 
 The plugin is GPL-2.0-or-later. The distributed hls.js runtime is provided under
 the Apache-2.0 license included as `assets/vendor/hls.LICENSE`.
+
+
+## FFmpeg security advisory gate
+
+ArgentWolf Video Processor inspects the administrator-configured system FFmpeg
+binary before starting new transcoding. Security checks are capability-aware:
+a build can be unaffected by an advisory when the vulnerable decoder or encoder
+is not compiled in, even when its version is otherwise old enough to be affected.
+Known-vulnerable or unverifiable builds are blocked from starting new transcodes;
+existing originals and generated media are left untouched.
+
+The initial enforced advisory is
+[CVE-2026-8461](https://nvd.nist.gov/vuln/detail/CVE-2026-8461), an out-of-bounds
+write in the MagicYUV decoder that can permit remote code execution. The plugin
+checks whether the `magicyuv` decoder is enabled, recognizes fixed upstream or
+backported release lines, reports the CVE explicitly in Diagnostics and WordPress
+Site Health, and links to the NVD record. Future FFmpeg CVEs should be added to
+the same advisory registry with their own capability and NVD link.

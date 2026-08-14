@@ -37,6 +37,7 @@ final class Diagnostics
         }
 
         $checks[] = $this->ffmpeg_version($settings);
+        $checks = array_merge($checks, $this->ffmpeg_security_checks($settings));
         $checks[] = array(
             'check'  => 'proc_open()',
             'status' => function_exists('proc_open') ? 'ok' : 'error',
@@ -58,6 +59,85 @@ final class Diagnostics
             $checks = array_merge($checks, $this->hls_checks($settings));
         }
         $checks[] = $this->hls_js_check();
+        return $checks;
+    }
+
+    /** @return array<string, mixed> */
+    public function ffmpeg_security(): array
+    {
+        return FFmpeg_Security::assess((string) Settings::get('ffmpeg_path', ''));
+    }
+
+    /** @param array<string, mixed> $tests
+     *  @return array<string, mixed>
+     */
+    public function site_health_tests(array $tests): array
+    {
+        $tests['direct']['argentwolf_video_ffmpeg_security'] = array(
+            'label' => __('ArgentWolf Video Processor FFmpeg security', 'argentwolf-video-processor'),
+            'test' => array($this, 'site_health_ffmpeg_security'),
+        );
+        return $tests;
+    }
+
+    /** @return array<string, mixed> */
+    public function site_health_ffmpeg_security(): array
+    {
+        $assessment = $this->ffmpeg_security();
+        $allowed = ! empty($assessment['processing_allowed']);
+        $items = array();
+        $actions = array();
+        foreach ((array) ($assessment['advisories'] ?? array()) as $advisory) {
+            if (! is_array($advisory)) {
+                continue;
+            }
+            $items[] = '<li><strong>' . esc_html((string) $advisory['id']) . '</strong>: ' . esc_html((string) $advisory['reason']) . '</li>';
+            $actions[] = sprintf(
+                '<a href="%s" target="_blank" rel="noopener noreferrer">%s</a>',
+                esc_url((string) $advisory['url']),
+                esc_html(sprintf(__('%s details at NVD', 'argentwolf-video-processor'), (string) $advisory['id']))
+            );
+        }
+
+        $description = $allowed
+            ? __('The configured FFmpeg binary passed the plugin security advisory gate for new transcoding.', 'argentwolf-video-processor')
+            : __('New video transcoding is disabled because the configured FFmpeg binary did not pass the security advisory gate.', 'argentwolf-video-processor');
+
+        return array(
+            'label' => $allowed
+                ? __('FFmpeg security advisory gate passed', 'argentwolf-video-processor')
+                : __('FFmpeg security advisory gate is blocking transcoding', 'argentwolf-video-processor'),
+            'status' => $allowed ? 'good' : 'critical',
+            'badge' => array(
+                'label' => __('ArgentWolf Video Processor', 'argentwolf-video-processor'),
+                'color' => 'blue',
+            ),
+            'description' => '<p>' . esc_html($description) . '</p><ul>' . implode('', $items) . '</ul>',
+            'actions' => '<p>' . implode(' | ', $actions) . '</p>',
+            'test' => 'argentwolf_video_ffmpeg_security',
+        );
+    }
+
+    /** @param array<string, mixed> $settings
+     *  @return list<array<string, mixed>>
+     */
+    private function ffmpeg_security_checks(array $settings): array
+    {
+        $assessment = FFmpeg_Security::assess((string) ($settings['ffmpeg_path'] ?? ''));
+        $checks = array();
+        foreach ((array) ($assessment['advisories'] ?? array()) as $advisory) {
+            if (! is_array($advisory)) {
+                continue;
+            }
+            $status = empty($advisory['blocking']) ? 'ok' : 'error';
+            $checks[] = array(
+                'check' => 'FFmpeg security ' . (string) $advisory['id'],
+                'status' => $status,
+                'detail' => (string) $advisory['reason'],
+                'url' => (string) $advisory['url'],
+                'url_label' => (string) $advisory['id'] . ' — NVD',
+            );
+        }
         return $checks;
     }
 

@@ -45,6 +45,7 @@ final class Plugin
         add_action(Activator::CRON_HOOK, array($launcher, 'dispatch'));
         add_filter('render_block_core/video', array($renderer, 'render_block'), 10, 2);
         add_filter('wp_video_shortcode', array($renderer, 'render_shortcode'), 10, 2);
+        add_filter('site_status_tests', array($diagnostics, 'site_health_tests'));
 
         if (is_admin()) {
             add_action('admin_init', array($admin, 'register'));

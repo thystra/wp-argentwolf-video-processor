@@ -31,6 +31,7 @@ require_once ARGENT_VIDEO_DIR . 'includes/Storage.php';
 require_once ARGENT_VIDEO_DIR . 'includes/Output_Namer.php';
 require_once ARGENT_VIDEO_DIR . 'includes/Command_Builder.php';
 require_once ARGENT_VIDEO_DIR . 'includes/Shell_Probe.php';
+require_once ARGENT_VIDEO_DIR . 'includes/FFmpeg_Security.php';
 require_once ARGENT_VIDEO_DIR . 'includes/Process_Runner.php';
 require_once ARGENT_VIDEO_DIR . 'includes/Probe.php';
 require_once ARGENT_VIDEO_DIR . 'includes/Adaptive_HLS.php';
