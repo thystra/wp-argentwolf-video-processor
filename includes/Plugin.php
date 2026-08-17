@@ -11,6 +11,8 @@ final class Plugin
 {
     private static ?self $instance = null;
     private bool $booted = false;
+    private ?Backend_Registry $backend_registry = null;
+    private ?Backend_Adapter_Factory $backend_factory = null;
 
     public static function instance(): self
     {
@@ -35,6 +37,10 @@ final class Plugin
         $player = new Player();
         $renderer = new Renderer($player);
         $diagnostics = new Diagnostics();
+        $this->backend_registry = new Backend_Registry();
+        $this->backend_factory = new Backend_Adapter_Factory(
+            new Local_Backend_Adapter($queue, $diagnostics)
+        );
         $admin = new Admin($jobs, $queue, $bulk, $launcher, $diagnostics);
 
         add_filter('cron_schedules', array($this, 'cron_schedules'));
@@ -66,6 +72,24 @@ final class Plugin
         if (defined('WP_CLI') && WP_CLI) {
             \WP_CLI::add_command('argent-video', new CLI_Command($jobs, $queue, $bulk, $worker, $diagnostics));
         }
+    }
+
+    public function backend_registry(): Backend_Registry
+    {
+        if (null === $this->backend_registry) {
+            throw new \RuntimeException('AWVP backend registry is not initialized.');
+        }
+
+        return $this->backend_registry;
+    }
+
+    public function backend_factory(): Backend_Adapter_Factory
+    {
+        if (null === $this->backend_factory) {
+            throw new \RuntimeException('AWVP backend adapter factory is not initialized.');
+        }
+
+        return $this->backend_factory;
     }
 
     /** @param array<string, array<string, mixed>> $schedules

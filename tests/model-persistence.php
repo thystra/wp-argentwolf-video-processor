@@ -81,6 +81,7 @@ function update_option(string $option, mixed $value, ?bool $autoload = null): bo
     return true;
 }
 
+require_once dirname(__DIR__) . '/includes/Backend_Identity.php';
 require_once dirname(__DIR__) . '/includes/Model_Activator.php';
 require_once dirname(__DIR__) . '/includes/Video_Post_Type.php';
 require_once dirname(__DIR__) . '/includes/Video_Meta.php';

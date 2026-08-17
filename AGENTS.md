@@ -290,3 +290,33 @@ thread.
 - If unusually strict or redundant checks are retained after a function is
   proven, document the reason and the condition or review point for relaxing
   them.
+
+## Applicator and verifier locale determinism
+
+- **Pin collation semantics before comparing ordered machine output.** The R16
+  backend/local applicator generated its expected changed-path list with
+  Python's deterministic string ordering but compared it with shell `sort`
+  under the host's active locale. On that host, `_` collated differently, so
+  `Backend_Adapter_Factory.php` and `Backend_Adapter.php` appeared in a
+  different order even though the changed-path set was exactly correct. Any
+  applicator, verifier, manifest builder, checksum generator, or release tool
+  that depends on textual/path ordering must establish the same ordering rule
+  on every producer and consumer. For shell tooling, set `LC_ALL=C` (and
+  normally `LANG=C`) before `sort`, `comm`, or other collation-sensitive
+  operations unless a different locale is deliberately part of the contract.
+  Do not rely on the operator host's inherited locale.
+
+- **Do not make incidental ordering an authority boundary.** If the invariant is
+  only membership ("these paths and no others changed"), compare sets or
+  explicit missing/unexpected collections rather than positional arrays.
+  Require exact ordering only when order itself is semantically significant or
+  serialized into a canonical artifact. When exact order is required across
+  languages/tools, add a focused regression proving they produce identical
+  ordering for punctuation-sensitive names such as `A_B` versus `A_B_C` or
+  `Backend_Adapter.php` versus `Backend_Adapter_Factory.php`.
+
+- **Locale normalization belongs at the start of the verifier.** Apply the
+  deterministic locale before any order-sensitive command, not only at the one
+  comparison that previously failed. A repair must include a regression that
+  reproduces the historical path-order case and proves the normalized command
+  agrees with the expected ordering.

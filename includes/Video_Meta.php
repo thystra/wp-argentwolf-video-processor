@@ -272,13 +272,7 @@ final class Video_Meta
 
     public static function sanitize_backend_id(mixed $value): string
     {
-        if (! is_string($value) || strlen($value) > 64) {
-            return '';
-        }
-
-        return 1 === preg_match('/^[a-z0-9][a-z0-9_-]{0,63}$/D', $value)
-            ? $value
-            : '';
+        return Backend_Identity::sanitize($value);
     }
 
     public static function sanitize_remote_identifier(mixed $value, int $max_length): string
