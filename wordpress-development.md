@@ -66,6 +66,22 @@ A plugin must not write generated state into:
 If generated data is not meant to be public, protect it from direct access or
 choose an appropriate non-public storage design.
 
+## Runtime diagnostics and temporary-file lifecycle
+
+Classify plugin-created runtime data before selecting storage:
+
+- persistent application state belongs in WordPress-managed database/storage APIs appropriate to the data;
+- persistent private diagnostics require an explicitly non-public design and bounded retention;
+- short-lived process/bootstrap capture may use WordPress-resolved temporary storage only when cleanup is explicit on success and failure.
+
+For temporary files, prefer WordPress temporary-file facilities such as `get_temp_dir()` and `wp_tempnam()` rather than directly selecting a PHP/system temporary directory. A temporary file is not a retention mechanism. Import any diagnostic data that must persist into its authoritative store, bound the stored size, then delete the scratch file. Design stale-file reconciliation for abrupt process termination so a later run does not truncate the only remaining evidence before importing it.
+
+Every retained diagnostic facility needs a finite per-record size bound and a finite record-count or time-based retention policy. Error records are not exempt from retention limits. If administrators can tune retention, sanitize the setting to safe bounds and provide a generous but finite default.
+
+Do not put private runtime logs under uploads merely to satisfy a writable-path requirement unless direct web access is separately and portably prevented. Apache-only `.htaccess` protection is not a cross-server privacy boundary.
+
+`ABSPATH` is not categorically forbidden. Use it only when the semantic requirement is the WordPress installation root or a WordPress core include. Do not use it as a substitute for plugin-directory, content-directory, uploads, or writable-storage APIs.
+
 ## Filesystem confinement
 
 Treat filesystem destinations as security-sensitive inputs.
@@ -143,6 +159,8 @@ for proper unique naming.
 
 Guard executable PHP entry points against unintended direct web execution where
 appropriate.
+
+When a public product rename deliberately preserves established persisted identifiers for upgrade compatibility, keep those existing identifiers stable. Newly introduced global identifiers should use the current canonical plugin-specific prefix or slug rather than extending a legacy abbreviation or old product name.
 
 ## Third-party libraries and build inputs
 

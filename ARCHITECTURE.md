@@ -28,7 +28,8 @@ product name.
 - metadata stripping;
 - FFmpeg, FFprobe, and WP-CLI paths;
 - CPU and I/O priority;
-- stale-job recovery.
+- stale-job recovery;
+- worker diagnostic retention.
 
 The existing option name is retained for upgrade compatibility.
 
@@ -47,6 +48,8 @@ The recurring WordPress event does not encode video. `Worker_Launcher` checks
 the queue and starts a detached WP-CLI worker at configured low CPU and I/O
 priority. When automatic detached launch is unavailable, an operator may invoke
 `wp argent-video worker --once` from a system scheduler.
+
+Each detached launch has a database-backed diagnostic record. Bootstrap/output capture uses a short-lived WordPress temporary file; useful bounded output is persisted into the run record before the temporary file is removed, and stale captures are reconciled before later launches can discard evidence.
 
 ### Probe and transcoding
 
@@ -88,6 +91,8 @@ worker launch, CLI examples, and a link to the public GitHub project.
 
 The CLI command remains `wp argent-video` for compatibility.
 
+The Settings page also exposes bounded worker diagnostic history, administrator-configurable successful/error retention limits, and a protected clear-history action.
+
 ## Data ownership
 
 The plugin stores:
@@ -95,6 +100,7 @@ The plugin stores:
 - settings and worker state in WordPress options;
 - job state in the `argent_video_jobs` table;
 - processing status, errors, and output metadata in attachment post metadata;
+- bounded worker diagnostic history in the `argentwolf_video_processor_logs` table;
 - generated derivative files under
   `wp_upload_dir()['basedir']/argentwolf-video-processor/<attachment-id>/`.
 

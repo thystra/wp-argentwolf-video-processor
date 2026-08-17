@@ -56,8 +56,8 @@
 - [ ] Resolve or document every Plugin Check result.
 
 ## Milestone 6 — runtime upgrade validation
-
-- [ ] Install `0.3.1` on a clean WordPress test site with `WP_DEBUG` enabled.
+- [ ] Install `0.3.2` on a clean WordPress test site with `WP_DEBUG` enabled.
+- [ ] Upgrade a test site from active `0.3.1` and verify creation of `argentwolf_video_processor_logs` without changing `argent_video_jobs`.
 - [ ] Upgrade a test site from active `0.2.3`.
 - [ ] Verify the old-to-new plugin basename transition.
 - [ ] Verify all settings are preserved.
@@ -69,7 +69,6 @@
 - [ ] Verify scheduled dispatch does not run FFmpeg in WP-Cron.
 - [ ] Verify deactivation/reactivation and default non-destructive uninstall.
 - [ ] Verify settings and GitHub support links.
-
 ## Milestone 7 — WordPress.org submission
 
 - [ ] Confirm requested slug `argentwolf-video-processor`.

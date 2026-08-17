@@ -17,14 +17,16 @@ if (! defined('ARGENT_VIDEO_REMOVE_DATA_ON_UNINSTALL') || true !== ARGENT_VIDEO_
 
 global $wpdb;
 
-// Explicit opt-in destructive uninstall must remove the plugin-owned queue table.
+// Explicit opt-in destructive uninstall must remove both plugin-owned tables.
 // phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.DirectDatabaseQuery.SchemaChange
-$wpdb->query(
-    $wpdb->prepare(
-        'DROP TABLE IF EXISTS %i',
-        $wpdb->prefix . 'argent_video_jobs'
-    )
-);
+foreach (array('argent_video_jobs', 'argentwolf_video_processor_logs') as $table_suffix) {
+    $wpdb->query(
+        $wpdb->prepare(
+            'DROP TABLE IF EXISTS %i',
+            $wpdb->prefix . $table_suffix
+        )
+    );
+}
 // phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.DirectDatabaseQuery.SchemaChange
 delete_option('argent_video_processor_settings');
 delete_option('argent_video_processor_db_version');

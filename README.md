@@ -80,7 +80,8 @@ shared hosting.
 - output, path, and process-priority settings;
 - manual worker launch;
 - WP-CLI examples;
-- a link to the GitHub project for support and development.
+- a link to the GitHub project for support and development;
+- bounded database-backed worker diagnostic history and retention controls.
 
 ## WP-CLI
 
@@ -108,6 +109,8 @@ and contains no telemetry. hls.js is fetched only during controlled release
 builds, verified, and served locally from the installed plugin. Build-time
 `hls.VERSION` and `hls.SHA256` integrity records are not shipped in the runtime
 package.
+
+Worker diagnostic history is stored locally in the WordPress database with bounded retention; detached-process capture files are temporary and removed after import.
 
 ## Development and releases
 
