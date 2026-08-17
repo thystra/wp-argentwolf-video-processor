@@ -166,6 +166,19 @@ A video snapshots the applicable defaults when it is created. Later global
 profile changes affect new videos unless the operator explicitly applies them
 to existing/pending videos.
 
+### Managed backend assets versus external embeds
+
+A configured backend represents a manageable destination/asset relationship.
+An arbitrary embeddable PeerTube watch URL from an unconfigured origin is an
+external reference, not a configured backend.
+
+External PeerTube embeds:
+
+- do not synthesize a backend descriptor;
+- do not imply credentials, ownership, or destructive-management authority;
+- remain attached to the stable AWVP Video identity through a separate bounded
+  external-reference representation defined before block/editor implementation.
+
 ## 6. Multi-backend routing rules
 
 ### 6.1 One configured backend
@@ -180,8 +193,10 @@ or other ambiguous content metadata.
 
 When multiple backends are configured:
 
-- direct-to-backend mode: require explicit destination confirmation before any
-  video bytes are sent to a remote backend;
+- staged remote-upload mode: require explicit destination confirmation before
+  AWVP forwards any staged video bytes to a remote backend;
+- any future direct browser-to-backend mode must satisfy the same destination
+  gate before the browser receives upload authority;
 - WordPress-staging mode: the browser may upload the source to WordPress first,
   but AWVP must require a destination before forwarding it remotely.
 
@@ -315,12 +330,18 @@ or was manually overridden.
 
 Browser -> WordPress staging -> backend.
 
-Useful when destination is not yet selected or when direct backend upload is
-not available.
+Useful when destination is not yet selected; for PeerTube this staged path is
+the initial/default upload architecture.
 
 The staged source remains governed by explicit retention and cleanup rules.
 
-### 11.2 Direct backend upload
+### 11.2 Deferred direct browser-to-backend upload
+
+This is not an initial-release path. The normal PeerTube architecture is
+browser -> AWVP staging -> authenticated AWVP server -> PeerTube. Direct
+browser upload may be reconsidered later only with suitably scoped upload
+authority and an acceptable cross-origin/retry/security model.
+
 
 Browser -> backend, coordinated by WordPress/AWVP.
 
@@ -542,12 +563,15 @@ Never change a stored backend ID/UUID and assume the bytes moved.
 - multiple-backend explicit destination gate;
 - post-level "use for rest of this post" destination.
 
-### Tranche 2.0-7 — direct/resumable browser-to-backend upload
+### Tranche 2.0-7 — staged-transfer resilience and upload hardening
 
-- safe authorization/session mechanism;
-- no long-lived browser credentials;
-- progress/recovery;
-- fallback to WordPress staging where required.
+- harden temporary AWVP staging and cleanup/recovery behavior;
+- support retry-safe and resumable AWVP server-to-backend upload where the
+  verified backend API supports it;
+- reconcile interrupted transfers without duplicating remote assets;
+- preserve the untouched staging source until positive backend acceptance;
+- keep long-lived backend credentials out of browser JavaScript;
+- leave direct browser-to-backend upload as a post-initial-release optimization.
 
 ### Tranche 2.0-8 — publication synchronization
 

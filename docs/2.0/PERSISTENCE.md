@@ -15,7 +15,9 @@ The persistence model must support all of the following without breaking the
 - a backend instance plus channel as a destination;
 - more than one remote asset during safe copy/move/migration operations;
 - desired state separate from actual remote state;
-- WordPress-staging and direct-to-backend upload modes;
+- WordPress/AWVP staging with authenticated server-to-backend transfer as the
+  initial remote-upload mode;
+- future direct browser-to-backend upload only as an optional optimization;
 - per-video snapshots of operator-confirmed defaults;
 - post-level default destinations and stable per-post video sequence numbers;
 - asynchronous upload, processing, reconciliation, publication, and cleanup;
@@ -380,6 +382,28 @@ Tranche 2.0-3 must define a dedicated secret-store abstraction supporting:
 
 The encryption/key-management decision is intentionally deferred to the
 authentication tranche and must not be guessed into this schema.
+
+### Managed backend assets versus unmanaged external references
+
+The backend registry and `argent_video_remote_assets` table model assets tied to
+configured/manageable backend identity.
+
+An arbitrary PeerTube URL from an unconfigured origin is not a configured
+backend asset merely because it can be embedded. AWVP must not invent a
+`backend_id` to force such an embed into the managed remote-assets model.
+
+AWVP Video remains the stable WordPress identity for both managed backend media
+and unmanaged external embeds.
+
+Before block/editor implementation, the persistence contract must define a
+bounded protected representation for unmanaged external references. It must
+contain only normalized provider/origin/watch/embed identity, bounded non-secret
+cached metadata needed for rendering, and verification state. It must not confer
+management, publication, or deletion authority.
+
+Adding that protected metadata representation does not itself require a new
+custom table or a model database-version bump. Its exact field vocabulary and
+sanitization contract must be frozen before runtime implementation.
 
 ## 7. Backend eligibility and destination ambiguity
 

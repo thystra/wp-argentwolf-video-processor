@@ -149,6 +149,14 @@ Nonce success is not authorization.
 
 Long-lived backend credentials must never be returned through REST.
 
+Arbitrary external PeerTube metadata/embed lookups are SSRF-sensitive. Use the
+WordPress safe HTTP APIs intended for arbitrary URLs (for example
+`wp_safe_remote_get()` / `wp_safe_remote_request()`), which validate the
+requested URL and redirects with WordPress's HTTP URL safety checks. Treat all
+returned metadata, URLs, and HTML-facing values as untrusted input and apply
+contextual escaping at output.
+
+
 Structured registered meta should use explicit WordPress meta types and
 sanitization/auth callbacks. If native REST exposure is later enabled for
 array/object meta, provide the required REST schema and keep the CPT's
@@ -253,7 +261,9 @@ Requirements:
 - no duplicate bundled WordPress framework libraries;
 - purpose-built capability-aware REST endpoints;
 - block stores stable AWVP Video ID, not backend secrets;
-- file-drop/direct-upload behavior obeys the multi-backend destination gate;
+- file-drop/staged-upload behavior obeys the multi-backend destination gate;
+- any future direct browser-to-backend upload must obey the same destination
+  gate before upload authority is delegated;
 - existing `core/video` remains renderable and is not mass-converted on plugin
   activation.
 
@@ -308,6 +318,7 @@ Treat all of the following as untrusted:
 - attachment metadata;
 - filenames and paths;
 - backend URLs entered by administrators;
+- user-supplied external PeerTube/watch/embed URLs and origin-derived URLs;
 - PeerTube/API JSON;
 - channel IDs;
 - remote URLs/embed URLs;
