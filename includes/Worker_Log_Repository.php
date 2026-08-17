@@ -561,7 +561,7 @@ final class Worker_Log_Repository
         if ($size <= self::MAX_CAPTURE_BYTES) {
             $content = stream_get_contents($handle);
         } else {
-            $head = fread($handle, self::CAPTURE_HEAD_BYTES);
+            $head = stream_get_contents($handle, self::CAPTURE_HEAD_BYTES);
             $marker = "\n\n[ArgentWolf Video Processor diagnostic output truncated]\n\n";
             $tail_bytes = self::MAX_CAPTURE_BYTES - self::CAPTURE_HEAD_BYTES - strlen($marker);
             fseek($handle, -$tail_bytes, SEEK_END);

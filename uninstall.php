@@ -19,11 +19,11 @@ global $wpdb;
 
 // Explicit opt-in destructive uninstall must remove both plugin-owned tables.
 // phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.DirectDatabaseQuery.SchemaChange
-foreach (array('argent_video_jobs', 'argentwolf_video_processor_logs') as $table_suffix) {
+foreach (array('argent_video_jobs', 'argentwolf_video_processor_logs') as $argentwolf_video_processor_table_suffix) {
     $wpdb->query(
         $wpdb->prepare(
             'DROP TABLE IF EXISTS %i',
-            $wpdb->prefix . $table_suffix
+            $wpdb->prefix . $argentwolf_video_processor_table_suffix
         )
     );
 }
