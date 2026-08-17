@@ -547,14 +547,19 @@ final class Worker_Log_Repository
             return '';
         }
 
-        $size = filesize($path);
-        if (false === $size || 0 === $size) {
-            return '';
-        }
-
         // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fopen -- Bounded head/tail reading prevents unbounded worker diagnostics from entering memory or the database.
         $handle = fopen($path, 'rb');
         if (false === $handle) {
+            return '';
+        }
+
+        // Path-level stat results can be stale after a temporary capture is
+        // created, checked, and then written in the same PHP request.
+        $stat = fstat($handle);
+        $size = is_array($stat) ? (int) ($stat['size'] ?? 0) : 0;
+        if ($size < 1) {
+            // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose -- Closes the diagnostic stream opened above.
+            fclose($handle);
             return '';
         }
 

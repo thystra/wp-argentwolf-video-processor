@@ -24,6 +24,33 @@ awvp_release_assert(
     false !== file_put_contents($capture_path, $evidence),
     'Could not write temporary diagnostic evidence.'
 );
+$capture_reflection = new ReflectionClass($repo);
+$safe_capture_path = $capture_reflection->getMethod('safe_capture_path');
+$safe_capture_path->setAccessible(true);
+$read_capture = $capture_reflection->getMethod('read_capture');
+$read_capture->setAccessible(true);
+
+$validated_capture_path = (string) $safe_capture_path->invoke($repo, $capture_path);
+awvp_release_assert(
+    '' !== $validated_capture_path,
+    sprintf(
+        'Temporary capture failed safety validation. path=%s basename=%s temp_dir=%s',
+        $capture_path,
+        basename($capture_path),
+        get_temp_dir()
+    )
+);
+
+$precomplete_output = (string) $read_capture->invoke($repo, $validated_capture_path);
+awvp_release_assert(
+    str_contains($precomplete_output, $evidence),
+    sprintf(
+        'Temporary capture could not be read before persistence. path=%s bytes=%d',
+        $validated_capture_path,
+        strlen($precomplete_output)
+    )
+);
+
 $repo->mark_running($capture_run, max(1, getmypid()));
 $repo->complete(
     $capture_run,
@@ -33,7 +60,13 @@ $capture_row = awvp_release_worker_row($capture_run);
 awvp_release_assert('complete' === $capture_row['status'], 'Capture run did not complete.');
 awvp_release_assert(
     str_contains((string) $capture_row['diagnostic_output'], $evidence),
-    'Temporary capture evidence was not persisted.'
+    sprintf(
+        'Temporary capture evidence was not persisted. status=%s message=%s output_bytes=%d capture_path=%s',
+        (string) ($capture_row['status'] ?? ''),
+        (string) ($capture_row['message'] ?? ''),
+        strlen((string) ($capture_row['diagnostic_output'] ?? '')),
+        (string) ($capture_row['capture_path'] ?? '')
+    )
 );
 awvp_release_assert(
     null === $capture_row['capture_path'] || '' === (string) $capture_row['capture_path'],

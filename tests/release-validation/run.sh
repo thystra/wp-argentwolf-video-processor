@@ -103,7 +103,7 @@ on_exit() {
 }
 trap on_exit EXIT
 
-for command in docker sha256sum unzip openssl sed grep awk tr; do
+for command in docker sha256sum unzip openssl sed grep awk tr mktemp; do
     command -v "$command" >/dev/null 2>&1 || fail "Required host command missing: $command"
 done
 docker info >/dev/null 2>&1 || fail "Docker daemon is not accessible"
@@ -442,6 +442,46 @@ run_case() {
         echo "PAYLOAD_PHASE_RESULT=$phase PASS"
     }
 
+    run_plugin_check_gate() {
+        local check_mode="$1"
+        local runtime="$2"
+        local output_file
+        local rc
+
+        output_file="$(mktemp "$REPORT_DIR/.awvp-plugin-check.XXXXXX")"
+
+        set +e
+        if [[ "$runtime" == "yes" ]]; then
+            wp_cli plugin check "$PLUGIN_SLUG" \
+                --mode="$check_mode" \
+                --format="$PLUGIN_CHECK_FORMAT" \
+                --require=/var/www/html/wp-content/plugins/plugin-check/cli.php \
+                2>&1 | tee "$output_file"
+            rc=${PIPESTATUS[0]}
+        else
+            wp_cli plugin check "$PLUGIN_SLUG" \
+                --mode="$check_mode" \
+                --format="$PLUGIN_CHECK_FORMAT" \
+                2>&1 | tee "$output_file"
+            rc=${PIPESTATUS[0]}
+        fi
+        set -e
+
+        if (( rc != 0 )); then
+            rm -f "$output_file"
+            fail "Plugin Check command failed: mode=$check_mode runtime=$runtime rc=$rc"
+        fi
+
+        if grep -Eq $'(^|\t)(ERROR|WARNING)(\t|$)' "$output_file"; then
+            echo "PLUGIN_CHECK_FINDINGS_GATE=FAIL mode=$check_mode runtime=$runtime"
+            rm -f "$output_file"
+            fail "Plugin Check reported ERROR/WARNING findings"
+        fi
+
+        rm -f "$output_file"
+        echo "PLUGIN_CHECK_FINDINGS_GATE=PASS mode=$check_mode runtime=$runtime"
+    }
+
     verify_installed_package() {
         local artifact="$1"
         local expected_sha="$2"
@@ -528,18 +568,13 @@ run_case() {
         for check_mode in "${PLUGIN_CHECK_STATIC_MODES[@]:-}"; do
             CURRENT_PHASE="plugin-check-static-$check_mode"
             echo "--- Plugin Check static installed-exact-package mode=$check_mode"
-            wp_cli plugin check "$PLUGIN_SLUG" \
-                --mode="$check_mode" \
-                --format="$PLUGIN_CHECK_FORMAT"
+            run_plugin_check_gate "$check_mode" "no"
         done
 
         for check_mode in "${PLUGIN_CHECK_RUNTIME_MODES[@]:-}"; do
             CURRENT_PHASE="plugin-check-runtime-$check_mode"
             echo "--- Plugin Check installed/runtime mode=$check_mode"
-            wp_cli plugin check "$PLUGIN_SLUG" \
-                --mode="$check_mode" \
-                --format=table \
-                --require=/var/www/html/wp-content/plugins/plugin-check/cli.php
+            run_plugin_check_gate "$check_mode" "yes"
         done
     else
         fail "Unknown case mode: $mode"
@@ -625,6 +660,7 @@ echo "WordPress runtime networks=INTERNAL"
 echo "DB consumer-path readiness=REQUIRED_AND_PASSED"
 echo "Installed package byte identity=REQUIRED_AND_PASSED"
 echo "Plugin Check target=INSTALLED_EXACT_PACKAGE_SLUG"
+echo "Plugin Check findings gate=EXPLICIT_ERROR_WARNING_PARSE"
 echo "WP_HTTP_BLOCK_EXTERNAL=TRUE"
 echo "Host ports published=NO"
 echo "PeerTube/API action=NO"

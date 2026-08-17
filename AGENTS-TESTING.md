@@ -253,6 +253,18 @@ match newer naming conventions.
 The 0.3.2 payload exercises the database-backed worker diagnostic repository
 against real WordPress/database APIs.
 
+### Read changing temporary captures from the opened handle
+
+PHP stat-family calls can return cached metadata when the same path is checked
+and then modified during one PHP request. Worker captures have exactly that
+lifecycle: WordPress creates an empty temporary file, the repository validates
+it, output is written, and the repository reads it later in the same request.
+
+Open the capture first and obtain its current size with `fstat()` on that
+handle rather than trusting a path-level `filesize()` result. The release
+fixture must prove a just-written unique marker is readable before completion
+and again after database persistence.
+
 Require:
 
 - a temporary capture is created through WordPress temporary-file facilities;
@@ -324,8 +336,13 @@ Durable regression lesson from the 0.3.2 release-validation r2 harness:
 
 ### Plugin Check findings must fail the gate
 
-Ordinary Plugin Check table output is reporting output and must not be assumed
-to make a shell harness fail merely because it prints an `ERROR` or `WARNING`.
+Ordinary Plugin Check output is reporting output and must not be assumed to
+make a shell harness fail merely because it prints an `ERROR` or `WARNING`.
+
+The runner must independently parse canonical tabular Plugin Check output and
+fail when any result row contains type `ERROR` or `WARNING`, in addition to
+failing on a nonzero command exit status. Static and runtime checks must use
+the same payload-declared format.
 
 The canonical payload must use a Plugin Check strict output format such as
 `strict-table`, unless a reviewed payload explicitly defines another

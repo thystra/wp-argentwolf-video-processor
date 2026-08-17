@@ -63,3 +63,11 @@ than merely appearing in otherwise-successful command output.
 
 Upgrade seed phases must copy `$wpdb->insert_id` immediately after the insert
 whose identity they intend to preserve.
+
+## Findings and capture-read gates
+
+The runner independently fails on tabular Plugin Check `ERROR` or `WARNING`
+rows; command exit status is not the sole findings gate.
+
+Worker-diagnostic phases prove newly written capture evidence can be read
+immediately before completion and then survives database persistence.
