@@ -85,6 +85,12 @@ Therefore:
 
 Do not create custom tables merely for convenience.
 
+AWVP deliberately retains the established `_argent_video_` prefix for its
+plugin-internal post meta. WordPress treats leading-underscore post meta as
+protected/hidden from the ordinary Custom Fields UI. This is a documented
+project-specific exception for post metadata, not permission to invent
+WordPress-core `wp_*` globals or unnamespaced identifiers.
+
 ## 4. Database contract
 
 Custom tables must:
@@ -92,11 +98,16 @@ Custom tables must:
 - use `$wpdb->prefix`;
 - use `$wpdb->get_charset_collate()`;
 - use WordPress-compatible `dbDelta()` formatting where appropriate;
-- have an explicit non-autoloaded plugin schema-version option;
+- have an explicit plugin schema-version option; a tiny version scalar checked
+  on every request may be deliberately autoloaded, while large or sensitive
+  configuration remains non-autoloaded;
 - upgrade idempotently;
 - avoid portable-schema-hostile SQL features unless deliberately justified;
 - use WordPress database APIs and parameterized queries;
 - store 2.0 custom-table timestamps consistently in UTC;
+- keep indexed textual widths compatible with WordPress's conservative
+  utf8mb4/index-length conventions unless a deliberate database minimum is
+  declared and tested;
 - be covered by clean-install and upgrade tests;
 - never perform destructive data conversion simply because schema installation
   runs.
@@ -112,6 +123,14 @@ attachment adoption, per-post sequence allocation, task claiming, or primary
 remote-asset promotion), use an atomic/locked repository operation and test the
 supported concurrency behavior. Do not rely on a read-then-write sequence that
 can race.
+
+Do not advance a schema-version option merely because `dbDelta()` was invoked.
+Verify the required tables and critical indexes first; failed or partial schema
+installation must remain visibly retryable.
+
+Foreign/durable identifiers must be validated in canonical form. Do not use
+"sanitization" that can turn one invalid identifier into a different valid
+attachment, post, backend, channel, or remote asset ID.
 
 ## 5. REST/API contract
 

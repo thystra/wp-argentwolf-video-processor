@@ -39,6 +39,9 @@ final class Plugin
 
         add_filter('cron_schedules', array($this, 'cron_schedules'));
         add_action('plugins_loaded', array(Activator::class, 'maybe_upgrade'));
+        add_action('plugins_loaded', array(Model_Activator::class, 'maybe_upgrade'));
+        add_action('init', array(Video_Post_Type::class, 'register'), 5);
+        add_action('init', array(Video_Meta::class, 'register'), 6);
         add_action('init', array(Activator::class, 'schedule_dispatch'));
         add_action('add_attachment', array($queue, 'maybe_enqueue_attachment'));
         add_action('delete_attachment', array($queue, 'delete_attachment'));

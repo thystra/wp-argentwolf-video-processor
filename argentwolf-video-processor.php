@@ -25,6 +25,9 @@ define('ARGENT_VIDEO_DIR', plugin_dir_path(__FILE__));
 define('ARGENT_VIDEO_URL', plugin_dir_url(__FILE__));
 
 require_once ARGENT_VIDEO_DIR . 'includes/Settings.php';
+require_once ARGENT_VIDEO_DIR . 'includes/Model_Activator.php';
+require_once ARGENT_VIDEO_DIR . 'includes/Video_Post_Type.php';
+require_once ARGENT_VIDEO_DIR . 'includes/Video_Meta.php';
 require_once ARGENT_VIDEO_DIR . 'includes/Activator.php';
 require_once ARGENT_VIDEO_DIR . 'includes/Job_Repository.php';
 require_once ARGENT_VIDEO_DIR . 'includes/Storage.php';

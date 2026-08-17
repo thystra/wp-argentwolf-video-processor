@@ -109,6 +109,13 @@ Remote publication state is intentionally separate from WordPress post status.
 Use narrowly registered, validated metadata with the established
 `_argent_video_` prefix.
 
+The leading underscore is deliberate for these plugin-internal post-meta keys:
+WordPress treats underscore-prefixed post meta as protected/hidden from the
+ordinary Custom Fields UI. This is a documented project-specific exception to
+the generic guidance against inventing reserved-looking global identifiers; the
+keys remain fully namespaced with the established `argent_video` project
+identity and are not WordPress-core `wp_*` identifiers.
+
 Initial logical fields:
 
 ### `_argent_video_attachment_id`
@@ -325,6 +332,11 @@ A backend ID is immutable once referenced by an AWVP Video or remote asset.
 Renaming a label does not change the ID. Replacing one logical server/account
 with another creates a new backend ID.
 
+Backend IDs use the canonical lowercase ASCII form
+`[a-z0-9][a-z0-9_-]{0,63}`. Code must validate this form exactly rather than
+silently lowercasing, stripping, or otherwise rewriting a supplied durable
+identifier into a different backend ID.
+
 A referenced backend descriptor must not be silently hard-deleted from the
 configuration map. "Remove" operations retire/tombstone the descriptor while
 remote/video records still reference it, preserving enough non-secret identity
@@ -413,7 +425,7 @@ id                      bigint(20) unsigned NOT NULL AUTO_INCREMENT
 video_post_id           bigint(20) unsigned NOT NULL
 backend_id              varchar(64) NOT NULL
 channel_id              varchar(191) DEFAULT NULL
-remote_id               varchar(191) DEFAULT NULL
+remote_id               varchar(127) DEFAULT NULL
 role                    varchar(24) NOT NULL DEFAULT 'secondary'
 state                   varchar(32) NOT NULL DEFAULT 'creating'
 desired_privacy         varchar(32) DEFAULT NULL
@@ -438,6 +450,18 @@ Required indexes:
 - key on `(video_post_id, state)`;
 - key on `(backend_id, state)`;
 - key on `(state, last_synced_at)` for reconciliation scans.
+
+The `(backend_id, remote_id)` unique index deliberately budgets at most 191
+indexed characters (`64 + 127`). WordPress core retains a conservative
+191-character utf8mb4 index-length convention for compatibility with older
+supported MySQL/MariaDB/InnoDB configurations. Increasing either indexed text
+length requires a separately reviewed database-minimum/index-compatibility
+decision.
+
+`channel_id` is an opaque backend identifier, not display text. It may be up to
+191 characters but must be accepted only when it is already in the permitted
+text form; sanitization must not rewrite markup/control characters into a
+different valid remote identifier.
 
 All timestamps in 2.0 custom tables are stored as UTC WordPress/MySQL datetime
 values. Presentation converts them to the site's/user's timezone.
@@ -544,9 +568,13 @@ runtime contracts and will be defined with the implementing tranche.
 Do not make the new 2.0 model fight with the legacy queue's existing
 `argent_video_processor_db_version = 1`.
 
-Create a separate, non-autoloaded model schema option:
+Create a separate model schema option:
 
 `argent_video_processor_model_db_version`
+
+This is a tiny scalar checked on every request by the model upgrade gate, so it
+is deliberately autoloaded. Backend descriptors, workflow/profile data, and
+secrets remain separate and non-autoloaded.
 
 The new model starts at schema version `1`.
 
@@ -562,6 +590,12 @@ Use `$wpdb->prefix`, `$wpdb->get_charset_collate()`, and `dbDelta()` with
 WordPress-compatible SQL formatting.
 
 Installation/upgrade must be idempotent.
+
+The model schema version must be written only after the installer verifies that
+both supplemental tables and their required indexes exist. A partial/failed
+`dbDelta()` run must leave the model version behind the target version so a
+later request can retry and diagnostics can report the incomplete schema rather
+than falsely treating it as current.
 
 Schema installation must never:
 
@@ -733,7 +767,12 @@ Before the persistence implementation is merged:
 18. referenced backend IDs cannot be silently deleted/reused;
 19. primary remote-asset promotion preserves exactly one unambiguous primary;
 20. new custom-table timestamps are verified as UTC;
-21. WordPress Plugin Check is run when an installable 2.0 package is eventually
+21. composite textual indexes remain compatible with the declared WordPress/
+    database support floor;
+22. schema version is not advanced when required tables/indexes are absent;
+23. strict ID sanitizers reject negative, malformed, rewritten, and overflow
+    foreign/durable identifiers rather than mapping them to another ID;
+24. WordPress Plugin Check is run when an installable 2.0 package is eventually
     produced, followed by independent manual review.
 
 ## 18. Explicitly deferred decisions

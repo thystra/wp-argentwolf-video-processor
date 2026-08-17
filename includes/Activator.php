@@ -16,6 +16,7 @@ final class Activator
     public static function activate(): void
     {
         self::create_table();
+        Model_Activator::install();
         self::schedule_dispatch();
     }
 
