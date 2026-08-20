@@ -1,6 +1,11 @@
 <!-- File: CHANGELOG.md -->
 # Changelog
 
+## 0.3.3 - 2026-08-20
+
+- Updated WordPress compatibility metadata to indicate testing through WordPress 7.1.
+- No functional or runtime behavior changes from 0.3.2.
+
 ## 0.3.2 - 2026-08-17
 
 - Replace the append-only system temporary worker log with bounded database-backed worker diagnostic history.

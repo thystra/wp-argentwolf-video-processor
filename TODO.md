@@ -56,8 +56,9 @@
 - [ ] Resolve or document every Plugin Check result.
 
 ## Milestone 6 — runtime upgrade validation
-- [ ] Install `0.3.2` on a clean WordPress test site with `WP_DEBUG` enabled.
-- [ ] Upgrade a test site from active `0.3.1` and verify creation of `argentwolf_video_processor_logs` without changing `argent_video_jobs`.
+- [x] Install `0.3.2` on a clean WordPress test site with `WP_DEBUG` enabled.
+- [x] Upgrade a test site from active `0.3.1` and verify creation of `argentwolf_video_processor_logs` without changing `argent_video_jobs`.
+- [ ] Build, validate, tag, publish, and submit `0.3.3` with `Tested up to: 7.1`.
 - [ ] Upgrade a test site from active `0.2.3`.
 - [ ] Verify the old-to-new plugin basename transition.
 - [ ] Verify all settings are preserved.
