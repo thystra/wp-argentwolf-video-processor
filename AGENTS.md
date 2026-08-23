@@ -84,6 +84,8 @@ must remain outside the submitted plugin package. Do not retain a legacy
 migration path in the public runtime unless that compatibility behavior has
 been intentionally designed, reviewed, and tested as a supported feature.
 
+Existing legacy identifiers remain where compatibility requires them. New global identifiers introduced after the public rename should use the canonical `argentwolf_video_processor_*` prefix (or the full `argentwolf-video-processor` slug where hyphenated slugs are appropriate) unless a separately reviewed compatibility requirement says otherwise.
+
 ## Architecture invariants
 
 - Preserve every original WordPress attachment.
@@ -118,6 +120,9 @@ been intentionally designed, reviewed, and tested as a supported feature.
 - Treat shell command paths and arguments as untrusted. Validate configuration,
   use fixed argument construction, and quote arguments safely before execution.
 - Public requests must never directly execute FFmpeg.
+- Persistent operational diagnostics belong in bounded database-backed history, not append-only filesystem logs.
+- Detached-process/bootstrap capture is ephemeral scratch data: allocate it through WordPress temporary-file facilities, associate it with a durable run record before launch, persist bounded useful output before deletion, and reconcile stale captures before a later launch can discard evidence.
+- Bound diagnostics in both dimensions: enforce a per-record capture ceiling and a finite record-count retention policy. Error retention must also be bounded and administrator-configurable.
 
 ## Source layout
 
@@ -161,6 +166,12 @@ reimplemented ad hoc by individual callers.
   be retained in maintainer-local project support storage, but must not be
   shipped in the WordPress.org package.
 
+Applicators and validators are part of the release-safety boundary. When an applicator defect is discovered, record the failure signature, root cause, prevention rule, and a focused regression guard rather than merely repairing the immediate anchor.
+
+Prefer structural edits over presentation-sensitive text anchors. In descending order of preference, use an exact reviewed Git base or file checksum; file path plus class/method/function/hook identity; parser/token/AST or keyed-field structure; a reviewed unified patch; explicit managed-region markers; and only then tightly scoped plain-text matching for small controlled files. Avoid anchors that depend on whitespace, indentation, wrapping, bullet order, or the exact wording of natural-language prose when a more stable boundary exists.
+
+For documentation on an exact reviewed Git base, patch by parsed section boundaries or install a reviewed complete-file/unified-patch result, then validate the resulting diff and required semantic content. Do not make an otherwise-correct applicator fail merely because one explanatory sentence was rewrapped or rephrased.
+
 ## Validation
 
 Before commit, run the applicable complete suite. At minimum:
@@ -191,6 +202,13 @@ Storage or deletion changes also require focused tests proving that:
 
 Run tests against the staged prospective tree when practical, not only the
 developer's mutable working copy.
+
+Temporary-process and diagnostic-lifecycle changes also require focused regression coverage proving that:
+
+- temporary process capture uses WordPress-resolved temporary storage and cleans up on normal completion, process/launch failure, and partial-allocation failure;
+- diagnostic data is persisted before its temporary capture is deleted; when deletion depends on a database write, require exactly one affected durable row and preserve the capture on zero-row or failed updates;
+- stale detached-worker captures are recovered without truncating the only remaining evidence;
+- diagnostic retention limits and per-run size bounds are enforced.
 
 ## Distribution package invariants
 
@@ -242,6 +260,18 @@ When the Plugins Team requests corrections, review the whole codebase for the
 same class of issue, not only the cited line. Upload the complete corrected ZIP
 through the submission page and reply briefly in the existing review email
 thread.
+
+## WordPress.org review lessons
+
+WordPress.org reviewer findings are durable engineering lessons, not one-line corrections. For each finding, identify the failure class and root cause, inspect the complete source tree for related instances, encode the prevention rule in project guidance, and add focused regression coverage before treating the correction as complete.
+
+- Classify every plugin-created file by ownership, lifetime, and exposure before choosing storage. Persistent application/diagnostic state and short-lived process scratch are different classes.
+- Prefer WordPress path/file APIs over raw environment assumptions. Use `wp_upload_dir()` for managed generated uploads storage and WordPress temporary-file facilities (`get_temp_dir()` / `wp_tempnam()`) for genuinely temporary scratch that has explicit cleanup.
+- Do not allow diagnostic logs or process captures to accumulate indefinitely in the system temporary directory.
+- Non-public diagnostics must not become publicly downloadable merely because uploads storage is convenient; database-backed local history is preferred for AWVP worker diagnostics.
+- Every temporary-file allocation needs failure-safe cleanup, including partial allocation and external-process launch failures.
+- Do not mechanically replace `ABSPATH` because a reviewer highlighted it. Classify the path semantics: plugin paths use plugin directory APIs, uploads use `wp_upload_dir()`, while WP-CLI `--path` legitimately requires the WordPress installation root.
+- A persistent or append-only diagnostic stream requires explicit size and retention bounds. “Keep errors” never means unlimited growth.
 
 ## Release discipline
 
@@ -320,3 +350,13 @@ thread.
   comparison that previously failed. A repair must include a regression that
   reproduces the historical path-order case and proves the normalized command
   agrees with the expected ordering.
+
+## Stable 1.0 and shared engineering baseline
+
+Current stable release: `1.0.0`.
+
+Cross-project release, validator, partial-mutation, shared-host, and ZFS lessons
+are centralized in `wp-plugin-template`. AWVP keeps project-specific behavior,
+release evidence, and test contracts here. Future work, especially the 2.0
+line, applies the shared template guidance together with `AGENTS-TESTING.md`,
+`wordpress-development.md`, and the 2.0 architecture.

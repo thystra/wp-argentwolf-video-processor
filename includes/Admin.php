@@ -17,7 +17,8 @@ final class Admin
         private readonly Queue $queue,
         private readonly Bulk_Queue $bulk,
         private readonly Worker_Launcher $launcher,
-        private readonly Diagnostics $diagnostics
+        private readonly Diagnostics $diagnostics,
+        private readonly Worker_Log_Repository $worker_logs
     ) {
     }
 
@@ -156,9 +157,26 @@ final class Admin
             wp_die(esc_html__('You are not allowed to launch the worker.', 'argentwolf-video-processor'));
         }
         check_admin_referer('argent_video_dispatch');
-        $result = $this->launcher->launch();
+        $result = $this->launcher->launch('manual');
         update_option('argent_video_processor_last_launch', $result, false);
         $this->redirect(! empty($result['ok']) ? 'launched' : 'error', (string) ($result['message'] ?? ''));
+    }
+
+    public function clear_worker_logs_action(): void
+    {
+        if (! current_user_can('manage_options')) {
+            wp_die(esc_html__('You are not allowed to clear worker diagnostics.', 'argentwolf-video-processor'));
+        }
+        check_admin_referer('argentwolf_video_processor_clear_worker_logs');
+        $deleted = $this->worker_logs->clear_retained();
+        $this->redirect(
+            'logs-cleared',
+            sprintf(
+                /* translators: %d: number of worker diagnostic records deleted. */
+                _n('%d worker diagnostic record deleted.', '%d worker diagnostic records deleted.', $deleted, 'argentwolf-video-processor'),
+                $deleted
+            )
+        );
     }
 
     public function notices(): void
@@ -181,6 +199,7 @@ final class Admin
             'bulk'      => $message ?: __('Video backlog queued.', 'argentwolf-video-processor'),
             'cancelled' => __('Queued video processing was cancelled.', 'argentwolf-video-processor'),
             'launched'  => __('The background video worker was launched.', 'argentwolf-video-processor'),
+            'logs-cleared' => $message ?: __('Worker diagnostic history was cleared.', 'argentwolf-video-processor'),
             'error'     => $message ?: __('The video action failed.', 'argentwolf-video-processor'),
         );
         $class = 'error' === $notice ? 'notice notice-error' : 'notice notice-success';
@@ -198,6 +217,7 @@ final class Admin
         $last_launch = get_option('argent_video_processor_last_launch', array());
         $last_worker = get_option('argent_video_processor_last_worker_run', array());
         $bulk = $this->bulk->summary();
+        $worker_logs = $this->worker_logs->list(20);
         ?>
         <div class="wrap">
             <h1><?php esc_html_e('ArgentWolf Video Processor', 'argentwolf-video-processor'); ?></h1>
@@ -212,6 +232,63 @@ final class Admin
                 <tr><th><?php esc_html_e('Last worker run', 'argentwolf-video-processor'); ?></th><td><code><?php echo esc_html(wp_json_encode($last_worker, JSON_UNESCAPED_SLASHES)); ?></code></td></tr>
             </tbody></table>
             <p><a class="button" href="<?php echo esc_url(wp_nonce_url(admin_url('admin-post.php?action=argent_video_dispatch'), 'argent_video_dispatch')); ?>"><?php esc_html_e('Launch worker now', 'argentwolf-video-processor'); ?></a></p>
+
+        <h2><?php esc_html_e('Worker history', 'argentwolf-video-processor'); ?></h2>
+        <p><?php esc_html_e('Recent worker diagnostics are stored locally in the WordPress database. Temporary process captures are imported and removed after each run.', 'argentwolf-video-processor'); ?></p>
+        <table class="widefat striped" style="max-width:1100px">
+            <thead><tr><th><?php esc_html_e('Time', 'argentwolf-video-processor'); ?></th><th><?php esc_html_e('Trigger', 'argentwolf-video-processor'); ?></th><th><?php esc_html_e('Status', 'argentwolf-video-processor'); ?></th><th><?php esc_html_e('Jobs', 'argentwolf-video-processor'); ?></th><th><?php esc_html_e('Details', 'argentwolf-video-processor'); ?></th></tr></thead>
+            <tbody>
+            <?php if ([] === $worker_logs) : ?>
+                <tr><td colspan="5"><?php esc_html_e('No retained worker diagnostic history.', 'argentwolf-video-processor'); ?></td></tr>
+            <?php else : ?>
+                <?php foreach ($worker_logs as $worker_log) : ?>
+                    <?php
+                    $worker_status = (string) ($worker_log['status'] ?? 'unknown');
+                    $worker_status_label = match ($worker_status) {
+                        'launching' => __('Launching', 'argentwolf-video-processor'),
+                        'running'   => __('Running', 'argentwolf-video-processor'),
+                        'complete'  => (int) ($worker_log['jobs_failed'] ?? 0) > 0
+                            ? __('Complete (with job errors)', 'argentwolf-video-processor')
+                            : __('Complete', 'argentwolf-video-processor'),
+                        'failed'    => __('Failed', 'argentwolf-video-processor'),
+                        default     => __('Unknown', 'argentwolf-video-processor'),
+                    };
+                    $trigger_source = (string) ($worker_log['trigger_source'] ?? 'unknown');
+                    $trigger_label = match ($trigger_source) {
+                        'automatic' => __('Automatic', 'argentwolf-video-processor'),
+                        'manual'    => __('Manual', 'argentwolf-video-processor'),
+                        'cli'       => __('WP-CLI', 'argentwolf-video-processor'),
+                        default     => __('Unknown', 'argentwolf-video-processor'),
+                    };
+                    $jobs_summary = sprintf(
+                        /* translators: 1: processed jobs, 2: failed jobs, 3: recovered stale jobs. */
+                        __('%1$d processed / %2$d failed / %3$d recovered', 'argentwolf-video-processor'),
+                        (int) ($worker_log['jobs_processed'] ?? 0),
+                        (int) ($worker_log['jobs_failed'] ?? 0),
+                        (int) ($worker_log['jobs_recovered'] ?? 0)
+                    );
+                    ?>
+                    <tr>
+                        <td><?php echo esc_html((string) ($worker_log['created_at'] ?? '')); ?></td>
+                        <td><?php echo esc_html($trigger_label); ?></td>
+                        <td><?php echo esc_html($worker_status_label); ?></td>
+                        <td><?php echo esc_html($jobs_summary); ?></td>
+                        <td>
+                            <?php echo esc_html((string) ($worker_log['message'] ?? '')); ?>
+                            <?php if (! empty($worker_log['diagnostic_excerpt'])) : ?>
+                                <details><summary><?php esc_html_e('Diagnostic output', 'argentwolf-video-processor'); ?></summary><pre style="white-space:pre-wrap;max-width:650px;max-height:24em;overflow:auto"><?php echo esc_html((string) $worker_log['diagnostic_excerpt']); ?></pre></details>
+                            <?php endif; ?>
+                        </td>
+                    </tr>
+                <?php endforeach; ?>
+            <?php endif; ?>
+            </tbody>
+        </table>
+        <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" data-confirm="<?php esc_attr_e('Clear all retained completed and failed worker diagnostics?', 'argentwolf-video-processor'); ?>" onsubmit="return window.confirm(this.dataset.confirm);" style="margin-top:1em">
+            <input type="hidden" name="action" value="argentwolf_video_processor_clear_worker_logs">
+            <?php wp_nonce_field('argentwolf_video_processor_clear_worker_logs'); ?>
+            <?php submit_button(__('Clear retained worker history', 'argentwolf-video-processor'), 'secondary', 'submit', false); ?>
+        </form>
 
             <h2><?php esc_html_e('Process existing videos', 'argentwolf-video-processor'); ?></h2>
             <p><?php esc_html_e('Backlog jobs are added to the same one-at-a-time queue used for new uploads. The page request only queues work; it does not run FFmpeg.', 'argentwolf-video-processor'); ?></p>
@@ -288,6 +365,22 @@ final class Admin
                     <?php $this->number_row('ionice_class', 'I/O scheduling class', $settings); ?>
                     <?php $this->number_row('ionice_level', 'I/O priority level', $settings); ?>
                     <?php $this->number_row('stale_job_minutes', 'Stale worker recovery (minutes)', $settings); ?>
+                    <?php $this->number_row(
+                        'worker_log_success_limit',
+                        __('Successful worker logs retained', 'argentwolf-video-processor'),
+                        $settings,
+                        __('Number of successful worker runs to retain. Older successful diagnostics are removed automatically. Set to 0 to retain none.', 'argentwolf-video-processor'),
+                        0,
+                        500
+                    ); ?>
+                    <?php $this->number_row(
+                        'worker_log_error_limit',
+                        __('Error worker logs retained', 'argentwolf-video-processor'),
+                        $settings,
+                        __('Maximum failed or job-error worker runs to retain. Default 100; each run stores at most 512 KiB of captured diagnostic output. Set to 0 to retain none.', 'argentwolf-video-processor'),
+                        0,
+                        1000
+                    ); ?>
                 </table>
                 <?php submit_button(); ?>
             </form>
@@ -330,11 +423,18 @@ wp argent-video worker --once</pre>
     }
 
     /** @param array<string, mixed> $settings */
-    private function number_row(string $key, string $label, array $settings): void
-    {
+    private function number_row(
+        string $key,
+        string $label,
+        array $settings,
+        string $description = '',
+        ?int $minimum = null,
+        ?int $maximum = null
+    ): void {
         ?>
         <tr><th scope="row"><label for="argent-<?php echo esc_attr($key); ?>"><?php echo esc_html($label); ?></label></th><td>
-            <input class="small-text" type="number" id="argent-<?php echo esc_attr($key); ?>" name="<?php echo esc_attr(Settings::OPTION); ?>[<?php echo esc_attr($key); ?>]" value="<?php echo esc_attr((string) $settings[$key]); ?>">
+            <input class="small-text" type="number" id="argent-<?php echo esc_attr($key); ?>" name="<?php echo esc_attr(Settings::OPTION); ?>[<?php echo esc_attr($key); ?>]" value="<?php echo esc_attr((string) $settings[$key]); ?>"<?php if (null !== $minimum) : ?> min="<?php echo esc_attr((string) $minimum); ?>"<?php endif; ?><?php if (null !== $maximum) : ?> max="<?php echo esc_attr((string) $maximum); ?>"<?php endif; ?>>
+            <?php if ('' !== $description) : ?><p class="description"><?php echo esc_html($description); ?></p><?php endif; ?>
         </td></tr>
         <?php
     }

@@ -27,13 +27,14 @@ final class Plugin
         $this->booted = true;
 
         $jobs = new Job_Repository();
+        $worker_logs = new Worker_Log_Repository();
         $queue = new Queue($jobs);
         $bulk = new Bulk_Queue($jobs, $queue);
         $runner = new Process_Runner();
         $probe = new Probe($runner);
         $transcoder = new Transcoder($runner, $probe);
         $worker = new Worker($jobs, $transcoder);
-        $launcher = new Worker_Launcher($jobs);
+        $launcher = new Worker_Launcher($jobs, $worker_logs);
         $player = new Player();
         $renderer = new Renderer($player);
         $diagnostics = new Diagnostics();
@@ -41,7 +42,7 @@ final class Plugin
         $this->backend_factory = new Backend_Adapter_Factory(
             new Local_Backend_Adapter($queue, $diagnostics)
         );
-        $admin = new Admin($jobs, $queue, $bulk, $launcher, $diagnostics);
+        $admin = new Admin($jobs, $queue, $bulk, $launcher, $diagnostics, $worker_logs);
 
         add_filter('cron_schedules', array($this, 'cron_schedules'));
         add_action('plugins_loaded', array(Activator::class, 'maybe_upgrade'));
@@ -66,11 +67,12 @@ final class Plugin
             add_action('admin_post_argent_video_bulk_queue', array($admin, 'bulk_action'));
             add_action('admin_post_argent_video_cancel_attachment', array($admin, 'cancel_action'));
             add_action('admin_post_argent_video_dispatch', array($admin, 'dispatch_action'));
+            add_action('admin_post_argentwolf_video_processor_clear_worker_logs', array($admin, 'clear_worker_logs_action'));
             add_action('admin_notices', array($admin, 'notices'));
         }
 
         if (defined('WP_CLI') && WP_CLI) {
-            \WP_CLI::add_command('argent-video', new CLI_Command($jobs, $queue, $bulk, $worker, $diagnostics));
+            \WP_CLI::add_command('argent-video', new CLI_Command($jobs, $queue, $bulk, $worker, $diagnostics, $worker_logs));
         }
     }
 

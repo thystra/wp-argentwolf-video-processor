@@ -2,7 +2,7 @@
 
 Status: proposed 2.0 development contract
 Target branch: `develop-2.0`
-Release assumption: the submitted 0.3.1 review line becomes the stable 1.0 line, subject to review-required fixes.
+Stable baseline: WordPress.org-published `1.0.0`; `v1.0.0` identifies the released source, while later stable-main documentation/closure commits do not change the released artifact.
 
 ## 1. Product direction
 
@@ -632,3 +632,28 @@ The foundation tranche does not:
 - migrate the database.
 
 Those require separately reviewed implementation tranches.
+
+## Stable 1.0 synchronization
+
+The stable 1.0 line was forward-ported into `develop-2.0` after the first public
+WordPress.org release.
+
+Authority at synchronization:
+
+- released `v1.0.0` source:
+  `f656cdaba54fa63771187ca8b4fa6e19a20989f6`;
+- canonical/public Forgejo 1.0.0 ZIP SHA-256:
+  `7bbafd11c4d1f2805cfe66bb448ddac656eecc8bb2d2d12adf23a7173225468e`;
+- stable `main` synchronization point:
+  `a7849773754dc03d527df8b25a3571ebed673ab6`;
+- pre-synchronization `develop-2.0` tip:
+  `76909b3afc652e8506c66f395ab475013f95f76f`.
+
+The merge preserves both sides of the intentional divergence:
+
+- stable 1.0 queue/worker-diagnostics/database/release-review fixes;
+- the existing 2.0 persistence model, backend registry/local adapter, and
+  PeerTube connection contracts.
+
+This synchronization does not itself bump the runtime version to 2.0.0 and is
+not a 2.0 release.
