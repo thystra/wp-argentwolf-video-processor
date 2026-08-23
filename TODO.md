@@ -89,3 +89,16 @@
 - [ ] Safe cancellation of an active FFmpeg process.
 - [ ] Optional additional adaptive codecs after compatibility review.
 - [ ] Multisite-specific administration and queue behavior.
+
+## 1.0 release closure
+
+- [x] Receive WordPress.org approval for the corrected 0.3.3 review package.
+- [x] Promote the approved codebase to metadata-only stable version 1.0.0.
+- [x] Build one canonical 1.0.0 ZIP from the reviewed Forgejo commit.
+- [x] Validate exact 0.3.3 -> 1.0.0 upgrade and installed-package byte identity.
+- [x] Pass WordPress 7.1 / Plugin Check 2.1.0 / WP_DEBUG release gates.
+- [x] Tag `v1.0.0` only after canonical artifact validation.
+- [x] Publish and redownload the exact Forgejo 1.0.0 asset with matching SHA-256.
+- [x] Publish `trunk`, `tags/1.0.0`, and directory assets to WordPress.org SVN.
+- [ ] Merge the completed `release/1.x` line into `main`.
+- [ ] Forward-port the stable 1.0 baseline into `develop-2.0`.

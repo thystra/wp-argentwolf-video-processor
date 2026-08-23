@@ -320,3 +320,13 @@ WordPress.org reviewer findings are durable engineering lessons, not one-line co
 - If unusually strict or redundant checks are retained after a function is
   proven, document the reason and the condition or review point for relaxing
   them.
+
+## Stable 1.0 and shared engineering baseline
+
+Current stable release: `1.0.0`.
+
+Cross-project release, validator, partial-mutation, shared-host, and ZFS lessons
+are centralized in `wp-plugin-template`. AWVP keeps project-specific behavior,
+release evidence, and test contracts here. Future work, especially the 2.0
+line, applies the shared template guidance together with `AGENTS-TESTING.md`,
+`wordpress-development.md`, and the 2.0 architecture.

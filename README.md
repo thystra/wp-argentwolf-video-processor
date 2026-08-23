@@ -148,3 +148,11 @@ checks whether the `magicyuv` decoder is enabled, recognizes fixed upstream or
 backported release lines, reports the CVE explicitly in Diagnostics and WordPress
 Site Health, and links to the NVD record. Future FFmpeg CVEs should be added to
 the same advisory registry with their own capability and NVD link.
+
+## Current stable release
+
+Current stable release: `1.0.0`, published through WordPress.org.
+
+Install from WordPress.org or use the exact ZIP attached to the tagged Forgejo
+release. Automatically generated source archives are not the canonical
+installable release artifact.

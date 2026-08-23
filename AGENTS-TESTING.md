@@ -456,3 +456,28 @@ For every harness defect, record:
 
 A harness PASS is meaningful only when the harness itself has a reviewed,
 repeatable contract.
+
+## Durable 2.0 harness requirements
+
+The successful 1.0 release closes the one-off WordPress 7.1 validator chain.
+The 2.0 line should use the repository `tests/release-validation` framework from
+the beginning rather than accumulating release-specific validator scripts as
+the primary architecture.
+
+For the next harness iteration:
+
+* provision/authenticate newly supported WordPress core fixtures separately and
+  consume a pinned/checksum-bound fixture during release validation;
+* preserve exact prior public release -> exact candidate upgrade coverage;
+* preserve installed-package byte-identity checks;
+* pin Plugin Check package/version and parse ERROR/WARNING findings explicitly;
+* retain static/new, runtime/new, and runtime/update checks where applicable;
+* keep `WP_DEBUG` and isolated-network/no-host-port gates;
+* preflight direct Docker access for the normal `ubuntuzfstest` account;
+* print a ready-to-copy report retrieval command on both success and failure;
+* remove the historical accidental inclusion of `AGENTS-TESTING.md` from the
+  validation bundle and assert repository-only documentation is excluded;
+* record source-framework commit and bundle/artifact SHA-256 in reports.
+
+An environment/verifier failure after candidate identity gates have passed does
+not by itself require rebuilding the candidate. Classify the failure first.
