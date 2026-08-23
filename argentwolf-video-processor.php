@@ -28,6 +28,8 @@ require_once ARGENT_VIDEO_DIR . 'includes/Settings.php';
 require_once ARGENT_VIDEO_DIR . 'includes/Backend_Identity.php';
 require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Origin.php';
 require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Api_Error.php';
+require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Http_Client.php';
+require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Api_Client.php';
 require_once ARGENT_VIDEO_DIR . 'includes/Backend_Secret_Store.php';
 require_once ARGENT_VIDEO_DIR . 'includes/Backend_Secret_Crypto.php';
 require_once ARGENT_VIDEO_DIR . 'includes/Managed_Backend_Secret_Store.php';

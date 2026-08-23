@@ -104,11 +104,20 @@ The `argent-video` command name is retained for compatibility.
 Metadata removal applies to generated derivatives and adaptive renditions. The
 original uploaded attachment is preserved and may retain its original metadata.
 
-The plugin does not upload videos or usage information to an external service
-and contains no telemetry. hls.js is fetched only during controlled release
-builds, verified, and served locally from the installed plugin. Build-time
-`hls.VERSION` and `hls.SHA256` integrity records are not shipped in the runtime
-package.
+Stable 1.0 processing remains local and the plugin contains no telemetry. The
+unreleased 2.0 development line adds an opt-in, operator-configured PeerTube
+connection. Its initial connection check contacts only that configured
+PeerTube origin and reads the public instance configuration/version; it sends no
+media, credentials, or telemetry. The configured service can observe ordinary
+HTTP transport metadata, including the WordPress server's network address and
+the plugin product/version User-Agent. Later upload work will send media and
+selected metadata only to the configured PeerTube service, whose operator terms
+and privacy policy will apply. This checkpoint does not yet expose an
+administrator-facing connection action.
+
+hls.js is fetched only during controlled release builds, verified, and served
+locally from the installed plugin. Build-time `hls.VERSION` and `hls.SHA256`
+integrity records are not shipped in the runtime package.
 
 Worker diagnostic history is stored locally in the WordPress database with bounded retention; detached-process capture files are temporary and removed after import.
 
