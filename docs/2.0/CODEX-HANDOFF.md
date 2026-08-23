@@ -103,18 +103,28 @@ workflows.
 
 A real-WordPress Docker development smoke is ready at
 `tests/integration/peertube-http-smoke.sh`. It exports exact clean `HEAD`, uses
-digest-pinned WordPress 7.0.2/PHP 8.3, WP-CLI, and MariaDB images, creates an
-internal-only network with no host ports, and contacts only the isolated mock
-PeerTube fixture. Run it on `ubuntuzfstest` with:
+the digest-pinned official WordPress 7.1.0/PHP 8.3, WP-CLI, and MariaDB images,
+creates an internal-only network with no host ports, and contacts only the
+isolated mock PeerTube fixture. Run it on `ubuntuzfstest` with:
 
 ```bash
 bash tests/integration/peertube-http-smoke.sh
 ```
 
-Local Docker-daemon access was unavailable, so this smoke still requires the VM
-run. It is a focused development checkpoint, not the 2.0 release artifact,
-minimum-version, upgrade, Plugin Check, real-PeerTube, TLS, authentication, or
-upload matrix.
+The first VM attempt against the earlier WordPress 7.0.2 runner completed
+database readiness, WordPress installation, and plugin activation, then stopped
+before PeerTube detection because the disposable WP-CLI process did not receive
+the debug and isolated-network configuration used by the WordPress container.
+Cleanup passed. This is classified as a harness-configuration failure, not a
+product failure.
+
+The corrected runner passes the same configuration to both runtimes, verifies
+it along with exact WordPress 7.1 and PHP 8.3 versions before plugin activation,
+and verifies resource ownership before use and cleanup. Local Docker-daemon
+access remains unavailable, so the corrected clean checkpoint still requires a
+VM rerun. This smoke is a focused development checkpoint, not the 2.0 release
+artifact, minimum-version, upgrade, Plugin Check, real-PeerTube, TLS,
+authentication, or upload matrix.
 
 ## Recommended continuation
 

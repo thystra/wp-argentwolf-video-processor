@@ -323,14 +323,26 @@ docker network create \
     --internal \
     --label "org.argentwolf.awvp.test.run=$RUN_TOKEN" \
     "$NETWORK_NAME" >/dev/null
+[[ "$RUN_TOKEN" == "$(
+    docker network inspect \
+        --format '{{ index .Labels "org.argentwolf.awvp.test.run" }}' \
+        "$NETWORK_NAME"
+)" ]] || fail 'The Docker network is not owned by this test run.'
 [[ 'true' == "$(docker network inspect --format '{{.Internal}}' "$NETWORK_NAME")" ]] \
     || fail 'Docker did not create an internal-only network.'
+echo 'DOCKER_NETWORK_OWNERSHIP=PASS'
 echo 'DOCKER_NETWORK_INTERNAL=PASS'
 
 VOLUME_CREATE_ATTEMPTED=1
 docker volume create \
     --label "org.argentwolf.awvp.test.run=$RUN_TOKEN" \
     "$VOLUME_NAME" >/dev/null
+[[ "$RUN_TOKEN" == "$(
+    docker volume inspect \
+        --format '{{ index .Labels "org.argentwolf.awvp.test.run" }}' \
+        "$VOLUME_NAME"
+)" ]] || fail 'The Docker volume is not owned by this test run.'
+echo 'DOCKER_VOLUME_OWNERSHIP=PASS'
 
 DATABASE_CREATE_ATTEMPTED=1
 docker run -d \
