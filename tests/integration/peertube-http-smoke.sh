@@ -11,7 +11,8 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 REPOSITORY_ROOT="$(cd -- "$SCRIPT_DIR/../.." && pwd -P)"
 FIXTURE_ROOT="$REPOSITORY_ROOT/tests/fixtures/peertube-http-smoke"
 
-WORDPRESS_IMAGE='wordpress:7.0.2-php8.3-apache@sha256:b2d7e3153c8a96f90305a3102fb6439335237fb1a9655b617d15c5168ce2f7a3'
+EXPECTED_WORDPRESS_VERSION='7.1'
+WORDPRESS_IMAGE='wordpress:7.1.0-php8.3-apache@sha256:65919a9ca10940feb10d9400fead0d639bf86241f47c91e2b9ea4703aa8452cf'
 WP_CLI_IMAGE='wordpress:cli-php8.3@sha256:2b5e9d4d3e51909dca1aaa4732e9f5e5bf0377c2114dbd8ff39f060bff202586'
 DATABASE_IMAGE='mariadb:10.11.18@sha256:de61fed4a40d3842f3ee09944ba52792156cfd9adf489b2cc670fc6ded28df8d'
 
@@ -24,6 +25,7 @@ WORDPRESS_NAME="$RESOURCE_PREFIX-wp"
 MOCK_NAME="$RESOURCE_PREFIX-peertube"
 DATABASE_PASSWORD=''
 DATABASE_ROOT_PASSWORD=''
+WORDPRESS_CONFIG_EXTRA=''
 
 WORK_DIRECTORY=''
 REQUEST_LOG=''
@@ -60,11 +62,11 @@ exec > >(tee -a "$REPORT_FILE") 2>&1
 
 RESULT='FAIL'
 DOCKER_READY=0
-NETWORK_CREATED=0
-VOLUME_CREATED=0
-DATABASE_CREATED=0
-WORDPRESS_CREATED=0
-MOCK_CREATED=0
+NETWORK_CREATE_ATTEMPTED=0
+VOLUME_CREATE_ATTEMPTED=0
+DATABASE_CREATE_ATTEMPTED=0
+WORDPRESS_CREATE_ATTEMPTED=0
+MOCK_CREATE_ATTEMPTED=0
 
 fail() {
     echo "PEERTUBE_HTTP_SMOKE_ERROR=$*" >&2
@@ -78,14 +80,20 @@ cleanup() {
     trap - EXIT
     set +e
 
-    if (( DOCKER_READY == 1 )); then
-        local container_spec container_created container_name owner_label
+    if (( DOCKER_READY == 1 )) && ! docker info >/dev/null 2>&1; then
+        echo 'DOCKER_CLEANUP_ACCESS=FAIL' >&2
+        cleanup_failed=1
+    elif (( DOCKER_READY == 1 )); then
+        local container_spec container_create_attempted container_name owner_label
         for container_spec in \
-            "$MOCK_CREATED|$MOCK_NAME" \
-            "$WORDPRESS_CREATED|$WORDPRESS_NAME" \
-            "$DATABASE_CREATED|$DATABASE_NAME"; do
-            IFS='|' read -r container_created container_name <<<"$container_spec"
-            if (( container_created == 1 )); then
+            "$MOCK_CREATE_ATTEMPTED|$MOCK_NAME" \
+            "$WORDPRESS_CREATE_ATTEMPTED|$WORDPRESS_NAME" \
+            "$DATABASE_CREATE_ATTEMPTED|$DATABASE_NAME"; do
+            IFS='|' read -r container_create_attempted container_name <<<"$container_spec"
+            if (( container_create_attempted == 1 )); then
+                if ! docker container inspect "$container_name" >/dev/null 2>&1; then
+                    continue
+                fi
                 owner_label="$(
                     docker container inspect \
                         --format '{{ index .Config.Labels "org.argentwolf.awvp.test.run" }}' \
@@ -100,7 +108,8 @@ cleanup() {
             fi
         done
 
-        if (( VOLUME_CREATED == 1 )); then
+        if (( VOLUME_CREATE_ATTEMPTED == 1 )) \
+            && docker volume inspect "$VOLUME_NAME" >/dev/null 2>&1; then
             owner_label="$(
                 docker volume inspect \
                     --format '{{ index .Labels "org.argentwolf.awvp.test.run" }}' \
@@ -114,7 +123,8 @@ cleanup() {
             fi
         fi
 
-        if (( NETWORK_CREATED == 1 )); then
+        if (( NETWORK_CREATE_ATTEMPTED == 1 )) \
+            && docker network inspect "$NETWORK_NAME" >/dev/null 2>&1; then
             owner_label="$(
                 docker network inspect \
                     --format '{{ index .Labels "org.argentwolf.awvp.test.run" }}' \
@@ -253,6 +263,8 @@ wp_cli() {
         -e WORDPRESS_DB_USER=wordpress \
         -e "WORDPRESS_DB_PASSWORD=$DATABASE_PASSWORD" \
         -e WORDPRESS_DB_NAME=wordpress \
+        -e WORDPRESS_DEBUG=1 \
+        -e "WORDPRESS_CONFIG_EXTRA=$WORDPRESS_CONFIG_EXTRA" \
         "$WP_CLI_IMAGE" \
         --path=/var/www/html "$@"
 }
@@ -306,20 +318,21 @@ for image_reference in "$WORDPRESS_IMAGE" "$WP_CLI_IMAGE" "$DATABASE_IMAGE"; do
     echo "IMAGE_ID=$image_id"
 done
 
+NETWORK_CREATE_ATTEMPTED=1
 docker network create \
     --internal \
     --label "org.argentwolf.awvp.test.run=$RUN_TOKEN" \
     "$NETWORK_NAME" >/dev/null
-NETWORK_CREATED=1
 [[ 'true' == "$(docker network inspect --format '{{.Internal}}' "$NETWORK_NAME")" ]] \
     || fail 'Docker did not create an internal-only network.'
 echo 'DOCKER_NETWORK_INTERNAL=PASS'
 
+VOLUME_CREATE_ATTEMPTED=1
 docker volume create \
     --label "org.argentwolf.awvp.test.run=$RUN_TOKEN" \
     "$VOLUME_NAME" >/dev/null
-VOLUME_CREATED=1
 
+DATABASE_CREATE_ATTEMPTED=1
 docker run -d \
     --name "$DATABASE_NAME" \
     --label "org.argentwolf.awvp.test.run=$RUN_TOKEN" \
@@ -330,7 +343,6 @@ docker run -d \
     -e "MARIADB_PASSWORD=$DATABASE_PASSWORD" \
     -e "MARIADB_ROOT_PASSWORD=$DATABASE_ROOT_PASSWORD" \
     "$DATABASE_IMAGE" >/dev/null
-DATABASE_CREATED=1
 
 wait_for_database
 wait_for_database_consumer_path
@@ -342,6 +354,7 @@ printf -v WORDPRESS_CONFIG_EXTRA '%s\n' \
     'define( "WP_ACCESSIBLE_HOSTS", "peertube.test" );' \
     'define( "ARGENT_VIDEO_PEERTUBE_DEV_ORIGINS", array( "http://peertube.test:9000" ) );'
 
+WORDPRESS_CREATE_ATTEMPTED=1
 docker run -d \
     --name "$WORDPRESS_NAME" \
     --label "org.argentwolf.awvp.test.run=$RUN_TOKEN" \
@@ -356,10 +369,10 @@ docker run -d \
     -e WORDPRESS_DEBUG=1 \
     -e "WORDPRESS_CONFIG_EXTRA=$WORDPRESS_CONFIG_EXTRA" \
     "$WORDPRESS_IMAGE" >/dev/null
-WORDPRESS_CREATED=1
 
 wait_for_wordpress_files
 
+MOCK_CREATE_ATTEMPTED=1
 docker run -d \
     --name "$MOCK_NAME" \
     --label "org.argentwolf.awvp.test.run=$RUN_TOKEN" \
@@ -371,7 +384,6 @@ docker run -d \
     -v "$WORK_DIRECTORY:/awvp-state" \
     "$WP_CLI_IMAGE" \
     -S 0.0.0.0:9000 /awvp-mock/mock-router.php >/dev/null
-MOCK_CREATED=1
 
 wait_for_mock
 
@@ -390,11 +402,35 @@ wp_cli core install \
     --admin_email=awvp@example.invalid \
     --skip-email
 
+if ! wp_cli eval '
+    $valid = defined( "WP_DEBUG" ) && true === WP_DEBUG
+        && defined( "WP_DEBUG_LOG" ) && true === WP_DEBUG_LOG
+        && defined( "WP_DEBUG_DISPLAY" ) && false === WP_DEBUG_DISPLAY
+        && defined( "WP_HTTP_BLOCK_EXTERNAL" ) && true === WP_HTTP_BLOCK_EXTERNAL
+        && defined( "WP_ACCESSIBLE_HOSTS" ) && "peertube.test" === WP_ACCESSIBLE_HOSTS
+        && defined( "ARGENT_VIDEO_PEERTUBE_DEV_ORIGINS" )
+        && array( "http://peertube.test:9000" ) === ARGENT_VIDEO_PEERTUBE_DEV_ORIGINS;
+    if ( ! $valid ) {
+        fwrite( STDERR, "The isolated WordPress runtime configuration is incomplete.\n" );
+        exit( 1 );
+    }
+    echo "WORDPRESS_RUNTIME_CONFIGURATION=PASS\n";
+'; then
+    fail 'The WordPress and WP-CLI containers did not receive the same test configuration.'
+fi
+
+WORDPRESS_VERSION="$(wp_cli core version)"
+[[ "$EXPECTED_WORDPRESS_VERSION" == "$WORDPRESS_VERSION" ]] \
+    || fail "Expected WordPress $EXPECTED_WORDPRESS_VERSION, observed: $WORDPRESS_VERSION"
+echo "WORDPRESS_VERSION=$WORDPRESS_VERSION"
+PHP_VERSION="$(wp_cli eval 'echo PHP_VERSION;')"
+[[ "$PHP_VERSION" == 8.3.* ]] \
+    || fail "Expected PHP 8.3.x, observed: $PHP_VERSION"
+echo "PHP_VERSION=$PHP_VERSION"
+
 wp_cli plugin activate argentwolf-video-processor
 wp_cli plugin is-active argentwolf-video-processor
 echo 'PLUGIN_ACTIVATION=PASS'
-echo "WORDPRESS_VERSION=$(wp_cli core version)"
-echo "PHP_VERSION=$(wp_cli eval 'echo PHP_VERSION;')"
 
 wp_cli eval-file \
     /var/www/html/wp-content/plugins/argentwolf-video-processor/tests/fixtures/peertube-http-smoke/assert-detect.php \
