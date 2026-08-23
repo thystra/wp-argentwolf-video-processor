@@ -145,19 +145,40 @@ development-checkpoint evidence, not a 2.0 release-artifact, exact-ZIP,
 minimum WordPress 6.4/PHP 8.1, MySQL, upgrade, Plugin Check, real-PeerTube, TLS,
 authentication, channel, administrator-action, or upload gate.
 
+## R33 integration closure
+
+The documentation-only feature closure
+`a591daa6c39ea5072315797a0fda4406ec241fc2` passed Forgejo CI run 49. R33 was
+then integrated into `develop-2.0` without rewriting its tested history:
+
+- merge commit before this handoff-closure commit:
+  `9e9fbfa2d9d118c9cbd0ef929669e7ac7b3899ce`;
+- first parent / prior `develop-2.0` authority:
+  `c0045ac5491e334c0e5cd7fa6b093bb773715023`;
+- second parent / validated feature closure:
+  `a591daa6c39ea5072315797a0fda4406ec241fc2`;
+- merge tree:
+  `6f318b724cdef59b4dd0f74f6f808003a793e2e4`.
+
+The prospective and committed merge trees exactly matched the feature tree,
+and only this handoff document changed between the VM-tested `c9f0949` tree and
+the merge tree. The complete post-merge PHP lint, focused, dependency-free,
+storage, restricted `open_basedir`, smoke-load, FFmpeg security/integration,
+vendor-fetch, JavaScript syntax, workflow-YAML, and diff checks passed.
+
 ## Recommended continuation
 
-The R33 focused source/CI/VM gate is complete. Before authentication or other
-runtime mutation:
+R33 is integrated and its focused source/CI/VM and post-merge source gates are
+complete. Before authentication or other runtime mutation:
 
 1. preserve and hash the successful VM report outside the disposable `/tmp`
    location;
-2. fetch Forgejo and verify exact feature/integration ref authority;
-3. prospectively verify and merge reviewed R33 work into `develop-2.0` without
-   rewriting the tested feature history;
-4. run post-merge source and CI validation;
-5. implement OAuth bootstrap/OTP/identity/channel work as separately reviewed
-   prospective slices, preserving the no-upload tranche boundary.
+2. fetch Forgejo and verify the exact current `develop-2.0` authority before
+   creating the next feature branch;
+3. implement OAuth bootstrap/OTP/identity/channel work as separately reviewed
+   prospective slices, preserving the no-upload tranche boundary;
+4. keep credentials, remote mutation, and upload outside a slice until its
+   prospective validation and failure classification are explicit.
 
 ## Engineering policy
 
