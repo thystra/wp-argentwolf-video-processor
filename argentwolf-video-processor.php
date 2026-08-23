@@ -3,7 +3,7 @@
  * Plugin Name: ArgentWolf Video Processor
  * Plugin URI: https://github.com/thystra/wp-argentwolf-video-processor
  * Description: Queues WordPress videos and creates adaptive and progressive streaming derivatives with a detached FFmpeg worker while preserving the original attachment.
- * Version: 0.3.3
+ * Version: 1.0.0
  * Requires at least: 6.4
  * Requires PHP: 8.1
  * Author: Alan Johnson
@@ -19,7 +19,7 @@ if (! defined('ABSPATH')) {
     exit;
 }
 
-define('ARGENT_VIDEO_VERSION', '0.3.3');
+define('ARGENT_VIDEO_VERSION', '1.0.0');
 define('ARGENT_VIDEO_FILE', __FILE__);
 define('ARGENT_VIDEO_DIR', plugin_dir_path(__FILE__));
 define('ARGENT_VIDEO_URL', plugin_dir_url(__FILE__));

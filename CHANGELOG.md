@@ -1,6 +1,11 @@
 <!-- File: CHANGELOG.md -->
 # Changelog
 
+## 1.0.0 - 2026-08-22
+
+- Promoted the WordPress.org-approved 0.3.3 codebase to the first stable 1.0.0 release.
+- No functional or runtime behavior changes from 0.3.3.
+
 ## 0.3.3 - 2026-08-20
 
 - Updated WordPress compatibility metadata to indicate testing through WordPress 7.1.

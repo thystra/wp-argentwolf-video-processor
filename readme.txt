@@ -4,7 +4,7 @@ Tags: video, ffmpeg, hls, adaptive streaming, media
 Requires at least: 6.4
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.3.3
+Stable tag: 1.0.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -137,6 +137,9 @@ plugin-update workflow and confirm the plugin remains active.
 
 == Upgrade Notice ==
 
+= 1.0.0 =
+First stable WordPress.org release; no functional or runtime behavior changes from 0.3.3.
+
 = 0.3.3 =
 WordPress 7.1 compatibility metadata update; no functional or runtime changes from 0.3.2.
 
@@ -156,6 +159,10 @@ Renames the public plugin and package to ArgentWolf Video Processor and prepares
 the project for WordPress.org review while retaining existing data identifiers.
 
 == Changelog ==
+
+= 1.0.0 =
+* Promoted the WordPress.org-approved 0.3.3 codebase to the first stable 1.0.0 release.
+* No functional or runtime behavior changes from 0.3.3.
 
 = 0.3.3 =
 * Updated WordPress compatibility metadata for WordPress 7.1.
