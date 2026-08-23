@@ -120,22 +120,43 @@ product failure.
 
 The corrected runner passes the same configuration to both runtimes, verifies
 it along with exact WordPress 7.1 and PHP 8.3 versions before plugin activation,
-and verifies resource ownership before use and cleanup. Local Docker-daemon
-access remains unavailable, so the corrected clean checkpoint still requires a
-VM rerun. This smoke is a focused development checkpoint, not the 2.0 release
-artifact, minimum-version, upgrade, Plugin Check, real-PeerTube, TLS,
-authentication, or upload matrix.
+and verifies resource ownership before use and cleanup.
+
+The corrected run completed successfully on `ubuntuzfstest` at
+`2026-08-23T12:40:07Z`:
+
+- tested source commit:
+  `c9f0949a659984c8502adee6e4b66d98f77bb26f`;
+- tested source tree:
+  `638955f4fab53ee426e3840f19d3befc00724f07`;
+- report:
+  `/tmp/awvp-r33-report.AcCg6f/peertube-http-smoke-20260823T124007Z-35191.log`;
+- observed runtime: WordPress 7.1 and PHP 8.3.33;
+- exact committed-source export, network/volume ownership, internal network,
+  no-host-port, database consumer path, runtime configuration, plugin
+  activation, WordPress PeerTube assertions, and cleanup gates: `PASS`;
+- isolated PeerTube requests: exactly one `GET /api/v1/config`;
+- WordPress debug diagnostics: none;
+- final result: `PEERTUBE_HTTP_SMOKE=PASS`.
+
+Forgejo CI run 48 also passed at the tested source commit. Preserve and hash the
+VM report before its `/tmp` location is cleaned. This smoke is focused
+development-checkpoint evidence, not a 2.0 release-artifact, exact-ZIP,
+minimum WordPress 6.4/PHP 8.1, MySQL, upgrade, Plugin Check, real-PeerTube, TLS,
+authentication, channel, administrator-action, or upload gate.
 
 ## Recommended continuation
 
-Before merging R33 or adding authentication/runtime mutation:
+The R33 focused source/CI/VM gate is complete. Before authentication or other
+runtime mutation:
 
-1. fetch Forgejo and verify exact source/ref authority;
-2. check out the clean R33 feature checkpoint above;
-3. run the focused Docker smoke on `ubuntuzfstest` and preserve its report;
-4. classify any harness/environment failure separately from a product failure;
-5. merge reviewed R33 work into `develop-2.0` only after the smoke and CI pass;
-6. implement OAuth bootstrap/OTP/identity/channel work as separately reviewed
+1. preserve and hash the successful VM report outside the disposable `/tmp`
+   location;
+2. fetch Forgejo and verify exact feature/integration ref authority;
+3. prospectively verify and merge reviewed R33 work into `develop-2.0` without
+   rewriting the tested feature history;
+4. run post-merge source and CI validation;
+5. implement OAuth bootstrap/OTP/identity/channel work as separately reviewed
    prospective slices, preserving the no-upload tranche boundary.
 
 ## Engineering policy
