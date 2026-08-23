@@ -26,6 +26,11 @@ define('ARGENT_VIDEO_URL', plugin_dir_url(__FILE__));
 
 require_once ARGENT_VIDEO_DIR . 'includes/Settings.php';
 require_once ARGENT_VIDEO_DIR . 'includes/Backend_Identity.php';
+require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Origin.php';
+require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Api_Error.php';
+require_once ARGENT_VIDEO_DIR . 'includes/Backend_Secret_Store.php';
+require_once ARGENT_VIDEO_DIR . 'includes/Backend_Secret_Crypto.php';
+require_once ARGENT_VIDEO_DIR . 'includes/Managed_Backend_Secret_Store.php';
 require_once ARGENT_VIDEO_DIR . 'includes/Backend_Capabilities.php';
 require_once ARGENT_VIDEO_DIR . 'includes/Backend_Health.php';
 require_once ARGENT_VIDEO_DIR . 'includes/Backend_Adapter.php';
