@@ -8,6 +8,7 @@ declare(strict_types=1);
 namespace ArgentVideo;
 
 use RuntimeException;
+use Throwable;
 use WP_CLI;
 use WP_CLI\Utils;
 
@@ -18,7 +19,8 @@ final class CLI_Command
         private readonly Queue $queue,
         private readonly Bulk_Queue $bulk,
         private readonly Worker $worker,
-        private readonly Diagnostics $diagnostics
+        private readonly Diagnostics $diagnostics,
+        private readonly Worker_Log_Repository $worker_logs
     ) {
     }
 
@@ -32,6 +34,9 @@ final class CLI_Command
      *
      * [--limit=<count>]
      * : Process up to this many jobs. Default 1.
+     *
+     * [--worker-log-id=<id>]
+     * : Internal detached-launch diagnostic record ID.
      */
     public function worker(array $args, array $assoc_args): void
     {
@@ -41,7 +46,18 @@ final class CLI_Command
             $limit = 1;
         }
 
+        $run_id = 0;
+        $logging_started = false;
         try {
+            $run_id = isset($assoc_args['worker-log-id'])
+                ? max(0, (int) $assoc_args['worker-log-id'])
+                : $this->worker_logs->create('cli');
+            if ($run_id < 1) {
+                throw new RuntimeException('Worker diagnostic record ID must be a positive integer.');
+            }
+
+            $this->worker_logs->mark_running($run_id, getmypid() ?: 0);
+            $logging_started = true;
             $result = $this->worker->run($limit);
             foreach ($result['errors'] as $failure) {
                 WP_CLI::warning(sprintf(
@@ -51,14 +67,19 @@ final class CLI_Command
                     $this->error_summary($failure['message'])
                 ));
             }
-
+            $this->flush_output();
+            $this->worker_logs->complete($run_id, $result);
             WP_CLI::success(sprintf(
                 'Worker complete: %d processed, %d failed, %d stale recovered.',
                 $result['processed'],
                 $result['failed'],
                 $result['recovered']
             ));
-        } catch (RuntimeException $error) {
+        } catch (Throwable $error) {
+            if ($logging_started && $run_id > 0) {
+                $this->flush_output();
+                $this->worker_logs->fail($run_id, $error->getMessage(), 1);
+            }
             WP_CLI::error($error->getMessage());
         }
     }
@@ -143,7 +164,6 @@ final class CLI_Command
         $after = (string) ($assoc_args['after'] ?? '');
         $through = (string) ($assoc_args['through'] ?? '');
         $limit = max(0, min(5000, (int) ($assoc_args['limit'] ?? 0)));
-
         try {
             $result = $this->bulk->queue($mode, $after, $through, $limit);
             foreach ($result['errors'] as $error) {
@@ -157,6 +177,16 @@ final class CLI_Command
             ));
         } catch (RuntimeException $error) {
             WP_CLI::error($error->getMessage());
+        }
+    }
+
+    private function flush_output(): void
+    {
+        if (defined('STDOUT') && is_resource(STDOUT)) {
+            fflush(STDOUT);
+        }
+        if (defined('STDERR') && is_resource(STDERR)) {
+            fflush(STDERR);
         }
     }
 

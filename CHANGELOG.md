@@ -1,6 +1,24 @@
 <!-- File: CHANGELOG.md -->
 # Changelog
 
+## 1.0.0 - 2026-08-22
+
+- Promoted the WordPress.org-approved 0.3.3 codebase to the first stable 1.0.0 release.
+- No functional or runtime behavior changes from 0.3.3.
+
+## 0.3.3 - 2026-08-20
+
+- Updated WordPress compatibility metadata to indicate testing through WordPress 7.1.
+- No functional or runtime behavior changes from 0.3.2.
+
+## 0.3.2 - 2026-08-17
+
+- Replace the append-only system temporary worker log with bounded database-backed worker diagnostic history.
+- Add `argentwolf_video_processor_logs` as the canonical new plugin table while retaining the legacy `argent_video_jobs` queue table for upgrade compatibility.
+- Add configurable successful/error diagnostic retention, bounded per-run capture, stale detached-run recovery, administrator history display, and protected history clearing.
+- Move process scratch capture to WordPress temporary-file facilities with failure-safe cleanup.
+- Record the WordPress.org review and applicator-anchor lessons in contributor guidance and update release documentation.
+
 ## 0.3.1 - 2026-08-13
 
 - Add a capability-aware FFmpeg security gate with explicit CVE-2026-8461 / NVD reporting; block new transcoding when MagicYUV is enabled on an unpatched or unverifiable build.

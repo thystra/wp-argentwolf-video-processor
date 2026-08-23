@@ -66,6 +66,22 @@ A plugin must not write generated state into:
 If generated data is not meant to be public, protect it from direct access or
 choose an appropriate non-public storage design.
 
+## Runtime diagnostics and temporary-file lifecycle
+
+Classify plugin-created runtime data before selecting storage:
+
+- persistent application state belongs in WordPress-managed database/storage APIs appropriate to the data;
+- persistent private diagnostics require an explicitly non-public design and bounded retention;
+- short-lived process/bootstrap capture may use WordPress-resolved temporary storage only when cleanup is explicit on success and failure.
+
+For temporary files, prefer WordPress temporary-file facilities such as `get_temp_dir()` and `wp_tempnam()` rather than directly selecting a PHP/system temporary directory. A temporary file is not a retention mechanism. Import any diagnostic data that must persist into its authoritative store, bound the stored size, then delete the scratch file. Design stale-file reconciliation for abrupt process termination so a later run does not truncate the only remaining evidence before importing it.
+
+Every retained diagnostic facility needs a finite per-record size bound and a finite record-count or time-based retention policy. Error records are not exempt from retention limits. If administrators can tune retention, sanitize the setting to safe bounds and provide a generous but finite default.
+
+Do not put private runtime logs under uploads merely to satisfy a writable-path requirement unless direct web access is separately and portably prevented. Apache-only `.htaccess` protection is not a cross-server privacy boundary.
+
+`ABSPATH` is not categorically forbidden. Use it only when the semantic requirement is the WordPress installation root or a WordPress core include. Do not use it as a substitute for plugin-directory, content-directory, uploads, or writable-storage APIs.
+
 ## Filesystem confinement
 
 Treat filesystem destinations as security-sensitive inputs.
@@ -143,6 +159,8 @@ for proper unique naming.
 
 Guard executable PHP entry points against unintended direct web execution where
 appropriate.
+
+When a public product rename deliberately preserves established persisted identifiers for upgrade compatibility, keep those existing identifiers stable. Newly introduced global identifiers should use the current canonical plugin-specific prefix or slug rather than extending a legacy abbreviation or old product name.
 
 ## Third-party libraries and build inputs
 
@@ -291,3 +309,41 @@ For projects using Forgejo as authority:
 
 If a release package changes for any reason, it is a different artifact and
 must pass the release gates again.
+
+## AWVP 1.0 release closure
+
+The first stable WordPress.org release is `1.0.0`, promoted from the approved
+`0.3.3` codebase with release metadata changes only.
+
+Release authority:
+
+* stable source commit:
+  `f656cdaba54fa63771187ca8b4fa6e19a20989f6`;
+* canonical/public Forgejo ZIP SHA-256:
+  `7bbafd11c4d1f2805cfe66bb448ddac656eecc8bb2d2d12adf23a7173225468e`;
+* package size: 227964 bytes;
+* installable file count: 30;
+* release validator report:
+  `awvp-100-wp71-pcp-r1-20260823T020938Z-14923.txt`;
+* exact published base `0.3.3` SHA-256:
+  `0249a1e481c5335e7dd57d6c0fcc1885d42425b9862e08cf559b112ecc04c094`.
+
+The 1.0 validator proved the intended two-file metadata package delta, exact
+published 0.3.3 -> exact 1.0.0 in-place upgrade, installed-package byte
+identity, Plugin Check 2.1.0 static/new + runtime/new + runtime/update,
+WordPress 7.1, DB version 2, and the AWVP `WP_DEBUG` gate.
+
+The canonical release workflow is a pre-tag builder. Build canonical bytes from
+the exact reviewed commit before creating the corresponding tag when the
+workflow refuses post-tag rebuilds. Preserve and promote those exact bytes,
+then independently redownload the public Forgejo asset and verify its checksum.
+
+WordPress.org SVN identity is case-sensitive. The successful committer identity
+for this plugin is `Thystra`; lowercase `thystra` reached the pre-commit hook
+but lacked authorization. The rejected transaction did not invalidate the
+staged tree or release artifact; correcting account case and retrying the same
+commit was sufficient.
+
+WordPress.org SVN remains a distribution surface. `trunk/` and `tags/1.0.0/`
+were derived from the canonical plugin tree, while directory artwork belongs in
+top-level SVN `assets/`.
