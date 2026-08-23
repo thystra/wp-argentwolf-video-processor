@@ -131,6 +131,8 @@ The corrected run completed successfully on `ubuntuzfstest` at
   `638955f4fab53ee426e3840f19d3befc00724f07`;
 - report:
   `/tmp/awvp-r33-report.AcCg6f/peertube-http-smoke-20260823T124007Z-35191.log`;
+- report SHA-256:
+  `2b452d03d7cc75b97d28889a18d14a47696815eee54b3b70bccb4ab765750c09`;
 - observed runtime: WordPress 7.1 and PHP 8.3.33;
 - exact committed-source export, network/volume ownership, internal network,
   no-host-port, database consumer path, runtime configuration, plugin
@@ -139,10 +141,11 @@ The corrected run completed successfully on `ubuntuzfstest` at
 - WordPress debug diagnostics: none;
 - final result: `PEERTUBE_HTTP_SMOKE=PASS`.
 
-Forgejo CI run 48 also passed at the tested source commit. Preserve and hash the
-VM report before its `/tmp` location is cleaned. This smoke is focused
-development-checkpoint evidence, not a 2.0 release-artifact, exact-ZIP,
-minimum WordPress 6.4/PHP 8.1, MySQL, upgrade, Plugin Check, real-PeerTube, TLS,
+Forgejo CI run 48 also passed at the tested source commit. The VM report digest
+is recorded above; copy the raw report outside its disposable `/tmp` location
+if it must remain available after VM cleanup. This smoke is focused
+development-checkpoint evidence, not a 2.0 release-artifact, exact-ZIP, minimum
+WordPress 6.4/PHP 8.1, MySQL, upgrade, Plugin Check, real-PeerTube, TLS,
 authentication, channel, administrator-action, or upload gate.
 
 ## R33 integration closure
@@ -171,13 +174,11 @@ vendor-fetch, JavaScript syntax, workflow-YAML, and diff checks passed.
 R33 is integrated and its focused source/CI/VM and post-merge source gates are
 complete. Before authentication or other runtime mutation:
 
-1. preserve and hash the successful VM report outside the disposable `/tmp`
-   location;
-2. fetch Forgejo and verify the exact current `develop-2.0` authority before
+1. fetch Forgejo and verify the exact current `develop-2.0` authority before
    creating the next feature branch;
-3. implement OAuth bootstrap/OTP/identity/channel work as separately reviewed
+2. implement OAuth bootstrap/OTP/identity/channel work as separately reviewed
    prospective slices, preserving the no-upload tranche boundary;
-4. keep credentials, remote mutation, and upload outside a slice until its
+3. keep credentials, remote mutation, and upload outside a slice until its
    prospective validation and failure classification are explicit.
 
 ## Engineering policy
