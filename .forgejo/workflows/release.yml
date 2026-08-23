@@ -146,6 +146,11 @@ jobs:
 
       - name: Run release tests
         run: |
+          php tests/model-persistence.php
+          php tests/backend-local.php
+          php tests/peertube-connection-foundation.php
+          php tests/peertube-http-api.php
+          bash -n tests/integration/peertube-http-smoke.sh
           php tests/run.php
           php tests/storage-boundary.php
           php -d open_basedir="${FORGEJO_WORKSPACE}:/tmp" tests/open-basedir.php

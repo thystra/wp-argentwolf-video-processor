@@ -1,7 +1,7 @@
 # AWVP 2.0 PeerTube Connection, Authentication, and API Contract
 
-Status: tranche 2.0-3 design contract
-Reviewed API baseline: PeerTube 8.1.0 OpenAPI, 2026-08-17
+Status: tranche 2.0-3 design contract; R33 read-only detection implemented
+Reviewed runtime baselines: PeerTube 8.1.8 and 8.2.4, 2026-08-22
 Applies to: configured/manageable PeerTube backends
 
 ## 1. Purpose and scope
@@ -31,8 +31,11 @@ belong to tranche 2.0-6.
 
 ## 2. Verified PeerTube API baseline
 
-The official PeerTube OpenAPI reviewed on 2026-08-17 identifies API version
-8.1.0.
+The initial compatibility floor is PeerTube 8.1.8, the security-fixed 8.1
+release. PeerTube 8.2.4 is the primary current integration target. The OpenAPI
+document shipped with both releases still identifies its API schema as 8.1.0;
+that value is not the running instance version. Read the running version only
+from the bounded `serverVersion` field returned by `GET /api/v1/config`.
 
 Relevant current primitives include:
 
@@ -48,6 +51,8 @@ Relevant current primitives include:
 PeerTube documents API rate limiting, with a more restrictive login/token
 limit. `429 Too Many Requests` may carry `Retry-After`,
 `X-RateLimit-Limit`, `X-RateLimit-Remaining`, and `X-RateLimit-Reset`.
+The status and headers are authoritative because the rate limiter may return a
+plain-text body rather than RFC7807 JSON.
 
 PeerTube errors use normal HTTP status codes and support RFC7807-style
 `application/problem+json`. Prefer `detail` over deprecated legacy `error`.
@@ -57,9 +62,10 @@ credentials to `/api/v1/users/token`. A successful response contains access
 and refresh tokens plus expiry information. Two-factor login may require the
 `x-peertube-otp` header.
 
-PeerTube currently documents one usable access/session token at a time. AWVP
-therefore recommends a dedicated PeerTube account for AWVP instead of silently
-reusing an operator's everyday login.
+PeerTube's maintained tests prove multiple simultaneous login sessions. AWVP
+must not assume that a new login invalidates older sessions. A dedicated
+PeerTube account remains the least-privilege recommendation and avoids mixing
+AWVP operations with an administrator's everyday account.
 
 Do not infer all future capabilities solely from a PeerTube version string.
 
@@ -200,6 +206,22 @@ GET {origin}/api/v1/config
 
 It stores no credential and performs no login retry loop.
 
+R33 implements only this public detection boundary. `PeerTube_Http_Client`
+exposes no arbitrary URL or other endpoint, redirects are disabled, the body is
+requested with identity encoding and rejected at or above the 1 MiB returned
+body limit, and `PeerTube_Api_Client::detect_instance()` retains only a small
+normalized observation. No administrator action invokes it yet; R33 sends no
+media, credentials, or telemetry. Like any direct HTTP request, the configured
+PeerTube operator can observe the WordPress server's network address and the
+bounded AWVP product/version User-Agent.
+
+WordPress applies its transport byte limit before decompression in at least one
+supported transport. `Accept-Encoding: identity`, disabled requested
+decompression, post-return size checks, and rejection of encoded responses are
+the R33 defenses, but the WordPress limit is not an absolute pre-decompression
+memory guarantee against a noncompliant malicious server. Revisit a streamed
+transport boundary before handling larger or less trusted responses.
+
 After explicit `manage_options` administrator authorization, authenticated
 verification may:
 
@@ -244,9 +266,9 @@ Admin UX should recommend:
 
 The account should have only the permissions/channel access needed by AWVP.
 
-Because PeerTube currently documents one usable access/session token at a time,
-AWVP should warn that an everyday user account may have competing session/token
-behavior.
+Multiple simultaneous sessions are supported, but AWVP should still warn that
+using an everyday account expands credential exposure and mixes unrelated
+session lifecycles.
 
 ## 10. Backend secret-store abstraction
 
@@ -349,11 +371,10 @@ contract.
 
 ## 15. Refresh and reauthentication
 
-PeerTube returns refresh-token material for normal login sessions.
-
-Before implementation, verify exact supported refresh grant parameters against
-the supported PeerTube primary source/API and cover them with focused tests.
-Do not invent a refresh endpoint from another OAuth implementation.
+PeerTube returns refresh-token material for normal login sessions. Refresh uses
+the same `/api/v1/users/token` endpoint with form fields `client_id`,
+`client_secret`, `grant_type=refresh_token`, and `refresh_token`. It sends no
+bearer, username, password, or OTP. Successful refresh rotates both tokens.
 
 Refresh must:
 
@@ -363,7 +384,11 @@ Refresh must:
 - preserve a newer record if another request already refreshed it;
 - never log old/new tokens;
 - never loop indefinitely on 401;
-- become `reauthentication_required` when refresh is expired/rejected/invalid.
+- treat HTTP 400 `invalid_grant` as `reauthentication_required` when the refresh
+  token is expired, revoked, reused, or bound to a different client;
+- classify a timeout, lost response, or malformed success after refresh as an
+  indeterminate partial mutation. PeerTube may already have revoked the old
+  token, so blindly retrying it is unsafe.
 
 A failed refresh does not delete the backend descriptor.
 
@@ -390,6 +415,12 @@ Explicit administrator disconnect may call:
 POST /api/v1/users/revoke-token
 ```
 
+The current bearer authorizes revocation; this endpoint accepts no token body.
+Success is HTTP 200 with `{"success":true}`. PeerTube 8.1.8 does not await token
+deletion, so compatibility tests allow bounded propagation before proving that
+the access and associated refresh token are invalid. PeerTube 8.2.4 awaits the
+deletion.
+
 Disconnect/revoke does not delete remote videos, AWVP Videos, remote-asset
 records, or automatically hard-delete the backend descriptor.
 
@@ -410,6 +441,12 @@ Never persist the entire raw response.
 
 Discover destinations through the authenticated account/channel API, not global
 federated search.
+
+Authenticate with `/api/v1/users/me` first, bind the account-channel request to
+the returned `account.name`, use deterministic `sort=id`, and verify each
+candidate has `ownerAccount.id` equal to the authenticated account ID and
+`isLocal === true`. The account-channel endpoint itself is public, so a
+successful listing does not prove token validity or management authority.
 
 Normalized destination data is bounded and non-secret:
 
@@ -607,7 +644,9 @@ The first merged runtime PeerTube-contact tranche must disclose in
 administrator-facing/readme/privacy/help text that PeerTube is an
 operator-configured external service and that connection tests contact it.
 Later uploads send media/metadata to that configured service and its own
-operator policies apply.
+operator policies apply. The disclosure must also state that the connection
+request exposes normal transport metadata, including the requesting server's
+network address and AWVP product/version User-Agent, to the configured service.
 
 ## 32. Uninstall
 
@@ -756,8 +795,11 @@ Actual upload remains tranche 2.0-4.
 
 ## 39. Source authority
 
-API behavior was reviewed against official PeerTube 8.1.0 OpenAPI/REST
-documentation on 2026-08-17.
+API behavior was rechecked on 2026-08-22 against official PeerTube 8.1.8 and
+8.2.4 release source, runtime controllers, and maintained integration tests.
+The shipped OpenAPI schema still reports 8.1.0 and contains known discrepancies,
+including declaring `/api/v1/users/me` as an array even though runtime returns a
+single object. Runtime behavior and primary tests govern those discrepancies.
 
 WordPress HTTP behavior was reviewed against current official documentation for
 `wp_safe_remote_request()`, `wp_safe_remote_get()`,

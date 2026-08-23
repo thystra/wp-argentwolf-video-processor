@@ -36,8 +36,13 @@ The plugin stores work in a database queue and processes one video at a time.
 Its recurring WordPress event only starts a detached WP-CLI worker; FFmpeg does
 not run inside the WP-Cron callback or an administrator web request.
 
-No video, metadata, or usage information is sent to an external processing
-service.
+Stable 1.0 processing is local. The unreleased 2.0 development line adds an
+opt-in connection to an administrator-configured PeerTube service. Its initial
+connection check reads public instance configuration only and sends no video,
+credentials, or telemetry. The configured service can observe ordinary request
+metadata, including the WordPress server network address and plugin/version
+User-Agent. This checkpoint does not yet expose an administrator-facing
+connection action.
 
 == Installation ==
 
@@ -100,8 +105,13 @@ Automatic detached dispatch is unavailable. An operator may invoke
 
 = Does the plugin use an external service? =
 
-No. Video processing occurs on the WordPress server. The pinned hls.js runtime
-is bundled with the release and served locally.
+Stable 1.0 does not: video processing occurs on the WordPress server and the
+pinned hls.js runtime is served locally. The unreleased 2.0 development line can
+contact only an administrator-configured PeerTube origin for an explicit
+connection check. Future opt-in PeerTube upload features will send media and
+selected metadata to that service, whose operator terms and privacy policy
+apply. PeerTube is self-hostable software; the administrator must review the
+terms and privacy information published by the operator of the chosen instance.
 
 == Privacy ==
 
@@ -111,8 +121,12 @@ status, output paths, and error information in the local WordPress installation.
 Generated derivatives strip source metadata when that setting is enabled. The
 original attachment remains unchanged and may retain its original metadata.
 
-The plugin contains no telemetry and does not send media or usage information to
-a remote processing service.
+The plugin contains no telemetry. Stable 1.0 sends no media or usage information
+to a remote processing service. The unreleased 2.0 connection check sends no
+media or credentials and reads only public configuration from the exact
+administrator-configured PeerTube origin. That operator can observe the
+requesting server network address and plugin/version User-Agent. Future opt-in
+uploads will send media and selected metadata to that configured service.
 
 Worker diagnostic history is stored locally in the WordPress database with bounded retention. Detached-process capture files are temporary and removed after their useful output has been persisted.
 
@@ -124,6 +138,11 @@ responsible for installing security-maintained versions and configuring their
 paths.
 
 The release bundles a pinned hls.js browser runtime under its Apache-2.0 license.
+
+PeerTube is optional, self-hostable video-platform software. The unreleased 2.0
+connection work targets an exact service origin selected by the administrator:
+https://joinpeertube.org/. Service terms, privacy practices, and data location
+are controlled by the operator of that selected instance.
 
 == Developer notes ==
 

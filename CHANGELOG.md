@@ -1,6 +1,16 @@
 <!-- File: CHANGELOG.md -->
 # Changelog
 
+## 2.0.0 - Unreleased
+
+- Add an origin-bound WordPress safe-HTTP client and bounded, read-only PeerTube
+  instance detection through `GET /api/v1/config`.
+- Preserve the existing local backend and 1.0 runtime behavior; this checkpoint
+  adds no authentication, upload, remote mutation, or administrator connection
+  action.
+- Add focused PeerTube HTTP/API security tests to all CI/release-test workflows
+  and a real-WordPress, isolated-network Docker development smoke.
+
 ## 1.0.0 - 2026-08-22
 
 - Promoted the WordPress.org-approved 0.3.3 codebase to the first stable 1.0.0 release.
