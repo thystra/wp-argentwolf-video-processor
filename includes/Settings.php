@@ -40,6 +40,8 @@ final class Settings
             'ionice_level'            => 7,
             'strip_metadata'          => true,
             'stale_job_minutes'       => 240,
+            'worker_log_success_limit' => 10,
+            'worker_log_error_limit'   => 100,
         );
     }
 
@@ -120,7 +122,9 @@ final class Settings
             'ionice_class'           => self::bounded_int($input['ionice_class'] ?? null, 1, 3, 2),
             'ionice_level'           => self::bounded_int($input['ionice_level'] ?? null, 0, 7, 7),
             'strip_metadata'         => ! empty($input['strip_metadata']),
-            'stale_job_minutes'      => self::bounded_int($input['stale_job_minutes'] ?? null, 30, 1440, 240),
+            'stale_job_minutes'       => self::bounded_int($input['stale_job_minutes'] ?? null, 30, 1440, 240),
+            'worker_log_success_limit' => self::bounded_int($input['worker_log_success_limit'] ?? null, 0, 500, 10),
+            'worker_log_error_limit'   => self::bounded_int($input['worker_log_error_limit'] ?? null, 0, 1000, 100),
         );
     }
 

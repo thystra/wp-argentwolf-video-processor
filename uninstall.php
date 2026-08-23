@@ -17,12 +17,19 @@ if (! defined('ARGENT_VIDEO_REMOVE_DATA_ON_UNINSTALL') || true !== ARGENT_VIDEO_
 
 global $wpdb;
 
-// Explicit opt-in destructive uninstall must remove the plugin-owned queue table.
+// Explicit opt-in destructive uninstall must remove both plugin-owned tables.
+// Keep table names explicit so uninstall.php creates no global-scope iterator.
 // phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.DirectDatabaseQuery.SchemaChange
 $wpdb->query(
     $wpdb->prepare(
         'DROP TABLE IF EXISTS %i',
         $wpdb->prefix . 'argent_video_jobs'
+    )
+);
+$wpdb->query(
+    $wpdb->prepare(
+        'DROP TABLE IF EXISTS %i',
+        $wpdb->prefix . 'argentwolf_video_processor_logs'
     )
 );
 // phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.DirectDatabaseQuery.SchemaChange

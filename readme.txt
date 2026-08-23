@@ -2,9 +2,9 @@
 Contributors: thystra
 Tags: video, ffmpeg, hls, adaptive streaming, media
 Requires at least: 6.4
-Tested up to: 7.0
+Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.3.1
+Stable tag: 1.0.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -114,6 +114,8 @@ original attachment remains unchanged and may retain its original metadata.
 The plugin contains no telemetry and does not send media or usage information to
 a remote processing service.
 
+Worker diagnostic history is stored locally in the WordPress database with bounded retention. Detached-process capture files are temporary and removed after their useful output has been persisted.
+
 == External software ==
 
 The plugin requires operator-installed FFmpeg, FFprobe, and WP-CLI binaries.
@@ -135,6 +137,16 @@ plugin-update workflow and confirm the plugin remains active.
 
 == Upgrade Notice ==
 
+= 1.0.0 =
+First stable WordPress.org release; no functional or runtime behavior changes from 0.3.3.
+
+= 0.3.3 =
+WordPress 7.1 compatibility metadata update; no functional or runtime changes from 0.3.2.
+
+= 0.3.2 =
+
+Stores bounded worker diagnostic history in the local WordPress database and uses only short-lived WordPress temporary files for detached-process capture. Adds administrator-configurable retention for successful and error runs.
+
 = 0.3.1 =
 
 Moves generated derivatives into a plugin-owned uploads subtree and removes
@@ -147,6 +159,23 @@ Renames the public plugin and package to ArgentWolf Video Processor and prepares
 the project for WordPress.org review while retaining existing data identifiers.
 
 == Changelog ==
+
+= 1.0.0 =
+* Promoted the WordPress.org-approved 0.3.3 codebase to the first stable 1.0.0 release.
+* No functional or runtime behavior changes from 0.3.3.
+
+= 0.3.3 =
+* Updated WordPress compatibility metadata for WordPress 7.1.
+* No functional or runtime behavior changes from 0.3.2.
+
+= 0.3.2 =
+
+* Replace the persistent system-temp worker log with bounded database-backed diagnostic history in `{$wpdb->prefix}argentwolf_video_processor_logs`.
+* Use short-lived WordPress temporary captures for detached worker bootstrap/output and recover stale captures before later launches can replace evidence.
+* Add configurable retention defaults of 10 successful runs and 100 error/job-error runs, with a fixed 512 KiB diagnostic-output cap per run.
+* Add recent worker history and a nonce/capability-protected clear-history action to the Settings page.
+* Use WordPress temporary-file facilities with failure-safe cleanup for FFmpeg/FFprobe stdout and stderr captures.
+* Retain the legacy `argent_video_jobs` table for compatibility while using the canonical `argentwolf_video_processor_*` identifier for newly introduced tables.
 
 = 0.3.1 =
 

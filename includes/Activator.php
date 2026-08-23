@@ -9,13 +9,13 @@ namespace ArgentVideo;
 
 final class Activator
 {
-    public const DB_VERSION = '1';
+    public const DB_VERSION = '2';
     public const DB_OPTION = 'argent_video_processor_db_version';
     public const CRON_HOOK = 'argent_video_processor_dispatch';
 
     public static function activate(): void
     {
-        self::create_table();
+        self::create_tables();
         Model_Activator::install();
         self::schedule_dispatch();
     }
@@ -28,7 +28,7 @@ final class Activator
     public static function maybe_upgrade(): void
     {
         if (self::DB_VERSION !== (string) get_option(self::DB_OPTION, '')) {
-            self::create_table();
+            self::create_tables();
         }
     }
 
@@ -39,14 +39,15 @@ final class Activator
         }
     }
 
-    private static function create_table(): void
+    private static function create_tables(): void
     {
         global $wpdb;
 
-        $table = $wpdb->prefix . 'argent_video_jobs';
+        $jobs_table = $wpdb->prefix . 'argent_video_jobs';
+        $logs_table = $wpdb->prefix . Worker_Log_Repository::TABLE_SUFFIX;
         $charset_collate = $wpdb->get_charset_collate();
 
-        $sql = "CREATE TABLE {$table} (
+        $jobs_sql = "CREATE TABLE {$jobs_table} (
             id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
             attachment_id bigint(20) unsigned NOT NULL,
             source_path text NOT NULL,
@@ -68,8 +69,30 @@ final class Activator
             KEY locked_at (locked_at)
         ) {$charset_collate};";
 
+        $logs_sql = "CREATE TABLE {$logs_table} (
+            id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+            trigger_source varchar(20) NOT NULL DEFAULT 'unknown',
+            status varchar(20) NOT NULL DEFAULT 'launching',
+            pid bigint(20) unsigned DEFAULT NULL,
+            exit_code int DEFAULT NULL,
+            jobs_processed int(10) unsigned NOT NULL DEFAULT 0,
+            jobs_failed int(10) unsigned NOT NULL DEFAULT 0,
+            jobs_recovered int(10) unsigned NOT NULL DEFAULT 0,
+            message text DEFAULT NULL,
+            diagnostic_output longtext DEFAULT NULL,
+            capture_path text DEFAULT NULL,
+            started_at datetime DEFAULT NULL,
+            completed_at datetime DEFAULT NULL,
+            created_at datetime NOT NULL,
+            updated_at datetime NOT NULL,
+            PRIMARY KEY  (id),
+            KEY status_created (status, created_at),
+            KEY completed_at (completed_at)
+        ) {$charset_collate};";
+
         require_once ABSPATH . 'wp-admin/includes/upgrade.php';
-        dbDelta($sql);
+        dbDelta($jobs_sql);
+        dbDelta($logs_sql);
         update_option(self::DB_OPTION, self::DB_VERSION, false);
     }
 }

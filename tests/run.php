@@ -13,6 +13,10 @@ $GLOBALS['argent_video_test_uploads'] = array(
     'error'   => false,
 );
 mkdir((string) $GLOBALS['argent_video_test_uploads']['basedir'], 0700, true);
+$GLOBALS['argent_video_test_temp_dir'] = $storage_test_root . '/temp';
+$GLOBALS['argent_video_test_tempnam_calls'] = 0;
+$GLOBALS['argent_video_test_tempnam_fail_on_call'] = 0;
+mkdir((string) $GLOBALS['argent_video_test_temp_dir'], 0700, true);
 
 function wp_upload_dir(): array
 {
@@ -39,6 +43,47 @@ function wp_delete_file(string $file): void
     @unlink($file);
 }
 
+function wp_tempnam(string $filename = '', string $dir = ''): string
+{
+    unset($filename);
+    $GLOBALS['argent_video_test_tempnam_calls']++;
+    if (
+        (int) $GLOBALS['argent_video_test_tempnam_fail_on_call'] > 0
+        && (int) $GLOBALS['argent_video_test_tempnam_calls'] === (int) $GLOBALS['argent_video_test_tempnam_fail_on_call']
+    ) {
+        return '';
+    }
+
+    $directory = '' !== $dir ? $dir : (string) $GLOBALS['argent_video_test_temp_dir'];
+    $path = tempnam($directory, 'awvp-');
+    return false === $path ? '' : $path;
+}
+
+function get_temp_dir(): string
+{
+    return trailingslashit((string) $GLOBALS['argent_video_test_temp_dir']);
+}
+
+function wp_check_invalid_utf8(string $text, bool $strip = false): string
+{
+    unset($strip);
+    return $text;
+}
+
+function current_time(string $type, bool $gmt = false): string
+{
+    unset($type, $gmt);
+    return gmdate('Y-m-d H:i:s');
+}
+
+if (! defined('ARRAY_A')) {
+    define('ARRAY_A', 'ARRAY_A');
+}
+
+require_once dirname(__DIR__) . '/includes/Settings.php';
+require_once dirname(__DIR__) . '/includes/Activator.php';
+require_once dirname(__DIR__) . '/includes/Worker_Log_Repository.php';
+require_once dirname(__DIR__) . '/includes/Process_Runner.php';
 require_once dirname(__DIR__) . '/includes/Storage.php';
 require_once dirname(__DIR__) . '/includes/Output_Namer.php';
 require_once dirname(__DIR__) . '/includes/Command_Builder.php';
@@ -46,11 +91,15 @@ require_once dirname(__DIR__) . '/includes/Probe.php';
 require_once dirname(__DIR__) . '/includes/Adaptive_HLS.php';
 require_once dirname(__DIR__) . '/includes/Shell_Probe.php';
 
+use ArgentVideo\Activator;
 use ArgentVideo\Adaptive_HLS;
 use ArgentVideo\Command_Builder;
 use ArgentVideo\Output_Namer;
+use ArgentVideo\Process_Runner;
 use ArgentVideo\Probe;
+use ArgentVideo\Settings;
 use ArgentVideo\Shell_Probe;
+use ArgentVideo\Worker_Log_Repository;
 use ArgentVideo\Storage;
 
 $failures = array();
@@ -60,8 +109,123 @@ $assert = static function (bool $condition, string $message) use (&$failures): v
     }
 };
 
+$defaults = Settings::defaults();
+$assert(10 === $defaults['worker_log_success_limit'], 'Successful worker log retention default must be 10.');
+$assert(100 === $defaults['worker_log_error_limit'], 'Error worker log retention default must be 100.');
+$sanitized_retention = Settings::sanitize(array('worker_log_success_limit' => 9999, 'worker_log_error_limit' => -4));
+$assert(500 === $sanitized_retention['worker_log_success_limit'], 'Successful worker log retention must clamp to 500.');
+$assert(0 === $sanitized_retention['worker_log_error_limit'], 'Error worker log retention must allow zero and clamp at zero.');
+$assert('2' === Activator::DB_VERSION, 'Worker diagnostics schema requires database version 2.');
+$assert('argentwolf_video_processor_logs' === Worker_Log_Repository::TABLE_SUFFIX, 'New worker log table must use the canonical ArgentWolf identifier.');
+$launcher_source = (string) file_get_contents(dirname(__DIR__) . '/includes/Worker_Launcher.php');
+$process_source = (string) file_get_contents(dirname(__DIR__) . '/includes/Process_Runner.php');
+$assert(! str_contains($launcher_source, 'sys_get_temp_dir'), 'Worker launcher must not use sys_get_temp_dir for persistent diagnostics.');
+$assert(str_contains($launcher_source, '--worker-log-id='), 'Detached worker launch must pass its diagnostic record ID.');
+$assert(! str_contains($process_source, 'sys_get_temp_dir'), 'Process runner must use WordPress temporary-file facilities.');
+
 $assert(Shell_Probe::exec_available(), 'Shell executable probing requires exec() in the test environment.');
 $assert(Shell_Probe::path_executable(PHP_BINARY), 'Shell probe must find the active PHP binary.');
+$process_runner = new Process_Runner();
+$temp_before = glob((string) $GLOBALS['argent_video_test_temp_dir'] . '/awvp-*') ?: array();
+$process_result = $process_runner->run(array(PHP_BINARY, '-r', 'fwrite(STDOUT, "runner-out"); fwrite(STDERR, "runner-err");'));
+$temp_after = glob((string) $GLOBALS['argent_video_test_temp_dir'] . '/awvp-*') ?: array();
+$assert(0 === $process_result['exit_code'], 'Process runner test command must exit successfully.');
+$assert('runner-out' === $process_result['stdout'], 'Process runner must capture stdout.');
+$assert('runner-err' === $process_result['stderr'], 'Process runner must capture stderr.');
+$assert($temp_before === $temp_after, 'Process runner must clean up WordPress temporary capture files.');
+
+$GLOBALS['argent_video_test_tempnam_calls'] = 0;
+$GLOBALS['argent_video_test_tempnam_fail_on_call'] = 2;
+$partial_before = glob((string) $GLOBALS['argent_video_test_temp_dir'] . '/awvp-*') ?: array();
+$partial_failed = false;
+try {
+    $process_runner->run(array(PHP_BINARY, '-r', 'fwrite(STDOUT, "should-not-run");'));
+} catch (RuntimeException $error) {
+    $partial_failed = str_contains($error->getMessage(), 'temporary process log file');
+}
+$partial_after = glob((string) $GLOBALS['argent_video_test_temp_dir'] . '/awvp-*') ?: array();
+$assert($partial_failed, 'Process runner must surface second temporary-file allocation failure.');
+$assert($partial_before === $partial_after, 'Partial temporary-file allocation failure must clean up the first capture.');
+$GLOBALS['argent_video_test_tempnam_calls'] = 0;
+$GLOBALS['argent_video_test_tempnam_fail_on_call'] = 0;
+
+$large_capture = wp_tempnam('argentwolf-video-processor-cap-test.tmp');
+$assert('' !== $large_capture, 'Capture-cap regression fixture must allocate a temporary file.');
+if ('' !== $large_capture) {
+    file_put_contents($large_capture, str_repeat('A', Worker_Log_Repository::MAX_CAPTURE_BYTES + 8192));
+    $worker_log_reflection = new ReflectionClass(Worker_Log_Repository::class);
+    $worker_log_repository = $worker_log_reflection->newInstanceWithoutConstructor();
+    $read_capture = $worker_log_reflection->getMethod('read_capture');
+    $read_capture->setAccessible(true);
+    $bounded_capture = (string) $read_capture->invoke($worker_log_repository, $large_capture);
+    $assert(
+        strlen($bounded_capture) <= Worker_Log_Repository::MAX_CAPTURE_BYTES,
+        'Persisted diagnostic output must not exceed the fixed 512 KiB cap, including its truncation marker.'
+    );
+    $assert(
+        str_contains($bounded_capture, '[ArgentWolf Video Processor diagnostic output truncated]'),
+        'Oversized diagnostic output must carry an explicit truncation marker.'
+    );
+    wp_delete_file($large_capture);
+}
+
+$persist_capture = (string) $GLOBALS['argent_video_test_temp_dir']
+    . '/argentwolf-video-processor-worker-capture-persist-before-delete.tmp';
+file_put_contents($persist_capture, 'unique diagnostic evidence');
+$previous_wpdb_exists = array_key_exists('wpdb', $GLOBALS);
+$previous_wpdb = $GLOBALS['wpdb'] ?? null;
+$GLOBALS['wpdb'] = new class($persist_capture) {
+    public string $prefix = 'wp_';
+
+    /** @var array<string, mixed> */
+    private array $row;
+
+    public function __construct(string $capture_path)
+    {
+        $this->row = array(
+            'id'           => 1,
+            'status'       => 'running',
+            'capture_path' => $capture_path,
+        );
+    }
+
+    public function prepare(string $query, mixed ...$args): string
+    {
+        unset($args);
+        return $query;
+    }
+
+    /** @return array<string, mixed> */
+    public function get_row(string $query, string $output): array
+    {
+        unset($query, $output);
+        return $this->row;
+    }
+
+    /** @param array<string, mixed> $data
+     *  @param array<string, mixed> $where
+     *  @param list<string>|null $format
+     *  @param list<string>|null $where_format
+     */
+    public function update(string $table, array $data, array $where, ?array $format = null, ?array $where_format = null): int
+    {
+        unset($table, $data, $where, $format, $where_format);
+        return 0;
+    }
+};
+$worker_log_repository = new Worker_Log_Repository();
+$worker_log_repository->complete(1, array('processed' => 1, 'failed' => 0, 'recovered' => 0));
+$assert(
+    is_file($persist_capture),
+    'Temporary diagnostic evidence must remain when the durable database update affects zero rows.'
+);
+wp_delete_file($persist_capture);
+if ($previous_wpdb_exists) {
+    $GLOBALS['wpdb'] = $previous_wpdb;
+} else {
+    unset($GLOBALS['wpdb']);
+}
+
 $php_version = Shell_Probe::run(array(PHP_BINARY, '-v'));
 $assert($php_version['ok'] && str_contains($php_version['output'], 'PHP '), 'Shell probe must execute binaries without PHP filesystem stat calls.');
 
