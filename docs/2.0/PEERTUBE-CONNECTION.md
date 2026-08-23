@@ -1,6 +1,6 @@
 # AWVP 2.0 PeerTube Connection, Authentication, and API Contract
 
-Status: tranche 2.0-3 design contract; R33 read-only detection implemented
+Status: tranche 2.0-3 design contract; R34 authenticated API primitives implemented
 Reviewed runtime baselines: PeerTube 8.1.8 and 8.2.4, 2026-08-22
 Applies to: configured/manageable PeerTube backends
 
@@ -221,6 +221,33 @@ decompression, post-return size checks, and rejection of encoded responses are
 the R33 defenses, but the WordPress limit is not an absolute pre-decompression
 memory guarantee against a noncompliant malicious server. Revisit a streamed
 transport boundary before handling larger or less trusted responses.
+
+R34 extends the origin-bound client with explicit, non-generic primitives for
+the local OAuth-client read, password/OTP token exchange, `/users/me`, and the
+public account-channel listing. It validates exact methods, paths, form fields,
+headers, content types, status codes, response shapes, token lifetimes, identity
+binding, deterministic pagination, owner identity, and channel locality. It
+returns only reviewed projections; raw responses, password, OTP, and the local
+OAuth client do not enter WordPress options or diagnostics.
+
+`owned_channels()` accepts the bearer token, performs its own `/users/me`
+verification, and only then issues the public account-channel reads without the
+bearer. It does not accept a caller-supplied identity array as authority.
+Credential-bearing endpoint failures discard all remotely supplied textual
+diagnostics except exact allowlisted PeerTube machine codes; numeric HTTP/rate
+metadata remains available.
+
+These R34 primitives have no registered administrator action and no production
+connection orchestrator. Successful password grant creates a live remote
+session before identity and channel verification can finish. Discarding the
+token after a later failure would leave an untracked session; persisting it
+without a durable pending/reconciliation protocol would create a different
+partial-mutation hazard. R34 therefore keeps the result ephemeral and defers
+production connection persistence, refresh, and revoke until that protocol,
+per-secret serialization, and explicit indeterminate-outcome handling are
+implemented. The focused Docker fixture may invoke the primitives against an
+isolated mock, but normal plugin execution does not invoke them. No R34 path
+sends media or performs upload/import/video mutation.
 
 After explicit `manage_options` administrator authorization, authenticated
 verification may:
@@ -704,6 +731,20 @@ Requirements:
 - unknown future descriptor fields are not erased;
 - unknown/future registry descriptors remain preserved/fail-closed;
 - local descriptor semantics remain unchanged.
+
+R34 adds only a read-only preflight for a prospective PeerTube-v1 append. It is
+not connected to the OAuth primitives and performs no option or autoload
+mutation. The preflight accepts a new **disabled** descriptor only, proves that
+existing current-version unknown/future fields and descriptors can be retained
+exactly, and refuses a future or malformed top-level registry.
+
+The actual writer is deferred to a separate persistence slice. It requires an
+exact byte-level database compare-and-swap, conditional rollback/delete that
+cannot erase concurrent state, classified success/conflict/indeterminate
+outcomes, explicit WordPress option-cache and hook handling, and real database
+validation on WordPress 6.4 and 7.1. A production connection service also needs
+a durable pending/reconciliation protocol before it may combine remote session
+creation, encrypted-secret creation, descriptor linkage, and activation.
 
 ## 35. Adapter factory evolution
 

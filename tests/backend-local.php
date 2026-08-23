@@ -155,6 +155,7 @@ namespace {
     require_once dirname(__DIR__) . '/includes/Backend_Health.php';
     require_once dirname(__DIR__) . '/includes/Backend_Adapter.php';
     require_once dirname(__DIR__) . '/includes/Backend_Adapter_Factory.php';
+    require_once dirname(__DIR__) . '/includes/PeerTube_Origin.php';
     require_once dirname(__DIR__) . '/includes/Backend_Registry.php';
     require_once dirname(__DIR__) . '/includes/Local_Backend_Adapter.php';
 
@@ -330,6 +331,146 @@ namespace {
     $invalid_secret = $valid;
     $invalid_secret['backends']['local']['config'] = array('access_token' => 'do-not-store');
     $assert(! $registry->save($invalid_secret), 'Secret-like ordinary descriptor material must be rejected.');
+
+    $peertube = array(
+        'id' => 'peertube-primary',
+        'type' => 'peertube',
+        'label' => 'Primary PeerTube',
+        'state' => 'disabled',
+        'default_destination' => 'Channel: A',
+        'secret_ref' => 'managed_0123456789abcdef0123456789abcdef',
+        'config_version' => 1,
+        'config' => array('origin' => 'https://video.example.org'),
+    );
+
+    $GLOBALS['awvp_backend_option_exists'] = false;
+    $GLOBALS['awvp_backend_option_value'] = null;
+    $GLOBALS['awvp_backend_option_writes'] = array();
+    $GLOBALS['awvp_backend_autoload_writes'] = array();
+    $GLOBALS['awvp_backend_option_autoload'] = false;
+
+    $assert($registry->can_add_peertube($peertube), 'Known PeerTube v1 descriptor should pass read-only preflight.');
+    $assert([] === $GLOBALS['awvp_backend_option_writes'], 'PeerTube preflight must not write the registry.');
+    $assert([] === $GLOBALS['awvp_backend_autoload_writes'], 'PeerTube preflight must not mutate registry autoload state.');
+    $assert(! $GLOBALS['awvp_backend_option_exists'], 'PeerTube preflight must not materialize the absent registry.');
+
+    $stored_known_peertube = $valid;
+    $stored_known_peertube['backends']['peertube-primary'] = $peertube;
+    $GLOBALS['awvp_backend_option_exists'] = true;
+    $GLOBALS['awvp_backend_option_value'] = $stored_known_peertube;
+    $assert($peertube === $registry->get('peertube-primary'), 'Stored known PeerTube descriptor normalization mismatch.');
+    $assert('active' === (($registry->get('local')['state'] ?? '')), 'Stored PeerTube state must not change canonical local behavior.');
+
+    $second_peertube = $peertube;
+    $second_peertube['id'] = 'peertube-secondary';
+    $GLOBALS['awvp_backend_option_writes'] = array();
+    $GLOBALS['awvp_backend_autoload_writes'] = array();
+    $before_known_preflight = $GLOBALS['awvp_backend_option_value'];
+    $assert($registry->can_add_peertube($second_peertube), 'Preflight should accept a second known PeerTube descriptor prospectively.');
+    $assert($before_known_preflight === $GLOBALS['awvp_backend_option_value'], 'Known-state PeerTube preflight must preserve the option exactly.');
+    $assert([] === $GLOBALS['awvp_backend_option_writes'], 'Known-state PeerTube preflight must perform no option write.');
+    $assert([] === $GLOBALS['awvp_backend_autoload_writes'], 'Known-state PeerTube preflight must perform no autoload write.');
+
+    $active_peertube = $peertube;
+    $active_peertube['id'] = 'peertube-active-too-early';
+    $active_peertube['state'] = 'active';
+    $assert(
+        ! $registry->can_add_peertube($active_peertube),
+        'R34 preflight must reject an active PeerTube descriptor before verified activation exists.'
+    );
+
+    $secret_peertube = $peertube;
+    $secret_peertube['id'] = 'peertube-secret';
+    $secret_peertube['config']['access_token'] = 'must-never-enter-the-registry';
+    $assert(! $registry->can_add_peertube($secret_peertube), 'Secret-like PeerTube config must fail closed.');
+
+    $missing_secret_ref = $peertube;
+    $missing_secret_ref['id'] = 'peertube-no-secret-ref';
+    $missing_secret_ref['secret_ref'] = '';
+    $assert(! $registry->can_add_peertube($missing_secret_ref), 'PeerTube descriptor must carry a nonempty opaque secret-store reference.');
+
+    $future_peertube = $peertube;
+    $future_peertube['id'] = 'peertube-future';
+    $future_peertube['config_version'] = 2;
+    $future_peertube['config']['future_mode'] = 'preserve-only';
+    $assert(! $registry->can_add_peertube($future_peertube), 'Future PeerTube config must fail closed in the v1 preflight.');
+
+    $preserved_future_descriptor = $future_descriptor;
+    $preserved_future_descriptor['future_field'] = array('nested' => 'preserve-me-exactly');
+    $preserved_future_peertube = $future_peertube;
+    $preserved_future_peertube['id'] = 'peertube-future-stored';
+    $preserved_future_peertube['future_descriptor_field'] = 'also-preserve-me';
+    $stored_with_preserved_future = $valid;
+    $stored_with_preserved_future['future_registry_field'] = 'preserve-this-too';
+    $stored_with_preserved_future['backends']['future'] = $preserved_future_descriptor;
+    $stored_with_preserved_future['backends']['peertube-future-stored'] = $preserved_future_peertube;
+    $GLOBALS['awvp_backend_option_exists'] = true;
+    $GLOBALS['awvp_backend_option_value'] = $stored_with_preserved_future;
+    $GLOBALS['awvp_backend_option_writes'] = array();
+    $GLOBALS['awvp_backend_autoload_writes'] = array();
+    $GLOBALS['awvp_backend_option_autoload'] = false;
+
+    $preserving_peertube = $peertube;
+    $preserving_peertube['id'] = 'peertube-preserving';
+    $preserving_peertube['default_destination'] = '';
+    $before_preserving_preflight = $GLOBALS['awvp_backend_option_value'];
+    $assert($registry->can_add_peertube($preserving_peertube), 'PeerTube preflight should accept a valid registry containing future state.');
+    $assert($before_preserving_preflight === $GLOBALS['awvp_backend_option_value'], 'PeerTube preflight must preserve future state without writes.');
+    $assert([] === $GLOBALS['awvp_backend_option_writes'], 'PeerTube future-state preflight must remain read-only.');
+    $assert([] === $GLOBALS['awvp_backend_autoload_writes'], 'PeerTube future-state preflight must not touch autoload state.');
+    $assert(null === $registry->get('peertube-future-stored'), 'Stored future PeerTube config must fail closed during normalization.');
+    $assert(in_array('registry_descriptor_malformed', $registry->diagnostics(), true), 'Stored future PeerTube config must emit the malformed-descriptor diagnostic.');
+
+    $stored_with_existing_target = $stored_with_preserved_future;
+    $stored_with_existing_target['backends']['peertube-preserving'] = $preserving_peertube;
+    $GLOBALS['awvp_backend_option_value'] = $stored_with_existing_target;
+    $GLOBALS['awvp_backend_option_writes'] = array();
+    $GLOBALS['awvp_backend_autoload_writes'] = array();
+    $before_existing_target = $GLOBALS['awvp_backend_option_value'];
+    $assert(! $registry->can_add_peertube($preserving_peertube), 'Create-only PeerTube preflight must refuse an existing target ID.');
+    $assert($before_existing_target === $GLOBALS['awvp_backend_option_value'], 'Refused PeerTube target preflight must preserve the registry exactly.');
+    $assert([] === $GLOBALS['awvp_backend_option_writes'], 'Refused PeerTube target preflight must perform no option write.');
+    $assert([] === $GLOBALS['awvp_backend_autoload_writes'], 'Refused PeerTube target preflight must perform no autoload write.');
+
+    $future_registry_for_append = $stored_with_preserved_future;
+    $future_registry_for_append['version'] = 2;
+    $GLOBALS['awvp_backend_option_value'] = $future_registry_for_append;
+    $GLOBALS['awvp_backend_option_writes'] = array();
+    $future_registry_append = $peertube;
+    $future_registry_append['id'] = 'peertube-on-future-registry';
+    $assert(! $registry->can_add_peertube($future_registry_append), 'PeerTube v1 preflight must refuse a future top-level registry version.');
+    $assert($future_registry_for_append === $GLOBALS['awvp_backend_option_value'], 'Refused future-registry preflight must leave it unchanged.');
+    $assert([] === $GLOBALS['awvp_backend_option_writes'], 'Refused future-registry preflight must perform no option write.');
+
+    $missing_local_registry_for_append = array(
+        'version' => 1,
+        'backends' => array('future' => $preserved_future_descriptor),
+    );
+    $GLOBALS['awvp_backend_option_value'] = $missing_local_registry_for_append;
+    $GLOBALS['awvp_backend_option_writes'] = array();
+    $missing_local_append = $peertube;
+    $missing_local_append['id'] = 'peertube-on-missing-local';
+    $assert(! $registry->can_add_peertube($missing_local_append), 'PeerTube preflight must refuse an existing registry missing local.');
+    $assert($missing_local_registry_for_append === $GLOBALS['awvp_backend_option_value'], 'Missing-local registry must remain unchanged after refused preflight.');
+    $assert([] === $GLOBALS['awvp_backend_option_writes'], 'Missing-local refusal must perform no option write.');
+
+    $malformed_registry_for_append = $stored_with_preserved_future;
+    $malformed_registry_for_append['backends']['broken'] = 'not-a-descriptor';
+    $GLOBALS['awvp_backend_option_value'] = $malformed_registry_for_append;
+    $GLOBALS['awvp_backend_option_writes'] = array();
+    $malformed_registry_append = $peertube;
+    $malformed_registry_append['id'] = 'peertube-on-malformed-registry';
+    $assert(! $registry->can_add_peertube($malformed_registry_append), 'PeerTube preflight must reject a malformed current registry.');
+    $assert($malformed_registry_for_append === $GLOBALS['awvp_backend_option_value'], 'Malformed registry must remain unchanged after refused preflight.');
+    $assert([] === $GLOBALS['awvp_backend_option_writes'], 'Malformed registry refusal must perform no option write.');
+
+    $malformed_known_peertube = $valid;
+    $malformed_known_peertube['backends']['peertube-bad-origin'] = $peertube;
+    $malformed_known_peertube['backends']['peertube-bad-origin']['id'] = 'peertube-bad-origin';
+    $malformed_known_peertube['backends']['peertube-bad-origin']['config']['origin'] = 'https://video.example.org/path';
+    $GLOBALS['awvp_backend_option_value'] = $malformed_known_peertube;
+    $assert(null === $registry->get('peertube-bad-origin'), 'Malformed stored PeerTube v1 config must not normalize as known state.');
+    $assert(in_array('registry_descriptor_malformed', $registry->diagnostics(), true), 'Malformed stored PeerTube diagnostic missing.');
 
     $queue = new Queue();
     $diagnostics = new Diagnostics(

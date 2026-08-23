@@ -40,3 +40,36 @@ pull the pinned images. Runtime containers themselves have no external route.
 It covers only the R33 public `/api/v1/config` detection boundary. It does not
 test TLS, credentials, tokens, refresh/revocation, uploads, a real PeerTube
 server, a built plugin ZIP, or release/upgrade behavior.
+
+## PeerTube authenticated API checkpoint
+
+After the R34 source checkpoint is committed, run its separate smoke from a
+clean checkout on the disposable Docker host:
+
+```bash
+bash tests/integration/peertube-auth-api-smoke.sh
+```
+
+This runner retains the R33 isolation and digest-pinned WordPress 7.1/PHP 8.3,
+WP-CLI, and MariaDB fixture pattern, but uses a separate internal PeerTube
+fixture. It verifies the local OAuth client, the exact OTP-required response
+header classification, password-plus-OTP token exchange, bearer-authenticated
+`/api/v1/users/me`, and 101 owner/local-bound channels over two public account
+channel pages. Discovery re-verifies `/api/v1/users/me` from the bearer token
+inside the authority boundary rather than trusting a caller-built identity.
+The fixture rejects a bearer token on either public page and validates the
+exact methods, paths, query ordering, token form, and OTP header.
+
+The smoke snapshots AWVP-owned options and managed upload storage before the
+API calls and requires them to remain unchanged. It performs no refresh,
+revocation, upload, backend registration, secret persistence, or other remote
+mutation beyond the requested disposable login session. This is focused
+development-checkpoint evidence, not real-PeerTube, exact-ZIP, release,
+upgrade, Plugin Check, or TLS coverage.
+
+To preserve its report outside the checkout, set an absolute directory:
+
+```bash
+AWVP_R34_REPORT_DIR=/absolute/report/path \
+    bash tests/integration/peertube-auth-api-smoke.sh
+```
