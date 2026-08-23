@@ -101,4 +101,4 @@
 - [x] Publish and redownload the exact Forgejo 1.0.0 asset with matching SHA-256.
 - [x] Publish `trunk`, `tags/1.0.0`, and directory assets to WordPress.org SVN.
 - [x] Merge the completed `release/1.x` line into `main`.
-- [ ] Forward-port the stable 1.0 baseline into `develop-2.0`.
+- [x] Forward-port the stable 1.0 baseline into `develop-2.0`.
