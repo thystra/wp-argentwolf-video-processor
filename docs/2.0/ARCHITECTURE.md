@@ -233,6 +233,14 @@ Configuration should support:
 - token/bootstrap workflows that avoid retaining a user's PeerTube password
   when reusable OAuth/API tokens are sufficient.
 
+Connection setup is a durable cross-store operation, not a read-then-write
+convenience flow. Before a password grant, AWVP must have durably reserved a
+bounded non-secret operation record, an exact empty managed-secret slot, and a
+disabled backend descriptor. Reusable tokens are encrypted into that reserved
+slot before identity/destination verification and activation. A grant whose
+remote outcome is uncertain must remain explicitly indeterminate and must not
+be retried automatically.
+
 AWVP must expose connection health without exposing secrets.
 
 ## 8. Editor workflow
@@ -529,7 +537,9 @@ Never change a stored backend ID/UUID and assume the bytes moved.
 ### Tranche 2.0-3 — PeerTube connection and API client
 
 - multiple backend records;
-- credentials/tokens;
+- atomic disabled-descriptor persistence;
+- bounded non-secret connection journal and pending/reconciliation states;
+- independently encrypted, non-autoloaded credential records;
 - connection test;
 - capability/version discovery;
 - channel discovery;

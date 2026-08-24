@@ -9,8 +9,9 @@ ArgentWolf Video Processor 2.0 development.
   `v1.0.0`; later `main` commits are documentation/maintenance history unless a
   new release is deliberately prepared.
 - `develop-2.0` is the next-major integration line.
-- `feature/2.0-peertube-auth-identity` preserves the reviewed R34 source and
-  validation history. New continuation work branches from `develop-2.0`.
+- `feature/2.0-peertube-connection-persistence` preserves the reviewed R35
+  source and validation history. New continuation work branches from
+  `develop-2.0` after R35 integration closes.
 
 Do not develop unfinished 2.0 runtime changes directly on `main`.
 
@@ -262,17 +263,124 @@ dependency-free, storage, restricted `open_basedir`, smoke-load, FFmpeg
 security/integration, vendor-fetch, JavaScript syntax, workflow-YAML, shell
 syntax, and diff gates passed.
 
+## R35 durable connection-persistence checkpoint
+
+R35 began from the exact R34 integration authority without rewriting it:
+
+- branch: `feature/2.0-peertube-connection-persistence`;
+- parent / `origin/develop-2.0` authority:
+  `cf40c16a2becb66c3fd03d9d9b1955cd41d42035`;
+- implementation checkpoint:
+  `2549740888339d3be4004c49793d9879b459454d`;
+- implementation tree:
+  `b47508dd35bfa4abfbe52f2e6cd67448c9e2d465`;
+- subject: `Add durable PeerTube connection persistence`.
+
+The checkpoint adds an exact raw-option compare-and-swap boundary, classified
+mutation results, atomic disabled-backend registry append, managed secret
+manifest and generation-bound pending/ready records, a bounded connection
+operation journal, and a pure connection state machine. It validates both the
+WordPress 6.4 `autoload=no` and modern `autoload=off` representations, rejects
+autoload repair and unsafe serialized/reference values, invalidates option
+caches on conflicts and after definite or possible mutations, and preserves
+unknown future registry state.
+
+The state machine requires durable journal, pending-secret, and disabled-registry
+evidence before a future password grant, then bound encrypted-secret evidence
+before identity/destination verification and activation. It treats an
+indeterminate grant as terminal and permits only explicit, mutation-ID-changing
+replans after definite local conflicts. The journal never evicts unresolved
+work and allows at most one unresolved operation per backend.
+
+R35 deliberately registers no production connection service, administrator
+action, AJAX/REST endpoint, PeerTube adapter, activation writer, password/OTP
+collector, refresh/revoke path, upload path, or runtime PeerTube HTTP action.
+The model schema and plugin version remain unchanged; `main` is untouched.
+
+The complete PHP lint, focused model/backend/PeerTube/persistence tests in both
+autoload modes, dependency-free, storage, restricted `open_basedir`, smoke-load,
+FFmpeg security/integration, vendor-fetch, JavaScript syntax, workflow-YAML,
+shell-syntax, diff, and deterministic package gates passed locally. Forgejo CI
+run 54 passed the exact implementation checkpoint.
+
+The first two-case Docker attempt used the exact clean implementation commit
+and reached every WordPress persistence assertion in the WordPress 6.4 case,
+including zero WordPress HTTP requests and zero upload mutations. Its final
+debug gate then correctly failed on WordPress-core diagnostics caused by the
+test environment: WP-CLI lacked a stable request host, while ambient cron/admin
+bootstrap paths were permitted to invoke unrelated WordPress.org update checks
+against intentionally blocked external HTTP. This is classified as a harness
+failure, not a product failure. Cleanup passed.
+
+- failed report:
+  `/tmp/awvp-r35-report.CEhutr/peertube-persistence-smoke-20260824T041006Z-28773.log`;
+- failed report SHA-256:
+  `e2507a3d37853c64fa983e95dedd60de288f263c08b5edba4f36a2ad28a9c29b`;
+- failed final result: `PEERTUBE_PERSISTENCE_SMOKE=FAIL`.
+
+Two non-rewriting follow-up commits corrected and hardened only the R35 smoke
+fixture, runner, and integration documentation:
+
+- `a2cab741cad219d19ba80d554318c08cf1204642` establishes global WP-CLI URL
+  context, disables ambient cron, and uses explicit CLI context for plugin
+  activation;
+- `a2cab741cad219d19ba80d554318c08cf1204642` tree:
+  `373e9e9bb80e3d5af658f01ce9cf37e716f8407f`;
+- `8dfca147feaf05abb4d12c81d289ff053b0b2f75` preserves complete debug
+  diagnostics, detects WordPress database/incorrect-call diagnostics, and
+  checks synthetic secrets before replaying a failing log;
+- corrected tested tree:
+  `b342ee4b579ebc2be1ee319a9e240f2f27d1cdc4`.
+
+The correction does not clear, truncate, suppress, or allowlist diagnostics.
+It changes no production plugin source or installable runtime content. The full
+local non-Docker suite passed again, and Forgejo CI run 55 passed the exact
+corrected commit.
+
+The corrected matrix completed successfully on `ubuntuzfstest` at
+`2026-08-24T10:39:52Z`:
+
+- tested source commit:
+  `8dfca147feaf05abb4d12c81d289ff053b0b2f75`;
+- tested source tree:
+  `b342ee4b579ebc2be1ee319a9e240f2f27d1cdc4`;
+- report:
+  `/tmp/awvp-r35-report.6Ma2an/peertube-persistence-smoke-20260824T103952Z-33509.log`;
+- report SHA-256:
+  `97aaabb7c703e7720ce780adacdd6d6ba524c9471a75981ab3963cc760d1673d`;
+- minimum case: WordPress 6.4.2, PHP 8.1.34, MariaDB 10.6.27;
+- current case: WordPress 7.1, PHP 8.3.33, MariaDB 10.11.18;
+- exact committed-source export, read-only runtime mount, image pins, owned
+  internal networks/volumes, no host ports, fresh sites, database consumer
+  paths, runtime configuration, plugin activation, authoritative CAS, cache
+  hooks, autoload refusal, disabled registry append, future-state preservation,
+  journal CAS, pending reconciliation, encrypted-secret CAS, synthetic-secret
+  exclusion, clean debug logs, and per-case cleanup: `PASS`;
+- WordPress HTTP requests in each case: `0`;
+- upload mutations in each case: `0`;
+- final results: `PEERTUBE_PERSISTENCE_WORDPRESS_ASSERTIONS=PASS`,
+  `PEERTUBE_PERSISTENCE_MATRIX_ASSERTIONS=PASS`,
+  `RESOURCE_CLEANUP=PASS`, and `PEERTUBE_PERSISTENCE_SMOKE=PASS`.
+
+This remains focused committed-source development evidence, not a release ZIP,
+upgrade, MySQL, Plugin Check, real-PeerTube, TLS, administrator-action,
+refresh/revoke, adapter, activation, upload, or publication gate. Preserve the
+raw reports outside disposable `/tmp` storage if they are needed beyond the
+VM's lifetime.
+
 ## Recommended continuation
 
-R34 is integrated and its bounded source/CI/WordPress 7.1 VM and post-merge
-source gates are complete. Next:
+R35 source, local, CI, and two-case VM gates are complete on its feature branch.
+Next:
 
-1. define the durable pending/reconciliation protocol before registering a
-   production password-grant action;
-2. implement registry persistence only with the documented atomic/classified
-   contract and real WordPress/database validation;
-3. review refresh/revoke as separate partial-mutation slices;
-4. preserve the no-upload boundary until tranche 2.0-4 state-machine work.
+1. integrate the validated R35 feature closure into `develop-2.0` through an
+   exact prospective merge tree and post-merge validation;
+2. implement a production connection coordinator only through the validated
+   journal, managed-secret, disabled-registry, and state-machine boundaries;
+3. keep administrator actions and remote password-grant mutation in a separate
+   reviewed slice with explicit indeterminate-outcome reconciliation;
+4. review refresh/revoke separately and preserve the no-upload boundary until
+   tranche 2.0-4 state-machine work.
 
 ## Engineering policy
 

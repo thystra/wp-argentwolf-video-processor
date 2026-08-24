@@ -67,8 +67,8 @@ final class Backend_Registry
      * Validate a write payload.
      *
      * The whole-registry writer remains limited to the built-in local
-     * descriptor. R34 adds only a read-only PeerTube append preflight so a
-     * future writer can validate unknown/future-state preservation without
+     * descriptor. PeerTube creation uses the dedicated create-only atomic
+     * append below so it can preserve unknown/future state without
      * reconstructing that state.
      *
      * @return array{version:int,backends:array<string,array<string,mixed>>}|null
@@ -167,6 +167,41 @@ final class Backend_Registry
     public function can_add_peertube(mixed $descriptor): bool
     {
         return null !== $this->prepare_peertube_append($descriptor);
+    }
+
+    /**
+     * Create one disabled PeerTube descriptor without replacing registry state.
+     *
+     * The before value comes exclusively from Atomic_Option_Store's raw,
+     * non-cached snapshot. The prospective value is validated once and the
+     * exact snapshot is attempted once; a stale snapshot is reported as a
+     * conflict and is never retried here.
+     */
+    public function create_disabled_peertube(mixed $descriptor): Atomic_Option_Result
+    {
+        $store = new Atomic_Option_Store(self::OPTION);
+        $snapshot = $store->snapshot();
+
+        if (Atomic_Option_Snapshot::INDETERMINATE === $snapshot->state()) {
+            return Atomic_Option_Result::indeterminate(
+                Atomic_Option_Result::MUTATION_NONE,
+                Atomic_Option_Result::PHASE_VALIDATION
+            );
+        }
+
+        if (Atomic_Option_Snapshot::REFUSED === $snapshot->state()) {
+            return Atomic_Option_Result::refused(Atomic_Option_Result::PHASE_VALIDATION);
+        }
+
+        $exists = $snapshot->is_present();
+        $stored = $exists ? $snapshot->value() : null;
+        $prepared = $this->prepare_peertube_append_from_state($descriptor, $exists, $stored);
+
+        if (null === $prepared) {
+            return Atomic_Option_Result::refused(Atomic_Option_Result::PHASE_VALIDATION);
+        }
+
+        return $store->compare_exchange($snapshot, $prepared['value']);
     }
 
     /**
@@ -405,14 +440,36 @@ final class Backend_Registry
      */
     private function prepare_peertube_append(mixed $descriptor): ?array
     {
+        $sentinel = new stdClass();
+        $stored = get_option(self::OPTION, $sentinel);
+        $exists = $sentinel !== $stored;
+
+        return $this->prepare_peertube_append_from_state(
+            $descriptor,
+            $exists,
+            $exists ? $stored : null
+        );
+    }
+
+    /**
+     * Strictly model one disabled, create-only PeerTube append from a supplied
+     * state. Atomic callers must supply that state from their raw snapshot.
+     *
+     * @return array{
+     *   exists:bool,
+     *   before:array<string,mixed>|null,
+     *   value:array<string,mixed>
+     * }|null
+     */
+    private function prepare_peertube_append_from_state(
+        mixed $descriptor,
+        bool $exists,
+        mixed $stored
+    ): ?array {
         $descriptor = $this->sanitize_peertube_descriptor($descriptor);
         if (null === $descriptor) {
             return null;
         }
-
-        $sentinel = new stdClass();
-        $stored = get_option(self::OPTION, $sentinel);
-        $exists = $sentinel !== $stored;
 
         if (! $exists) {
             $before = null;
