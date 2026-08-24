@@ -9,8 +9,8 @@ ArgentWolf Video Processor 2.0 development.
   `v1.0.0`; later `main` commits are documentation/maintenance history unless a
   new release is deliberately prepared.
 - `develop-2.0` is the next-major integration line.
-- `feature/2.0-peertube-connection-foundation` is the active implementation
-  feature branch preserved for the next PeerTube tranche.
+- `feature/2.0-peertube-auth-identity` is the active implementation feature
+  branch for the reviewed authenticated PeerTube API checkpoint.
 
 Do not develop unfinished 2.0 runtime changes directly on `main`.
 
@@ -169,17 +169,87 @@ the merge tree. The complete post-merge PHP lint, focused, dependency-free,
 storage, restricted `open_basedir`, smoke-load, FFmpeg security/integration,
 vendor-fetch, JavaScript syntax, workflow-YAML, and diff checks passed.
 
+## R34 authenticated API checkpoint
+
+R34 began from the exact R33 integration authority without rewriting it:
+
+- branch: `feature/2.0-peertube-auth-identity`;
+- parent / `origin/develop-2.0` authority:
+  `31692d841311b054214070f8b61358a07e15514b`;
+- implementation checkpoint:
+  `93bb5df54507c8a40a85d5fd5a97e29d610a7c7e`;
+- implementation tree:
+  `87bb1e0c3949cf8718116a9a54c064dd572b5f59`;
+- subject: `Add bounded PeerTube auth identity primitives`.
+
+The checkpoint adds explicit origin-bound primitives for the local OAuth-client
+read, password/OTP token exchange, bearer-authenticated `/users/me`, and public
+account-channel discovery. Token lifetimes, identity fields, PeerTube machine
+names, pagination, channel owner IDs, and channel locality are bounded and
+validated. `owned_channels()` derives authority from its own bearer identity
+lookup and never accepts a caller-built identity. Public channel reads receive
+no bearer token. Credentialed endpoint errors discard remote text and accept
+only endpoint-specific reviewed machine codes.
+
+The backend-registry addition is deliberately read-only: it can preflight a
+prospective disabled PeerTube-v1 descriptor while retaining current-version
+unknown/future state in memory, but exposes no PeerTube writer. A writer remains
+deferred until byte-exact compare-and-swap, conditional rollback, classified
+partial outcomes, option-cache/hook behavior, and real WordPress 6.4/7.1
+database behavior are validated.
+
+R34 registers no administrator action or production connection service,
+persists no OAuth client/password/OTP/token/identity/channel response, performs
+no refresh/revoke/upload/media action, and does not register a PeerTube adapter.
+This boundary avoids combining the password grant's live remote-session
+creation with incomplete local persistence/reconciliation semantics.
+
+The complete PHP lint, focused model/backend/PeerTube tests, dependency-free,
+storage, restricted `open_basedir`, smoke-load, FFmpeg security/integration,
+vendor-fetch, JavaScript syntax, workflow-YAML, diff, and deterministic package
+gates passed locally. Forgejo CI run 51 passed the exact implementation
+checkpoint.
+
+The separate authenticated-API Docker smoke then passed on `ubuntuzfstest` at
+`2026-08-24T01:46:29Z`:
+
+- tested source commit:
+  `93bb5df54507c8a40a85d5fd5a97e29d610a7c7e`;
+- tested source tree:
+  `87bb1e0c3949cf8718116a9a54c064dd572b5f59`;
+- report:
+  `/tmp/awvp-r34-report.mSdUmZ/peertube-auth-api-smoke-20260824T014629Z-6724.log`;
+- report SHA-256:
+  `9ac95c11192253f0285712a56797fce57c4a29e263520e1a52ae4de58facb079`;
+- observed runtime: WordPress 7.1 and PHP 8.3.33;
+- exact committed-source export, image pins, owned internal network/volume,
+  no-host-port, database consumer path, runtime configuration, plugin
+  activation, and cleanup gates: `PASS`;
+- local OAuth client, OTP-required header, password-plus-OTP token, current
+  identity, 101 owned channels across two pages, exact request sequence, public
+  no-bearer reads, no AWVP option persistence, and no managed-upload mutation:
+  `PASS`;
+- WordPress debug diagnostics: none;
+- final result: `PEERTUBE_AUTH_API_SMOKE=PASS`.
+
+This is a focused development-checkpoint gate, not a real-PeerTube, TLS,
+release-ZIP, Plugin Check, minimum-version, MySQL, upgrade,
+administrator-action, refresh/revoke, persistence, adapter, upload, or
+publication gate. Preserve the raw report outside disposable `/tmp` storage if
+it is needed beyond the VM's lifetime.
+
 ## Recommended continuation
 
-R33 is integrated and its focused source/CI/VM and post-merge source gates are
-complete. Before authentication or other runtime mutation:
+R34's bounded source/CI/WordPress 7.1 VM gates are complete. Next:
 
-1. fetch Forgejo and verify the exact current `develop-2.0` authority before
-   creating the next feature branch;
-2. implement OAuth bootstrap/OTP/identity/channel work as separately reviewed
-   prospective slices, preserving the no-upload tranche boundary;
-3. keep credentials, remote mutation, and upload outside a slice until its
-   prospective validation and failure classification are explicit.
+1. integrate the reviewed feature into exact current `develop-2.0` without
+   rewriting its tested checkpoint;
+2. define the durable pending/reconciliation protocol before registering a
+   production password-grant action;
+3. implement registry persistence only with the documented atomic/classified
+   contract and real WordPress/database validation;
+4. review refresh/revoke as separate partial-mutation slices;
+5. preserve the no-upload boundary until tranche 2.0-4 state-machine work.
 
 ## Engineering policy
 

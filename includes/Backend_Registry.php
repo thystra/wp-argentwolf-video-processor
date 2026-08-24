@@ -15,6 +15,9 @@ final class Backend_Registry
     public const VERSION = 1;
     public const LOCAL_ID = 'local';
 
+    private const PEERTUBE_TYPE = 'peertube';
+    private const PEERTUBE_CONFIG_VERSION = 1;
+
     /** @return array<string, array<string, mixed>> */
     public function all(): array
     {
@@ -63,9 +66,10 @@ final class Backend_Registry
     /**
      * Validate a write payload.
      *
-     * Tranche 2.0-2 installs only the built-in local descriptor writer.
-     * Unknown/future backend types fail closed so older code cannot erase or
-     * reinterpret configuration it does not understand.
+     * The whole-registry writer remains limited to the built-in local
+     * descriptor. R34 adds only a read-only PeerTube append preflight so a
+     * future writer can validate unknown/future-state preservation without
+     * reconstructing that state.
      *
      * @return array{version:int,backends:array<string,array<string,mixed>>}|null
      */
@@ -150,6 +154,19 @@ final class Backend_Registry
         }
 
         return $value === get_option(self::OPTION, null);
+    }
+
+    /**
+     * Read-only preflight for a prospective PeerTube append.
+     *
+     * Unlike the generic local writer, this path deliberately retains every
+     * existing registry field and descriptor verbatim. It models one known
+     * PeerTube v1 append to a structurally valid v1 registry entirely in
+     * memory; it never persists the modeled result.
+     */
+    public function can_add_peertube(mixed $descriptor): bool
+    {
+        return null !== $this->prepare_peertube_append($descriptor);
     }
 
     /**
@@ -247,6 +264,19 @@ final class Backend_Registry
             }
         }
 
+        if (self::PEERTUBE_TYPE === $type) {
+            if (self::PEERTUBE_CONFIG_VERSION !== $config_version) {
+                return null;
+            }
+
+            $peertube_config = self::sanitize_peertube_config($config);
+            if (self::LOCAL_ID === $id || '' === $secret_ref || null === $peertube_config) {
+                return null;
+            }
+
+            $config = $peertube_config;
+        }
+
         return array(
             'id'                  => $id,
             'type'                => $type,
@@ -294,6 +324,203 @@ final class Backend_Registry
         );
     }
 
+    /** @return array<string, mixed>|null */
+    private function sanitize_peertube_descriptor(mixed $descriptor): ?array
+    {
+        if (! is_array($descriptor)
+            || ! self::has_exact_keys(
+                $descriptor,
+                array(
+                    'id',
+                    'type',
+                    'label',
+                    'state',
+                    'default_destination',
+                    'secret_ref',
+                    'config_version',
+                    'config',
+                )
+            )
+            || self::contains_secret_material($descriptor)
+        ) {
+            return null;
+        }
+
+        $id = Backend_Identity::sanitize($descriptor['id']);
+        $type = Backend_Identity::sanitize($descriptor['type']);
+        $label = self::strict_text($descriptor['label'], 120);
+        $state = self::state($descriptor['state']);
+        $default_destination = self::optional_opaque($descriptor['default_destination'], 191);
+        $secret_ref = self::optional_opaque($descriptor['secret_ref'], 191);
+        $config_version = self::positive_int($descriptor['config_version']);
+        $config = self::sanitize_peertube_config($descriptor['config']);
+
+        if ('' === $id
+            || self::LOCAL_ID === $id
+            || self::PEERTUBE_TYPE !== $type
+            || '' === $label
+            || 'disabled' !== $state
+            || null === $default_destination
+            || null === $secret_ref
+            || '' === $secret_ref
+            || self::PEERTUBE_CONFIG_VERSION !== $config_version
+            || null === $config
+        ) {
+            return null;
+        }
+
+        return array(
+            'id'                  => $id,
+            'type'                => self::PEERTUBE_TYPE,
+            'label'               => $label,
+            'state'               => $state,
+            'default_destination' => $default_destination,
+            'secret_ref'          => $secret_ref,
+            'config_version'      => self::PEERTUBE_CONFIG_VERSION,
+            'config'              => $config,
+        );
+    }
+
+    /** @return array{origin:string}|null */
+    private static function sanitize_peertube_config(mixed $config): ?array
+    {
+        if (! is_array($config) || ! self::has_exact_keys($config, array('origin'))) {
+            return null;
+        }
+
+        $origin = PeerTube_Origin::sanitize($config['origin']);
+        if ('' === $origin || $origin !== $config['origin']) {
+            return null;
+        }
+
+        return array('origin' => $origin);
+    }
+
+    /**
+     * @return array{
+     *   exists:bool,
+     *   before:array<string,mixed>|null,
+     *   value:array<string,mixed>
+     * }|null
+     */
+    private function prepare_peertube_append(mixed $descriptor): ?array
+    {
+        $descriptor = $this->sanitize_peertube_descriptor($descriptor);
+        if (null === $descriptor) {
+            return null;
+        }
+
+        $sentinel = new stdClass();
+        $stored = get_option(self::OPTION, $sentinel);
+        $exists = $sentinel !== $stored;
+
+        if (! $exists) {
+            $before = null;
+            $value = array(
+                'version'  => self::VERSION,
+                'backends' => array(self::LOCAL_ID => self::local_descriptor('active')),
+            );
+        } else {
+            if (! is_array($stored)
+                || self::VERSION !== self::positive_int($stored['version'] ?? null)
+                || ! is_array($stored['backends'] ?? null)
+                || self::contains_secret_material($stored)
+            ) {
+                return null;
+            }
+
+            $strict = self::strict_structure($stored);
+            if (! is_array($strict) || $strict !== $stored) {
+                return null;
+            }
+
+            // An existing v1 registry is expected to own its local identity.
+            // Only a genuinely absent option receives the compatibility
+            // default; never repair malformed stored state as a side effect of
+            // adding a remote backend.
+            if (! array_key_exists(self::LOCAL_ID, $stored['backends'])) {
+                return null;
+            }
+
+            foreach ($stored['backends'] as $key => $stored_descriptor) {
+                if (! $this->stored_descriptor_can_be_preserved($key, $stored_descriptor)) {
+                    return null;
+                }
+            }
+
+            $before = $stored;
+            $value = $stored;
+        }
+
+        if (array_key_exists($descriptor['id'], $value['backends'])) {
+            return null;
+        }
+
+        $value['backends'][$descriptor['id']] = $descriptor;
+
+        return array(
+            'exists' => $exists,
+            'before' => $before,
+            'value'  => $value,
+        );
+    }
+
+    /**
+     * Validate the known core envelope without reconstructing future state.
+     *
+     * A future type-specific descriptor can safely survive an append even
+     * though this version cannot normalize it for use. Current local v1 and
+     * PeerTube v1 descriptors still receive their exact known validation.
+     */
+    private function stored_descriptor_can_be_preserved(mixed $key, mixed $descriptor): bool
+    {
+        if (! is_string($key) || ! is_array($descriptor) || self::contains_secret_material($descriptor)) {
+            return false;
+        }
+
+        $id = Backend_Identity::sanitize($descriptor['id'] ?? null);
+        $type = Backend_Identity::sanitize($descriptor['type'] ?? null);
+        $state = self::state($descriptor['state'] ?? null);
+        $label = self::strict_text($descriptor['label'] ?? '', 120);
+        $config_version = self::positive_int($descriptor['config_version'] ?? null);
+        $default_destination = self::optional_opaque($descriptor['default_destination'] ?? null, 191);
+        $secret_ref = self::optional_opaque($descriptor['secret_ref'] ?? null, 191);
+        $config = self::strict_structure($descriptor['config'] ?? array());
+
+        if ('' === $id
+            || $key !== $id
+            || '' === $type
+            || '' === $state
+            || '' === $label
+            || $config_version < 1
+            || null === $default_destination
+            || null === $secret_ref
+            || ! is_array($config)
+        ) {
+            return false;
+        }
+
+        if (self::LOCAL_ID === $id) {
+            if (self::LOCAL_ID !== $type) {
+                return false;
+            }
+
+            if (1 === $config_version
+                && ('' !== $default_destination || '' !== $secret_ref || [] !== $config)
+            ) {
+                return false;
+            }
+        }
+
+        if (self::PEERTUBE_TYPE === $type && self::PEERTUBE_CONFIG_VERSION === $config_version) {
+            return self::LOCAL_ID !== $id
+                && '' !== $secret_ref
+                && null !== self::sanitize_peertube_config($config);
+        }
+
+        return true;
+    }
+
     /** @return array<string, mixed> */
     private static function local_descriptor(string $state): array
     {
@@ -307,6 +534,28 @@ final class Backend_Registry
             'config_version'      => 1,
             'config'              => array(),
         );
+    }
+
+    /** @param list<string> $expected */
+    private static function has_exact_keys(array $value, array $expected): bool
+    {
+        if (count($value) !== count($expected)) {
+            return false;
+        }
+
+        foreach ($expected as $key) {
+            if (! array_key_exists($key, $value)) {
+                return false;
+            }
+        }
+
+        foreach (array_keys($value) as $key) {
+            if (! is_string($key) || ! in_array($key, $expected, true)) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private static function state(mixed $value): string
