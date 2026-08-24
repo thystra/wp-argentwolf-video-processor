@@ -373,15 +373,54 @@ Long-lived backend tokens/credentials must not be stored in
 `argent_video_processor_backends`, legacy settings, block attributes, rendered
 HTML, diagnostics, logs, or general REST responses.
 
-Tranche 2.0-3 must define a dedicated secret-store abstraction supporting:
+Tranche 2.0-3 defines a dedicated secret-store abstraction supporting:
 
 - managed WordPress-side secret persistence with autoload disabled;
 - optional `wp-config.php` / environment-backed secret references;
 - token/bootstrap flows that discard the user's PeerTube password when reusable
   tokens are sufficient.
 
-The encryption/key-management decision is intentionally deferred to the
-authentication tranche and must not be guessed into this schema.
+The managed provider uses authenticated encryption and fails closed when key
+material changes or ciphertext is invalid. Existing version-1 ready records
+remain readable. New version-2 records bind an opaque provisioning ID into the
+authenticated-encryption context and distinguish an empty `pending` reservation
+from a credential-bearing `ready` record. The pending record is created before
+any future remote password grant; plaintext passwords and OTPs never enter the
+manifest.
+
+`argentwolf_video_processor_backend_secrets` is only the provider version
+manifest. Each managed credential occupies its own non-autoloaded
+`argentwolf_video_processor_backend_secrets_<managed_ref>` record option.
+If a reservation call creates the manifest but cannot establish or confirm its
+separate record, the composite outcome reports an applied partial mutation as
+indeterminate so reconciliation cannot mistake it for a no-mutation conflict
+or refusal.
+
+Managed-secret reservation and commit operations, plus the classified
+replacement and deletion variants, use exact raw option compare-and-swap. A
+stale generation cannot overwrite or delete a newer ready credential. Outcomes
+remain explicitly classified when the database mutation or its observed
+postcondition is uncertain.
+
+### PeerTube connection operation journal
+
+The non-autoloaded option
+`argentwolf_video_processor_peertube_connection_operations` stores the bounded,
+non-secret local journal for PeerTube connection setup. It is versioned, holds
+at most 32 records, allows at most one unresolved operation per backend, and
+never evicts an unresolved record. Each record durably reserves an operation
+ID, managed-secret reference, and provisioning ID.
+
+The journal accepts only the pure connection state machine's validated record
+shape. It rejects credentials, authorization values, raw request/response
+bodies, and arbitrary remote detail recursively. A remote grant may begin only
+after the journal record, exact pending secret slot, and exact disabled backend
+descriptor are all durable. An indeterminate grant has no automatic outbound
+transition.
+
+The journal and managed-secret manifest are option-based local persistence, not
+a custom-table schema change. The R35 foundation exposes no production
+connection action and performs no PeerTube HTTP request.
 
 ### Managed backend assets versus unmanaged external references
 

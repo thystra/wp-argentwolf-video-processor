@@ -73,3 +73,41 @@ To preserve its report outside the checkout, set an absolute directory:
 AWVP_R34_REPORT_DIR=/absolute/report/path \
     bash tests/integration/peertube-auth-api-smoke.sh
 ```
+
+## PeerTube local persistence checkpoint
+
+After the R35 source checkpoint is committed, run the two-case persistence
+smoke from a clean checkout on the disposable Docker host:
+
+```bash
+bash tests/integration/peertube-persistence-smoke.sh
+```
+
+The runner exports exact committed `HEAD` once and mounts that export read-only
+for both cases:
+
+- WordPress 6.4.2 / PHP 8.1 / MariaDB 10.6.27;
+- WordPress 7.1 / PHP 8.3 / MariaDB 10.11.18.
+
+All six official images are digest-pinned. Each case receives its own owned
+internal-only network, WordPress volume, database, and WordPress container; no
+host port is published. The fixture exercises authoritative raw option
+compare-and-swap, version-correct non-autoload storage, WordPress cache/action
+behavior, conditional rollback, concurrent-winner preservation, disabled
+registry append, the bounded connection journal, pending-secret reconciliation,
+authenticated encryption, and generation-bound secret replacement/deletion.
+It also proves that an already-autoloaded target is refused rather than silently
+repaired.
+
+The persistence fixture installs no HTTP mock because the checkpoint must make
+zero WordPress HTTP requests. It additionally requires no upload-tree mutation.
+This remains focused source-checkpoint evidence, not an exact-ZIP, release,
+upgrade, MySQL, Plugin Check, real-PeerTube, TLS, administrator-action, adapter,
+refresh/revoke, or upload gate.
+
+To preserve its report outside the checkout, set an absolute directory:
+
+```bash
+AWVP_R35_REPORT_DIR=/absolute/report/path \
+    bash tests/integration/peertube-persistence-smoke.sh
+```

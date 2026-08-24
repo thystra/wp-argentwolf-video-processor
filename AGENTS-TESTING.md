@@ -155,10 +155,10 @@ matrix:
 
 1. WordPress 6.4.2 / PHP 8.1 / MariaDB 10.6.27 — upgrade;
 2. WordPress 6.4.2 / PHP 8.1 / MariaDB 10.6.27 — clean;
-3. WordPress 7.0.2 / PHP 8.3 / MariaDB 10.11.18 — upgrade;
-4. WordPress 7.0.2 / PHP 8.3 / MariaDB 10.11.18 — clean;
-5. WordPress 7.0.2 / PHP 8.3 / MySQL 8.0 — upgrade;
-6. WordPress 7.0.2 / PHP 8.3 / MySQL 8.0 — clean.
+3. WordPress 7.1 / PHP 8.3 / MariaDB 10.11.18 — upgrade;
+4. WordPress 7.1 / PHP 8.3 / MariaDB 10.11.18 — clean;
+5. WordPress 7.1 / PHP 8.3 / MySQL 8.0 — upgrade;
+6. WordPress 7.1 / PHP 8.3 / MySQL 8.0 — clean.
 
 The matrix itself belongs in the payload. A future release may add or update
 fixtures after review, but must not silently remove the declared minimum-version
@@ -166,6 +166,11 @@ fixture or all coverage for either MariaDB or MySQL.
 
 Pin Docker images by digest when a reviewed successful fixture is available.
 Record resolved image IDs/digests in every run report.
+
+Historical release payloads retain the exact WordPress versions and image
+digests that formed their release evidence. Update the active/future payload;
+do not rewrite an already-closed payload merely because the current-version
+matrix advances.
 
 ## 6. Exact-package installation
 

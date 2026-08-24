@@ -11,9 +11,6 @@ interface Backend_Secret_Store
 {
     public function available(): bool;
 
-    /** @param array<string, mixed> $secret */
-    public function create(string $backend_id, array $secret): string;
-
     /** @return array<string, mixed>|null */
     public function read(string $secret_ref, string $backend_id): ?array;
 
@@ -33,7 +30,14 @@ interface Backend_Secret_Store
         int $expected_generation
     ): bool;
 
-    public function delete(string $secret_ref, string $backend_id): bool;
+    /**
+     * Delete only when the caller's observed generation is still current.
+     */
+    public function delete(
+        string $secret_ref,
+        string $backend_id,
+        int $expected_generation
+    ): bool;
 }
 
 // EOF: includes/Backend_Secret_Store.php

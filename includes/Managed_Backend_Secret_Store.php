@@ -7,70 +7,319 @@ declare(strict_types=1);
 
 namespace ArgentVideo;
 
+use Throwable;
+
 final class Managed_Backend_Secret_Store implements Backend_Secret_Store
 {
     public const OPTION = 'argentwolf_video_processor_backend_secrets';
 
-    private const VERSION = 1;
+    public const PROVISION_ABSENT = 'absent';
+    public const PROVISION_PENDING = 'pending';
+    public const PROVISION_READY = 'ready';
+    public const PROVISION_CONFLICT = 'conflict';
+    public const PROVISION_UNREADABLE = 'unreadable';
+    public const PROVISION_INDETERMINATE = 'indeterminate';
+
+    private const MANIFEST_VERSION = 1;
+    private const LEGACY_RECORD_VERSION = 1;
+    private const RECORD_VERSION = 2;
+    private const STATE_PENDING = 'pending';
+    private const STATE_READY = 'ready';
+    private const NONAUTOLOAD_VALUES = array('no', 'off', 'auto-off');
 
     public function available(): bool
     {
+        global $wpdb;
+
         return Backend_Secret_Crypto::available()
-            && function_exists('get_option')
-            && function_exists('add_option')
-            && function_exists('update_option')
-            && function_exists('delete_option')
-            && function_exists('wp_set_option_autoload')
-            && function_exists('wp_load_alloptions');
+            && class_exists(Atomic_Option_Store::class)
+            && class_exists(Atomic_Option_Result::class)
+            && is_object($wpdb)
+            && isset($wpdb->options)
+            && function_exists('do_action')
+            && function_exists('wp_cache_delete');
     }
 
-    public function create(string $backend_id, array $secret): string
-    {
+    /**
+     * Reserve an empty, non-secret managed slot before any password grant.
+     */
+    public function reserve(
+        string $secret_ref,
+        string $backend_id,
+        string $provisioning_id
+    ): Atomic_Option_Result {
+        $backend_id = Backend_Identity::sanitize($backend_id);
+        if (
+            ! self::valid_ref($secret_ref)
+            || '' === $backend_id
+            || ! self::valid_provisioning_id($provisioning_id)
+            || ! $this->available()
+        ) {
+            return Atomic_Option_Result::refused();
+        }
+
+        $manifest = $this->ensure_manifest_classified();
+        if (Atomic_Option_Result::APPLIED !== $manifest->status()) {
+            return $manifest;
+        }
+
+        $record = array(
+            'version'         => self::RECORD_VERSION,
+            'state'           => self::STATE_PENDING,
+            'backend_id'      => $backend_id,
+            'provisioning_id' => $provisioning_id,
+            'generation'      => 0,
+            'envelope'        => array(),
+        );
+
+        $store = new Atomic_Option_Store(self::record_option($secret_ref));
+        $snapshot = $store->snapshot();
+        if (Atomic_Option_Snapshot::INDETERMINATE === $snapshot->state()) {
+            return self::combine_manifest_reservation_result(
+                $manifest,
+                self::snapshot_indeterminate()
+            );
+        }
+        if (Atomic_Option_Snapshot::REFUSED === $snapshot->state()) {
+            return self::combine_manifest_reservation_result(
+                $manifest,
+                Atomic_Option_Result::refused()
+            );
+        }
+
+        if ($snapshot->is_present()) {
+            if (! self::supported_present_snapshot($snapshot)) {
+                return self::combine_manifest_reservation_result(
+                    $manifest,
+                    Atomic_Option_Result::refused()
+                );
+            }
+
+            $existing = self::normalize_record($snapshot->value());
+            $result = is_array($existing)
+                && self::STATE_PENDING === $existing['state']
+                && self::RECORD_VERSION === $existing['version']
+                && $backend_id === $existing['backend_id']
+                && $provisioning_id === $existing['provisioning_id']
+                    ? Atomic_Option_Result::satisfied()
+                    : Atomic_Option_Result::conflict(Atomic_Option_Result::PHASE_VALIDATION);
+
+            return self::combine_manifest_reservation_result($manifest, $result);
+        }
+
+        return self::combine_manifest_reservation_result(
+            $manifest,
+            $store->compare_exchange($snapshot, $record)
+        );
+    }
+
+    /**
+     * Fill only the exact pending slot reserved for this provisioning ID.
+     *
+     * @param array<string, mixed> $secret
+     */
+    public function commit_reserved(
+        string $secret_ref,
+        string $backend_id,
+        string $provisioning_id,
+        array $secret
+    ): Atomic_Option_Result {
         $backend_id = Backend_Identity::sanitize($backend_id);
         $secret = self::sanitize_secret($secret);
-
-        if ('' === $backend_id || [] === $secret || ! $this->available()) {
-            return '';
+        if (
+            ! self::valid_ref($secret_ref)
+            || '' === $backend_id
+            || ! self::valid_provisioning_id($provisioning_id)
+            || [] === $secret
+            || ! $this->available()
+        ) {
+            return Atomic_Option_Result::refused();
         }
 
-        if (! $this->ensure_manifest()) {
-            return '';
+        $manifest = $this->existing_manifest_classified();
+        if (Atomic_Option_Result::APPLIED !== $manifest->status()) {
+            return $manifest;
         }
 
-        for ($attempt = 0; $attempt < 4; $attempt++) {
-            $secret_ref = 'managed_' . bin2hex(random_bytes(16));
-            $generation = 1;
+        $store = new Atomic_Option_Store(self::record_option($secret_ref));
+        $snapshot = $store->snapshot();
+        if (Atomic_Option_Snapshot::INDETERMINATE === $snapshot->state()) {
+            return self::snapshot_indeterminate();
+        }
+        if (! $snapshot->is_present()) {
+            return Atomic_Option_Snapshot::ABSENT === $snapshot->state()
+                ? Atomic_Option_Result::conflict(Atomic_Option_Result::PHASE_VALIDATION)
+                : Atomic_Option_Result::refused();
+        }
+        if (! self::supported_present_snapshot($snapshot)) {
+            return Atomic_Option_Result::refused();
+        }
 
-            try {
-                $envelope = Backend_Secret_Crypto::encrypt(
-                    $secret,
-                    self::aad($secret_ref, $backend_id, $generation)
-                );
-            } catch (\Throwable) {
-                return '';
+        $record = self::normalize_record($snapshot->value());
+        if (
+            ! is_array($record)
+            || self::RECORD_VERSION !== $record['version']
+            || $backend_id !== $record['backend_id']
+            || $provisioning_id !== $record['provisioning_id']
+        ) {
+            return Atomic_Option_Result::conflict(Atomic_Option_Result::PHASE_VALIDATION);
+        }
+
+        if (self::STATE_READY === $record['state']) {
+            if (1 !== $record['generation']) {
+                return Atomic_Option_Result::conflict(Atomic_Option_Result::PHASE_VALIDATION);
             }
 
-            $record = array(
-                'version'    => self::VERSION,
-                'backend_id' => $backend_id,
-                'generation' => $generation,
-                'envelope'   => $envelope,
+            $stored_secret = $this->decrypt_record($secret_ref, $record);
+            if (null === $stored_secret) {
+                return self::snapshot_indeterminate();
+            }
+
+            return $secret === $stored_secret
+                ? Atomic_Option_Result::satisfied()
+                : Atomic_Option_Result::conflict(Atomic_Option_Result::PHASE_VALIDATION);
+        }
+
+        if (self::STATE_PENDING !== $record['state'] || 0 !== $record['generation']) {
+            return Atomic_Option_Result::conflict(Atomic_Option_Result::PHASE_VALIDATION);
+        }
+
+        try {
+            $envelope = Backend_Secret_Crypto::encrypt(
+                $secret,
+                self::aad_v2($secret_ref, $backend_id, $provisioning_id, 1)
             );
-            $option = self::record_option($secret_ref);
-
-            if (! add_option($option, $record, '', false)) {
-                continue;
-            }
-
-            if (! $this->verify_nonautoloaded_value($option, $record)) {
-                $this->delete_if_unchanged($option, $record);
-                return '';
-            }
-
-            return $secret_ref;
+        } catch (Throwable) {
+            return Atomic_Option_Result::refused();
         }
 
-        return '';
+        $ready = array(
+            'version'         => self::RECORD_VERSION,
+            'state'           => self::STATE_READY,
+            'backend_id'      => $backend_id,
+            'provisioning_id' => $provisioning_id,
+            'generation'      => 1,
+            'envelope'        => $envelope,
+        );
+
+        return $store->compare_exchange($snapshot, $ready);
+    }
+
+    /**
+     * Probe only safe provisioning state; decrypted token material never
+     * crosses this boundary.
+     *
+     * @return array{state:string,generation:int}
+     */
+    public function provisioning_state(
+        string $secret_ref,
+        string $backend_id,
+        string $provisioning_id
+    ): array {
+        $backend_id = Backend_Identity::sanitize($backend_id);
+        if (
+            ! self::valid_ref($secret_ref)
+            || '' === $backend_id
+            || ! self::valid_provisioning_id($provisioning_id)
+            || ! $this->available()
+        ) {
+            return self::provision_state(self::PROVISION_UNREADABLE, 0);
+        }
+
+        $manifest = $this->existing_manifest_classified();
+        if (Atomic_Option_Result::INDETERMINATE === $manifest->status()) {
+            return self::provision_state(self::PROVISION_INDETERMINATE, 0);
+        }
+        if (Atomic_Option_Result::APPLIED !== $manifest->status()) {
+            return self::provision_state(self::PROVISION_UNREADABLE, 0);
+        }
+
+        $snapshot = (new Atomic_Option_Store(self::record_option($secret_ref)))->snapshot();
+        if ($snapshot->is_absent()) {
+            return self::provision_state(self::PROVISION_ABSENT, 0);
+        }
+        if (Atomic_Option_Snapshot::INDETERMINATE === $snapshot->state()) {
+            return self::provision_state(self::PROVISION_INDETERMINATE, 0);
+        }
+        if (! $snapshot->is_present()) {
+            return self::provision_state(self::PROVISION_UNREADABLE, 0);
+        }
+        if (! self::supported_present_snapshot($snapshot)) {
+            return self::provision_state(self::PROVISION_UNREADABLE, 0);
+        }
+
+        $record = self::normalize_record($snapshot->value());
+        if (
+            ! is_array($record)
+            || self::RECORD_VERSION !== $record['version']
+            || $backend_id !== $record['backend_id']
+            || $provisioning_id !== $record['provisioning_id']
+        ) {
+            return self::provision_state(self::PROVISION_CONFLICT, 0);
+        }
+
+        if (self::STATE_PENDING === $record['state']) {
+            return self::provision_state(self::PROVISION_PENDING, 0);
+        }
+
+        if (null === $this->decrypt_record($secret_ref, $record)) {
+            return self::provision_state(self::PROVISION_UNREADABLE, $record['generation']);
+        }
+
+        return self::provision_state(self::PROVISION_READY, $record['generation']);
+    }
+
+    /**
+     * Remove only a still-empty exact reservation. A ready record is never
+     * deleted by pre-grant cleanup.
+     */
+    public function delete_reserved_if_pending(
+        string $secret_ref,
+        string $backend_id,
+        string $provisioning_id
+    ): Atomic_Option_Result {
+        $backend_id = Backend_Identity::sanitize($backend_id);
+        if (
+            ! self::valid_ref($secret_ref)
+            || '' === $backend_id
+            || ! self::valid_provisioning_id($provisioning_id)
+            || ! $this->available()
+        ) {
+            return Atomic_Option_Result::refused();
+        }
+
+        $manifest = $this->existing_manifest_classified();
+        if (Atomic_Option_Result::APPLIED !== $manifest->status()) {
+            return $manifest;
+        }
+
+        $store = new Atomic_Option_Store(self::record_option($secret_ref));
+        $snapshot = $store->snapshot();
+        if ($snapshot->is_absent()) {
+            return Atomic_Option_Result::satisfied();
+        }
+        if (Atomic_Option_Snapshot::INDETERMINATE === $snapshot->state()) {
+            return self::snapshot_indeterminate();
+        }
+        if (! $snapshot->is_present()) {
+            return Atomic_Option_Result::refused();
+        }
+        if (! self::supported_present_snapshot($snapshot)) {
+            return Atomic_Option_Result::refused();
+        }
+
+        $record = self::normalize_record($snapshot->value());
+        if (
+            ! is_array($record)
+            || self::RECORD_VERSION !== $record['version']
+            || self::STATE_PENDING !== $record['state']
+            || $backend_id !== $record['backend_id']
+            || $provisioning_id !== $record['provisioning_id']
+        ) {
+            return Atomic_Option_Result::conflict(Atomic_Option_Result::PHASE_VALIDATION);
+        }
+
+        return $store->compare_delete($snapshot);
     }
 
     public function read(string $secret_ref, string $backend_id): ?array
@@ -84,22 +333,22 @@ final class Managed_Backend_Secret_Store implements Backend_Secret_Store
             return null;
         }
 
-        $record = $this->load_record($secret_ref);
-        if (null === $record || $backend_id !== $record['backend_id']) {
+        $snapshot = (new Atomic_Option_Store(self::record_option($secret_ref)))->snapshot();
+        if (! self::supported_present_snapshot($snapshot)) {
             return null;
         }
 
-        $secret = Backend_Secret_Crypto::decrypt(
-            $record['envelope'],
-            self::aad($secret_ref, $backend_id, $record['generation'])
-        );
-
-        if (! is_array($secret)) {
+        $record = self::normalize_record($snapshot->value());
+        if (
+            ! is_array($record)
+            || self::STATE_READY !== $record['state']
+            || $backend_id !== $record['backend_id']
+        ) {
             return null;
         }
 
-        $secret = self::sanitize_secret($secret);
-        if ([] === $secret) {
+        $secret = $this->decrypt_record($secret_ref, $record);
+        if (null === $secret) {
             return null;
         }
 
@@ -113,165 +362,399 @@ final class Managed_Backend_Secret_Store implements Backend_Secret_Store
         array $secret,
         int $expected_generation
     ): bool {
-        if (
-            ! $this->manifest_valid()
-            || ! self::valid_ref($secret_ref)
-            || $expected_generation < 1
-        ) {
-            return false;
-        }
+        $result = $this->replace_classified(
+            $secret_ref,
+            $backend_id,
+            $secret,
+            $expected_generation
+        );
 
+        return Atomic_Option_Result::APPLIED === $result->status()
+            && Atomic_Option_Result::MUTATION_APPLIED === $result->mutation();
+    }
+
+    /**
+     * Classified exact-generation replacement for future refresh callers.
+     *
+     * @param array<string, mixed> $secret
+     */
+    public function replace_classified(
+        string $secret_ref,
+        string $backend_id,
+        array $secret,
+        int $expected_generation
+    ): Atomic_Option_Result {
         $backend_id = Backend_Identity::sanitize($backend_id);
         $secret = self::sanitize_secret($secret);
-        if ('' === $backend_id || [] === $secret || ! $this->available()) {
-            return false;
+        if (
+            ! self::valid_ref($secret_ref)
+            || '' === $backend_id
+            || [] === $secret
+            || $expected_generation < 1
+            || $expected_generation >= PHP_INT_MAX
+            || ! $this->available()
+        ) {
+            return Atomic_Option_Result::refused();
         }
 
-        $record = $this->load_record($secret_ref);
+        $manifest = $this->existing_manifest_classified();
+        if (Atomic_Option_Result::APPLIED !== $manifest->status()) {
+            return $manifest;
+        }
+
+        $store = new Atomic_Option_Store(self::record_option($secret_ref));
+        $snapshot = $store->snapshot();
+        if (Atomic_Option_Snapshot::INDETERMINATE === $snapshot->state()) {
+            return self::snapshot_indeterminate();
+        }
+        if (! $snapshot->is_present()) {
+            return Atomic_Option_Snapshot::ABSENT === $snapshot->state()
+                ? Atomic_Option_Result::conflict(Atomic_Option_Result::PHASE_VALIDATION)
+                : Atomic_Option_Result::refused();
+        }
+        if (! self::supported_present_snapshot($snapshot)) {
+            return Atomic_Option_Result::refused();
+        }
+
+        $record = self::normalize_record($snapshot->value());
         if (
-            null === $record
+            ! is_array($record)
+            || self::STATE_READY !== $record['state']
             || $backend_id !== $record['backend_id']
-            || $record['generation'] !== $expected_generation
+            || $expected_generation !== $record['generation']
         ) {
-            return false;
+            return Atomic_Option_Result::conflict(Atomic_Option_Result::PHASE_VALIDATION);
         }
 
         $generation = $expected_generation + 1;
-
         try {
             $envelope = Backend_Secret_Crypto::encrypt(
                 $secret,
-                self::aad($secret_ref, $backend_id, $generation)
+                self::aad_for_fields(
+                    $secret_ref,
+                    $record['version'],
+                    $backend_id,
+                    $record['provisioning_id'],
+                    $generation
+                )
             );
-        } catch (\Throwable) {
-            return false;
+        } catch (Throwable) {
+            return Atomic_Option_Result::refused();
         }
 
-        $replacement = array(
-            'version'    => self::VERSION,
-            'backend_id' => $backend_id,
-            'generation' => $generation,
-            'envelope'   => $envelope,
+        if (self::LEGACY_RECORD_VERSION === $record['version']) {
+            $replacement = array(
+                'version'    => self::LEGACY_RECORD_VERSION,
+                'backend_id' => $backend_id,
+                'generation' => $generation,
+                'envelope'   => $envelope,
+            );
+        } else {
+            $replacement = array(
+                'version'         => self::RECORD_VERSION,
+                'state'           => self::STATE_READY,
+                'backend_id'      => $backend_id,
+                'provisioning_id' => $record['provisioning_id'],
+                'generation'      => $generation,
+                'envelope'        => $envelope,
+            );
+        }
+
+        return $store->compare_exchange($snapshot, $replacement);
+    }
+
+    public function delete(
+        string $secret_ref,
+        string $backend_id,
+        int $expected_generation
+    ): bool {
+        $result = $this->delete_classified(
+            $secret_ref,
+            $backend_id,
+            $expected_generation
         );
-        $option = self::record_option($secret_ref);
-
-        update_option($option, $replacement, false);
-        wp_set_option_autoload($option, false);
-
-        return $this->verify_nonautoloaded_value($option, $replacement);
+        return Atomic_Option_Result::APPLIED === $result->status()
+            && Atomic_Option_Result::MUTATION_APPLIED === $result->mutation();
     }
 
-    public function delete(string $secret_ref, string $backend_id): bool
-    {
-        if (! $this->manifest_valid() || ! self::valid_ref($secret_ref)) {
-            return false;
-        }
-
+    public function delete_classified(
+        string $secret_ref,
+        string $backend_id,
+        int $expected_generation
+    ): Atomic_Option_Result {
         $backend_id = Backend_Identity::sanitize($backend_id);
-        if ('' === $backend_id || ! $this->available()) {
-            return false;
+        if (
+            ! self::valid_ref($secret_ref)
+            || '' === $backend_id
+            || $expected_generation < 1
+            || ! $this->available()
+        ) {
+            return Atomic_Option_Result::refused();
         }
 
-        $record = $this->load_record($secret_ref);
-        if (null === $record || $backend_id !== $record['backend_id']) {
-            return false;
+        $manifest = $this->existing_manifest_classified();
+        if (Atomic_Option_Result::APPLIED !== $manifest->status()) {
+            return $manifest;
         }
 
-        return delete_option(self::record_option($secret_ref));
+        $store = new Atomic_Option_Store(self::record_option($secret_ref));
+        $snapshot = $store->snapshot();
+        if (Atomic_Option_Snapshot::INDETERMINATE === $snapshot->state()) {
+            return self::snapshot_indeterminate();
+        }
+        if (! $snapshot->is_present()) {
+            return Atomic_Option_Snapshot::ABSENT === $snapshot->state()
+                ? Atomic_Option_Result::satisfied()
+                : Atomic_Option_Result::refused();
+        }
+        if (! self::supported_present_snapshot($snapshot)) {
+            return Atomic_Option_Result::refused();
+        }
+
+        $record = self::normalize_record($snapshot->value());
+        if (
+            ! is_array($record)
+            || self::STATE_READY !== $record['state']
+            || $backend_id !== $record['backend_id']
+            || $expected_generation !== $record['generation']
+        ) {
+            return Atomic_Option_Result::conflict(Atomic_Option_Result::PHASE_VALIDATION);
+        }
+
+        return $store->compare_delete($snapshot);
     }
 
-    private function ensure_manifest(): bool
+    private function ensure_manifest_classified(): Atomic_Option_Result
     {
-        $manifest = array('version' => self::VERSION);
-        $sentinel = new \stdClass();
-        $stored = get_option(self::OPTION, $sentinel);
-
-        if ($sentinel === $stored) {
-            if (! add_option(self::OPTION, $manifest, '', false)) {
-                $stored = get_option(self::OPTION, $sentinel);
-                if ($manifest !== $stored) {
-                    return false;
-                }
-            }
-        } elseif ($manifest !== $stored) {
-            return false;
+        $store = new Atomic_Option_Store(self::OPTION);
+        $snapshot = $store->snapshot();
+        if (Atomic_Option_Snapshot::INDETERMINATE === $snapshot->state()) {
+            return self::snapshot_indeterminate();
+        }
+        if (Atomic_Option_Snapshot::REFUSED === $snapshot->state()) {
+            return Atomic_Option_Result::refused();
         }
 
-        wp_set_option_autoload(self::OPTION, false);
+        $manifest = array('version' => self::MANIFEST_VERSION);
+        if ($snapshot->is_present()) {
+            return $manifest === $snapshot->value()
+                && in_array((string) $snapshot->autoload(), self::NONAUTOLOAD_VALUES, true)
+                    ? Atomic_Option_Result::satisfied()
+                    : Atomic_Option_Result::refused();
+        }
 
-        return $this->verify_nonautoloaded_value(self::OPTION, $manifest);
+        return $store->compare_exchange($snapshot, $manifest);
+    }
+
+    /**
+     * Preserve a manifest mutation that occurred earlier in reserve(). A
+     * later slot failure is a known partial mutation, never a no-mutation
+     * conflict/refusal. A satisfied pre-existing slot still means this call
+     * applied the missing manifest.
+     */
+    private static function combine_manifest_reservation_result(
+        Atomic_Option_Result $manifest,
+        Atomic_Option_Result $reservation
+    ): Atomic_Option_Result {
+        if (Atomic_Option_Result::MUTATION_APPLIED !== $manifest->mutation()) {
+            return $reservation;
+        }
+
+        if (Atomic_Option_Result::APPLIED === $reservation->status()) {
+            return Atomic_Option_Result::MUTATION_APPLIED === $reservation->mutation()
+                ? $reservation
+                : Atomic_Option_Result::applied();
+        }
+
+        $mutation = Atomic_Option_Result::MUTATION_UNKNOWN === $reservation->mutation()
+            ? Atomic_Option_Result::MUTATION_UNKNOWN
+            : Atomic_Option_Result::MUTATION_APPLIED;
+
+        return Atomic_Option_Result::indeterminate($mutation, $reservation->phase());
     }
 
     private function manifest_valid(): bool
     {
+        return Atomic_Option_Result::APPLIED
+            === $this->existing_manifest_classified()->status();
+    }
+
+    private function existing_manifest_classified(): Atomic_Option_Result
+    {
         if (! $this->available()) {
-            return false;
+            return Atomic_Option_Result::refused();
         }
 
-        return array('version' => self::VERSION) === get_option(self::OPTION, null)
-            && ! array_key_exists(self::OPTION, wp_load_alloptions(true));
+        $snapshot = (new Atomic_Option_Store(self::OPTION))->snapshot();
+        if (Atomic_Option_Snapshot::INDETERMINATE === $snapshot->state()) {
+            return self::snapshot_indeterminate();
+        }
+        if (! $snapshot->is_present()) {
+            return Atomic_Option_Result::refused();
+        }
+
+        return array('version' => self::MANIFEST_VERSION) === $snapshot->value()
+            && in_array((string) $snapshot->autoload(), self::NONAUTOLOAD_VALUES, true)
+                ? Atomic_Option_Result::satisfied()
+                : Atomic_Option_Result::refused();
     }
 
     /**
+     * @param mixed $value
      * @return array{
      *   version:int,
+     *   state:string,
      *   backend_id:string,
+     *   provisioning_id:string,
      *   generation:int,
      *   envelope:array<string,mixed>
      * }|null
      */
-    private function load_record(string $secret_ref): ?array
+    private static function normalize_record(mixed $value): ?array
     {
-        $record = get_option(self::record_option($secret_ref), null);
-        if (! is_array($record)) {
+        if (! is_array($value)) {
             return null;
         }
 
-        $expected_keys = array('version', 'backend_id', 'generation', 'envelope');
-        $actual_keys = array_keys($record);
-        sort($expected_keys);
-        sort($actual_keys);
+        $version = $value['version'] ?? null;
+        if (self::LEGACY_RECORD_VERSION === $version) {
+            if (! self::has_exact_keys(
+                $value,
+                array('version', 'backend_id', 'generation', 'envelope')
+            )) {
+                return null;
+            }
 
-        if ($expected_keys !== $actual_keys || self::VERSION !== ($record['version'] ?? null)) {
+            $backend_id = Backend_Identity::sanitize($value['backend_id'] ?? null);
+            $generation = self::positive_int($value['generation'] ?? null);
+            if ('' === $backend_id || $generation < 1 || ! is_array($value['envelope'] ?? null)) {
+                return null;
+            }
+
+            return array(
+                'version'         => self::LEGACY_RECORD_VERSION,
+                'state'           => self::STATE_READY,
+                'backend_id'      => $backend_id,
+                'provisioning_id' => '',
+                'generation'      => $generation,
+                'envelope'        => $value['envelope'],
+            );
+        }
+
+        if (
+            self::RECORD_VERSION !== $version
+            || ! self::has_exact_keys(
+                $value,
+                array(
+                    'version',
+                    'state',
+                    'backend_id',
+                    'provisioning_id',
+                    'generation',
+                    'envelope',
+                )
+            )
+        ) {
             return null;
         }
 
-        $backend_id = Backend_Identity::sanitize($record['backend_id'] ?? null);
-        $generation = self::positive_int($record['generation'] ?? null);
-        $envelope = $record['envelope'] ?? null;
+        $state = $value['state'] ?? null;
+        $backend_id = Backend_Identity::sanitize($value['backend_id'] ?? null);
+        $provisioning_id = $value['provisioning_id'] ?? null;
+        $generation = self::nonnegative_int($value['generation'] ?? null);
+        $envelope = $value['envelope'] ?? null;
+        if (
+            ! is_string($state)
+            || ! in_array($state, array(self::STATE_PENDING, self::STATE_READY), true)
+            || '' === $backend_id
+            || ! self::valid_provisioning_id($provisioning_id)
+            || $generation < 0
+            || ! is_array($envelope)
+        ) {
+            return null;
+        }
 
-        if ('' === $backend_id || $generation < 1 || ! is_array($envelope)) {
+        if (
+            (self::STATE_PENDING === $state && (0 !== $generation || [] !== $envelope))
+            || (self::STATE_READY === $state && ($generation < 1 || [] === $envelope))
+        ) {
             return null;
         }
 
         return array(
-            'version'    => self::VERSION,
-            'backend_id' => $backend_id,
-            'generation' => $generation,
-            'envelope'   => $envelope,
+            'version'         => self::RECORD_VERSION,
+            'state'           => $state,
+            'backend_id'      => $backend_id,
+            'provisioning_id' => $provisioning_id,
+            'generation'      => $generation,
+            'envelope'        => $envelope,
         );
     }
 
-    /** @param array<string, mixed> $expected */
-    private function verify_nonautoloaded_value(string $option, array $expected): bool
+    /**
+     * @param array<string, mixed> $record
+     * @return array<string, mixed>|null
+     */
+    private function decrypt_record(string $secret_ref, array $record): ?array
     {
-        $autoloaded = wp_load_alloptions(true);
-        if (array_key_exists($option, $autoloaded)) {
-            return false;
+        if (self::STATE_READY !== ($record['state'] ?? '')) {
+            return null;
         }
 
-        return $expected === get_option($option, null);
+        $secret = Backend_Secret_Crypto::decrypt(
+            $record['envelope'],
+            self::aad_for_fields(
+                $secret_ref,
+                $record['version'],
+                $record['backend_id'],
+                $record['provisioning_id'],
+                $record['generation']
+            )
+        );
+        if (! is_array($secret)) {
+            return null;
+        }
+
+        $secret = self::sanitize_secret($secret);
+        return [] === $secret ? null : $secret;
     }
 
-    /** @param array<string, mixed> $attempted */
-    private function delete_if_unchanged(string $option, array $attempted): void
-    {
-        $sentinel = new \stdClass();
-        $current = get_option($option, $sentinel);
+    private static function aad_for_fields(
+        string $secret_ref,
+        int $version,
+        string $backend_id,
+        string $provisioning_id,
+        int $generation
+    ): string {
+        return self::LEGACY_RECORD_VERSION === $version
+            ? self::aad_v1($secret_ref, $backend_id, $generation)
+            : self::aad_v2(
+                $secret_ref,
+                $backend_id,
+                $provisioning_id,
+                $generation
+            );
+    }
 
-        if ($current === $attempted) {
-            delete_option($option);
-        }
+    private static function aad_v1(
+        string $secret_ref,
+        string $backend_id,
+        int $generation
+    ): string {
+        return 'awvp-secret|' . $secret_ref . '|' . $backend_id . '|' . $generation;
+    }
+
+    private static function aad_v2(
+        string $secret_ref,
+        string $backend_id,
+        string $provisioning_id,
+        int $generation
+    ): string {
+        return 'awvp-secret-v2|'
+            . $secret_ref . '|'
+            . $backend_id . '|'
+            . $provisioning_id . '|'
+            . $generation;
     }
 
     /**
@@ -325,22 +808,33 @@ final class Managed_Backend_Secret_Store implements Backend_Secret_Store
     private static function valid_ref(mixed $value): bool
     {
         return is_string($value)
-            && strlen($value) <= 191
-            && 1 === preg_match('/^managed_[a-f0-9]{32}$/', $value);
+            && 1 === preg_match('/^managed_[a-f0-9]{32}$/D', $value);
+    }
+
+    private static function valid_provisioning_id(mixed $value): bool
+    {
+        return is_string($value)
+            && 1 === preg_match('/^provision_[a-f0-9]{32}$/D', $value);
     }
 
     private static function positive_int(mixed $value): int
     {
+        $value = self::nonnegative_int($value);
+        return $value > 0 ? $value : 0;
+    }
+
+    private static function nonnegative_int(mixed $value): int
+    {
         if (is_int($value)) {
-            return $value > 0 ? $value : 0;
+            return $value >= 0 ? $value : -1;
         }
 
-        if (is_string($value) && ctype_digit($value)) {
-            $parsed = (int) $value;
-            return $parsed > 0 ? $parsed : 0;
+        if (! is_string($value) || 1 !== preg_match('/^(?:0|[1-9][0-9]*)$/D', $value)) {
+            return -1;
         }
 
-        return 0;
+        $parsed = filter_var($value, FILTER_VALIDATE_INT, array('options' => array('min_range' => 0)));
+        return false !== $parsed && (string) $parsed === $value ? (int) $parsed : -1;
     }
 
     private static function record_option(string $secret_ref): string
@@ -348,9 +842,50 @@ final class Managed_Backend_Secret_Store implements Backend_Secret_Store
         return self::OPTION . '_' . $secret_ref;
     }
 
-    private static function aad(string $secret_ref, string $backend_id, int $generation): string
+    private static function supported_present_snapshot(
+        Atomic_Option_Snapshot $snapshot
+    ): bool {
+        return $snapshot->is_present()
+            && in_array((string) $snapshot->autoload(), self::NONAUTOLOAD_VALUES, true);
+    }
+
+    /** @param list<string> $expected */
+    private static function has_exact_keys(array $value, array $expected): bool
     {
-        return 'awvp-secret|' . $secret_ref . '|' . $backend_id . '|' . $generation;
+        if (count($value) !== count($expected)) {
+            return false;
+        }
+
+        foreach ($expected as $key) {
+            if (! array_key_exists($key, $value)) {
+                return false;
+            }
+        }
+
+        foreach (array_keys($value) as $key) {
+            if (! is_string($key) || ! in_array($key, $expected, true)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /** @return array{state:string,generation:int} */
+    private static function provision_state(string $state, int $generation): array
+    {
+        return array(
+            'state'      => $state,
+            'generation' => $generation,
+        );
+    }
+
+    private static function snapshot_indeterminate(): Atomic_Option_Result
+    {
+        return Atomic_Option_Result::indeterminate(
+            Atomic_Option_Result::MUTATION_NONE,
+            Atomic_Option_Result::PHASE_VALIDATION
+        );
     }
 }
 

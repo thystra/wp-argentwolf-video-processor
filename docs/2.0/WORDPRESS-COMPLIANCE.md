@@ -1,7 +1,7 @@
 # ArgentWolf Video Processor 2.0 WordPress Compliance Contract
 
 Status: required companion for all AWVP 2.0 implementation tranches
-Checked against official WordPress developer documentation: 2026-08-16
+Checked against official WordPress developer documentation: 2026-08-23
 
 This document converts WordPress/WordPress.org requirements into stable
 engineering boundaries so compliance is designed in rather than repaired at
@@ -286,6 +286,28 @@ separate versioned 2.0 options reduce upgrade/review risk.
 
 Large lists, profiles, backend descriptors, and secret storage should not be
 autoloaded merely for convenience.
+
+R35's fixed-scope backend-registry, connection-journal, and managed-secret
+mutations require an exact raw database compare-and-swap that the ordinary
+Options API does not expose. This narrowly reviewed repository primitive may
+use parameterized direct queries only for AWVP-owned, bounded, canonical array
+options. It must:
+
+- take the expected token from an authoritative raw row, including exact
+  serialized bytes and autoload state;
+- make one conditional mutation attempt rather than retry a stale decision;
+- classify applied, conflict, indeterminate, and refused outcomes;
+- use exact conditional rollback/delete so concurrent state cannot be erased;
+- invalidate individual, `alloptions`, and `notoptions` caches after a definite
+  or possible mutation and emit the applicable option actions;
+- refuse malformed, oversized, object-bearing, or unsupported-autoload rows;
+- require the caller to supply the final prospectively validated value rather
+  than pretending to reproduce arbitrary Settings API filters.
+
+These private options remain non-autoloaded. Repairing an already autoloaded row
+is a separate deliberate Options API operation followed by a fresh raw
+snapshot; the compare-and-swap must not reuse a pre-repair observation or make
+rollback capable of restoring an autoloaded sensitive value.
 
 Backend IDs referenced by durable video/remote records are immutable identifiers.
 Removing a backend from active use should retire/tombstone its non-secret
