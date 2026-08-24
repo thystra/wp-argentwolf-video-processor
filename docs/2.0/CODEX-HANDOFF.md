@@ -9,8 +9,8 @@ ArgentWolf Video Processor 2.0 development.
   `v1.0.0`; later `main` commits are documentation/maintenance history unless a
   new release is deliberately prepared.
 - `develop-2.0` is the next-major integration line.
-- `feature/2.0-peertube-auth-identity` is the active implementation feature
-  branch for the reviewed authenticated PeerTube API checkpoint.
+- `feature/2.0-peertube-auth-identity` preserves the reviewed R34 source and
+  validation history. New continuation work branches from `develop-2.0`.
 
 Do not develop unfinished 2.0 runtime changes directly on `main`.
 
@@ -238,18 +238,41 @@ administrator-action, refresh/revoke, persistence, adapter, upload, or
 publication gate. Preserve the raw report outside disposable `/tmp` storage if
 it is needed beyond the VM's lifetime.
 
+## R34 integration closure
+
+The documentation-only validation record
+`d65c51e1de0e648e799ed887baf82e71371125cf` passed Forgejo CI run 52. R34 was
+then integrated into `develop-2.0` without rewriting either parent:
+
+- merge commit before this handoff-closure commit:
+  `86434431c8a63cb5fbc77dd4fda11bb6db42ebd1`;
+- first parent / prior `develop-2.0` authority:
+  `31692d841311b054214070f8b61358a07e15514b`;
+- second parent / validated feature closure:
+  `d65c51e1de0e648e799ed887baf82e71371125cf`;
+- merge tree:
+  `9ce44cd3b8cc89518c3592155b7fc1abe0393f49`.
+
+The prospective and committed merge trees matched exactly. Only this handoff
+document changed between the VM-tested implementation tree
+`87bb1e0c3949cf8718116a9a54c064dd572b5f59` and the merge tree, so the
+integrated runtime is byte-identical to the WordPress 7.1 VM-tested runtime. The
+complete post-merge PHP lint, focused,
+dependency-free, storage, restricted `open_basedir`, smoke-load, FFmpeg
+security/integration, vendor-fetch, JavaScript syntax, workflow-YAML, shell
+syntax, and diff gates passed.
+
 ## Recommended continuation
 
-R34's bounded source/CI/WordPress 7.1 VM gates are complete. Next:
+R34 is integrated and its bounded source/CI/WordPress 7.1 VM and post-merge
+source gates are complete. Next:
 
-1. integrate the reviewed feature into exact current `develop-2.0` without
-   rewriting its tested checkpoint;
-2. define the durable pending/reconciliation protocol before registering a
+1. define the durable pending/reconciliation protocol before registering a
    production password-grant action;
-3. implement registry persistence only with the documented atomic/classified
+2. implement registry persistence only with the documented atomic/classified
    contract and real WordPress/database validation;
-4. review refresh/revoke as separate partial-mutation slices;
-5. preserve the no-upload boundary until tranche 2.0-4 state-machine work.
+3. review refresh/revoke as separate partial-mutation slices;
+4. preserve the no-upload boundary until tranche 2.0-4 state-machine work.
 
 ## Engineering policy
 
