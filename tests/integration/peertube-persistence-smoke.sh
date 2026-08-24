@@ -459,14 +459,6 @@ run_case() {
         "/var/www/html/wp-content/plugins/argentwolf-video-processor/$FIXTURE_RELATIVE" \
         --use-include
 
-    if docker exec "$WORDPRESS_NAME" \
-        sh -c 'test -f /var/www/html/wp-content/debug.log && grep -E "PHP (Fatal error|Parse error|Warning|Notice|Deprecated)" /var/www/html/wp-content/debug.log' \
-        >/dev/null 2>&1; then
-        docker exec "$WORDPRESS_NAME" tail -n 120 /var/www/html/wp-content/debug.log || true
-        fail "WP_DEBUG_LOG contains a PHP diagnostic for $CURRENT_CASE."
-    fi
-    echo "WP_DEBUG_DIAGNOSTICS=$CURRENT_CASE:NONE"
-
     for forbidden_value in \
         'r35-access-token-value-one' \
         'r35-refresh-token-value-one' \
@@ -484,6 +476,16 @@ run_case() {
         fi
     done
     echo "SYNTHETIC_SECRET_DIAGNOSTICS=$CURRENT_CASE:NONE"
+
+    if docker exec "$WORDPRESS_NAME" \
+        sh -c 'test -f /var/www/html/wp-content/debug.log && grep -E "PHP (Fatal error|Parse error|Warning|Notice|Deprecated)|WordPress database error|was called incorrectly" /var/www/html/wp-content/debug.log' \
+        >/dev/null 2>&1; then
+        if ! docker exec "$WORDPRESS_NAME" cat /var/www/html/wp-content/debug.log; then
+            fail "A diagnostic was detected but the complete debug log could not be preserved for $CURRENT_CASE."
+        fi
+        fail "WP_DEBUG_LOG contains a PHP or WordPress diagnostic for $CURRENT_CASE."
+    fi
+    echo "WP_DEBUG_DIAGNOSTICS=$CURRENT_CASE:NONE"
     echo "CASE_ASSERTIONS=$CURRENT_CASE:PASS"
 
     if ! cleanup_case; then
