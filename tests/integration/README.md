@@ -100,7 +100,14 @@ It also proves that an already-autoloaded target is refused rather than silently
 repaired.
 
 The persistence fixture installs no HTTP mock because the checkpoint must make
-zero WordPress HTTP requests. It additionally requires no upload-tree mutation.
+zero WordPress HTTP requests. Every WP-CLI bootstrap receives the isolated
+`http://wp` request context, and ambient WordPress cron is disabled so a fresh
+site cannot initiate unrelated WordPress.org update checks. Plugin activation
+uses WP-CLI's explicit CLI context so the command does not synthesize an admin
+page and fire unrelated `admin_init` update checks. The runner still blocks
+external HTTP and fails on any PHP diagnostic in the complete debug log; it
+does not discard or allowlist bootstrap diagnostics. It additionally requires
+no upload-tree mutation.
 This remains focused source-checkpoint evidence, not an exact-ZIP, release,
 upgrade, MySQL, Plugin Check, real-PeerTube, TLS, administrator-action, adapter,
 refresh/revoke, or upload gate.

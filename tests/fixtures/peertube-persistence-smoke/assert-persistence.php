@@ -33,6 +33,14 @@ $assert(
     defined('WP_HTTP_BLOCK_EXTERNAL') && true === WP_HTTP_BLOCK_EXTERNAL,
     'External WordPress HTTP must be blocked.'
 );
+$assert(
+    defined('DISABLE_WP_CRON') && true === DISABLE_WP_CRON,
+    'Ambient WordPress cron must be disabled.'
+);
+$assert(
+    isset($_SERVER['HTTP_HOST']) && 'wp' === $_SERVER['HTTP_HOST'],
+    'WP-CLI must use the isolated WordPress request host.'
+);
 
 global $wpdb;
 $assert(is_object($wpdb) && isset($wpdb->options), 'The WordPress options table is unavailable.');

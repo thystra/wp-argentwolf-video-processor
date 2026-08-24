@@ -312,7 +312,9 @@ wp_cli() {
         -e WORDPRESS_DEBUG=1 \
         -e "WORDPRESS_CONFIG_EXTRA=$WORDPRESS_CONFIG_EXTRA" \
         "$WP_CLI_IMAGE" \
-        --path=/var/www/html "$@"
+        --path=/var/www/html \
+        --url=http://wp \
+        "$@"
 }
 
 run_case() {
@@ -375,7 +377,8 @@ run_case() {
     printf -v WORDPRESS_CONFIG_EXTRA '%s\n' \
         'define( "WP_DEBUG_LOG", true );' \
         'define( "WP_DEBUG_DISPLAY", false );' \
-        'define( "WP_HTTP_BLOCK_EXTERNAL", true );'
+        'define( "WP_HTTP_BLOCK_EXTERNAL", true );' \
+        'define( "DISABLE_WP_CRON", true );'
 
     WORDPRESS_CREATE_ATTEMPTED=1
     docker run -d \
@@ -421,7 +424,9 @@ run_case() {
         $valid = defined( "WP_DEBUG" ) && true === WP_DEBUG
             && defined( "WP_DEBUG_LOG" ) && true === WP_DEBUG_LOG
             && defined( "WP_DEBUG_DISPLAY" ) && false === WP_DEBUG_DISPLAY
-            && defined( "WP_HTTP_BLOCK_EXTERNAL" ) && true === WP_HTTP_BLOCK_EXTERNAL;
+            && defined( "WP_HTTP_BLOCK_EXTERNAL" ) && true === WP_HTTP_BLOCK_EXTERNAL
+            && defined( "DISABLE_WP_CRON" ) && true === DISABLE_WP_CRON
+            && isset( $_SERVER["HTTP_HOST"] ) && "wp" === $_SERVER["HTTP_HOST"];
         if ( ! $valid ) {
             fwrite( STDERR, "The persistence runtime configuration is incomplete.\n" );
             exit( 1 );
@@ -446,8 +451,8 @@ run_case() {
         || fail "Expected MariaDB $expected_database for $CURRENT_CASE; observed $observed_database."
     echo "DATABASE_VERSION=$CURRENT_CASE:$observed_database"
 
-    wp_cli plugin activate argentwolf-video-processor
-    wp_cli plugin is-active argentwolf-video-processor
+    wp_cli --context=cli plugin activate argentwolf-video-processor
+    wp_cli --context=cli plugin is-active argentwolf-video-processor
     echo "PLUGIN_ACTIVATION=$CURRENT_CASE:PASS"
 
     wp_cli eval-file \
