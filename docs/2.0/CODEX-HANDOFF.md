@@ -11,7 +11,7 @@ ArgentWolf Video Processor 2.0 development.
 - `develop-2.0` is the next-major integration line.
 - `feature/2.0-peertube-connection-coordinator` preserves the reviewed R36
   source and validation history. New continuation work branches from
-  `develop-2.0` after R36 integration closes.
+  `develop-2.0`.
 
 Do not develop unfinished 2.0 runtime changes directly on `main`.
 
@@ -482,16 +482,58 @@ password-grant, refresh/revoke, adapter, activation, upload, or publication
 gate. Preserve the raw report outside disposable `/tmp` storage if it is needed
 beyond the VM's lifetime.
 
+## R36 integration closure
+
+The documentation-only feature evidence closure
+`171917459b80c18da8dcf0928858fbed953cbc26` passed Forgejo CI run 60. Its only
+change from the VM-tested `eeb33df9c801a3d82887b089597f34a36f69ab5e`
+tree is this handoff document. The installable runtime object set remains
+identical to the VM-tested implementation checkpoint.
+
+R36 was then integrated into `develop-2.0` without rewriting either parent:
+
+- merge commit before this handoff-closure commit:
+  `86af405c27c72b042376eb52e0d4d6dd6c1d40c8`;
+- first parent / prior `develop-2.0` authority:
+  `1c17e39bb7afb27cacc68f45057043bc53057f06`;
+- second parent / validated feature closure:
+  `171917459b80c18da8dcf0928858fbed953cbc26`;
+- merge tree:
+  `1e59a6af4ecdbb009efd71b57c110bb5c1764b1b`.
+
+Immediately before integration, Forgejo refs were re-fetched and frozen;
+`origin/main` remained `ed3982586d78f10fbb46aaf938d4478eabd322d1`.
+The prior develop authority was the exact merge base and strict ancestor of the
+feature closure. The conflict-free prospective tree, staged merge tree,
+committed merge tree, and feature-closure tree matched exactly.
+
+The complete PHP lint, focused model/backend/PeerTube tests, autoload-sensitive
+CAS/planning/registry/operation-store/managed-secret/coordinator tests in both
+modes, dependency-free, storage, restricted `open_basedir`, smoke-load, FFmpeg
+security/binary/integration, vendor-fetch, JavaScript syntax, workflow-YAML, all
+integration shell-syntax, and diff gates passed on both the prospective and
+committed merge trees. An exact
+prospective-tree validation package passed its root/content/exclusion and
+`SHA256SUMS` checks with ZIP SHA-256
+`c24d858ee778aa3523812298af86dc71714dea1b3cbff3e3e0d8a763793d6b00`.
+That newly built ZIP was noncanonical validation evidence, was not promoted or
+published, and was removed after inspection. Forgejo CI run 61 passed the exact
+merge commit.
+
+Only this handoff document changes after the committed merge tree, so the
+integrated installable runtime remains byte-for-byte the runtime exercised by
+the successful WordPress 6.4/7.1 VM matrix. R36 is integrated only on
+`develop-2.0`; `main`, tags, releases, and publication surfaces remain
+untouched.
+
 ## Recommended continuation
 
-R36 source, local, CI, and two-case WordPress VM gates are complete on its
-feature branch. Next:
+R36 is integrated and its source, local, CI, two-case WordPress VM, prospective,
+and post-merge gates are complete. Next:
 
-1. integrate the validated R36 feature closure into `develop-2.0` through an
-   exact prospective merge tree and post-merge validation;
-2. keep administrator actions and remote password-grant mutation in a separate
+1. keep administrator actions and remote password-grant mutation in a separate
    reviewed slice with explicit indeterminate-outcome reconciliation;
-3. review refresh/revoke separately and preserve the no-upload boundary until
+2. review refresh/revoke separately and preserve the no-upload boundary until
    tranche 2.0-4 state-machine work.
 
 ## Engineering policy
