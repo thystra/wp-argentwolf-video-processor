@@ -9,9 +9,9 @@ ArgentWolf Video Processor 2.0 development.
   `v1.0.0`; later `main` commits are documentation/maintenance history unless a
   new release is deliberately prepared.
 - `develop-2.0` is the next-major integration line.
-- `feature/2.0-peertube-connection-persistence` preserves the reviewed R35
+- `feature/2.0-peertube-connection-coordinator` preserves the reviewed R36
   source and validation history. New continuation work branches from
-  `develop-2.0`.
+  `develop-2.0` after R36 integration closes.
 
 Do not develop unfinished 2.0 runtime changes directly on `main`.
 
@@ -410,13 +410,85 @@ the successful WordPress 6.4/7.1 VM matrix. R35 is integrated only on
 `develop-2.0`; `main`, tags, releases, and publication surfaces remain
 untouched.
 
+## R36 restart-safe connection-coordinator checkpoint
+
+R36 began from the exact R35 integration authority without rewriting it:
+
+- branch: `feature/2.0-peertube-connection-coordinator`;
+- parent / `origin/develop-2.0` authority:
+  `1c17e39bb7afb27cacc68f45057043bc53057f06`;
+- implementation checkpoint:
+  `eeb33df9c801a3d82887b089597f34a36f69ab5e`;
+- implementation tree:
+  `afe99376baf9e8e2be266d1dddf8fb729a9db2b3`;
+- subject: `Add restart-safe PeerTube connection coordination`.
+
+The checkpoint adds prospective, single-use atomic-option mutation plans;
+classified plan results; authoritative option, operation-journal,
+managed-secret, and backend-registry probes; and a restart-safe local PeerTube
+connection coordinator. Raw prospective snapshots are held outside normal
+object debug/export state, plans reject serialization and reconstruction, and
+every apply path validates its bounded evidence before reaching a mutation.
+
+`start()` creates only a bounded local journal entry. Each `resume()` call
+crosses at most one local persistence boundary while reserving a managed secret,
+recording its confirmation, appending an exact disabled PeerTube descriptor,
+and confirming semantic readiness across fresh processes. Replanning is limited
+to a definite SQL-phase conflict with no mutation and a fresh authoritative
+read. Pre-action hook mutations, stale probes, anomalous post-write evidence,
+manifest read failures, occupied identities, malformed journals, credential
+input, and ambiguous writes retain explicit refused or indeterminate outcomes.
+
+R36 registers no administrator action, AJAX/REST endpoint, password/OTP grant,
+PeerTube HTTP request, adapter, activation writer, refresh/revoke path, upload
+path, or publication action. It persists no credentials or remote identity and
+does not change the model schema or plugin version. `main` remains untouched.
+
+The complete PHP lint, focused planning/coordinator/persistence tests in both
+autoload modes, dependency-free, storage, restricted `open_basedir`, smoke-load,
+FFmpeg security/binary/integration, vendor-fetch, JavaScript syntax,
+workflow-YAML, all integration shell-syntax, and diff gates passed locally.
+Forgejo CI run 59 passed the exact implementation checkpoint.
+
+The two-case coordinator matrix completed successfully on `ubuntuzfstest` at
+`2026-08-25T09:22:22Z`:
+
+- tested source commit:
+  `eeb33df9c801a3d82887b089597f34a36f69ab5e`;
+- tested source tree:
+  `afe99376baf9e8e2be266d1dddf8fb729a9db2b3`;
+- report:
+  `/tmp/awvp-r36-report.5v3mQg/peertube-connection-coordinator-smoke-20260825T092222Z-15123.log`;
+- report SHA-256:
+  `5e35fd51891abebd7ab3c2efb6402a1beb29363734d7a232f8dec314136db42e`;
+- minimum case: WordPress 6.4.2, PHP 8.1.34, MariaDB 10.6.27;
+- current case: WordPress 7.1, PHP 8.3.33, MariaDB 10.11.18;
+- exact committed-source export, read-only runtime mount, digest-pinned images,
+  owned internal networks/volumes, no host ports, fresh sites, database consumer
+  paths, runtime configuration, plugin activation, eleven fresh WP-CLI
+  coordinator processes per case, restart sequencing, single-target persistence
+  boundaries, semantic readiness after an unrelated registry append, occupied
+  identity refusal, credential-input refusal, synthetic-secret exclusion, clean
+  debug logs, and per-case cleanup: `PASS`;
+- WordPress HTTP requests in each case: none;
+- upload mutations in each case: none;
+- final results: `PEERTUBE_CONNECTION_COORDINATOR_MATRIX_ASSERTIONS=PASS`,
+  `RESOURCE_CLEANUP=PASS`, and
+  `PEERTUBE_CONNECTION_COORDINATOR_SMOKE=PASS`.
+
+This remains focused committed-source development evidence, not a release ZIP,
+upgrade, MySQL, Plugin Check, real-PeerTube, TLS, administrator-action,
+password-grant, refresh/revoke, adapter, activation, upload, or publication
+gate. Preserve the raw report outside disposable `/tmp` storage if it is needed
+beyond the VM's lifetime.
+
 ## Recommended continuation
 
-R35 is integrated and its source, local, CI, two-case WordPress VM, prospective,
-and post-merge gates are complete. Next:
+R36 source, local, CI, and two-case WordPress VM gates are complete on its
+feature branch. Next:
 
-1. implement a production connection coordinator only through the validated
-   journal, managed-secret, disabled-registry, and state-machine boundaries;
+1. integrate the validated R36 feature closure into `develop-2.0` through an
+   exact prospective merge tree and post-merge validation;
 2. keep administrator actions and remote password-grant mutation in a separate
    reviewed slice with explicit indeterminate-outcome reconciliation;
 3. review refresh/revoke separately and preserve the no-upload boundary until
