@@ -893,6 +893,90 @@ $assert(
     'Partial delete hook mutation was not preserved and cache-invalidated without SQL.'
 );
 
+// A normally returning pre-action receives the same prospective guard. Its
+// target mutation cannot be mislabeled as a zero-row SQL conflict, because
+// that classification is later authority for a fresh coordinator plan.
+$store = $reset();
+$hook_created = array('marker' => 'hook-created-before-return');
+$create_before = $store->snapshot();
+$GLOBALS['awvp_atomic_action_callbacks']['add_option'] = static function () use (
+    $option,
+    $hook_created,
+    $expected_autoload
+): void {
+    $GLOBALS['wpdb']->rows[$option] = array(
+        'option_value' => serialize($hook_created),
+        'autoload'     => $expected_autoload,
+    );
+};
+$partial_create = $store->compare_exchange($create_before, $created_value);
+$assert(
+    Atomic_Option_Result::INDETERMINATE === $partial_create->status()
+    && Atomic_Option_Result::MUTATION_UNKNOWN === $partial_create->mutation()
+    && Atomic_Option_Result::PHASE_PRE_ACTION === $partial_create->phase(),
+    'Mutation-then-return add action was not classified indeterminate/unknown/pre-action.'
+);
+$assert(
+    serialize($hook_created) === $GLOBALS['wpdb']->rows[$option]['option_value']
+    && [] === $GLOBALS['wpdb']->mutations
+    && 3 === count($GLOBALS['awvp_atomic_cache_deletes']),
+    'Normal-returning partial add hook reached SQL or lost its target mutation.'
+);
+
+$store = $reset();
+$GLOBALS['wpdb']->rows[$option] = array(
+    'option_value' => serialize($old_value),
+    'autoload'     => $expected_autoload,
+);
+$update_before = $store->snapshot();
+$hook_updated = array('marker' => 'hook-updated-before-return');
+$GLOBALS['awvp_atomic_action_callbacks']['update_option'] = static function () use (
+    $option,
+    $hook_updated,
+    $expected_autoload
+): void {
+    $GLOBALS['wpdb']->rows[$option] = array(
+        'option_value' => serialize($hook_updated),
+        'autoload'     => $expected_autoload,
+    );
+};
+$partial_update = $store->compare_exchange($update_before, $new_value);
+$assert(
+    Atomic_Option_Result::INDETERMINATE === $partial_update->status()
+    && Atomic_Option_Result::MUTATION_UNKNOWN === $partial_update->mutation()
+    && Atomic_Option_Result::PHASE_PRE_ACTION === $partial_update->phase(),
+    'Mutation-then-return update action was not classified indeterminate/unknown/pre-action.'
+);
+$assert(
+    serialize($hook_updated) === $GLOBALS['wpdb']->rows[$option]['option_value']
+    && [] === $GLOBALS['wpdb']->mutations
+    && 3 === count($GLOBALS['awvp_atomic_cache_deletes']),
+    'Normal-returning partial update hook reached SQL or lost its target mutation.'
+);
+
+$store = $reset();
+$GLOBALS['wpdb']->rows[$option] = array(
+    'option_value' => serialize($old_value),
+    'autoload'     => $expected_autoload,
+);
+$delete_before = $store->snapshot();
+$GLOBALS['awvp_atomic_action_callbacks']['delete_option'] = static function () use ($option): void {
+    unset($GLOBALS['wpdb']->rows[$option]);
+};
+$partial_delete = $store->compare_delete($delete_before);
+$assert(
+    Atomic_Option_Result::INDETERMINATE === $partial_delete->status()
+    && Atomic_Option_Result::MUTATION_UNKNOWN === $partial_delete->mutation()
+    && Atomic_Option_Result::PHASE_PRE_ACTION === $partial_delete->phase(),
+    'Mutation-then-return delete action was not classified indeterminate/unknown/pre-action.'
+);
+$assert(
+    ! array_key_exists($option, $GLOBALS['wpdb']->rows)
+    && [] === $GLOBALS['wpdb']->mutations
+    && 3 === count($GLOBALS['awvp_atomic_cache_deletes']),
+    'Normal-returning partial delete hook reached SQL or restored its target mutation.'
+);
+
 $store = $reset();
 $GLOBALS['wpdb']->rows[$option] = array(
     'option_value' => serialize($old_value),

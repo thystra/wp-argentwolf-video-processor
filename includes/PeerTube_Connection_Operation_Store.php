@@ -21,6 +21,11 @@ final class PeerTube_Connection_Operation_Store
     public const VERSION = 1;
     public const MAX_OPERATIONS = 32;
 
+    public const PROBE_PRESENT = 'present';
+    public const PROBE_ABSENT = 'absent';
+    public const PROBE_REFUSED = 'refused';
+    public const PROBE_INDETERMINATE = 'indeterminate';
+
     private const NONAUTOLOAD_VALUES = array('no', 'off', 'auto-off');
 
     /**
@@ -187,17 +192,41 @@ final class PeerTube_Connection_Operation_Store
     /** @return array<string, mixed>|null */
     public function get(string $operation_id): ?array
     {
+        $probe = $this->probe($operation_id);
+        return self::PROBE_PRESENT === $probe['status']
+            ? $probe['record']
+            : null;
+    }
+
+    /**
+     * Read one operation with an explicit authoritative classification.
+     *
+     * @return array{status:string,record:array<string,mixed>|null}
+     */
+    public function probe(string $operation_id): array
+    {
         if ('' === self::operation_id($operation_id)) {
-            return null;
+            return self::probe_result(self::PROBE_REFUSED);
         }
 
         $snapshot = (new Atomic_Option_Store(self::OPTION))->snapshot();
-        $journal = $this->journal_from_snapshot($snapshot);
-        if (null === $journal) {
-            return null;
+        if (Atomic_Option_Snapshot::INDETERMINATE === $snapshot->state()) {
+            return self::probe_result(self::PROBE_INDETERMINATE);
         }
 
-        return $journal['operations'][$operation_id] ?? null;
+        if (Atomic_Option_Snapshot::REFUSED === $snapshot->state()) {
+            return self::probe_result(self::PROBE_REFUSED);
+        }
+
+        $journal = $this->journal_from_snapshot($snapshot);
+        if (null === $journal) {
+            return self::probe_result(self::PROBE_REFUSED);
+        }
+
+        $record = $journal['operations'][$operation_id] ?? null;
+        return is_array($record)
+            ? self::probe_result(self::PROBE_PRESENT, $record)
+            : self::probe_result(self::PROBE_ABSENT);
     }
 
     /** @return array<string, array<string, mixed>>|null */
@@ -317,6 +346,18 @@ final class PeerTube_Connection_Operation_Store
         return array(
             'record' => $record,
             'result' => $result,
+        );
+    }
+
+    /**
+     * @param array<string, mixed>|null $record
+     * @return array{status:string,record:array<string,mixed>|null}
+     */
+    private static function probe_result(string $status, ?array $record = null): array
+    {
+        return array(
+            'status' => $status,
+            'record' => $record,
         );
     }
 

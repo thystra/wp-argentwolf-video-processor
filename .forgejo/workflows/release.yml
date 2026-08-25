@@ -152,6 +152,8 @@ jobs:
           php tests/peertube-http-api.php
           php tests/atomic-option-cas.php
           AWVP_ATOMIC_MODERN_AUTOLOAD=1 php tests/atomic-option-cas.php
+          php tests/atomic-option-planning.php
+          AWVP_ATOMIC_MODERN_AUTOLOAD=1 php tests/atomic-option-planning.php
           php tests/backend-registry-atomic.php
           AWVP_ATOMIC_MODERN_AUTOLOAD=1 php tests/backend-registry-atomic.php
           php tests/peertube-connection-state-machine.php
@@ -159,9 +161,12 @@ jobs:
           AWVP_ATOMIC_MODERN_AUTOLOAD=1 php tests/peertube-connection-operation-store.php
           php tests/managed-secret-persistence.php
           AWVP_ATOMIC_MODERN_AUTOLOAD=1 php tests/managed-secret-persistence.php
+          php tests/peertube-connection-coordinator.php
+          AWVP_ATOMIC_MODERN_AUTOLOAD=1 php tests/peertube-connection-coordinator.php
           bash -n tests/integration/peertube-http-smoke.sh
           bash -n tests/integration/peertube-auth-api-smoke.sh
           bash -n tests/integration/peertube-persistence-smoke.sh
+          bash -n tests/integration/peertube-connection-coordinator-smoke.sh
           php tests/run.php
           php tests/storage-boundary.php
           php -d open_basedir="${FORGEJO_WORKSPACE}:/tmp" tests/open-basedir.php

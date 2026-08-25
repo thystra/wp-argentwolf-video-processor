@@ -67,6 +67,19 @@ if (
     exit(1);
 }
 
+foreach (
+    array(
+        ArgentVideo\Atomic_Option_Mutation_Plan::class,
+        ArgentVideo\Atomic_Option_Plan_Result::class,
+        ArgentVideo\PeerTube_Connection_Coordinator::class,
+    ) as $required_class
+) {
+    if (! class_exists($required_class, false)) {
+        fwrite(STDERR, "Plugin smoke load missed required R36 class {$required_class}.\n");
+        exit(1);
+    }
+}
+
 fwrite(STDOUT, "Plugin smoke load passed.\n");
 
 // EOF: tests/smoke-load.php

@@ -186,12 +186,16 @@ final class Awvp_Managed_Secret_Fake_Wpdb
 require_once dirname(__DIR__) . '/includes/Backend_Identity.php';
 require_once dirname(__DIR__) . '/includes/Atomic_Option_Snapshot.php';
 require_once dirname(__DIR__) . '/includes/Atomic_Option_Result.php';
+require_once dirname(__DIR__) . '/includes/Atomic_Option_Mutation_Plan.php';
+require_once dirname(__DIR__) . '/includes/Atomic_Option_Plan_Result.php';
 require_once dirname(__DIR__) . '/includes/Atomic_Option_Store.php';
 require_once dirname(__DIR__) . '/includes/Backend_Secret_Store.php';
 require_once dirname(__DIR__) . '/includes/Backend_Secret_Crypto.php';
 require_once dirname(__DIR__) . '/includes/Managed_Backend_Secret_Store.php';
 
 use ArgentVideo\Atomic_Option_Result;
+use ArgentVideo\Atomic_Option_Plan_Result;
+use ArgentVideo\Atomic_Option_Store;
 use ArgentVideo\Backend_Secret_Crypto;
 use ArgentVideo\Managed_Backend_Secret_Store;
 
@@ -268,6 +272,116 @@ $secret_three = array(
     'access_expires_at'  => 1900000003,
     'refresh_expires_at' => 1900003603,
 );
+
+// Every prospective reservation API must preserve an authoritative manifest
+// read failure as indeterminate. In particular, a failed preflight must not
+// consume the request-local plan or mutate the target slot.
+$prospective_store = new Managed_Backend_Secret_Store();
+$prospective_manifest = $prospective_store->initialize_classified();
+$assert_result(
+    $prospective_manifest,
+    Atomic_Option_Result::APPLIED,
+    Atomic_Option_Result::MUTATION_APPLIED,
+    'Prospective fixture manifest initialization'
+);
+$prospective_plan_result = $prospective_store->prepare_reservation(
+    $secret_ref,
+    $backend_id,
+    $provisioning_id,
+    'mutation_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+);
+$prospective_plan = $prospective_plan_result->plan();
+$assert(
+    Atomic_Option_Plan_Result::READY === $prospective_plan_result->status()
+        && null !== $prospective_plan,
+    'Prospective reservation fixture did not produce an exact plan.'
+);
+$prospective_evidence = $prospective_plan->evidence();
+$prospective_option = $record_option($secret_ref);
+$mutations_before_manifest_failures = count($GLOBALS['wpdb']->mutations);
+
+$GLOBALS['wpdb']->failed_reads[Managed_Backend_Secret_Store::OPTION] = 1;
+$initialize_manifest_failure = $prospective_store->initialize_classified();
+$assert_result(
+    $initialize_manifest_failure,
+    Atomic_Option_Result::INDETERMINATE,
+    Atomic_Option_Result::MUTATION_NONE,
+    'Prospective manifest initialization read failure'
+);
+
+$GLOBALS['wpdb']->failed_reads[Managed_Backend_Secret_Store::OPTION] = 1;
+$prepare_manifest_failure = $prospective_store->prepare_reservation(
+    $secret_ref,
+    $backend_id,
+    $provisioning_id,
+    'mutation_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
+);
+$assert(
+    Atomic_Option_Plan_Result::INDETERMINATE === $prepare_manifest_failure->status()
+        && null === $prepare_manifest_failure->plan(),
+    'Prospective reservation planning collapsed a manifest read failure.'
+);
+
+$GLOBALS['wpdb']->failed_reads[Managed_Backend_Secret_Store::OPTION] = 1;
+$apply_manifest_failure = $prospective_store->apply_reservation_plan(
+    $secret_ref,
+    $backend_id,
+    $provisioning_id,
+    $prospective_plan
+);
+$assert_result(
+    $apply_manifest_failure,
+    Atomic_Option_Result::INDETERMINATE,
+    Atomic_Option_Result::MUTATION_NONE,
+    'Prospective reservation apply manifest read failure'
+);
+
+$GLOBALS['wpdb']->failed_reads[Managed_Backend_Secret_Store::OPTION] = 1;
+$probe_manifest_failure = $prospective_store->probe_reservation(
+    $secret_ref,
+    $backend_id,
+    $provisioning_id,
+    $prospective_evidence
+);
+$assert(
+    Atomic_Option_Store::PROBE_INDETERMINATE === $probe_manifest_failure,
+    'Prospective reservation probe collapsed a manifest read failure.'
+);
+
+$GLOBALS['wpdb']->failed_reads[Managed_Backend_Secret_Store::OPTION] = 1;
+$reconcile_manifest_failure = $prospective_store->reconcile_reservation(
+    $secret_ref,
+    $backend_id,
+    $provisioning_id,
+    $prospective_evidence
+);
+$assert_result(
+    $reconcile_manifest_failure,
+    Atomic_Option_Result::INDETERMINATE,
+    Atomic_Option_Result::MUTATION_NONE,
+    'Prospective reservation reconcile manifest read failure'
+);
+$assert(
+    $mutations_before_manifest_failures === count($GLOBALS['wpdb']->mutations)
+        && ! isset($GLOBALS['wpdb']->rows[$prospective_option]),
+    'Manifest read failures crossed the prospective target mutation boundary.'
+);
+
+$prospective_applied = $prospective_store->apply_reservation_plan(
+    $secret_ref,
+    $backend_id,
+    $provisioning_id,
+    $prospective_plan
+);
+$assert_result(
+    $prospective_applied,
+    Atomic_Option_Result::APPLIED,
+    Atomic_Option_Result::MUTATION_APPLIED,
+    'Prospective plan reuse after manifest read failure'
+);
+
+$GLOBALS['wpdb'] = new Awvp_Managed_Secret_Fake_Wpdb();
+$store = new Managed_Backend_Secret_Store();
 
 // A missing manifest may be initialized before reserve() discovers a
 // pre-existing slot. The composite result must retain that definite mutation
@@ -680,7 +794,8 @@ $reserve_and_commit = static function (
 };
 
 // Deterministically inject one replacement during another writer's pre-action.
-// The inner exact CAS wins and the writer holding the stale snapshot conflicts.
+// The inner exact CAS wins; the outer writer must detect the hook-side target
+// change before SQL and retain unknown mutation authority.
 $race_ref = 'managed_55555555555555555555555555555555';
 $race_provision = 'provision_66666666666666666666666666666666';
 $reserve_and_commit($race_ref, $race_provision);
@@ -706,21 +821,21 @@ $assert_result(
 );
 $assert_result(
     $outer_replace,
-    Atomic_Option_Result::CONFLICT,
-    Atomic_Option_Result::MUTATION_NONE,
-    'Concurrent stale replacement'
+    Atomic_Option_Result::INDETERMINATE,
+    Atomic_Option_Result::MUTATION_UNKNOWN,
+    'Hook-side replacement'
 );
 $assert(
-    Atomic_Option_Result::PHASE_SQL === $outer_replace->phase(),
-    'Concurrent stale replacement must conflict at the exact SQL predicate.'
+    Atomic_Option_Result::PHASE_PRE_ACTION === $outer_replace->phase(),
+    'Hook-side replacement must be classified before the outer SQL statement.'
 );
 $assert(
     $expected_read_two_generation_two === $store->read($race_ref, $backend_id),
     'Two-writer CAS must preserve the inner replacement winner.'
 );
 
-// The same exact-byte precondition prevents a stale delete from erasing a
-// concurrent replacement made after the delete's snapshot.
+// The same pre-action guard prevents a delete from erasing a replacement made
+// by its own normally returning delete hook.
 $delete_race_ref = 'managed_77777777777777777777777777777777';
 $delete_race_provision = 'provision_88888888888888888888888888888888';
 $reserve_and_commit($delete_race_ref, $delete_race_provision);
@@ -761,13 +876,13 @@ $assert_result(
 );
 $assert_result(
     $stale_delete,
-    Atomic_Option_Result::CONFLICT,
-    Atomic_Option_Result::MUTATION_NONE,
-    'Delete-race stale delete'
+    Atomic_Option_Result::INDETERMINATE,
+    Atomic_Option_Result::MUTATION_UNKNOWN,
+    'Delete-hook replacement'
 );
 $assert(
-    Atomic_Option_Result::PHASE_SQL === $stale_delete->phase(),
-    'Concurrent stale delete must conflict at the exact SQL predicate.'
+    Atomic_Option_Result::PHASE_PRE_ACTION === $stale_delete->phase(),
+    'Delete-hook replacement must be classified before delete SQL.'
 );
 $assert(
     $expected_read_two_generation_two === $store->read($delete_race_ref, $backend_id),

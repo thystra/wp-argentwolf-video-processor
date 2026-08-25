@@ -34,10 +34,228 @@ final class Managed_Backend_Secret_Store implements Backend_Secret_Store
         return Backend_Secret_Crypto::available()
             && class_exists(Atomic_Option_Store::class)
             && class_exists(Atomic_Option_Result::class)
+            && class_exists(Atomic_Option_Mutation_Plan::class)
+            && class_exists(Atomic_Option_Plan_Result::class)
             && is_object($wpdb)
             && isset($wpdb->options)
             && function_exists('do_action')
             && function_exists('wp_cache_delete');
+    }
+
+    /**
+     * Establish only the versioned provider manifest.
+     *
+     * Reservation planning and execution deliberately require this manifest
+     * to exist already. Keeping initialization separate prevents a caller
+     * from mistaking a manifest-only partial mutation for a reserved slot.
+     */
+    public function initialize_classified(): Atomic_Option_Result
+    {
+        if (! $this->available()) {
+            return Atomic_Option_Result::refused();
+        }
+
+        return $this->ensure_manifest_classified();
+    }
+
+    /**
+     * Prospectively describe creation of one exact empty managed slot.
+     *
+     * This method never mutates either the manifest or the record option.
+     */
+    public function prepare_reservation(
+        string $secret_ref,
+        string $backend_id,
+        string $provisioning_id,
+        string $mutation_id
+    ): Atomic_Option_Plan_Result {
+        $backend_id = Backend_Identity::sanitize($backend_id);
+        if (
+            ! self::valid_ref($secret_ref)
+            || '' === $backend_id
+            || ! self::valid_provisioning_id($provisioning_id)
+            || ! $this->available()
+        ) {
+            return Atomic_Option_Plan_Result::refused();
+        }
+
+        $manifest = $this->existing_manifest_classified();
+        if (Atomic_Option_Result::INDETERMINATE === $manifest->status()) {
+            return Atomic_Option_Plan_Result::indeterminate();
+        }
+        if (Atomic_Option_Result::APPLIED !== $manifest->status()) {
+            return Atomic_Option_Plan_Result::refused();
+        }
+
+        $store = new Atomic_Option_Store(self::record_option($secret_ref));
+        $snapshot = $store->snapshot();
+
+        return $store->prepare_compare_exchange(
+            $snapshot,
+            self::pending_record($backend_id, $provisioning_id),
+            'secret_reserve',
+            $mutation_id
+        );
+    }
+
+    /**
+     * Apply only a prospectively validated exact pending-slot plan.
+     */
+    public function apply_reservation_plan(
+        string $secret_ref,
+        string $backend_id,
+        string $provisioning_id,
+        Atomic_Option_Mutation_Plan $plan
+    ): Atomic_Option_Result {
+        $backend_id = Backend_Identity::sanitize($backend_id);
+        if (
+            ! self::valid_ref($secret_ref)
+            || '' === $backend_id
+            || ! self::valid_provisioning_id($provisioning_id)
+            || ! $this->available()
+        ) {
+            return Atomic_Option_Result::refused();
+        }
+
+        $manifest = $this->existing_manifest_classified();
+        if (Atomic_Option_Result::APPLIED !== $manifest->status()) {
+            return $manifest;
+        }
+        if (! $this->valid_reservation_plan(
+            $plan,
+            $secret_ref,
+            $backend_id,
+            $provisioning_id
+        )) {
+            return Atomic_Option_Result::refused();
+        }
+
+        return (new Atomic_Option_Store(self::record_option($secret_ref)))->apply_plan($plan);
+    }
+
+    /**
+     * Classify the authoritative record against journaled mutation evidence.
+     *
+     * An `after` result additionally proves that the current record is the
+     * exact non-secret pending slot bound to this provisioning operation.
+     * A ready or foreign record is always `other`; it is never accepted as a
+     * completed reservation.
+     *
+     * @param array<string, mixed> $evidence
+     */
+    public function probe_reservation(
+        string $secret_ref,
+        string $backend_id,
+        string $provisioning_id,
+        array $evidence
+    ): string {
+        $backend_id = Backend_Identity::sanitize($backend_id);
+        if (
+            ! self::valid_ref($secret_ref)
+            || '' === $backend_id
+            || ! self::valid_provisioning_id($provisioning_id)
+            || ! $this->available()
+            || 'secret_reserve' !== ($evidence['kind'] ?? null)
+        ) {
+            return Atomic_Option_Store::PROBE_REFUSED;
+        }
+
+        $manifest = $this->existing_manifest_classified();
+        if (Atomic_Option_Result::INDETERMINATE === $manifest->status()) {
+            return Atomic_Option_Store::PROBE_INDETERMINATE;
+        }
+        if (Atomic_Option_Result::APPLIED !== $manifest->status()) {
+            return Atomic_Option_Store::PROBE_REFUSED;
+        }
+
+        $store = new Atomic_Option_Store(self::record_option($secret_ref));
+        $probe = $store->probe_evidence($evidence);
+        if (Atomic_Option_Store::PROBE_AFTER !== $probe) {
+            return $probe;
+        }
+
+        $snapshot = $store->snapshot();
+        if (Atomic_Option_Snapshot::INDETERMINATE === $snapshot->state()) {
+            return Atomic_Option_Store::PROBE_INDETERMINATE;
+        }
+        if (! self::supported_present_snapshot($snapshot)) {
+            return $snapshot->is_absent()
+                ? Atomic_Option_Store::PROBE_OTHER
+                : Atomic_Option_Store::PROBE_REFUSED;
+        }
+
+        $record = self::normalize_record($snapshot->value());
+        if (self::pending_record($backend_id, $provisioning_id) !== $record) {
+            return Atomic_Option_Store::PROBE_OTHER;
+        }
+
+        return $store->probe_evidence($evidence);
+    }
+
+    /**
+     * Reconcile one already-journaled reservation plan.
+     *
+     * The exact recorded `after` state is satisfied. The exact recorded
+     * `before` state may be applied using the same mutation ID and evidence.
+     * Every other state is preserved and reported without overwrite/delete.
+     *
+     * @param array<string, mixed> $evidence
+     */
+    public function reconcile_reservation(
+        string $secret_ref,
+        string $backend_id,
+        string $provisioning_id,
+        array $evidence
+    ): Atomic_Option_Result {
+        $probe = $this->probe_reservation(
+            $secret_ref,
+            $backend_id,
+            $provisioning_id,
+            $evidence
+        );
+
+        if (Atomic_Option_Store::PROBE_AFTER === $probe) {
+            return Atomic_Option_Result::satisfied();
+        }
+        if (Atomic_Option_Store::PROBE_INDETERMINATE === $probe) {
+            return Atomic_Option_Result::indeterminate(
+                Atomic_Option_Result::MUTATION_NONE,
+                Atomic_Option_Result::PHASE_VALIDATION
+            );
+        }
+        if (Atomic_Option_Store::PROBE_REFUSED === $probe) {
+            return Atomic_Option_Result::refused();
+        }
+        if (Atomic_Option_Store::PROBE_BEFORE !== $probe) {
+            return Atomic_Option_Result::conflict(Atomic_Option_Result::PHASE_VALIDATION);
+        }
+
+        $mutation_id = $evidence['mutation_id'] ?? null;
+        if (! is_string($mutation_id)) {
+            return Atomic_Option_Result::refused();
+        }
+
+        $prepared = $this->prepare_reservation(
+            $secret_ref,
+            $backend_id,
+            $provisioning_id,
+            $mutation_id
+        );
+        $plan = $prepared->plan();
+        if (
+            Atomic_Option_Plan_Result::READY !== $prepared->status()
+            || null === $plan
+            || $plan->evidence() !== $evidence
+        ) {
+            return self::plan_failure($prepared);
+        }
+
+        return $this->apply_reservation_plan(
+            $secret_ref,
+            $backend_id,
+            $provisioning_id,
+            $plan
+        );
     }
 
     /**
@@ -522,6 +740,52 @@ final class Managed_Backend_Secret_Store implements Backend_Secret_Store
         }
 
         return $store->compare_delete($snapshot);
+    }
+
+    /** @return array<string, mixed> */
+    private static function pending_record(
+        string $backend_id,
+        string $provisioning_id
+    ): array {
+        return array(
+            'version'         => self::RECORD_VERSION,
+            'state'           => self::STATE_PENDING,
+            'backend_id'      => $backend_id,
+            'provisioning_id' => $provisioning_id,
+            'generation'      => 0,
+            'envelope'        => array(),
+        );
+    }
+
+    private function valid_reservation_plan(
+        Atomic_Option_Mutation_Plan $plan,
+        string $secret_ref,
+        string $backend_id,
+        string $provisioning_id
+    ): bool {
+        $before = $plan->before();
+        $written = $plan->written();
+
+        return self::record_option($secret_ref) === $plan->option()
+            && 'secret_reserve' === $plan->kind()
+            && $before->is_absent()
+            && self::supported_present_snapshot($written)
+            && self::pending_record($backend_id, $provisioning_id) === $written->value();
+    }
+
+    private static function plan_failure(
+        Atomic_Option_Plan_Result $prepared
+    ): Atomic_Option_Result {
+        return match ($prepared->status()) {
+            Atomic_Option_Plan_Result::CONFLICT => Atomic_Option_Result::conflict(
+                Atomic_Option_Result::PHASE_VALIDATION
+            ),
+            Atomic_Option_Plan_Result::INDETERMINATE => Atomic_Option_Result::indeterminate(
+                Atomic_Option_Result::MUTATION_NONE,
+                Atomic_Option_Result::PHASE_VALIDATION
+            ),
+            default => Atomic_Option_Result::refused(),
+        };
     }
 
     private function ensure_manifest_classified(): Atomic_Option_Result
