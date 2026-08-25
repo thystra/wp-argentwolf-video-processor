@@ -120,3 +120,42 @@ To preserve its report outside the checkout, set an absolute directory:
 AWVP_R35_REPORT_DIR=/absolute/report/path \
     bash tests/integration/peertube-persistence-smoke.sh
 ```
+
+## PeerTube local connection coordinator checkpoint
+
+After the R36 source checkpoint is committed, run the two-case coordinator
+smoke from a clean checkout on the disposable Docker host:
+
+```bash
+bash tests/integration/peertube-connection-coordinator-smoke.sh
+```
+
+The runner retains the R35 committed-source, read-only plugin mount and pinned
+WordPress 6.4.2/PHP 8.1/MariaDB 10.6.27 plus WordPress 7.1/PHP 8.3/MariaDB
+10.11.18 matrix. Every case uses its own owned internal-only network, volume,
+database, and WordPress container, with no published host ports.
+
+Each coordinator boundary runs in a fresh WP-CLI container. The fixture proves
+the ordered `prepared` -> `secret_reserve_planned` -> `secret_reserved` ->
+`link_planned` -> `disabled` progression across separate PHP processes. It
+requires planning and application to occur in different invocations and
+compares authoritative raw option snapshots so each invocation changes at most
+its one declared persistence target. A separate append adds an unrelated
+disabled backend after the primary link is confirmed; the following read-only
+resume must still report semantic `ready_for_grant`. A final fresh process
+proves that the occupied primary identity and credential-bearing start intents
+are refused without opening another journal record.
+
+This checkpoint accepts no credentials, performs no grant, makes no WordPress
+HTTP request, and changes no managed upload path. External HTTP is blocked,
+ambient cron is disabled, and synthetic credential canaries are checked before
+any failing debug log is replayed. It is source-checkpoint evidence only, not a
+real-PeerTube, exact-ZIP, release, upgrade, MySQL, Plugin Check, TLS,
+administrator-action, adapter, refresh/revoke, or upload gate.
+
+To preserve its report outside the checkout, set an absolute directory:
+
+```bash
+AWVP_R36_REPORT_DIR=/absolute/report/path \
+    bash tests/integration/peertube-connection-coordinator-smoke.sh
+```

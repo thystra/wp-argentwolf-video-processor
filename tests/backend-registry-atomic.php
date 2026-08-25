@@ -75,6 +75,11 @@ final class Awvp_Registry_Atomic_Fake_Wpdb
     /** @var list<array{template:string,args:list<mixed>}> */
     public array $mutations = array();
 
+    /** @var array{option:string,row:array{option_value:string,autoload:string}}|null */
+    public ?array $row_before_read = null;
+
+    public int $reads_before_injection = 0;
+
     private int $query_id = 0;
 
     public function prepare(string $query, mixed ...$arguments): string
@@ -98,6 +103,15 @@ final class Awvp_Registry_Atomic_Fake_Wpdb
 
         $maximum_bytes = (int) ($prepared['args'][0] ?? 0);
         $option = (string) ($prepared['args'][2] ?? '');
+        if (null !== $this->row_before_read) {
+            if ($this->reads_before_injection > 0) {
+                --$this->reads_before_injection;
+            } else {
+                $injected = $this->row_before_read;
+                $this->row_before_read = null;
+                $this->rows[$injected['option']] = $injected['row'];
+            }
+        }
         $row = $this->rows[$option] ?? null;
         $this->last_error = '';
 
@@ -165,10 +179,14 @@ require_once dirname(__DIR__) . '/includes/Backend_Identity.php';
 require_once dirname(__DIR__) . '/includes/PeerTube_Origin.php';
 require_once dirname(__DIR__) . '/includes/Atomic_Option_Snapshot.php';
 require_once dirname(__DIR__) . '/includes/Atomic_Option_Result.php';
+require_once dirname(__DIR__) . '/includes/Atomic_Option_Mutation_Plan.php';
+require_once dirname(__DIR__) . '/includes/Atomic_Option_Plan_Result.php';
 require_once dirname(__DIR__) . '/includes/Atomic_Option_Store.php';
 require_once dirname(__DIR__) . '/includes/Backend_Registry.php';
 
 use ArgentVideo\Atomic_Option_Result;
+use ArgentVideo\Atomic_Option_Plan_Result;
+use ArgentVideo\Atomic_Option_Store;
 use ArgentVideo\Backend_Registry;
 
 $option = Backend_Registry::OPTION;
@@ -341,8 +359,9 @@ $assert(Atomic_Option_Result::REFUSED === $autoloaded_result->status(), 'Autoloa
 $assert([] === $GLOBALS['wpdb']->mutations, 'Autoloaded registry refusal must precede SQL.');
 $assert($autoloaded_raw === $GLOBALS['wpdb']->rows[$option]['option_value'], 'Autoloaded registry refusal changed registry bytes.');
 
-// A pre-action concurrent mutation makes the snapshot stale. Exactly one SQL
-// attempt reports conflict, preserves the winner, and never retries/rebases.
+// A normally returning pre-action can itself mutate the target. The writer
+// must detect that change before SQL, preserve the winner, and retain unknown
+// mutation authority rather than returning a zero-row/no-mutation conflict.
 $registry = $reset();
 $before_conflict = array('version' => 1, 'backends' => array('local' => $local('active')));
 $concurrent = $before_conflict;
@@ -359,11 +378,52 @@ $GLOBALS['awvp_registry_atomic_callbacks']['update_option'] = static function ()
     );
 };
 $conflicted = $registry->create_disabled_peertube($descriptor('conflicting-peertube'));
-$assert(Atomic_Option_Result::CONFLICT === $conflicted->status(), 'Stale registry append must be classified conflict.');
-$assert(Atomic_Option_Result::MUTATION_NONE === $conflicted->mutation(), 'Stale registry conflict must classify no mutation.');
-$assert(1 === count($GLOBALS['wpdb']->mutations), 'Stale registry append must attempt CAS exactly once.');
+$assert(Atomic_Option_Result::INDETERMINATE === $conflicted->status(), 'Hook-side registry mutation must be indeterminate.');
+$assert(Atomic_Option_Result::MUTATION_UNKNOWN === $conflicted->mutation(), 'Hook-side registry mutation must retain unknown authority.');
+$assert(Atomic_Option_Result::PHASE_PRE_ACTION === $conflicted->phase(), 'Hook-side registry mutation phase mismatch.');
+$assert([] === $GLOBALS['wpdb']->mutations, 'Hook-side registry mutation must be detected before SQL.');
 $assert(serialize($concurrent) === $GLOBALS['wpdb']->rows[$option]['option_value'], 'Stale registry append overwrote the concurrent winner.');
 $assert(! isset($stored()['backends']['conflicting-peertube']), 'Stale registry append falsely created a backend.');
+
+// A valid registry change between the exact-evidence read and the semantic
+// descriptor read must not reuse the stale `before` classification. The final
+// evidence read observes the concurrent state and reports `other`.
+$registry = $reset();
+$before_probe_race = array('version' => 1, 'backends' => array('local' => $local('active')));
+$probe_candidate = $descriptor('probe-race-peertube');
+$seed($before_probe_race, $expected_autoload);
+$prepared_probe = $registry->prepare_disabled_peertube(
+    $probe_candidate,
+    'mutation_' . str_repeat('a', 32)
+);
+$assert(
+    Atomic_Option_Plan_Result::READY === $prepared_probe->status()
+        && null !== $prepared_probe->plan(),
+    'Probe-race fixture could not prepare an exact registry plan.'
+);
+$concurrent_probe = $before_probe_race;
+$concurrent_probe['backends']['probe-race-unrelated'] = $descriptor('probe-race-unrelated');
+$GLOBALS['wpdb']->reads_before_injection = 1;
+$GLOBALS['wpdb']->row_before_read = array(
+    'option' => $option,
+    'row'    => array(
+        'option_value' => serialize($concurrent_probe),
+        'autoload'     => $expected_autoload,
+    ),
+);
+$probe_race = $registry->probe_disabled_peertube(
+    $probe_candidate,
+    $prepared_probe->plan()->evidence()
+);
+$assert(
+    Atomic_Option_Store::PROBE_OTHER === $probe_race,
+    'Registry probe reused a stale exact-before classification after a semantic read.'
+);
+$assert(
+    $concurrent_probe === $stored(),
+    'Registry probe race changed the concurrent registry state.'
+);
+$assert([] === $GLOBALS['wpdb']->mutations, 'Registry probe race attempted a mutation.');
 
 echo 'AWVP atomic backend registry tests passed ('
     . (function_exists('wp_autoload_values_to_autoload') ? 'modern/off' : 'wp64/no')

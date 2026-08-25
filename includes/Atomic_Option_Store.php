@@ -19,6 +19,12 @@ final class Atomic_Option_Store
 {
     public const MAX_SERIALIZED_BYTES = 1048576;
 
+    public const PROBE_BEFORE = 'before';
+    public const PROBE_AFTER = 'after';
+    public const PROBE_OTHER = 'other';
+    public const PROBE_REFUSED = 'refused';
+    public const PROBE_INDETERMINATE = 'indeterminate';
+
     private const AUTOLOAD_VALUES = array(
         'yes',
         'no',
@@ -118,6 +124,175 @@ final class Atomic_Option_Store
             $autoload,
             $value
         );
+    }
+
+    /**
+     * Prepare, but do not execute, one exact compare-and-swap mutation.
+     *
+     * The returned plan is request-local, single-use authority. Only its
+     * bounded non-secret evidence is suitable for durable journaling.
+     *
+     * @param array<string|int, mixed> $replacement
+     */
+    public function prepare_compare_exchange(
+        Atomic_Option_Snapshot $expected,
+        array $replacement,
+        string $kind,
+        string $mutation_id
+    ): Atomic_Option_Plan_Result {
+        if (
+            $this->option !== $expected->option()
+            || ! self::valid_mutation_identity($kind, $mutation_id)
+        ) {
+            return Atomic_Option_Plan_Result::refused();
+        }
+
+        if (Atomic_Option_Snapshot::INDETERMINATE === $expected->state()) {
+            return Atomic_Option_Plan_Result::indeterminate();
+        }
+
+        if (! $expected->is_present() && ! $expected->is_absent()) {
+            return Atomic_Option_Plan_Result::refused();
+        }
+
+        if (
+            $expected->is_present()
+            && (
+                ! $this->valid_present_snapshot($expected)
+                || ! in_array((string) $expected->autoload(), self::NONAUTOLOAD_VALUES, true)
+            )
+        ) {
+            return Atomic_Option_Plan_Result::refused();
+        }
+
+        if (
+            ('secret_reserve' === $kind && ! $expected->is_absent())
+            || (in_array($kind, array('secret_commit', 'registry_activate'), true)
+                && ! $expected->is_present())
+        ) {
+            return Atomic_Option_Plan_Result::conflict();
+        }
+
+        $raw = $this->encode_canonical_array($replacement);
+        if (null === $raw) {
+            return Atomic_Option_Plan_Result::refused();
+        }
+
+        // State-machine evidence deliberately describes value bytes, not an
+        // autoload-only normalization. Keep the existing compare_exchange()
+        // behavior available to legacy callers, but refuse such a plan.
+        if ($expected->is_present() && $raw === $expected->raw()) {
+            return Atomic_Option_Plan_Result::refused();
+        }
+
+        $written = Atomic_Option_Snapshot::present(
+            $this->option,
+            $raw,
+            $this->canonical_nonautoload_value(),
+            $replacement
+        );
+        $evidence = $this->mutation_evidence(
+            $kind,
+            $mutation_id,
+            $expected,
+            $written
+        );
+        if (null === $evidence) {
+            return Atomic_Option_Plan_Result::refused();
+        }
+
+        return Atomic_Option_Plan_Result::ready(
+            Atomic_Option_Mutation_Plan::create(
+                $this->option,
+                $kind,
+                $mutation_id,
+                $expected,
+                $written,
+                $evidence
+            )
+        );
+    }
+
+    /**
+     * Execute one exact request-local plan at most once.
+     */
+    public function apply_plan(
+        Atomic_Option_Mutation_Plan $plan
+    ): Atomic_Option_Result {
+        $plan_evidence = $plan->evidence();
+        if (
+            $this->option !== $plan->option()
+            || $this->option !== $plan->before()->option()
+            || $this->option !== $plan->written()->option()
+            || ! $plan->written()->is_present()
+            || ! $this->valid_present_snapshot($plan->written())
+            || $this->canonical_nonautoload_value() !== $plan->written()->autoload()
+            || ! $this->valid_mutation_evidence($plan_evidence)
+        ) {
+            return Atomic_Option_Result::refused();
+        }
+
+        $evidence = $this->mutation_evidence(
+            $plan->kind(),
+            $plan->mutation_id(),
+            $plan->before(),
+            $plan->written()
+        );
+        $replacement = $plan->written()->value();
+        if (
+            null === $evidence
+            || $evidence !== $plan_evidence
+            || ! is_array($replacement)
+            || ! $plan->consume()
+        ) {
+            return Atomic_Option_Result::refused();
+        }
+
+        return $this->compare_exchange($plan->before(), $replacement);
+    }
+
+    /**
+     * Classify the authoritative current row against durable plan evidence.
+     *
+     * @param array<string, mixed> $evidence
+     */
+    public function probe_evidence(array $evidence): string
+    {
+        if (! $this->valid_mutation_evidence($evidence)) {
+            return self::PROBE_REFUSED;
+        }
+
+        $snapshot = $this->snapshot();
+        if (Atomic_Option_Snapshot::INDETERMINATE === $snapshot->state()) {
+            return self::PROBE_INDETERMINATE;
+        }
+
+        if (Atomic_Option_Snapshot::REFUSED === $snapshot->state()) {
+            return self::PROBE_REFUSED;
+        }
+
+        if ($snapshot->is_absent()) {
+            return false === $evidence['before_exists']
+                ? self::PROBE_BEFORE
+                : self::PROBE_OTHER;
+        }
+
+        if (
+            ! $snapshot->is_present()
+            || ! in_array((string) $snapshot->autoload(), self::NONAUTOLOAD_VALUES, true)
+        ) {
+            return self::PROBE_REFUSED;
+        }
+
+        if ($this->snapshot_matches_evidence($snapshot, $evidence, 'before')) {
+            return self::PROBE_BEFORE;
+        }
+
+        if ($this->snapshot_matches_evidence($snapshot, $evidence, 'after')) {
+            return self::PROBE_AFTER;
+        }
+
+        return self::PROBE_OTHER;
     }
 
     /**
@@ -265,12 +440,23 @@ final class Atomic_Option_Store
             return Atomic_Option_Result::refused(Atomic_Option_Result::PHASE_PRE_ACTION);
         }
 
+        $action_before = $this->snapshot();
+        $action_guard = $this->classify_action_baseline($action_before);
+        if (null !== $action_guard) {
+            return $action_guard;
+        }
+
         $pre_action = $this->pre_action('add', null, $value);
         if (false === $pre_action) {
             return Atomic_Option_Result::refused(Atomic_Option_Result::PHASE_PRE_ACTION);
         }
         if (null === $pre_action) {
-            return $this->classify_pre_action_exception($before);
+            return $this->classify_pre_action_exception($action_before);
+        }
+
+        $post_action_guard = $this->classify_normal_pre_action($action_before);
+        if (null !== $post_action_guard) {
+            return $post_action_guard;
         }
 
         try {
@@ -318,12 +504,23 @@ final class Atomic_Option_Store
             return Atomic_Option_Result::refused(Atomic_Option_Result::PHASE_PRE_ACTION);
         }
 
+        $action_before = $this->snapshot();
+        $action_guard = $this->classify_action_baseline($action_before);
+        if (null !== $action_guard) {
+            return $action_guard;
+        }
+
         $pre_action = $this->pre_action('update', $old_value, $new_value);
         if (false === $pre_action) {
             return Atomic_Option_Result::refused(Atomic_Option_Result::PHASE_PRE_ACTION);
         }
         if (null === $pre_action) {
-            return $this->classify_pre_action_exception($before);
+            return $this->classify_pre_action_exception($action_before);
+        }
+
+        $post_action_guard = $this->classify_normal_pre_action($action_before);
+        if (null !== $post_action_guard) {
+            return $post_action_guard;
         }
 
         try {
@@ -370,12 +567,23 @@ final class Atomic_Option_Store
             return Atomic_Option_Result::refused(Atomic_Option_Result::PHASE_PRE_ACTION);
         }
 
+        $action_before = $this->snapshot();
+        $action_guard = $this->classify_action_baseline($action_before);
+        if (null !== $action_guard) {
+            return $action_guard;
+        }
+
         $pre_action = $this->pre_action('delete', null, null);
         if (false === $pre_action) {
             return Atomic_Option_Result::refused(Atomic_Option_Result::PHASE_PRE_ACTION);
         }
         if (null === $pre_action) {
-            return $this->classify_pre_action_exception($before);
+            return $this->classify_pre_action_exception($action_before);
+        }
+
+        $post_action_guard = $this->classify_normal_pre_action($action_before);
+        if (null !== $post_action_guard) {
+            return $post_action_guard;
         }
 
         try {
@@ -510,6 +718,49 @@ final class Atomic_Option_Store
             );
     }
 
+    /**
+     * Refuse to invoke an option action when its immediate authoritative
+     * baseline cannot be classified. This baseline lets the normal-returning
+     * path distinguish a hook-side target mutation from a later zero-row CAS.
+     */
+    private function classify_action_baseline(
+        Atomic_Option_Snapshot $snapshot
+    ): ?Atomic_Option_Result {
+        if (Atomic_Option_Snapshot::INDETERMINATE === $snapshot->state()) {
+            return Atomic_Option_Result::indeterminate(
+                Atomic_Option_Result::MUTATION_NONE,
+                Atomic_Option_Result::PHASE_PRE_ACTION
+            );
+        }
+
+        if (! $snapshot->is_present() && ! $snapshot->is_absent()) {
+            return Atomic_Option_Result::refused(Atomic_Option_Result::PHASE_PRE_ACTION);
+        }
+
+        return null;
+    }
+
+    /**
+     * A normally returning pre-action is not proof that it was inert. Compare
+     * the target with the immediately preceding authoritative baseline before
+     * allowing SQL. Any difference is a possible hook-side partial mutation,
+     * so it cannot become SQL-phase no-mutation/replan authority.
+     */
+    private function classify_normal_pre_action(
+        Atomic_Option_Snapshot $before_action
+    ): ?Atomic_Option_Result {
+        $current = $this->snapshot();
+        if ($this->same_snapshot($before_action, $current)) {
+            return null;
+        }
+
+        $this->invalidate_caches();
+        return Atomic_Option_Result::indeterminate(
+            Atomic_Option_Result::MUTATION_UNKNOWN,
+            Atomic_Option_Result::PHASE_PRE_ACTION
+        );
+    }
+
     private function post_action(
         string $operation,
         ?Atomic_Option_Snapshot $before,
@@ -567,6 +818,175 @@ final class Atomic_Option_Store
         }
 
         return $success;
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function mutation_evidence(
+        string $kind,
+        string $mutation_id,
+        Atomic_Option_Snapshot $before,
+        Atomic_Option_Snapshot $written
+    ): ?array {
+        if (
+            ! self::valid_mutation_identity($kind, $mutation_id)
+            || $this->option !== $before->option()
+            || $this->option !== $written->option()
+            || (! $before->is_present() && ! $before->is_absent())
+            || ! $written->is_present()
+        ) {
+            return null;
+        }
+
+        $before_raw = $before->raw();
+        $after_raw = $written->raw();
+        if (
+            ($before->is_present() && ! is_string($before_raw))
+            || ! is_string($after_raw)
+        ) {
+            return null;
+        }
+
+        $evidence = array(
+            'kind'          => $kind,
+            'mutation_id'   => $mutation_id,
+            'before_exists' => $before->is_present(),
+            'before_sha256' => $before->is_present() ? hash('sha256', $before_raw) : '',
+            'before_bytes'  => $before->is_present() ? strlen($before_raw) : 0,
+            'after_exists'  => true,
+            'after_sha256'  => hash('sha256', $after_raw),
+            'after_bytes'   => strlen($after_raw),
+        );
+
+        return $this->valid_mutation_evidence($evidence) ? $evidence : null;
+    }
+
+    /** @param array<string, mixed> $evidence */
+    private function valid_mutation_evidence(array $evidence): bool
+    {
+        if (! self::has_exact_keys(
+            $evidence,
+            array(
+                'kind',
+                'mutation_id',
+                'before_exists',
+                'before_sha256',
+                'before_bytes',
+                'after_exists',
+                'after_sha256',
+                'after_bytes',
+            )
+        )) {
+            return false;
+        }
+
+        $nodes = 0;
+        if (! self::safe_array_value($evidence, 0, $nodes)) {
+            return false;
+        }
+
+        $kind = $evidence['kind'];
+        $mutation_id = $evidence['mutation_id'];
+        $before_exists = $evidence['before_exists'];
+        $before_sha256 = $evidence['before_sha256'];
+        $before_bytes = $evidence['before_bytes'];
+        $after_exists = $evidence['after_exists'];
+        $after_sha256 = $evidence['after_sha256'];
+        $after_bytes = $evidence['after_bytes'];
+
+        if (
+            ! is_string($kind)
+            || ! is_string($mutation_id)
+            || ! self::valid_mutation_identity($kind, $mutation_id)
+            || ! is_bool($before_exists)
+            || ! is_string($before_sha256)
+            || ! is_int($before_bytes)
+            || ! is_bool($after_exists)
+            || true !== $after_exists
+            || ! is_string($after_sha256)
+            || ! is_int($after_bytes)
+            || $before_bytes < 0
+            || $before_bytes > $this->maximum_bytes
+            || $after_bytes < 1
+            || $after_bytes > $this->maximum_bytes
+            || ! self::valid_evidence_fields($before_exists, $before_sha256, $before_bytes)
+            || ! self::valid_evidence_fields(true, $after_sha256, $after_bytes)
+        ) {
+            return false;
+        }
+
+        if (
+            ('secret_reserve' === $kind && $before_exists)
+            || (in_array($kind, array('secret_commit', 'registry_activate'), true)
+                && ! $before_exists)
+            || ($before_exists
+                && $before_sha256 === $after_sha256
+                && $before_bytes === $after_bytes)
+        ) {
+            return false;
+        }
+
+        return true;
+    }
+
+    private static function valid_mutation_identity(string $kind, string $mutation_id): bool
+    {
+        return in_array(
+            $kind,
+            array('secret_reserve', 'registry_link', 'secret_commit', 'registry_activate'),
+            true
+        ) && 1 === preg_match('/^mutation_[a-f0-9]{32}$/D', $mutation_id);
+    }
+
+    private static function valid_evidence_fields(bool $exists, string $sha256, int $bytes): bool
+    {
+        return $exists
+            ? $bytes > 0 && 1 === preg_match('/^[a-f0-9]{64}$/D', $sha256)
+            : '' === $sha256 && 0 === $bytes;
+    }
+
+    /** @param array<string, mixed> $evidence */
+    private function snapshot_matches_evidence(
+        Atomic_Option_Snapshot $snapshot,
+        array $evidence,
+        string $prefix
+    ): bool {
+        $raw = $snapshot->raw();
+        if (
+            ! is_string($raw)
+            || true !== $evidence[$prefix . '_exists']
+            || strlen($raw) !== $evidence[$prefix . '_bytes']
+        ) {
+            return false;
+        }
+
+        return hash_equals(
+            $evidence[$prefix . '_sha256'],
+            hash('sha256', $raw)
+        );
+    }
+
+    /** @param list<string> $expected */
+    private static function has_exact_keys(array $value, array $expected): bool
+    {
+        if (count($value) !== count($expected)) {
+            return false;
+        }
+
+        foreach ($expected as $key) {
+            if (! array_key_exists($key, $value)) {
+                return false;
+            }
+        }
+
+        foreach (array_keys($value) as $key) {
+            if (! is_string($key) || ! in_array($key, $expected, true)) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private function same_snapshot(

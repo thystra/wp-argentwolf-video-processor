@@ -309,6 +309,27 @@ is a separate deliberate Options API operation followed by a fresh raw
 snapshot; the compare-and-swap must not reuse a pre-repair observation or make
 rollback capable of restoring an autoloaded sensitive value.
 
+R36 adds a prospective form of this private primitive for the local pre-grant
+coordinator. It creates a request-local, single-use exact mutation plan without
+writing, journals only bounded non-secret evidence, and applies no target
+mutation until that evidence is durable. Each coordinator call crosses at most
+one persistence boundary. An indeterminate outcome keeps the same evidence and
+mutation ID for reconciliation; it does not authorize retry with a fresh plan.
+
+The sole replan exception is an exact registry-link compare-and-swap that
+returns a SQL-phase zero-row definite no-mutation conflict and whose
+authoritative probe does not find the semantic after-state. The replacement
+plan has a fresh mutation ID and must be journaled before use. The semantic
+after-state requires a valid preservable shared registry with the reserved ID
+mapped to the exact disabled descriptor; unrelated valid descriptors may
+remain. A read-only occupied-ID preflight prevents the initial journal write,
+but never weakens the later exact compare-and-swap.
+
+The coordinator stops at `disabled`, followed by a separate mutation-free
+recheck of the exact pending secret and disabled descriptor. It has no
+credential inputs, HTTP path, admin/AJAX/REST registration, activation hook,
+upload mutation, schema bump, or plugin/release version change.
+
 Backend IDs referenced by durable video/remote records are immutable identifiers.
 Removing a backend from active use should retire/tombstone its non-secret
 descriptor while references remain; it must not silently delete/reuse the ID and

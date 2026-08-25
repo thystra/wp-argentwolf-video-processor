@@ -1,7 +1,8 @@
 # AWVP 2.0 PeerTube Connection, Authentication, and API Contract
 
-Status: tranche 2.0-3 design contract; R34 authenticated API primitives and
-R35 local persistence foundation implemented; no production connection action
+Status: tranche 2.0-3 design contract; R34 authenticated API primitives, R35
+local persistence foundation, and R36 local-only pre-grant coordination
+implemented; no administrator entry point or remote grant action
 Reviewed runtime baselines: PeerTube 8.1.8 and 8.2.4, 2026-08-22
 Applies to: configured/manageable PeerTube backends
 
@@ -805,7 +806,62 @@ not silently retried. R35 does not yet implement the production connection
 coordinator, activation writer, admin/AJAX/REST action, or any runtime HTTP
 invocation.
 
-## 36. Adapter factory evolution
+## 36. Local-only pre-grant coordinator
+
+R36 adds a restart-safe coordinator for only the local preparation prefix:
+
+```text
+prepared
+  -> secret_reserve_planned
+  -> secret_reserved
+  -> link_planned
+  -> disabled
+  -> separate read-only ready_for_grant recheck
+```
+
+`start()` creates only the durable journal record after a read-only
+backend-ID availability preflight. An already occupied ID is refused before an
+operation record is created. The preflight does not replace the later exact
+registry compare-and-swap, which remains authoritative if the registry changes
+concurrently.
+
+Each `resume()` call crosses at most one local persistence boundary. Shared
+managed-secret manifest initialization, journaling prospective-plan evidence,
+applying its target option mutation, and confirming the journal phase are
+separate boundaries. Reaching `disabled` is also separate from returning
+`ready_for_grant`: a subsequent mutation-free call must re-prove the exact
+pending secret reservation and exact disabled descriptor.
+
+Before a consequential target-option write, R36 builds a request-local,
+single-use prospective plan from an authoritative raw snapshot. Planning
+performs no mutation. The plan binds the option, mutation kind, fresh mutation
+ID, exact before/after values, and bounded non-secret evidence. Only that
+evidence is copied into the journal; the request-local values are not durable
+authority and must not expose secret material through diagnostics or debug
+output.
+
+After interruption or an indeterminate outcome, reconciliation uses the same
+journaled evidence and mutation ID. It does not silently mint a replacement
+plan. A disabled-registry link may be replanned only after the exact target
+compare-and-swap reports a SQL-phase, zero-row, definite no-mutation conflict
+and an authoritative probe does not find the semantic postcondition. The new
+plan must use a fresh mutation ID and must itself be journaled before use.
+
+The registry postcondition is semantic: the whole registry must remain a valid,
+preservable version-1 registry and the backend ID must map to the exact planned
+disabled PeerTube descriptor. Unrelated valid descriptors added concurrently
+do not invalidate that postcondition. A ready secret record, foreign pending
+reservation, occupied backend ID, malformed/future registry, autoloaded private
+option, or indeterminate read fails closed and is never overwritten.
+
+R36 accepts no password, OTP, OAuth secret, access token, refresh token,
+authorization value, or remote response. It performs no PeerTube HTTP, exposes
+no admin/AJAX/REST action, registers no activation path, mutates no uploads, and
+does not change the model schema, plugin version, or release version. Remote
+grant, credential commit, identity verification, destination selection,
+activation, and journal closure remain separately reviewed work.
+
+## 37. Adapter factory evolution
 
 Factory may register PeerTube alongside local.
 
@@ -813,7 +869,7 @@ Descriptor presence alone never establishes eligibility. Eligibility still
 requires installed implementation, structural capability, destination where
 required, and non-blocking health.
 
-## 37. No schema bump by default
+## 38. No schema bump by default
 
 A non-autoloaded option-based secret provider does not require a custom table.
 
@@ -821,7 +877,7 @@ Tranche 2.0-3 therefore should not advance the model schema merely for
 connection/auth. Any table proposal requires separate persistence review and
 real WordPress/database matrix.
 
-## 38. Implementation acceptance gates
+## 39. Implementation acceptance gates
 
 Before runtime implementation merges, prove at minimum:
 
@@ -866,20 +922,35 @@ Before runtime implementation merges, prove at minimum:
 39. PeerTube writer preserves future/unknown registry state;
 40. raw option compare-and-swap distinguishes conflict from indeterminate;
 41. rollback/delete is conditional and cannot erase concurrent state;
-42. the pending secret slot and disabled descriptor are durable before grant;
-43. unresolved connection operations are bounded and never evicted;
-44. an indeterminate grant is never retried automatically;
-45. stale secret replacement/deletion cannot affect a newer generation;
-46. the option/cache/hook contract is exercised against real WordPress 6.4 and
+42. every consequential local target write has a prospectively validated,
+    request-local plan whose bounded evidence is journaled before use;
+43. each pre-grant coordinator call crosses at most one local persistence
+    boundary;
+44. an indeterminate local mutation retains the same evidence and mutation ID;
+45. a registry-link plan is replaced only after a SQL-phase zero-row definite
+    no-mutation conflict, and its replacement has a fresh mutation ID;
+46. registry reconciliation accepts the exact disabled descriptor within a
+    shared valid registry without erasing unrelated descriptors;
+47. occupied backend IDs are refused before the initial journal write, while
+    the later compare-and-swap remains authoritative;
+48. the `disabled` journal transition and mutation-free `ready_for_grant`
+    prerequisite recheck are separate calls;
+49. the pending secret slot and disabled descriptor are durable before grant;
+50. unresolved connection operations are bounded and never evicted;
+51. an indeterminate grant is never retried automatically;
+52. stale secret replacement/deletion cannot affect a newer generation;
+53. the local pre-grant coordinator accepts no credentials and performs no
+    HTTP, admin registration, activation, upload, schema, or version mutation;
+54. the option/cache/hook contract is exercised against real WordPress 6.4 and
     7.1 databases;
-47. local adapter behavior unchanged;
-48. no direct GitHub push;
-49. main and 1.x lines remain outside this tranche;
-50. feature work staged/reviewed before commit/push;
-51. runtime service/privacy disclosure lands before first PeerTube network-contact
+55. local adapter behavior unchanged;
+56. no direct GitHub push;
+57. main and 1.x lines remain outside this tranche;
+58. feature work staged/reviewed before commit/push;
+59. runtime service/privacy disclosure lands before first PeerTube network-contact
     implementation merge.
 
-## 39. Recommended implementation order
+## 40. Recommended implementation order
 
 1. origin validator;
 2. HTTP/error normalization;
@@ -888,20 +959,21 @@ Before runtime implementation merges, prove at minimum:
 5. managed encrypted provider;
 6. exact option compare-and-swap and disabled registry append;
 7. durable connection journal, reserved secret slots, and pure transitions;
-8. optional external provider;
-9. low-level PeerTube API client and public instance detection;
-10. production login/bootstrap coordinator with OTP handling;
-11. `/users/me` verification and destination discovery;
-12. activation writer and adapter/factory integration;
-13. refresh/revoke lifecycle;
-14. admin connection actions;
-15. diagnostics/Site Health;
-16. service/privacy/help disclosure before runtime PeerTube contact;
-17. full regression/security review.
+8. local-only pre-grant coordinator through a separate ready recheck;
+9. optional external provider;
+10. low-level PeerTube API client and public instance detection;
+11. production login/bootstrap coordinator with OTP handling;
+12. `/users/me` verification and destination discovery;
+13. activation writer and adapter/factory integration;
+14. refresh/revoke lifecycle;
+15. admin connection actions;
+16. diagnostics/Site Health;
+17. service/privacy/help disclosure before runtime PeerTube contact;
+18. full regression/security review.
 
 Actual upload remains tranche 2.0-4.
 
-## 40. Source authority
+## 41. Source authority
 
 API behavior was rechecked on 2026-08-22 against official PeerTube 8.1.8 and
 8.2.4 release source, runtime controllers, and maintained integration tests.

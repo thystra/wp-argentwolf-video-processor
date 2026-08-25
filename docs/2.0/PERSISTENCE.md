@@ -422,6 +422,38 @@ The journal and managed-secret manifest are option-based local persistence, not
 a custom-table schema change. The R35 foundation exposes no production
 connection action and performs no PeerTube HTTP request.
 
+R36 coordinates only the local pre-grant prefix. `start()` creates the journal
+record after a read-only occupied-backend-ID preflight. Each later call crosses
+at most one persistence boundary: initialize the shared secret manifest,
+journal prospective reservation evidence, apply the exact pending-slot
+mutation, confirm `secret_reserved`, journal disabled-link evidence, apply the
+registry mutation, or confirm `disabled`. A separate mutation-free call
+rechecks the exact pending slot and exact disabled descriptor before reporting
+`ready_for_grant`.
+
+Consequential target mutations use request-local, single-use prospective plans
+created from authoritative raw snapshots. Planning writes nothing. The durable
+journal stores only bounded non-secret evidence that binds the mutation kind,
+mutation ID, and exact before/after hashes and byte lengths. After an
+indeterminate write, the same evidence and mutation ID remain authoritative for
+reconciliation. No cleanup, rollback, or replacement plan is inferred from
+uncertainty.
+
+A registry-link plan may be replaced only after its exact compare-and-swap
+returns a SQL-phase zero-row definite no-mutation conflict and a fresh probe
+does not find the planned semantic state. The replacement uses a fresh mutation
+ID and is journaled before it can be applied. The semantic after-state permits
+unrelated concurrent descriptors only when the shared registry remains valid
+and preservable and the reserved backend ID maps to the exact disabled
+descriptor. Occupied IDs, ready or foreign secret records, malformed/future
+state, unsupported autoload rows, and indeterminate reads fail closed.
+
+The R36 coordinator accepts and persists no credentials, performs no HTTP,
+registers no admin/AJAX/REST or activation action, changes no upload state, and
+requires no model-schema or plugin-version change. Remote grant, credential
+commit, activation, and operation closure remain outside this persistence
+slice.
+
 ### Managed backend assets versus unmanaged external references
 
 The backend registry and `argent_video_remote_assets` table model assets tied to
