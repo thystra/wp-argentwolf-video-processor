@@ -159,3 +159,45 @@ To preserve its report outside the checkout, set an absolute directory:
 AWVP_R36_REPORT_DIR=/absolute/report/path \
     bash tests/integration/peertube-connection-coordinator-smoke.sh
 ```
+
+## PeerTube password-grant checkpoint
+
+Run the exact clean R37 source checkpoint's two-case smoke on the disposable
+Docker host:
+
+```bash
+bash tests/integration/peertube-password-grant-smoke.sh
+```
+
+The runner exports exact committed `HEAD` once and mounts that plugin tree
+read-only in the same digest-pinned WordPress 6.4.2/PHP 8.1/MariaDB 10.6.27
+and WordPress 7.1/PHP 8.3/MariaDB 10.11.18 cases used by the R36 checkpoint.
+Digest-matching images already present in Docker's local cache are used without
+a registry request; only a missing pinned image is pulled. Each case owns a
+fresh internal-only network, WordPress volume, database, WordPress container,
+and isolated PeerTube-shaped fixture. No host port is published.
+
+Every local preparation boundary, credential-bearing attempt, and
+credential-free reconciliation runs in a fresh WP-CLI process. The fixture
+proves one successful OAuth-client GET and password-token POST, prospective
+encrypted secret planning/application followed by fresh-process confirmation,
+an OTP-required response plus an explicitly supplied retry, and a dropped
+token connection that becomes terminal indeterminate state without another
+HTTP request. Its redacted request log is compared with the exact expected
+sequence.
+
+The fixture invokes the service explicitly; the plugin registers no
+administrator, AJAX, REST, CLI, cron, activation, or upload entry point for it.
+It checks exact AWVP option deltas, non-autoload storage, plaintext credential
+and token exclusion, authenticated secret round-trips, unchanged attachment
+and managed-upload state, and a clean `WP_DEBUG` log. This remains focused
+source-checkpoint evidence, not a real-PeerTube, TLS, exact-ZIP, release,
+upgrade, MySQL, Plugin Check, administrator-action, identity/channel,
+activation, adapter, refresh/revoke, or upload gate.
+
+To preserve its report outside the checkout, set an absolute directory:
+
+```bash
+AWVP_R37_REPORT_DIR=/absolute/report/path \
+    bash tests/integration/peertube-password-grant-smoke.sh
+```

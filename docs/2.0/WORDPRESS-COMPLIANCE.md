@@ -2,6 +2,10 @@
 
 Status: required companion for all AWVP 2.0 implementation tranches
 Checked against official WordPress developer documentation: 2026-08-23
+Current implementation note: R37 defines an unregistered explicit
+password-grant service through encrypted token persistence. Exact commit, CI,
+and Docker VM authority belongs in checkpoint validation records, not this
+source contract.
 
 This document converts WordPress/WordPress.org requirements into stable
 engineering boundaries so compliance is designed in rather than repaired at
@@ -185,9 +189,22 @@ Before a runtime tranche that contacts PeerTube is merged:
 - transport failures, malformed responses, auth failures, and rate/quota
   responses are treated as ordinary untrusted failure states.
 
-The 1.x readme currently says no external service is used. That statement must
-be changed in the same tranche that first introduces runtime PeerTube contact;
-do not leave contradictory documentation for later release cleanup.
+Stable 1.x behavior remains local. The R37 source updates `README.md` and
+`readme.txt` in the same source tranche as its first internal credential-contact
+service. The disclosure identifies the exact configured PeerTube service,
+username/password and optional OTP transfer, non-retention of those bootstrap
+values and the local OAuth-client response, authenticated-encrypted server-side
+token storage, ordinary network-address/User-Agent exposure, the absence of
+media/metadata/telemetry transfer, and the absence of an administrator-facing
+or automatic invocation. The disclosure text is not, by itself, evidence of an
+R37 CI run, VM validation, integration, package, or release.
+
+R37 deliberately registers no administrator form/action, AJAX/REST endpoint,
+WP-CLI command, cron callback, or activation hook. Its service can be invoked
+only by explicit trusted server-side code. It therefore does not yet provide
+the future `manage_options` plus nonce authorization surface; such a surface
+must be separately implemented and tested before ordinary administrators can
+initiate a connection.
 
 ## 7. Secrets contract
 
@@ -211,8 +228,28 @@ The ordinary backend descriptor stores only a secret reference.
 Support advanced external secret sourcing (`wp-config.php`/environment) where
 practical.
 
-The exact encryption-at-rest mechanism requires a dedicated authentication
-review; do not invent cryptography casually.
+The managed provider uses the separately reviewed authenticated-encryption
+boundary and has no plaintext fallback. R37 may persist a successful password
+grant only by preparing an exact encrypted generation-one `secret_commit`,
+journaling bounded non-secret mutation evidence first, and applying that same
+request-local plan while token authority is still present. Password, OTP,
+OAuth-client fields, token plaintext, and raw HTTP responses must not enter
+AWVP options, journals, diagnostics, public projections, or logs. Request-local
+plan objects and their raw before/after values must not enter the journal,
+diagnostics, projections, or logs either. WordPress option hooks emitted for
+AWVP-owned mutations therefore receive only bounded non-secret journal data or
+the managed secret's authenticated ciphertext and bounded metadata, never the
+bootstrap plaintext or a raw HTTP response.
+
+The credential request and remote responses necessarily pass transiently
+through the WordPress HTTP API. Site code attached to hooks such as
+`http_request_args`, `pre_http_request`, or `http_api_debug` can therefore
+inspect request arguments or response objects transiently. AWVP does not
+persist or copy that plaintext into its own options, diagnostics, projections,
+or logs, and its disclosure must not imply that independently installed
+WordPress HTTP observers are unable to see it. Later reconciliation may confirm
+the exact encrypted after-state but must never rebuild or replay a token write
+from hash evidence.
 
 ## 8. Filesystem/media contract
 
@@ -329,6 +366,63 @@ The coordinator stops at `disabled`, followed by a separate mutation-free
 recheck of the exact pending secret and disabled descriptor. It has no
 credential inputs, HTTP path, admin/AJAX/REST registration, activation hook,
 upload mutation, schema bump, or plugin/release version change.
+
+R37 keeps the credential-bearing service separate from that R36 coordinator.
+The exact-origin local OAuth-client GET occurs before the durable grant claim;
+after it returns, the journal and both local prerequisites are re-proved. Only a
+definitely confirmed commitment to a request-local 256-bit attempt capability followed by another exact prerequisite
+check may continue toward one password-token POST. Immediately before HTTP, an
+exact journal event for the same attempt must durably mark the grant request as
+starting and refresh `grant_started_at` / `updated_at`; only confirmation of
+that capability-authenticated mark plus read-only reproof of both prerequisites and the exact marked
+journal after its option hooks authorizes the POST. An aged mark is refreshed;
+bounded refresh exhaustion sends no credentials. A pre-POST prerequisite
+change is classified as grant-not-sent. Once the POST has been invoked, an
+uncertain outcome is terminal and is never automatically retried.
+
+The caller's timestamp is only a floor. A fresh non-regressing observation
+after the OAuth-client GET timestamps the claim, and fresh observations around
+the password POST timestamp the request/response boundary. The post-response
+observation governs token-lifetime validation and the journaled remote outcome;
+a bounded `Retry-After` delay is therefore measured from that response
+observation through the record's `updated_at`, not from a pre-request time.
+Every returned mutation classification is cumulative for the whole service
+call: unknown mutation dominates definitely applied mutation, which dominates
+no mutation, so a later conflict or refusal cannot hide an earlier local write.
+
+Definite OTP-required and credential-class responses use two local journal
+boundaries. Their bounded evidence first enters `otp_result_pending` or
+`credential_result_pending`, neither of which authorizes another grant. Only a
+second `confirm_grant_result` transition bearing the matching request-local
+capability may expose `awaiting_otp` or `awaiting_credentials`. Only the
+domain-separated capability commitment is durable; the capability does not
+enter records, results, or option-hook values. The service attempts the
+confirmation without another HTTP request; if it is not applied,
+credential-free reconciliation does not
+promote the pending result and may terminalize it only as
+`local_persistence_unknown` after the stale interval.
+
+The credential-free reconciliation path performs no HTTP. It may confirm an
+already-applied authenticated-encrypted token record. It cannot apply the
+journaled plan after restart because the plaintext token authority no longer
+exists. In-flight and unresolved secret-plan states wait through a 30-second
+safety interval, longer than the reviewed 15-second HTTP timeout, before stale
+interruption/local-persistence classification. The confirmed grant-request mark
+immediately before HTTP refreshes the in-flight timer.
+
+A stale secret-write resolver prospectively replaces only an absent target or
+the exact empty generation-zero reservation with an exact persistent,
+non-secret `fenced` marker. It then re-probes the ready-write-versus-fence
+compare-and-swap: a concurrent exact generation-one write is confirmed, while
+only confirmed fenced state permits terminal `local_persistence_unknown`. The
+marker prevents older absent-to-pending reservation plans and
+pending-to-ready commit plans from regaining authority through ABA recreation.
+A ready, newer, foreign, or indeterminate target is never overwritten or
+treated as fenced. Target and registry authority are re-proved after journal
+hooks; terminal reconciliation may restore the fence or recover an exact ready
+commit to `secret_stored` without HTTP. R37 remains unregistered and stops before
+identity/destination verification, activation, refresh/revoke, operation
+closure, upload, schema, or version changes.
 
 Backend IDs referenced by durable video/remote records are immutable identifiers.
 Removing a backend from active use should retire/tombstone its non-secret

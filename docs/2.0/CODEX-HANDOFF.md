@@ -10,8 +10,9 @@ ArgentWolf Video Processor 2.0 development.
   new release is deliberately prepared.
 - `develop-2.0` is the next-major integration line.
 - `feature/2.0-peertube-connection-coordinator` preserves the reviewed R36
-  source and validation history. New continuation work branches from
-  `develop-2.0`.
+  source and validation history.
+- `feature/2.0-peertube-grant-bootstrap` is the active R37 development branch,
+  created from the reviewed R36 integration closure on `develop-2.0`.
 
 Do not develop unfinished 2.0 runtime changes directly on `main`.
 
@@ -526,14 +527,119 @@ the successful WordPress 6.4/7.1 VM matrix. R36 is integrated only on
 `develop-2.0`; `main`, tags, releases, and publication surfaces remain
 untouched.
 
+## R37 password-grant bootstrap
+
+The R37 implementation is isolated on
+`feature/2.0-peertube-grant-bootstrap`. This source description deliberately
+does not embed self-referential commit, CI, Docker/VM, package, integration, or
+release evidence. Establish those authorities from the exact repository refs and their
+associated validation records; do not infer them merely from this section being
+present.
+
+The current slice adds a narrow `PeerTube_Password_Grant_Api` interface and an
+explicit `PeerTube_Password_Grant_Service`. The service is loaded by the plugin
+bootstrap but registers no administrator form/action, AJAX/REST endpoint,
+WP-CLI command, cron callback, activation hook, adapter, or upload path. It can
+run only when explicitly invoked by trusted server-side code; an ordinary
+WordPress request does not initiate a PeerTube connection.
+
+For one bounded username/password/optional six-digit OTP attempt, the service:
+
+1. re-proves the exact operation, pending generation-zero secret reservation,
+   and disabled PeerTube descriptor;
+2. fetches the exact-origin local OAuth client before claiming an attempt, so a
+   failed read does not consume or strand a grant;
+3. takes a fresh non-regressing post-OAuth timestamp, then re-proves the journal
+   and local prerequisites after that read;
+4. generates a request-local 256-bit attempt capability, persists only its
+   domain-separated 128-bit commitment, and authoritatively confirms that
+   grant-attempt claim at the fresh time;
+5. rechecks both local targets and the exact claimed journal record;
+6. immediately before HTTP, capability-authenticates and confirms an exact
+   `mark_grant_request`, refreshing it if local hooks consume more than half of
+   the stale window and classifying bounded exhaustion as grant-not-sent;
+7. after the mark's option hooks, read-only re-proves both prerequisites and
+   the exact marked journal, then invokes at most one credential-bearing
+   password-token POST;
+8. validates a successful bounded token result, prepares an exact
+   authenticated-encrypted generation-one `secret_commit`, journals only its
+   bounded mutation evidence, and applies that same request-local plan while
+   plaintext token authority still exists.
+
+A prerequisite change after the claim but before the POST is capability-proved,
+durably classified as grant-not-sent, and returns to credential waiting. Definite OTP,
+credential, invalid-client, permission, and rate-limit token responses first
+enter bounded `otp_result_pending` or `credential_result_pending` journal
+phases. Those phases are not grant-eligible and remain non-retryable until a
+second `confirm_grant_result` supplies the request-local capability whose
+commitment owns the attempt. The capability is never persisted, returned, or
+placed in option-hook values. Therefore an observer cannot promote a pending
+result from an uncertain request, while an applied but temporarily unobservable
+authentic confirmation remains retry-safe. Fresh observations immediately
+before and after the POST prevent request latency from backdating the outcome.
+The post-response time anchors token lifetime validation and the journal
+`updated_at`; bounded `Retry-After` is measured from that response observation.
+Once the POST is invoked, a transport/TLS/5xx/malformed-success or otherwise
+uncertain outcome becomes terminal `grant_indeterminate`; no automatic retry
+is allowed. The returned mutation classification is cumulative across the
+call, with unknown mutation dominating applied mutation and applied mutation
+dominating none.
+
+Credential-free `reconcile()` performs no HTTP and accepts no password or OTP.
+It may probe and confirm an already-applied encrypted secret, advancing the
+journal to `secret_stored` / `ready_for_verification`. It never reconstructs or
+reapplies token material from journal hashes. A still-running grant or planned
+secret write is not classified as interrupted/lost until the 30-second safety
+interval has elapsed, longer than the reviewed 15-second HTTP timeout. The
+final durable grant-request mark immediately before the POST refreshes that
+timer so request latency is measured from the last confirmed outbound boundary.
+
+A stale planned write is terminalized only after reconciliation has
+prospectively replaced either an absent target or the exact empty
+generation-zero reservation with an exact persistent, non-secret `fenced`
+marker and then confirmed that marker. The marker is not deletion: it prevents
+both an older absent-to-pending reservation plan and an older pending-to-ready
+secret plan from regaining authority through ABA recreation. A fresh probe
+resolves a concurrent ready-write-versus-fence compare-and-swap: an exact
+generation-one winner is confirmed, while only confirmed `fenced` permits
+terminal `local_persistence_unknown`. The target is re-proved after the terminal
+journal hook; a late exact ready winner recovers the journal to `secret_stored`,
+and later terminal reconciliation repeats the same proof/fence protocol. Ready,
+newer, foreign, or indeterminate state is neither overwritten nor treated as
+fenced.
+
+The managed-secret provider now has prospective prepare/apply/probe operations
+for this exact pending-to-ready transition. Plans are request-local and
+single-use; durable evidence contains no password, OTP, OAuth client, token,
+raw response, or ciphertext. State-machine support distinguishes a confirmed
+pre-POST grant-not-sent path from post-invocation uncertainty and permits
+terminal local-persistence uncertainty after a planned secret write.
+
+`README.md` and `readme.txt` are updated in the same source slice to disclose the
+configured PeerTube contact, credential fields sent, transient OAuth-client
+handling, authenticated-encrypted token retention, normal transport metadata,
+no media/metadata/telemetry transfer, and the lack of an administrator-facing
+or automatic action. This satisfies the source-disclosure prerequisite only;
+it is not validation evidence.
+
+R37 deliberately stops before `/users/me` identity verification, channel or
+destination discovery, activation of the disabled descriptor, refresh/revoke,
+full operation closure, upload/media mutation, model-schema changes, and plugin
+or release version changes. `main`, tags, releases, and publication surfaces
+remain outside this work.
+
 ## Recommended continuation
 
 R36 is integrated and its source, local, CI, two-case WordPress VM, prospective,
-and post-merge gates are complete. Next:
+and post-merge gates are complete. R37 remains isolated from integration. Next:
 
-1. keep administrator actions and remote password-grant mutation in a separate
-   reviewed slice with explicit indeterminate-outcome reconciliation;
-2. review refresh/revoke separately and preserve the no-upload boundary until
+1. validate an exact clean R37 feature checkpoint, then record its commit, CI,
+   package, and VM authority separately from this source contract;
+2. keep administrator authorization/UI separate, with `manage_options`, nonce,
+   exact input validation, safe redirects/notices, and explicit disclosure;
+3. implement identity/destination verification and activation as later reviewed
+   slices;
+4. review refresh/revoke separately and preserve the no-upload boundary until
    tranche 2.0-4 state-machine work.
 
 ## Engineering policy

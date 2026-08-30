@@ -36,6 +36,7 @@ require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Connection_State_Machine.php'
 require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Connection_Operation_Store.php';
 require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Api_Error.php';
 require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Http_Client.php';
+require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Password_Grant_Api.php';
 require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Api_Client.php';
 require_once ARGENT_VIDEO_DIR . 'includes/Backend_Secret_Store.php';
 require_once ARGENT_VIDEO_DIR . 'includes/Backend_Secret_Crypto.php';
@@ -45,6 +46,7 @@ require_once ARGENT_VIDEO_DIR . 'includes/Backend_Health.php';
 require_once ARGENT_VIDEO_DIR . 'includes/Backend_Adapter.php';
 require_once ARGENT_VIDEO_DIR . 'includes/Backend_Registry.php';
 require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Connection_Coordinator.php';
+require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Password_Grant_Service.php';
 require_once ARGENT_VIDEO_DIR . 'includes/Model_Activator.php';
 require_once ARGENT_VIDEO_DIR . 'includes/Video_Post_Type.php';
 require_once ARGENT_VIDEO_DIR . 'includes/Video_Meta.php';

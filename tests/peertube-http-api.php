@@ -172,6 +172,7 @@ namespace ArgentVideo {
     require_once dirname(__DIR__) . '/includes/PeerTube_Origin.php';
     require_once dirname(__DIR__) . '/includes/PeerTube_Api_Error.php';
     require_once dirname(__DIR__) . '/includes/PeerTube_Http_Client.php';
+    require_once dirname(__DIR__) . '/includes/PeerTube_Password_Grant_Api.php';
     require_once dirname(__DIR__) . '/includes/PeerTube_Api_Client.php';
 
     $assert = static function (bool $condition, string $message): void {

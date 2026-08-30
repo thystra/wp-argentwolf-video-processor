@@ -37,12 +37,17 @@ Its recurring WordPress event only starts a detached WP-CLI worker; FFmpeg does
 not run inside the WP-Cron callback or an administrator web request.
 
 Stable 1.0 processing is local. The unreleased 2.0 development line adds an
-opt-in connection to an administrator-configured PeerTube service. Its initial
-connection check reads public instance configuration only and sends no video,
-credentials, or telemetry. The configured service can observe ordinary request
-metadata, including the WordPress server network address and plugin/version
-User-Agent. This checkpoint does not yet expose an administrator-facing
-connection action.
+opt-in connection to an operator-configured PeerTube service. Public instance
+detection sends no credentials. When explicitly invoked by a trusted
+server-side caller, the unreleased internal bootstrap sends the supplied
+PeerTube username and password plus an optional six-digit OTP only to that exact
+origin. The password, OTP, and instance-local OAuth client response are not
+retained. Returned access and refresh tokens are authenticated-encrypted in a
+non-autoloaded server-side option. No video, media metadata, or telemetry is
+sent by connection bootstrap. The configured service can observe ordinary
+request metadata, including the WordPress server network address and
+plugin/version User-Agent. This checkpoint registers no administrator-facing or
+automatic connection action.
 
 == Installation ==
 
@@ -107,11 +112,15 @@ Automatic detached dispatch is unavailable. An operator may invoke
 
 Stable 1.0 does not: video processing occurs on the WordPress server and the
 pinned hls.js runtime is served locally. The unreleased 2.0 development line can
-contact only an administrator-configured PeerTube origin for an explicit
-connection check. Future opt-in PeerTube upload features will send media and
-selected metadata to that service, whose operator terms and privacy policy
-apply. PeerTube is self-hostable software; the administrator must review the
-terms and privacy information published by the operator of the chosen instance.
+contact only an operator-configured PeerTube origin. Public instance detection
+sends no credentials. The explicit internal connection bootstrap exchanges a
+supplied PeerTube username/password and optional OTP for reusable tokens at that
+same origin; it retains only authenticated-encrypted access/refresh tokens.
+Connection bootstrap sends no media, media metadata, or telemetry. Future
+opt-in upload features will send media and selected metadata to that service,
+whose operator terms and privacy policy apply. PeerTube is self-hostable
+software; the administrator must review the terms and privacy information
+published by the operator of the chosen instance.
 
 == Privacy ==
 
@@ -122,11 +131,15 @@ Generated derivatives strip source metadata when that setting is enabled. The
 original attachment remains unchanged and may retain its original metadata.
 
 The plugin contains no telemetry. Stable 1.0 sends no media or usage information
-to a remote processing service. The unreleased 2.0 connection check sends no
-media or credentials and reads only public configuration from the exact
-administrator-configured PeerTube origin. That operator can observe the
-requesting server network address and plugin/version User-Agent. Future opt-in
-uploads will send media and selected metadata to that configured service.
+to a remote processing service. Unreleased 2.0 public instance detection reads
+only public configuration from the exact operator-configured PeerTube origin.
+Its explicit internal bootstrap sends the supplied PeerTube username/password
+and optional OTP only to that origin. The password, OTP, and transient local
+OAuth client response are not stored; returned access/refresh tokens are stored
+authenticated-encrypted in a non-autoloaded server-side option. Bootstrap sends
+no media, media metadata, or telemetry. That operator can observe the requesting
+server network address and plugin/version User-Agent. Future opt-in uploads will
+send media and selected metadata to that configured service.
 
 Worker diagnostic history is stored locally in the WordPress database with bounded retention. Detached-process capture files are temporary and removed after their useful output has been persisted.
 

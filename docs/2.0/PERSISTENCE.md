@@ -3,6 +3,10 @@
 Status: proposed Tranche 2.0-1 design contract
 Source baseline: `develop-2.0` commit `02f779003a77a083750e08380a6854413ce98a15`
 Purpose: define the durable 2.0 data model before schema or runtime implementation.
+Connection-persistence update: R37 defines an unregistered password-grant
+bootstrap through prospectively journaled encrypted token persistence. Exact
+commit, CI, and Docker VM authority belongs in checkpoint validation records,
+not this source contract.
 
 ## 1. Design goals
 
@@ -384,9 +388,10 @@ The managed provider uses authenticated encryption and fails closed when key
 material changes or ciphertext is invalid. Existing version-1 ready records
 remain readable. New version-2 records bind an opaque provisioning ID into the
 authenticated-encryption context and distinguish an empty `pending` reservation
-from a credential-bearing `ready` record. The pending record is created before
-any future remote password grant; plaintext passwords and OTPs never enter the
-manifest.
+from a credential-bearing `ready` record. R37 also uses an empty, non-secret
+`fenced` generation-zero record for stale grant recovery. The pending record is
+created before any future remote password grant; plaintext passwords and OTPs
+never enter the manifest or any of these records.
 
 `argentwolf_video_processor_backend_secrets` is only the provider version
 manifest. Each managed credential occupies its own non-autoloaded
@@ -401,6 +406,19 @@ replacement and deletion variants, use exact raw option compare-and-swap. A
 stale generation cannot overwrite or delete a newer ready credential. Outcomes
 remain explicitly classified when the database mutation or its observed
 postcondition is uncertain.
+
+R37 adds a prospective form of the initial pending-to-ready token commitment.
+The managed store validates and encrypts the exact generation-one secret into a
+request-local, single-use `secret_commit` plan. The connection journal receives
+only bounded mutation ID/hash/byte-length evidence before that exact plan may be
+applied. Password, OTP, local OAuth-client fields, access/refresh token
+plaintext, raw plan values, and ciphertext are not journal fields. A later
+request may probe and confirm an authenticated exact after-state, but journal
+evidence cannot reconstruct or replay token material when the before-state is
+still present. In that pending state, the probe authenticates only the exact
+before-side reservation; the opaque after hash has no semantic or write
+authority until a matching ready record exists and is authenticated and
+decrypted by the managed store.
 
 ### PeerTube connection operation journal
 
@@ -452,6 +470,77 @@ The R36 coordinator accepts and persists no credentials, performs no HTTP,
 registers no admin/AJAX/REST or activation action, changes no upload state, and
 requires no model-schema or plugin-version change. Remote grant, credential
 commit, activation, and operation closure remain outside this persistence
+slice.
+
+R37 adds a separate explicit password-grant service rather than expanding the
+R36 local coordinator. The service is loaded as an internal class but registers
+no administrator, AJAX/REST, WP-CLI, cron, activation, or upload action. It
+fetches the exact-origin local OAuth client before writing a grant claim,
+re-proves the journal/pending-secret/disabled-descriptor authority, durably
+claims only a domain-separated commitment to a request-local 256-bit attempt
+capability, rechecks the local targets, and then permits at most one
+credential-bearing token POST. A prerequisite change after the claim but before
+the POST is capability-proved and durably classified as grant-not-sent; it is not mistaken for an
+uncertain remote mutation.
+
+Immediately before HTTP, the service durably marks the exact same attempt as
+starting its grant request. The mark is separately confirmed, retains the
+`grant_in_flight` phase, and refreshes `grant_started_at` and `updated_at`; no
+password-token POST is authorized without it. Read-only target and exact
+journal probes after the mark catch authority changes made by its WordPress
+option hooks. A mark older than the 15-second pre-POST allowance is refreshed;
+bounded exhaustion becomes grant-not-sent without sending credentials. The
+stale interval is therefore measured from a fresh confirmed outbound boundary
+rather than only from the earlier attempt claim.
+
+The caller's timestamp is only a lower bound. The claim uses a fresh
+non-regressing observation after the OAuth-client GET; the request and response
+use fresh observations around the password-token POST. The post-response time
+anchors token-lifetime validation and the persisted remote result. For a
+rate-limited result, the bounded `Retry-After` interval begins at that response
+observation because it is stored together with the record's freshly updated
+timestamp. Public mutation classification accumulates across the whole service
+call: unknown mutation dominates applied mutation, and applied mutation
+dominates none, so later journal or target failures retain earlier partial-write
+evidence.
+
+Definite OTP-required and credential-class outcomes use a two-step journal
+protocol. Bounded response evidence first moves to `otp_result_pending` or
+`credential_result_pending`, neither of which is grant-eligible. Only a
+`confirm_grant_result` transition carrying the request-local capability that
+matches the durable attempt commitment opens `awaiting_otp` or
+`awaiting_credentials`. The capability never enters the durable record, bounded
+result, or option-hook values. The service attempts the second write without
+another HTTP request; if it is not applied, credential-free reconciliation leaves
+the pending evidence non-retryable and may terminalize only as
+`local_persistence_unknown` after the stale interval.
+
+Once the token POST is invoked, an uncertain result becomes terminal
+`grant_indeterminate` and is never retried automatically. On success, token
+commit planning, journal evidence persistence, and exact plan application occur
+in the same request while plaintext authority still exists. Credential-free
+`reconcile()` performs no HTTP: it confirms only an already-applied encrypted
+after-state. If the exact pending before-state remains, or another local state
+cannot prove success, it does not recreate/apply a plan. After the 30-second
+safety interval, a stale secret-write resolver prospectively replaces either an
+absent record or the exact empty generation-zero reservation with a durable,
+non-secret `fenced` generation-zero marker. It then re-probes both the planned
+commit and provisioning state: a concurrent exact generation-one write that
+won the compare-and-swap race is confirmed, while terminal
+`local_persistence_unknown` requires confirmed fenced state. The persistent
+marker prevents stale absent-to-pending reservation plans and stale
+pending-to-ready commit plans from regaining authority through ABA recreation;
+ready, newer, foreign, or indeterminate state is neither overwritten nor
+inferred fenced. Journal confirmation is followed by a fresh target/registry
+proof; terminal reconciliation may re-fence absent/exact-pending state or
+recover an exact ready commit to `secret_stored`. A stale `grant_in_flight` record is likewise classified as
+interrupted only after the interval refreshed by the final grant-request mark,
+which exceeds the reviewed 15-second HTTP timeout.
+
+R37 stops at `secret_stored` / `ready_for_verification`. Identity and
+destination verification, activation of the disabled descriptor, refresh,
+revoke, full operation closure, upload/media mutation, schema changes, and
+plugin/release version changes remain outside this in-development persistence
 slice.
 
 ### Managed backend assets versus unmanaged external references
