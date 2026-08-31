@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   validate:
-    runs-on: forgejo-pilot
+    runs-on: forgejo-workstation
     timeout-minutes: 45
     env:
       ARGENT_VIDEO_CI_FFMPEG_VERSION: '8.1.2'
