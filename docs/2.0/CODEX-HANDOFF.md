@@ -9,10 +9,9 @@ ArgentWolf Video Processor 2.0 development.
   `v1.0.0`; later `main` commits are documentation/maintenance history unless a
   new release is deliberately prepared.
 - `develop-2.0` is the next-major integration line.
-- `feature/2.0-peertube-connection-coordinator` preserves the reviewed R36
-  source and validation history.
-- `feature/2.0-peertube-grant-bootstrap` is the active R37 development branch,
-  created from the reviewed R36 integration closure on `develop-2.0`.
+- `feature/2.0-peertube-grant-bootstrap` preserves the reviewed R37 source and
+  validation history. New continuation work branches from `develop-2.0` after
+  R37 integration closes.
 
 Do not develop unfinished 2.0 runtime changes directly on `main`.
 
@@ -529,12 +528,16 @@ untouched.
 
 ## R37 password-grant bootstrap
 
-The R37 implementation is isolated on
-`feature/2.0-peertube-grant-bootstrap`. This source description deliberately
-does not embed self-referential commit, CI, Docker/VM, package, integration, or
-release evidence. Establish those authorities from the exact repository refs and their
-associated validation records; do not infer them merely from this section being
-present.
+R37 began from the exact R36 integration authority without rewriting it:
+
+- branch: `feature/2.0-peertube-grant-bootstrap`;
+- parent / `origin/develop-2.0` authority:
+  `a21274b1faa5c739f57f90c976cae7e30cb35fd5`;
+- implementation checkpoint:
+  `daa90ba86ec7042fd9c922ada67e9d849b846ea0`;
+- implementation tree:
+  `4c43cfe042dc1d90d645c275a99a0580c4ed0a48`;
+- subject: `Add restart-safe PeerTube password grant bootstrap`.
 
 The current slice adds a narrow `PeerTube_Password_Grant_Api` interface and an
 explicit `PeerTube_Password_Grant_Service`. The service is loaded by the plugin
@@ -628,13 +631,96 @@ full operation closure, upload/media mutation, model-schema changes, and plugin
 or release version changes. `main`, tags, releases, and publication surfaces
 remain outside this work.
 
+The complete PHP lint, focused model/backend/PeerTube/grant tests,
+autoload-sensitive CAS/planning/registry/operation-store/managed-secret/
+coordinator/grant tests in both modes, dependency-free, storage, restricted
+`open_basedir`, smoke-load, FFmpeg security/binary/integration, vendor-fetch,
+JavaScript syntax, workflow-YAML, all integration shell-syntax, and diff gates
+passed locally. An exact prospective implementation-tree validation package
+passed its single-root, content, exclusion, and `SHA256SUMS` checks with ZIP
+SHA-256 `0dfffb8742c7a28fe7c524f372410a92d54e5edcf89c34971f4a9d49868d3544`.
+That ZIP was noncanonical, was not promoted or published, and was removed after
+inspection. The first Forgejo run for the implementation checkpoint, run 63,
+lost its `forgejo-pilot` runner when its runner-host VM crashed during the
+FFmpeg build and is infrastructure-failure evidence, not a source-test result.
+The workflow-only commit `01f391a057d5d2b82c9b958082f85b382a293333`
+moved ordinary Forgejo CI to `forgejo-workstation`; run 64 passed that exact
+commit. Its installable runtime object set is identical to `daa90ba`.
+
+The first two-case Docker attempt used the exact clean `01f391a` commit and
+completed every password-grant state, request-sequence, no-retry, persistence,
+and cleanup assertion reached in the WordPress 6.4 case. Its final transport
+fixture proof correctly failed because PHP was the container's PID 1:
+`posix_kill()` reported success, but Linux PID-namespace init semantics
+suppressed the self-generated signal and produced an empty response rather
+than a real connection drop. The WordPress 7.1 case therefore did not run.
+This is classified as a harness failure, not successful transport evidence.
+
+- failed tested source commit:
+  `01f391a057d5d2b82c9b958082f85b382a293333`;
+- failed tested source tree:
+  `a8ce8f4494bb301a3f7bcf66f2cafe90534c376b`;
+- failed report:
+  `/tmp/awvp-r37-report.2Ipu1J/peertube-password-grant-smoke-20260831T032725Z-4772.log`;
+- failed report SHA-256:
+  `c130f9fadc80f855da8074a35b49aa854948012ca3611945052e4125a38b3522`;
+- failed final result: `PEERTUBE_PASSWORD_GRANT_SMOKE=FAIL`.
+
+The non-rewriting correction
+`b15e9881bf857c0658e11f1ca7e05a34093591f4` changes only the R37 fixture,
+integration runner, and integration documentation. It puts Docker init ahead
+of PHP, refuses readiness when PHP is PID 1, requires the exact persisted
+zero-status transport classification, and proves bounded fixture termination.
+Its tree is `c26a17e669711a1e6bc1d0669e5982fd592203d7`. It changes no production
+plugin source or installable runtime content. The full local non-Docker suite
+passed again, a pinned-image isolated replay proved a client-side transport
+failure, durable redacted marker, init-backed signal exit, and complete
+cleanup, and Forgejo CI run 65 passed the exact corrected commit. The earlier
+package hash remains evidence for the inspected prospective archive only; no
+claim is made that a later timestamped rebuild would have identical ZIP bytes.
+
+The corrected matrix completed successfully on `ubuntuzfstest` at
+`2026-08-31T10:09:24Z`:
+
+- tested source commit:
+  `b15e9881bf857c0658e11f1ca7e05a34093591f4`;
+- tested source tree:
+  `c26a17e669711a1e6bc1d0669e5982fd592203d7`;
+- report:
+  `/tmp/awvp-r37-report.6KpWXB/peertube-password-grant-smoke-20260831T100924Z-12274.log`;
+- report SHA-256:
+  `af4cef4442ed744f470cf81bf76510589ac4a76c907906a680b4857d7e76ba3c`;
+- minimum case: WordPress 6.4.2, PHP 8.1.34, MariaDB 10.6.27;
+- current case: WordPress 7.1, PHP 8.3.33, MariaDB 10.11.18;
+- exact committed-source export, read-only runtime mount, locally cached
+  digest-pinned images, owned internal networks/volumes, no host ports, fresh
+  sites, database consumer paths, runtime configuration, plugin activation,
+  35 restart-isolated WP-CLI processes per case, exact local OAuth and token
+  request sequence, successful grant, OTP-required response and explicit retry,
+  real transport drop, terminal no-retry reconciliation, authenticated-encrypted
+  secret persistence, plaintext/public-output secret exclusion, no registered
+  service callback, no upload mutations, clean debug logs, and per-case cleanup:
+  `PASS`;
+- PeerTube requests in each case: four local-OAuth GETs and four token POSTs,
+  including exactly one success-scenario POST and no retry after the dropped
+  transport request;
+- final results: `PEERTUBE_PASSWORD_GRANT_MATRIX_ASSERTIONS=PASS`,
+  `RESOURCE_CLEANUP=PASS`, and `PEERTUBE_PASSWORD_GRANT_SMOKE=PASS`.
+
+The runner classified this as `DEVELOPMENT_CHECKPOINT_NOT_RELEASE_GATE`. It
+remains focused committed-source development evidence, not a release ZIP,
+upgrade, MySQL, Plugin Check, real-PeerTube, TLS, administrator-action,
+identity/channel, activation, adapter, refresh/revoke, upload, or publication
+gate. Preserve the raw reports outside disposable `/tmp` storage if they are
+needed beyond the VM's lifetime.
+
 ## Recommended continuation
 
-R36 is integrated and its source, local, CI, two-case WordPress VM, prospective,
-and post-merge gates are complete. R37 remains isolated from integration. Next:
+R37 source, local, CI, and two-case WordPress VM gates are complete on its
+feature branch. Next:
 
-1. validate an exact clean R37 feature checkpoint, then record its commit, CI,
-   package, and VM authority separately from this source contract;
+1. integrate the validated R37 feature closure into `develop-2.0` through an
+   exact prospective merge tree and post-merge validation;
 2. keep administrator authorization/UI separate, with `manage_options`, nonce,
    exact input validation, safe redirects/notices, and explicit disclosure;
 3. implement identity/destination verification and activation as later reviewed
