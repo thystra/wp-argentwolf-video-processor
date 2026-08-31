@@ -2,7 +2,8 @@
 
 Status: tranche 2.0-3 design contract; R34 authenticated API primitives, R35
 local persistence foundation, and R36 local-only pre-grant coordination
-implemented; no administrator entry point or remote grant action
+implemented; R37 implements an unregistered password-grant bootstrap through
+encrypted token persistence and has no administrator entry point
 Reviewed runtime baselines: PeerTube 8.1.8 and 8.2.4, 2026-08-22
 Applies to: configured/manageable PeerTube backends
 
@@ -239,17 +240,18 @@ Credential-bearing endpoint failures discard all remotely supplied textual
 diagnostics except exact allowlisted PeerTube machine codes; numeric HTTP/rate
 metadata remains available.
 
-These R34 primitives have no registered administrator action and no production
-connection orchestrator. Successful password grant creates a live remote
-session before identity and channel verification can finish. Discarding the
-token after a later failure would leave an untracked session; persisting it
-without a durable pending/reconciliation protocol would create a different
-partial-mutation hazard. R34 therefore keeps the result ephemeral and defers
-production connection persistence, refresh, and revoke until that protocol,
-per-secret serialization, and explicit indeterminate-outcome handling are
-implemented. The focused Docker fixture may invoke the primitives against an
-isolated mock, but normal plugin execution does not invoke them. No R34 path
-sends media or performs upload/import/video mutation.
+At the R34 checkpoint these primitives had no registered administrator action
+or production connection orchestrator. Its focused Docker fixture could invoke
+them against an isolated mock, but normal plugin execution did not. R34 kept
+the token result ephemeral because a successful password grant creates a live
+remote session before identity and channel verification can finish; discarding
+that result after a later failure would leave an untracked session, while
+persisting it without a durable pending/reconciliation protocol would create a
+different partial-mutation hazard. R35 and R36 subsequently established the
+required local journal, exact pending secret reservation, disabled descriptor,
+and mutation planning boundaries. R37's bounded use of these primitives
+is described below. No connection path in these tranches sends media or
+performs upload/import/video mutation.
 
 After explicit `manage_options` administrator authorization, authenticated
 verification may:
@@ -284,6 +286,39 @@ OTP is never persisted.
 The local OAuth client response is not ordinary backend configuration. Prefer
 re-fetching the current instance-local client when needed instead of treating
 its returned client secret as operator-managed durable configuration.
+
+R37 implements only the password-grant and encrypted-token-persistence prefix
+as an explicit, unregistered server-side service. It fetches the local OAuth
+client before claiming a grant attempt, then re-proves the exact journal,
+pending secret, and disabled descriptor. A request-local 256-bit capability is
+committed into the attempt ID; only the commitment is durable. Only a definitely confirmed claim may
+continue toward one password-token POST. After the final prerequisite and claim
+recheck, a second exact journal event marks the same grant attempt as starting
+its request and refreshes the stale timer immediately before HTTP. Only a
+capability-authenticated mark followed by a read-only reproof of the local prerequisites and
+exact marked journal authorizes the POST; this catches mutations made by the
+mark's own WordPress option hooks. A mark that ages beyond the 15-second
+pre-POST allowance is refreshed, with bounded exhaustion becoming a definite
+no-send result. If a post-claim local prerequisite changes
+before HTTP, the journal records that the grant was not sent and returns to an
+explicit credential-waiting state.
+
+After the POST is invoked, transport/TLS/5xx/malformed-success or other
+uncertain outcomes become terminal `grant_indeterminate`; the service never
+silently repeats the request. A valid token response is encrypted into a
+request-local prospective `secret_commit` plan. Only bounded before/after hash
+evidence enters the journal, the exact plan is applied in the same request, and
+a later credential-free reconciliation call may confirm the authenticated
+generation-one record. Journal evidence alone is never authority to recreate
+or replay lost token material.
+
+A definite OTP-required or credential-class response is also journaled in two
+steps. Its bounded evidence first enters a pending, non-grant-eligible phase;
+only a second transition bearing the request-local capability may expose
+`awaiting_otp` or `awaiting_credentials`. The capability never enters the
+journal, result, or option-hook values. An observer therefore cannot promote a
+pending state created during an uncertain request; an authentic applied but
+temporarily unobservable confirmation remains safe for explicit retry.
 
 External-auth-plugin token flows require separate reviewed support.
 
@@ -677,6 +712,16 @@ operator policies apply. The disclosure must also state that the connection
 request exposes normal transport metadata, including the requesting server's
 network address and AWVP product/version User-Agent, to the configured service.
 
+The R37 source updates `README.md` and `readme.txt` alongside this
+credential-contact implementation. The disclosure states
+that an explicitly invoked internal bootstrap sends username/password and an
+optional six-digit OTP only to the exact configured PeerTube origin; does not
+retain those values or the instance-local OAuth-client response; stores returned
+tokens only as authenticated-encrypted, non-autoloaded server-side state; sends
+no media, media metadata, or telemetry; and registers no administrator-facing
+or automatic connection action. This disclosure text is not, by itself, a
+claim of a validated, integrated, or released R37 artifact.
+
 ## 32. Uninstall
 
 Default uninstall remains non-destructive.
@@ -861,6 +906,86 @@ does not change the model schema, plugin version, or release version. Remote
 grant, credential commit, identity verification, destination selection,
 activation, and journal closure remain separately reviewed work.
 
+### R37 unregistered password-grant bootstrap
+
+R37 adds a narrow `PeerTube_Password_Grant_Api` boundary and an explicit
+`PeerTube_Password_Grant_Service`. Loading the service registers no
+administrator form, AJAX/REST route, WP-CLI command, cron callback, activation
+hook, or upload path. A future authorized caller remains separate work.
+
+`submit()` accepts one bounded username/password/optional six-digit OTP attempt
+from a trusted server-side caller. It fetches the exact-origin local OAuth
+client before the durable grant claim so a failed read cannot consume or strand
+an attempt. It then re-proves the journal and both durable local prerequisites,
+persists and confirms only the domain-separated commitment to a fresh
+request-local attempt capability, rechecks the prerequisites once more,
+and re-proves the exact claim. Immediately before HTTP it must persist and
+confirm a capability-authenticated `mark_grant_request`. That final durable mark
+refreshes `grant_started_at` and `updated_at`. The service then read-only
+re-proves both prerequisites and the exact marked journal after the mark's
+option hooks. If the mark has consumed more than half of the 30-second stale
+window, it is refreshed and re-proved; three aged marks produce a definite
+grant-not-sent outcome. Only then may it invoke at most one credential-bearing
+token POST. Once the POST has been invoked, uncertain outcomes are terminal and are
+never retried automatically.
+
+The caller-supplied time is only a floor. The service obtains a fresh
+non-regressing timestamp after the OAuth-client GET for the grant claim and
+fresh timestamps immediately before and after the password-token request. The
+post-response observation anchors token-lifetime checks and the journaled
+response state. A bounded `Retry-After` is consequently enforced from that
+response observation through the record's `updated_at`, so request latency
+cannot backdate the wait. Result mutation classification is cumulative across
+the entire call: unknown mutation dominates applied mutation, which dominates
+no mutation, including when a later persistence step conflicts or fails.
+
+Definite OTP-required, credential, invalid-client, permission, and rate-limit
+results do not move directly to a retryable phase. Their bounded evidence first
+enters `otp_result_pending` or `credential_result_pending`. A second
+`confirm_grant_result` journal event must supply the request-local capability
+matching the durable attempt commitment before the operation becomes
+`awaiting_otp` or `awaiting_credentials`; the pending phases are not
+grant-eligible and permit no credential retry. The service attempts the second
+transition without another HTTP request. If it is not applied, the
+pending phase remains; credential-free reconciliation does not promote that
+uncertain result and may terminalize it only as `local_persistence_unknown`
+after the stale interval. If it is applied but its confirming read fails, the
+capability proof makes the resulting retryable phase authoritative and safe.
+
+Successful token material is validated, held only request-locally, and used to
+prepare an authenticated-encrypted generation-one `secret_commit`. The journal
+stores only bounded mutation evidence before the exact target plan is applied.
+`reconcile()` takes no credentials and performs no HTTP. It may confirm an
+already-applied encrypted record and advance to `ready_for_verification`; it
+never reconstructs or applies a secret from evidence. A still-in-flight grant
+or unresolved planned secret write is not classified as an interrupted/unknown
+outcome until the 30-second safety interval has elapsed, which is longer than
+the reviewed 15-second HTTP timeout. The confirmed grant-request mark
+immediately before HTTP refreshes the timestamp from which in-flight staleness
+is measured.
+
+For a stale planned secret write, reconciliation first probes for the
+authenticated exact ready record. Otherwise it may prospectively replace only
+an absent target or the exact empty generation-zero reservation with a durable,
+non-secret `fenced` marker. A fresh probe resolves the
+ready-write-versus-fence compare-and-swap: if the generation-one write won, it
+is confirmed; terminal `local_persistence_unknown` is permitted only after the
+exact fenced marker is confirmed. Retaining that marker prevents both stale
+absent-to-pending reservation plans and stale pending-to-ready commit plans from
+regaining authority through an ABA return to earlier bytes. A ready, newer,
+foreign, or indeterminate record is never overwritten or inferred fenced. The
+secret target and disabled registry are re-proved after journal confirmation.
+Terminal reconciliation repairs an absent/exact-pending target back to fenced
+or recovers an exact ready winner to `secret_stored` without HTTP.
+
+R37 stops after durable encrypted token persistence and reconciliation. It does
+not verify `/users/me`, discover or select a destination, activate the disabled
+descriptor, refresh or revoke tokens, close the full connection operation,
+send media, mutate uploads, change the model schema, or change the plugin or
+release version. This contract does not embed self-referential commit, Forgejo
+CI, Docker VM, package, integration, or release evidence; establish those facts
+from the exact repository refs and their associated validation records.
+
 ## 37. Adapter factory evolution
 
 Factory may register PeerTube alongside local.
@@ -949,6 +1074,38 @@ Before runtime implementation merges, prove at minimum:
 58. feature work staged/reviewed before commit/push;
 59. runtime service/privacy disclosure lands before first PeerTube network-contact
     implementation merge.
+60. the local OAuth-client read occurs before the durable grant claim;
+61. only a confirmed claim and freshly re-proved local prerequisites authorize
+    one password-token POST;
+62. no uncertain post-claim grant outcome is retried automatically;
+63. encrypted secret-commit evidence is journaled before the exact request-local
+    plan is applied, and later reconciliation never recreates token authority;
+64. in-flight/planned reconciliation waits beyond the reviewed HTTP timeout
+    before classifying a stale process interruption or lost local persistence;
+65. the R37 service remains unregistered and stops before identity,
+    destination, activation, refresh/revoke, operation closure, or upload work;
+66. the grant claim and response states use fresh post-OAuth/post-response
+    timestamps rather than backdating remote latency to the caller's input;
+67. `Retry-After` begins at the fresh response observation;
+68. one call reports cumulative partial-mutation classification instead of
+    letting its final persistence attempt hide an earlier mutation;
+69. stale secret-write terminalization prospectively replaces only absent or
+    exact empty generation-zero state with a persistent marker and re-probes a
+    concurrent ready-write-versus-fence race;
+70. an exact confirmed grant-request-start mark refreshes the stale timer
+    immediately before the sole credential-bearing POST;
+71. definite OTP/credential-class outcomes remain in non-grant-eligible pending
+    phases until a second journal transition proves the request-local attempt
+    capability; only its domain-separated commitment is durable;
+72. a stale secret plan replaces absent or exact pending state with a persistent
+    non-secret fenced marker, and only confirmed fenced permits terminal local
+    persistence uncertainty, preventing absent-to-pending and pending-to-ready
+    ABA resurrection;
+73. grant-request marks are refreshed when hook/reproof latency consumes more
+    than half the stale window, and bounded refresh exhaustion sends no
+    credentials;
+74. secret/registry targets are freshly re-proved after journal hooks, with an
+    exact ready winner recoverable from terminal commit evidence without HTTP.
 
 ## 40. Recommended implementation order
 
@@ -962,7 +1119,8 @@ Before runtime implementation merges, prove at minimum:
 8. local-only pre-grant coordinator through a separate ready recheck;
 9. optional external provider;
 10. low-level PeerTube API client and public instance detection;
-11. production login/bootstrap coordinator with OTP handling;
+11. production login/bootstrap coordinator with OTP handling (R37 feature
+    slice through encrypted token persistence only);
 12. `/users/me` verification and destination discovery;
 13. activation writer and adapter/factory integration;
 14. refresh/revoke lifecycle;

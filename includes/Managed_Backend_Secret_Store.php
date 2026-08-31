@@ -16,6 +16,7 @@ final class Managed_Backend_Secret_Store implements Backend_Secret_Store
     public const PROVISION_ABSENT = 'absent';
     public const PROVISION_PENDING = 'pending';
     public const PROVISION_READY = 'ready';
+    public const PROVISION_FENCED = 'fenced';
     public const PROVISION_CONFLICT = 'conflict';
     public const PROVISION_UNREADABLE = 'unreadable';
     public const PROVISION_INDETERMINATE = 'indeterminate';
@@ -25,6 +26,7 @@ final class Managed_Backend_Secret_Store implements Backend_Secret_Store
     private const RECORD_VERSION = 2;
     private const STATE_PENDING = 'pending';
     private const STATE_READY = 'ready';
+    private const STATE_FENCED = 'fenced';
     private const NONAUTOLOAD_VALUES = array('no', 'off', 'auto-off');
 
     public function available(): bool
@@ -259,6 +261,300 @@ final class Managed_Backend_Secret_Store implements Backend_Secret_Store
     }
 
     /**
+     * Prospectively describe the exact pending-to-ready generation-one write.
+     *
+     * The returned request-local plan contains only encrypted token material.
+     * Its durable evidence contains hashes and byte counts only.
+     *
+     * @param array<string, mixed> $secret
+     */
+    public function prepare_commit_reserved(
+        string $secret_ref,
+        string $backend_id,
+        string $provisioning_id,
+        array $secret,
+        string $mutation_id
+    ): Atomic_Option_Plan_Result {
+        $backend_id = Backend_Identity::sanitize($backend_id);
+        $secret = self::sanitize_secret($secret);
+        if (
+            ! self::valid_ref($secret_ref)
+            || '' === $backend_id
+            || ! self::valid_provisioning_id($provisioning_id)
+            || [] === $secret
+            || ! $this->available()
+        ) {
+            return Atomic_Option_Plan_Result::refused();
+        }
+
+        $manifest = $this->existing_manifest_classified();
+        if (Atomic_Option_Result::INDETERMINATE === $manifest->status()) {
+            return Atomic_Option_Plan_Result::indeterminate();
+        }
+        if (Atomic_Option_Result::APPLIED !== $manifest->status()) {
+            return Atomic_Option_Plan_Result::refused();
+        }
+
+        $store = new Atomic_Option_Store(self::record_option($secret_ref));
+        $snapshot = $store->snapshot();
+        if (Atomic_Option_Snapshot::INDETERMINATE === $snapshot->state()) {
+            return Atomic_Option_Plan_Result::indeterminate();
+        }
+        if (! $snapshot->is_present()) {
+            return Atomic_Option_Snapshot::ABSENT === $snapshot->state()
+                ? Atomic_Option_Plan_Result::conflict()
+                : Atomic_Option_Plan_Result::refused();
+        }
+        if (! self::supported_present_snapshot($snapshot)) {
+            return Atomic_Option_Plan_Result::refused();
+        }
+
+        if (! self::exact_pending_snapshot($snapshot, $backend_id, $provisioning_id)) {
+            return Atomic_Option_Plan_Result::conflict();
+        }
+
+        try {
+            $envelope = Backend_Secret_Crypto::encrypt(
+                $secret,
+                self::aad_v2($secret_ref, $backend_id, $provisioning_id, 1)
+            );
+        } catch (Throwable) {
+            return Atomic_Option_Plan_Result::refused();
+        }
+
+        return $store->prepare_compare_exchange(
+            $snapshot,
+            self::ready_record($backend_id, $provisioning_id, $envelope),
+            'secret_commit',
+            $mutation_id
+        );
+    }
+
+    /**
+     * Apply only the exact request-local encrypted commit plan for this secret.
+     *
+     * @param array<string, mixed> $secret
+     */
+    public function apply_commit_plan(
+        string $secret_ref,
+        string $backend_id,
+        string $provisioning_id,
+        array $secret,
+        Atomic_Option_Mutation_Plan $plan
+    ): Atomic_Option_Result {
+        $backend_id = Backend_Identity::sanitize($backend_id);
+        $secret = self::sanitize_secret($secret);
+        if (
+            ! self::valid_ref($secret_ref)
+            || '' === $backend_id
+            || ! self::valid_provisioning_id($provisioning_id)
+            || [] === $secret
+            || ! $this->available()
+        ) {
+            return Atomic_Option_Result::refused();
+        }
+
+        $manifest = $this->existing_manifest_classified();
+        if (Atomic_Option_Result::APPLIED !== $manifest->status()) {
+            return $manifest;
+        }
+        if (! $this->valid_commit_plan(
+            $plan,
+            $secret_ref,
+            $backend_id,
+            $provisioning_id,
+            $secret
+        )) {
+            return Atomic_Option_Result::refused();
+        }
+
+        return (new Atomic_Option_Store(self::record_option($secret_ref)))->apply_plan($plan);
+    }
+
+    /**
+     * Classify an authoritative record against one journaled secret commit.
+     *
+     * The `before` evidence is bound to the exact pending reservation. While
+     * that reservation remains authoritative, `after` is only structurally
+     * valid opaque evidence: a `before` result grants no write or replay
+     * authority. An `after` result additionally requires the current record
+     * to match that evidence and authenticate as a decryptable generation-one
+     * ready record. Decrypted material never leaves this store.
+     *
+     * @param array<string, mixed> $evidence
+     */
+    public function probe_commit(
+        string $secret_ref,
+        string $backend_id,
+        string $provisioning_id,
+        array $evidence
+    ): string {
+        $backend_id = Backend_Identity::sanitize($backend_id);
+        $pending = self::pending_record($backend_id, $provisioning_id);
+        if (
+            ! self::valid_ref($secret_ref)
+            || '' === $backend_id
+            || ! self::valid_provisioning_id($provisioning_id)
+            || ! $this->available()
+            || 'secret_commit' !== ($evidence['kind'] ?? null)
+            || ! self::evidence_has_exact_commit_before($evidence, $pending)
+        ) {
+            return Atomic_Option_Store::PROBE_REFUSED;
+        }
+
+        $manifest = $this->existing_manifest_classified();
+        if (Atomic_Option_Result::INDETERMINATE === $manifest->status()) {
+            return Atomic_Option_Store::PROBE_INDETERMINATE;
+        }
+        if (Atomic_Option_Result::APPLIED !== $manifest->status()) {
+            return Atomic_Option_Store::PROBE_REFUSED;
+        }
+
+        $store = new Atomic_Option_Store(self::record_option($secret_ref));
+        $probe = $store->probe_evidence($evidence);
+        if (! in_array(
+            $probe,
+            array(Atomic_Option_Store::PROBE_BEFORE, Atomic_Option_Store::PROBE_AFTER),
+            true
+        )) {
+            return $probe;
+        }
+
+        $snapshot = $store->snapshot();
+        if (Atomic_Option_Snapshot::INDETERMINATE === $snapshot->state()) {
+            return Atomic_Option_Store::PROBE_INDETERMINATE;
+        }
+        if (! self::supported_present_snapshot($snapshot)) {
+            return $snapshot->is_absent()
+                ? Atomic_Option_Store::PROBE_OTHER
+                : Atomic_Option_Store::PROBE_REFUSED;
+        }
+
+        $record = self::normalize_record($snapshot->value());
+        if ($pending === $record) {
+            $semantic_probe = Atomic_Option_Store::PROBE_BEFORE;
+        } elseif (
+            is_array($record)
+            && self::RECORD_VERSION === $record['version']
+            && self::STATE_READY === $record['state']
+            && $backend_id === $record['backend_id']
+            && $provisioning_id === $record['provisioning_id']
+            && 1 === $record['generation']
+        ) {
+            if (null === $this->decrypt_record($secret_ref, $record)) {
+                return Atomic_Option_Store::PROBE_REFUSED;
+            }
+            $semantic_probe = Atomic_Option_Store::PROBE_AFTER;
+        } else {
+            return Atomic_Option_Store::PROBE_OTHER;
+        }
+
+        $confirmed = $store->probe_evidence($evidence);
+        if ($semantic_probe === $confirmed) {
+            return $confirmed;
+        }
+
+        return in_array(
+            $confirmed,
+            array(Atomic_Option_Store::PROBE_BEFORE, Atomic_Option_Store::PROBE_AFTER),
+            true
+        )
+            ? Atomic_Option_Store::PROBE_INDETERMINATE
+            : $confirmed;
+    }
+
+    /**
+     * Prospectively replace an absent or exact empty reservation with a
+     * durable non-secret fence.
+     *
+     * Unlike deletion, the fenced marker prevents both an older absent-to-
+     * pending reservation plan and an older pending-to-ready commit plan from
+     * regaining authority through an ABA recreation of identical bytes.
+     */
+    public function prepare_fence_reserved(
+        string $secret_ref,
+        string $backend_id,
+        string $provisioning_id,
+        string $mutation_id
+    ): Atomic_Option_Plan_Result {
+        $backend_id = Backend_Identity::sanitize($backend_id);
+        if (
+            ! self::valid_ref($secret_ref)
+            || '' === $backend_id
+            || ! self::valid_provisioning_id($provisioning_id)
+            || ! $this->available()
+        ) {
+            return Atomic_Option_Plan_Result::refused();
+        }
+
+        $manifest = $this->existing_manifest_classified();
+        if (Atomic_Option_Result::INDETERMINATE === $manifest->status()) {
+            return Atomic_Option_Plan_Result::indeterminate();
+        }
+        if (Atomic_Option_Result::APPLIED !== $manifest->status()) {
+            return Atomic_Option_Plan_Result::refused();
+        }
+
+        $store = new Atomic_Option_Store(self::record_option($secret_ref));
+        $snapshot = $store->snapshot();
+        if (Atomic_Option_Snapshot::INDETERMINATE === $snapshot->state()) {
+            return Atomic_Option_Plan_Result::indeterminate();
+        }
+        if (Atomic_Option_Snapshot::REFUSED === $snapshot->state()) {
+            return Atomic_Option_Plan_Result::refused();
+        }
+        if ($snapshot->is_present() && ! self::supported_present_snapshot($snapshot)) {
+            return Atomic_Option_Plan_Result::refused();
+        }
+        if (
+            $snapshot->is_present()
+            && ! self::exact_pending_snapshot($snapshot, $backend_id, $provisioning_id)
+        ) {
+            return Atomic_Option_Plan_Result::conflict();
+        }
+
+        return $store->prepare_compare_exchange(
+            $snapshot,
+            self::fenced_record($backend_id, $provisioning_id),
+            'secret_fence',
+            $mutation_id
+        );
+    }
+
+    /** Apply only an exact request-local absent/pending-to-fenced plan. */
+    public function apply_fence_plan(
+        string $secret_ref,
+        string $backend_id,
+        string $provisioning_id,
+        Atomic_Option_Mutation_Plan $plan
+    ): Atomic_Option_Result {
+        $backend_id = Backend_Identity::sanitize($backend_id);
+        if (
+            ! self::valid_ref($secret_ref)
+            || '' === $backend_id
+            || ! self::valid_provisioning_id($provisioning_id)
+            || ! $this->available()
+        ) {
+            return Atomic_Option_Result::refused();
+        }
+
+        $manifest = $this->existing_manifest_classified();
+        if (Atomic_Option_Result::APPLIED !== $manifest->status()) {
+            return $manifest;
+        }
+        if (! $this->valid_fence_plan(
+            $plan,
+            $secret_ref,
+            $backend_id,
+            $provisioning_id
+        )) {
+            return Atomic_Option_Result::refused();
+        }
+
+        return (new Atomic_Option_Store(self::record_option($secret_ref)))->apply_plan($plan);
+    }
+
+    /**
      * Reserve an empty, non-secret managed slot before any password grant.
      */
     public function reserve(
@@ -478,6 +774,10 @@ final class Managed_Backend_Secret_Store implements Backend_Secret_Store
 
         if (self::STATE_PENDING === $record['state']) {
             return self::provision_state(self::PROVISION_PENDING, 0);
+        }
+
+        if (self::STATE_FENCED === $record['state']) {
+            return self::provision_state(self::PROVISION_FENCED, 0);
         }
 
         if (null === $this->decrypt_record($secret_ref, $record)) {
@@ -757,6 +1057,40 @@ final class Managed_Backend_Secret_Store implements Backend_Secret_Store
         );
     }
 
+    /**
+     * @param array<string, mixed> $envelope
+     * @return array<string, mixed>
+     */
+    private static function ready_record(
+        string $backend_id,
+        string $provisioning_id,
+        array $envelope
+    ): array {
+        return array(
+            'version'         => self::RECORD_VERSION,
+            'state'           => self::STATE_READY,
+            'backend_id'      => $backend_id,
+            'provisioning_id' => $provisioning_id,
+            'generation'      => 1,
+            'envelope'        => $envelope,
+        );
+    }
+
+    /** @return array<string, mixed> */
+    private static function fenced_record(
+        string $backend_id,
+        string $provisioning_id
+    ): array {
+        return array(
+            'version'         => self::RECORD_VERSION,
+            'state'           => self::STATE_FENCED,
+            'backend_id'      => $backend_id,
+            'provisioning_id' => $provisioning_id,
+            'generation'      => 0,
+            'envelope'        => array(),
+        );
+    }
+
     private function valid_reservation_plan(
         Atomic_Option_Mutation_Plan $plan,
         string $secret_ref,
@@ -771,6 +1105,101 @@ final class Managed_Backend_Secret_Store implements Backend_Secret_Store
             && $before->is_absent()
             && self::supported_present_snapshot($written)
             && self::pending_record($backend_id, $provisioning_id) === $written->value();
+    }
+
+    /** @param array<string, mixed> $secret */
+    private function valid_commit_plan(
+        Atomic_Option_Mutation_Plan $plan,
+        string $secret_ref,
+        string $backend_id,
+        string $provisioning_id,
+        array $secret
+    ): bool {
+        $before = $plan->before();
+        $written = $plan->written();
+        if (
+            self::record_option($secret_ref) !== $plan->option()
+            || 'secret_commit' !== $plan->kind()
+            || ! self::exact_pending_snapshot($before, $backend_id, $provisioning_id)
+            || ! self::supported_present_snapshot($written)
+        ) {
+            return false;
+        }
+
+        $record = self::normalize_record($written->value());
+        return is_array($record)
+            && self::RECORD_VERSION === $record['version']
+            && self::STATE_READY === $record['state']
+            && $backend_id === $record['backend_id']
+            && $provisioning_id === $record['provisioning_id']
+            && 1 === $record['generation']
+            && $secret === $this->decrypt_record($secret_ref, $record);
+    }
+
+    private function valid_fence_plan(
+        Atomic_Option_Mutation_Plan $plan,
+        string $secret_ref,
+        string $backend_id,
+        string $provisioning_id
+    ): bool {
+        $before = $plan->before();
+        $written = $plan->written();
+
+        return self::record_option($secret_ref) === $plan->option()
+            && 'secret_fence' === $plan->kind()
+            && (
+                $before->is_absent()
+                || self::exact_pending_snapshot($before, $backend_id, $provisioning_id)
+            )
+            && self::supported_present_snapshot($written)
+            && self::fenced_record($backend_id, $provisioning_id)
+                === self::normalize_record($written->value());
+    }
+
+    /**
+     * @param array<string, mixed> $evidence
+     * @param array<string, mixed> $pending
+     */
+    private static function evidence_has_exact_commit_before(
+        array $evidence,
+        array $pending
+    ): bool {
+        $before_exists = $evidence['before_exists'] ?? null;
+        $before_sha256 = $evidence['before_sha256'] ?? null;
+        $before_bytes = $evidence['before_bytes'] ?? null;
+        if (
+            true !== $before_exists
+            || ! is_string($before_sha256)
+            || ! is_int($before_bytes)
+        ) {
+            return false;
+        }
+
+        try {
+            $raw = serialize($pending);
+        } catch (Throwable) {
+            return false;
+        }
+
+        return strlen($raw) === $before_bytes
+            && 1 === preg_match('/^[a-f0-9]{64}$/D', $before_sha256)
+            && hash_equals($before_sha256, hash('sha256', $raw));
+    }
+
+    private static function exact_pending_snapshot(
+        Atomic_Option_Snapshot $snapshot,
+        string $backend_id,
+        string $provisioning_id
+    ): bool {
+        if (! self::supported_present_snapshot($snapshot)) {
+            return false;
+        }
+
+        $pending = self::pending_record($backend_id, $provisioning_id);
+        $raw = $snapshot->raw();
+        return is_string($raw)
+            && $pending === self::normalize_record($snapshot->value())
+            && hash_equals(serialize($pending), $raw);
     }
 
     private static function plan_failure(
@@ -929,7 +1358,11 @@ final class Managed_Backend_Secret_Store implements Backend_Secret_Store
         $envelope = $value['envelope'] ?? null;
         if (
             ! is_string($state)
-            || ! in_array($state, array(self::STATE_PENDING, self::STATE_READY), true)
+            || ! in_array(
+                $state,
+                array(self::STATE_PENDING, self::STATE_READY, self::STATE_FENCED),
+                true
+            )
             || '' === $backend_id
             || ! self::valid_provisioning_id($provisioning_id)
             || $generation < 0
@@ -939,7 +1372,8 @@ final class Managed_Backend_Secret_Store implements Backend_Secret_Store
         }
 
         if (
-            (self::STATE_PENDING === $state && (0 !== $generation || [] !== $envelope))
+            (in_array($state, array(self::STATE_PENDING, self::STATE_FENCED), true)
+                && (0 !== $generation || [] !== $envelope))
             || (self::STATE_READY === $state && ($generation < 1 || [] === $envelope))
         ) {
             return null;

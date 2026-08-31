@@ -380,6 +380,381 @@ $assert_result(
     'Prospective plan reuse after manifest read failure'
 );
 
+// Token commitment is a second prospective boundary. Planning requires the
+// exact pending record, stores only encrypted material in request-local
+// authority, and emits bounded hash evidence suitable for the journal.
+$prospective_pending_raw = $GLOBALS['wpdb']->rows[$prospective_option]['option_value'];
+$reordered_pending = array(
+    'state'           => 'pending',
+    'version'         => 2,
+    'backend_id'      => $backend_id,
+    'provisioning_id' => $provisioning_id,
+    'generation'      => 0,
+    'envelope'        => array(),
+);
+$GLOBALS['wpdb']->rows[$prospective_option]['option_value'] = serialize($reordered_pending);
+$reordered_plan_result = $prospective_store->prepare_commit_reserved(
+    $secret_ref,
+    $backend_id,
+    $provisioning_id,
+    $secret_one,
+    'mutation_abababababababababababababababab'
+);
+$assert(
+    Atomic_Option_Plan_Result::CONFLICT === $reordered_plan_result->status()
+        && null === $reordered_plan_result->plan(),
+    'Commit planning accepted non-exact pending bytes that could not be reconciled later.'
+);
+$GLOBALS['wpdb']->rows[$prospective_option]['option_value'] = $prospective_pending_raw;
+
+$commit_mutations_before = count($GLOBALS['wpdb']->mutations);
+$commit_plan_result = $prospective_store->prepare_commit_reserved(
+    $secret_ref,
+    $backend_id,
+    $provisioning_id,
+    $secret_one,
+    'mutation_cccccccccccccccccccccccccccccccc'
+);
+$commit_plan = $commit_plan_result->plan();
+$assert(
+    Atomic_Option_Plan_Result::READY === $commit_plan_result->status()
+        && null !== $commit_plan,
+    'Prospective secret commitment did not produce an exact plan.'
+);
+$assert(
+    $commit_mutations_before === count($GLOBALS['wpdb']->mutations),
+    'Prospective secret commitment planning mutated durable state.'
+);
+$commit_evidence = $commit_plan->evidence();
+$assert(
+    array(
+        'kind',
+        'mutation_id',
+        'before_exists',
+        'before_sha256',
+        'before_bytes',
+        'after_exists',
+        'after_sha256',
+        'after_bytes',
+    ) === array_keys($commit_evidence)
+    && 'secret_commit' === $commit_evidence['kind']
+    && 'mutation_cccccccccccccccccccccccccccccccc' === $commit_evidence['mutation_id']
+    && true === $commit_evidence['before_exists']
+    && true === $commit_evidence['after_exists'],
+    'Prospective secret commitment evidence shape or identity mismatch.'
+);
+$assert(
+    Atomic_Option_Store::PROBE_BEFORE === $prospective_store->probe_commit(
+        $secret_ref,
+        $backend_id,
+        $provisioning_id,
+        $commit_evidence
+    ),
+    'Pending secret commitment did not probe as the exact before-state.'
+);
+$commit_observations = serialize(
+    array(
+        'evidence' => $commit_evidence,
+        'debug'    => $commit_plan->__debugInfo(),
+        'written'  => $commit_plan->written()->raw(),
+    )
+);
+$assert(
+    ! str_contains($commit_observations, $secret_one['access_token'])
+        && ! str_contains($commit_observations, $secret_one['refresh_token']),
+    'Prospective commitment evidence or plan debug output exposed token plaintext.'
+);
+
+$forged_evidence = $commit_evidence;
+$forged_evidence['before_sha256'] = str_repeat('0', 64);
+$assert(
+    Atomic_Option_Store::PROBE_REFUSED === $prospective_store->probe_commit(
+        $secret_ref,
+        $backend_id,
+        $provisioning_id,
+        $forged_evidence
+    ),
+    'Commit probing accepted evidence not bound to the exact pending record.'
+);
+
+// The pending state can authenticate only the exact before side. A forged but
+// structurally valid after hash therefore remains a read-only before
+// classification; it cannot authorize or replay the lost request-local plan.
+$forged_after_evidence = $commit_evidence;
+$forged_after_evidence['after_sha256'] = str_repeat('f', 64);
+$forged_after_probe_mutations = count($GLOBALS['wpdb']->mutations);
+$forged_after_probe_raw = $GLOBALS['wpdb']->rows[$prospective_option]['option_value'];
+$assert(
+    Atomic_Option_Store::PROBE_BEFORE === $prospective_store->probe_commit(
+        $secret_ref,
+        $backend_id,
+        $provisioning_id,
+        $forged_after_evidence
+    ),
+    'Forged after evidence gained semantic authority while the exact pending record remained.'
+);
+$assert(
+    $forged_after_probe_mutations === count($GLOBALS['wpdb']->mutations)
+        && $forged_after_probe_raw === $GLOBALS['wpdb']->rows[$prospective_option]['option_value'],
+    'Forged after evidence authorized or replayed a pending secret write.'
+);
+
+// Read failures at either authoritative option preserve an indeterminate
+// classification and never consume or apply the request-local plan.
+$GLOBALS['wpdb']->failed_reads[Managed_Backend_Secret_Store::OPTION] = 1;
+$commit_prepare_manifest_failure = $prospective_store->prepare_commit_reserved(
+    $secret_ref,
+    $backend_id,
+    $provisioning_id,
+    $secret_one,
+    'mutation_dddddddddddddddddddddddddddddddd'
+);
+$assert(
+    Atomic_Option_Plan_Result::INDETERMINATE === $commit_prepare_manifest_failure->status()
+        && null === $commit_prepare_manifest_failure->plan(),
+    'Commit planning collapsed a manifest read failure.'
+);
+
+$GLOBALS['wpdb']->failed_reads[$prospective_option] = 1;
+$commit_prepare_target_failure = $prospective_store->prepare_commit_reserved(
+    $secret_ref,
+    $backend_id,
+    $provisioning_id,
+    $secret_one,
+    'mutation_eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee'
+);
+$assert(
+    Atomic_Option_Plan_Result::INDETERMINATE === $commit_prepare_target_failure->status()
+        && null === $commit_prepare_target_failure->plan(),
+    'Commit planning collapsed a target read failure.'
+);
+
+$GLOBALS['wpdb']->failed_reads[Managed_Backend_Secret_Store::OPTION] = 1;
+$commit_apply_manifest_failure = $prospective_store->apply_commit_plan(
+    $secret_ref,
+    $backend_id,
+    $provisioning_id,
+    $secret_one,
+    $commit_plan
+);
+$assert_result(
+    $commit_apply_manifest_failure,
+    Atomic_Option_Result::INDETERMINATE,
+    Atomic_Option_Result::MUTATION_NONE,
+    'Commit apply manifest read failure'
+);
+
+$GLOBALS['wpdb']->failed_reads[Managed_Backend_Secret_Store::OPTION] = 1;
+$assert(
+    Atomic_Option_Store::PROBE_INDETERMINATE === $prospective_store->probe_commit(
+        $secret_ref,
+        $backend_id,
+        $provisioning_id,
+        $commit_evidence
+    ),
+    'Commit probe collapsed a manifest read failure.'
+);
+
+$GLOBALS['wpdb']->failed_reads[$prospective_option] = 1;
+$assert(
+    Atomic_Option_Store::PROBE_INDETERMINATE === $prospective_store->probe_commit(
+        $secret_ref,
+        $backend_id,
+        $provisioning_id,
+        $commit_evidence
+    ),
+    'Commit probe collapsed a target read failure.'
+);
+
+$commit_mutations_before_refusals = count($GLOBALS['wpdb']->mutations);
+$wrong_secret_apply = $prospective_store->apply_commit_plan(
+    $secret_ref,
+    $backend_id,
+    $provisioning_id,
+    $secret_two,
+    $commit_plan
+);
+$assert_result(
+    $wrong_secret_apply,
+    Atomic_Option_Result::REFUSED,
+    Atomic_Option_Result::MUTATION_NONE,
+    'Wrong-secret prospective commit apply'
+);
+$wrong_binding_apply = $prospective_store->apply_commit_plan(
+    $secret_ref,
+    $backend_id,
+    $other_provisioning_id,
+    $secret_one,
+    $commit_plan
+);
+$assert_result(
+    $wrong_binding_apply,
+    Atomic_Option_Result::REFUSED,
+    Atomic_Option_Result::MUTATION_NONE,
+    'Wrong-binding prospective commit apply'
+);
+$assert(
+    $commit_mutations_before_refusals === count($GLOBALS['wpdb']->mutations),
+    'Refused prospective commit apply crossed the target mutation boundary.'
+);
+
+// The lower-level planner is not secret-store authority. Even a structurally
+// plausible plan is refused unless its encrypted ready record decrypts to the
+// exact secret supplied to this store boundary.
+$pending_snapshot = (new Atomic_Option_Store($prospective_option))->snapshot();
+$foreign_envelope = Backend_Secret_Crypto::encrypt(
+    $secret_two,
+    'awvp-secret-v2|'
+        . $secret_ref . '|'
+        . $backend_id . '|'
+        . $provisioning_id . '|1'
+);
+$foreign_ready = array(
+    'version'         => 2,
+    'state'           => 'ready',
+    'backend_id'      => $backend_id,
+    'provisioning_id' => $provisioning_id,
+    'generation'      => 1,
+    'envelope'        => $foreign_envelope,
+);
+$foreign_plan_result = (new Atomic_Option_Store($prospective_option))->prepare_compare_exchange(
+    $pending_snapshot,
+    $foreign_ready,
+    'secret_commit',
+    'mutation_ffffffffffffffffffffffffffffffff'
+);
+$foreign_plan = $foreign_plan_result->plan();
+$assert(
+    Atomic_Option_Plan_Result::READY === $foreign_plan_result->status()
+        && null !== $foreign_plan,
+    'Foreign secret commitment fixture did not produce a lower-level plan.'
+);
+$foreign_apply = $prospective_store->apply_commit_plan(
+    $secret_ref,
+    $backend_id,
+    $provisioning_id,
+    $secret_one,
+    $foreign_plan
+);
+$assert_result(
+    $foreign_apply,
+    Atomic_Option_Result::REFUSED,
+    Atomic_Option_Result::MUTATION_NONE,
+    'Foreign encrypted prospective commit apply'
+);
+
+// A matching after-hash is not enough: probe_commit also authenticates and
+// decrypts the exact generation-one record before reporting success.
+$invalid_ready = $foreign_ready;
+$invalid_ready['envelope']['ciphertext'] = 'not-valid-authenticated-ciphertext';
+$invalid_plan_result = (new Atomic_Option_Store($prospective_option))->prepare_compare_exchange(
+    $pending_snapshot,
+    $invalid_ready,
+    'secret_commit',
+    'mutation_0123456789abcdef0123456789abcdef'
+);
+$invalid_plan = $invalid_plan_result->plan();
+$assert(
+    Atomic_Option_Plan_Result::READY === $invalid_plan_result->status()
+        && null !== $invalid_plan,
+    'Unreadable secret commitment fixture did not produce lower-level evidence.'
+);
+$pending_raw = $GLOBALS['wpdb']->rows[$prospective_option]['option_value'];
+$GLOBALS['wpdb']->rows[$prospective_option]['option_value'] = serialize($invalid_ready);
+$assert(
+    Atomic_Option_Store::PROBE_REFUSED === $prospective_store->probe_commit(
+        $secret_ref,
+        $backend_id,
+        $provisioning_id,
+        $invalid_plan->evidence()
+    ),
+    'Commit probe accepted a matching but unauthenticated ready record.'
+);
+$GLOBALS['wpdb']->rows[$prospective_option]['option_value'] = $pending_raw;
+
+$commit_applied = $prospective_store->apply_commit_plan(
+    $secret_ref,
+    $backend_id,
+    $provisioning_id,
+    $secret_one,
+    $commit_plan
+);
+$assert_result(
+    $commit_applied,
+    Atomic_Option_Result::APPLIED,
+    Atomic_Option_Result::MUTATION_APPLIED,
+    'Exact prospective secret commitment'
+);
+$assert(
+    Atomic_Option_Store::PROBE_AFTER === $prospective_store->probe_commit(
+        $secret_ref,
+        $backend_id,
+        $provisioning_id,
+        $commit_evidence
+    ),
+    'Applied secret commitment did not probe as the exact authenticated after-state.'
+);
+$prospective_expected_read = $secret_one;
+$prospective_expected_read['generation'] = 1;
+$assert(
+    $prospective_expected_read === $prospective_store->read($secret_ref, $backend_id),
+    'Prospective encrypted commitment did not round-trip at generation one.'
+);
+$assert(
+    ! str_contains($GLOBALS['wpdb']->rows[$prospective_option]['option_value'], $secret_one['access_token'])
+        && ! str_contains($GLOBALS['wpdb']->rows[$prospective_option]['option_value'], $secret_one['refresh_token']),
+    'Prospective encrypted commitment persisted token plaintext.'
+);
+$ready_replan = $prospective_store->prepare_commit_reserved(
+    $secret_ref,
+    $backend_id,
+    $provisioning_id,
+    $secret_one,
+    'mutation_10101010101010101010101010101010'
+);
+$assert(
+    Atomic_Option_Plan_Result::CONFLICT === $ready_replan->status()
+        && null === $ready_replan->plan(),
+    'A ready record minted a replacement initial-commit plan.'
+);
+$commit_plan_reuse = $prospective_store->apply_commit_plan(
+    $secret_ref,
+    $backend_id,
+    $provisioning_id,
+    $secret_one,
+    $commit_plan
+);
+$assert_result(
+    $commit_plan_reuse,
+    Atomic_Option_Result::REFUSED,
+    Atomic_Option_Result::MUTATION_NONE,
+    'Consumed prospective commit plan reuse'
+);
+
+$ready_raw_for_probe = $GLOBALS['wpdb']->rows[$prospective_option]['option_value'];
+$GLOBALS['wpdb']->rows[$prospective_option]['option_value'] = serialize($foreign_ready);
+$assert(
+    Atomic_Option_Store::PROBE_OTHER === $prospective_store->probe_commit(
+        $secret_ref,
+        $backend_id,
+        $provisioning_id,
+        $commit_evidence
+    ),
+    'Commit probe accepted a different authenticated ready record.'
+);
+$GLOBALS['wpdb']->rows[$prospective_option]['option_value'] = $ready_raw_for_probe;
+
+$GLOBALS['wpdb']->failed_reads[$prospective_option] = 1;
+$assert(
+    Atomic_Option_Store::PROBE_INDETERMINATE === $prospective_store->probe_commit(
+        $secret_ref,
+        $backend_id,
+        $provisioning_id,
+        $commit_evidence
+    ),
+    'Applied commit probe collapsed an authoritative target read failure.'
+);
+
 $GLOBALS['wpdb'] = new Awvp_Managed_Secret_Fake_Wpdb();
 $store = new Managed_Backend_Secret_Store();
 
@@ -999,6 +1374,156 @@ $assert_result(
     Atomic_Option_Result::CONFLICT,
     Atomic_Option_Result::MUTATION_NONE,
     'Ready-row pending cleanup'
+);
+
+// A persistent fence closes the deletion ABA: neither an older absent-to-
+// pending reservation plan nor reserve() may recreate the exact pending bytes.
+$absent_fence_ref = 'managed_12121212121212121212121212121212';
+$absent_fence_provision = 'provision_34343434343434343434343434343434';
+$old_reservation = $store->prepare_reservation(
+    $absent_fence_ref,
+    $backend_id,
+    $absent_fence_provision,
+    'mutation_12121212121212121212121212121212'
+);
+$old_reservation_plan = $old_reservation->plan();
+$absent_fence = $store->prepare_fence_reserved(
+    $absent_fence_ref,
+    $backend_id,
+    $absent_fence_provision,
+    'mutation_34343434343434343434343434343434'
+);
+$absent_fence_plan = $absent_fence->plan();
+$assert(
+    Atomic_Option_Plan_Result::READY === $old_reservation->status()
+        && null !== $old_reservation_plan
+        && Atomic_Option_Plan_Result::READY === $absent_fence->status()
+        && null !== $absent_fence_plan,
+    'Absent fence fixture did not prospectively prepare both exact plans.'
+);
+$assert_result(
+    $store->apply_fence_plan(
+        $absent_fence_ref,
+        $backend_id,
+        $absent_fence_provision,
+        $absent_fence_plan
+    ),
+    Atomic_Option_Result::APPLIED,
+    Atomic_Option_Result::MUTATION_APPLIED,
+    'Absent-to-fenced apply'
+);
+$assert(
+    array('state' => Managed_Backend_Secret_Store::PROVISION_FENCED, 'generation' => 0)
+        === $store->provisioning_state(
+            $absent_fence_ref,
+            $backend_id,
+            $absent_fence_provision
+        ),
+    'Absent-to-fenced apply did not leave the exact durable marker.'
+);
+$assert_result(
+    $store->apply_reservation_plan(
+        $absent_fence_ref,
+        $backend_id,
+        $absent_fence_provision,
+        $old_reservation_plan
+    ),
+    Atomic_Option_Result::CONFLICT,
+    Atomic_Option_Result::MUTATION_NONE,
+    'Fenced stale reservation apply'
+);
+$assert_result(
+    $store->reserve($absent_fence_ref, $backend_id, $absent_fence_provision),
+    Atomic_Option_Result::CONFLICT,
+    Atomic_Option_Result::MUTATION_NONE,
+    'Fenced direct reservation'
+);
+$assert_result(
+    $store->apply_fence_plan(
+        $absent_fence_ref,
+        $backend_id,
+        $other_provisioning_id,
+        $absent_fence_plan
+    ),
+    Atomic_Option_Result::REFUSED,
+    Atomic_Option_Result::MUTATION_NONE,
+    'Wrong-binding fence plan'
+);
+
+// The same marker wins an exact pending-to-fenced race and invalidates a
+// still-live request-local pending-to-ready token plan.
+$pending_fence_ref = 'managed_56565656565656565656565656565656';
+$pending_fence_provision = 'provision_78787878787878787878787878787878';
+$assert_result(
+    $store->reserve($pending_fence_ref, $backend_id, $pending_fence_provision),
+    Atomic_Option_Result::APPLIED,
+    Atomic_Option_Result::MUTATION_APPLIED,
+    'Pending fence fixture reservation'
+);
+$old_commit = $store->prepare_commit_reserved(
+    $pending_fence_ref,
+    $backend_id,
+    $pending_fence_provision,
+    $secret_three,
+    'mutation_56565656565656565656565656565656'
+);
+$old_commit_plan = $old_commit->plan();
+$pending_fence = $store->prepare_fence_reserved(
+    $pending_fence_ref,
+    $backend_id,
+    $pending_fence_provision,
+    'mutation_78787878787878787878787878787878'
+);
+$pending_fence_plan = $pending_fence->plan();
+$assert(
+    Atomic_Option_Plan_Result::READY === $old_commit->status()
+        && null !== $old_commit_plan
+        && Atomic_Option_Plan_Result::READY === $pending_fence->status()
+        && null !== $pending_fence_plan,
+    'Pending fence fixture did not prospectively prepare both exact plans.'
+);
+$assert_result(
+    $store->apply_fence_plan(
+        $pending_fence_ref,
+        $backend_id,
+        $pending_fence_provision,
+        $pending_fence_plan
+    ),
+    Atomic_Option_Result::APPLIED,
+    Atomic_Option_Result::MUTATION_APPLIED,
+    'Pending-to-fenced apply'
+);
+$assert_result(
+    $store->apply_commit_plan(
+        $pending_fence_ref,
+        $backend_id,
+        $pending_fence_provision,
+        $secret_three,
+        $old_commit_plan
+    ),
+    Atomic_Option_Result::CONFLICT,
+    Atomic_Option_Result::MUTATION_NONE,
+    'Fenced stale token commit apply'
+);
+$assert(
+    array('state' => Managed_Backend_Secret_Store::PROVISION_FENCED, 'generation' => 0)
+        === $store->provisioning_state(
+            $pending_fence_ref,
+            $backend_id,
+            $pending_fence_provision
+        )
+        && null === $store->read($pending_fence_ref, $backend_id),
+    'Pending-to-fenced recovery exposed a credential or lost its marker.'
+);
+unset(
+    $old_reservation,
+    $old_reservation_plan,
+    $absent_fence,
+    $absent_fence_plan,
+    $old_commit,
+    $old_commit_plan,
+    $pending_fence,
+    $pending_fence_plan
 );
 
 // Existing version-1 records remain readable and replacement preserves their

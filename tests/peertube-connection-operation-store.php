@@ -316,7 +316,7 @@ $complete_record = static function (array $record) use ($mutation, $assert): arr
         array(Machine::EVENT_PLAN_DISABLED_LINK, $mutation('registry_link', '2', true)),
         array(Machine::EVENT_CONFIRM_DISABLED_LINK, array()),
         array(Machine::EVENT_BEGIN_GRANT, array(
-            'attempt_id' => 'attempt_33333333333333333333333333333333',
+            'attempt_capability' => str_repeat('3', 64),
         )),
         array(Machine::EVENT_PLAN_SECRET_STORAGE, $mutation('secret_commit', '4', true)),
         array(Machine::EVENT_CONFIRM_SECRET_STORED, array()),

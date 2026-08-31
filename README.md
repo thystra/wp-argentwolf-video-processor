@@ -106,14 +106,20 @@ original uploaded attachment is preserved and may retain its original metadata.
 
 Stable 1.0 processing remains local and the plugin contains no telemetry. The
 unreleased 2.0 development line adds an opt-in, operator-configured PeerTube
-connection. Its initial connection check contacts only that configured
-PeerTube origin and reads the public instance configuration/version; it sends no
-media, credentials, or telemetry. The configured service can observe ordinary
-HTTP transport metadata, including the WordPress server's network address and
-the plugin product/version User-Agent. Later upload work will send media and
-selected metadata only to the configured PeerTube service, whose operator terms
-and privacy policy will apply. This checkpoint does not yet expose an
-administrator-facing connection action.
+connection. Public instance detection contacts only that configured origin and
+sends no credentials. The unreleased internal password-grant service, when
+explicitly invoked by a trusted server-side caller, sends the supplied PeerTube
+username and password plus an optional six-digit OTP only to that same exact
+origin. The instance-local OAuth client is used transiently; the password, OTP,
+and OAuth client response are not retained. Returned access and refresh tokens
+are authenticated-encrypted in a non-autoloaded server-side option before the
+operation can advance. No media, selected media metadata, or telemetry is sent
+by this connection bootstrap. The configured service can observe ordinary HTTP
+transport metadata, including the WordPress server's network address and the
+plugin product/version User-Agent. Its operator terms and privacy policy apply.
+This checkpoint registers no administrator-facing or automatic connection
+action. Later upload work will separately disclose and send media and selected
+metadata only to the configured service.
 
 hls.js is fetched only during controlled release builds, verified, and served
 locally from the installed plugin. Build-time `hls.VERSION` and `hls.SHA256`

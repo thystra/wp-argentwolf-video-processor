@@ -934,7 +934,13 @@ final class Atomic_Option_Store
     {
         return in_array(
             $kind,
-            array('secret_reserve', 'registry_link', 'secret_commit', 'registry_activate'),
+            array(
+                'secret_reserve',
+                'secret_fence',
+                'registry_link',
+                'secret_commit',
+                'registry_activate',
+            ),
             true
         ) && 1 === preg_match('/^mutation_[a-f0-9]{32}$/D', $mutation_id);
     }

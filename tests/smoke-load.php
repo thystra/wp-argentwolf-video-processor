@@ -67,15 +67,21 @@ if (
     exit(1);
 }
 
+if (! interface_exists(ArgentVideo\PeerTube_Password_Grant_Api::class, false)) {
+    fwrite(STDERR, "Plugin smoke load missed required R37 interface " . ArgentVideo\PeerTube_Password_Grant_Api::class . ".\n");
+    exit(1);
+}
+
 foreach (
     array(
         ArgentVideo\Atomic_Option_Mutation_Plan::class,
         ArgentVideo\Atomic_Option_Plan_Result::class,
         ArgentVideo\PeerTube_Connection_Coordinator::class,
+        ArgentVideo\PeerTube_Password_Grant_Service::class,
     ) as $required_class
 ) {
     if (! class_exists($required_class, false)) {
-        fwrite(STDERR, "Plugin smoke load missed required R36 class {$required_class}.\n");
+        fwrite(STDERR, "Plugin smoke load missed required R37 class {$required_class}.\n");
         exit(1);
     }
 }

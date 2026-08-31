@@ -163,10 +163,13 @@ jobs:
           AWVP_ATOMIC_MODERN_AUTOLOAD=1 php tests/managed-secret-persistence.php
           php tests/peertube-connection-coordinator.php
           AWVP_ATOMIC_MODERN_AUTOLOAD=1 php tests/peertube-connection-coordinator.php
+          php tests/peertube-password-grant-service.php
+          AWVP_ATOMIC_MODERN_AUTOLOAD=1 php tests/peertube-password-grant-service.php
           bash -n tests/integration/peertube-http-smoke.sh
           bash -n tests/integration/peertube-auth-api-smoke.sh
           bash -n tests/integration/peertube-persistence-smoke.sh
           bash -n tests/integration/peertube-connection-coordinator-smoke.sh
+          bash -n tests/integration/peertube-password-grant-smoke.sh
           php tests/run.php
           php tests/storage-boundary.php
           php -d open_basedir="${FORGEJO_WORKSPACE}:/tmp" tests/open-basedir.php

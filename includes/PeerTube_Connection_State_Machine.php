@@ -26,6 +26,8 @@ final class PeerTube_Connection_State_Machine
     public const PHASE_LINK_PLANNED = 'link_planned';
     public const PHASE_DISABLED = 'disabled';
     public const PHASE_GRANT_IN_FLIGHT = 'grant_in_flight';
+    public const PHASE_OTP_RESULT_PENDING = 'otp_result_pending';
+    public const PHASE_CREDENTIAL_RESULT_PENDING = 'credential_result_pending';
     public const PHASE_AWAITING_OTP = 'awaiting_otp';
     public const PHASE_AWAITING_CREDENTIALS = 'awaiting_credentials';
     public const PHASE_GRANT_INDETERMINATE = 'grant_indeterminate';
@@ -45,8 +47,11 @@ final class PeerTube_Connection_State_Machine
     public const EVENT_REPLAN_DISABLED_LINK = 'replan_disabled_link_after_conflict';
     public const EVENT_CONFIRM_DISABLED_LINK = 'confirm_disabled_link';
     public const EVENT_BEGIN_GRANT = 'begin_grant';
+    public const EVENT_MARK_GRANT_REQUEST = 'mark_grant_request';
+    public const EVENT_GRANT_NOT_SENT = 'grant_not_sent';
     public const EVENT_OTP_REQUIRED = 'otp_required';
     public const EVENT_CREDENTIALS_REJECTED = 'credentials_rejected';
+    public const EVENT_CONFIRM_GRANT_RESULT = 'confirm_grant_result';
     public const EVENT_GRANT_INDETERMINATE = 'grant_indeterminate';
     public const EVENT_PLAN_SECRET_STORAGE = 'plan_secret_storage';
     public const EVENT_CONFIRM_SECRET_STORED = 'confirm_secret_stored';
@@ -59,10 +64,12 @@ final class PeerTube_Connection_State_Machine
     public const EVENT_CONFIRM_ACTIVATION = 'confirm_activation';
     public const EVENT_COMPLETE = 'complete';
 
+    public const MAX_GRANT_ATTEMPTS = 8;
+
     private const MAX_RECORD_BYTES = 16384;
     private const MAX_OPTION_VALUE_BYTES = 1048576;
-    private const MAX_GRANT_ATTEMPTS = 8;
     private const MAX_RETRY_AFTER = 86400;
+    private const GRANT_ATTEMPT_DOMAIN = 'awvp-peertube-grant-attempt-v1:';
 
     /**
      * Create the first durable journal value.
@@ -217,9 +224,12 @@ final class PeerTube_Connection_State_Machine
                     ),
                     true
                 )
-                || ! self::has_exact_keys($payload, array('attempt_id'))
-                || '' === self::attempt_id($payload['attempt_id'])
-                || $payload['attempt_id'] === $record['grant_attempt_id']
+                || ! self::has_exact_keys($payload, array('attempt_capability'))
+                || '' === self::attempt_commitment($payload['attempt_capability'])
+                || hash_equals(
+                    $record['grant_attempt_id'],
+                    self::attempt_commitment($payload['attempt_capability'])
+                )
                 || $record['grant_attempt_no'] >= self::MAX_GRANT_ATTEMPTS
             ) {
                 return null;
@@ -227,9 +237,53 @@ final class PeerTube_Connection_State_Machine
 
             $next['phase'] = self::PHASE_GRANT_IN_FLIGHT;
             $next['grant_attempt_no'] = $record['grant_attempt_no'] + 1;
-            $next['grant_attempt_id'] = $payload['attempt_id'];
+            $next['grant_attempt_id'] = self::attempt_commitment($payload['attempt_capability']);
             $next['grant_started_at'] = $now;
             $next['last_error'] = self::empty_error();
+        } elseif (self::EVENT_MARK_GRANT_REQUEST === $event) {
+            if (
+                self::PHASE_GRANT_IN_FLIGHT !== $phase
+                || ! self::has_exact_keys($payload, array('attempt_capability'))
+                || ! self::attempt_capability_matches(
+                    $payload['attempt_capability'],
+                    $record['grant_attempt_id']
+                )
+            ) {
+                return null;
+            }
+
+            // Refresh the durable stale-attempt boundary immediately before
+            // the caller performs the one credential-bearing request.
+            $next['grant_started_at'] = $now;
+        } elseif (self::EVENT_GRANT_NOT_SENT === $event) {
+            $reason = $payload['reason'] ?? null;
+            if (
+                self::PHASE_GRANT_IN_FLIGHT !== $phase
+                || ! self::has_exact_keys(
+                    $payload,
+                    array('attempt_capability', 'reason', 'http_status', 'retry_after')
+                )
+                || ! self::attempt_capability_matches(
+                    $payload['attempt_capability'],
+                    $record['grant_attempt_id']
+                )
+                || ! in_array(
+                    $reason,
+                    array('local_prerequisite_changed', 'request_window_expired'),
+                    true
+                )
+                || 0 !== $payload['http_status']
+                || 0 !== $payload['retry_after']
+            ) {
+                return null;
+            }
+
+            $next['phase'] = self::PHASE_AWAITING_CREDENTIALS;
+            $next['last_error'] = self::error(
+                'peertube.auth.grant_not_sent',
+                $payload['http_status'],
+                $payload['retry_after']
+            );
         } elseif (self::EVENT_OTP_REQUIRED === $event) {
             if (
                 self::PHASE_GRANT_IN_FLIGHT !== $phase
@@ -240,7 +294,7 @@ final class PeerTube_Connection_State_Machine
                 return null;
             }
 
-            $next['phase'] = self::PHASE_AWAITING_OTP;
+            $next['phase'] = self::PHASE_OTP_RESULT_PENDING;
             $next['last_error'] = self::error(
                 'peertube.auth.otp_required',
                 $payload['http_status'],
@@ -262,20 +316,63 @@ final class PeerTube_Connection_State_Machine
                 return null;
             }
 
-            $next['phase'] = self::PHASE_AWAITING_CREDENTIALS;
+            $next['phase'] = self::PHASE_CREDENTIAL_RESULT_PENDING;
             $next['last_error'] = self::error(
                 self::credential_error_codes()[$reason],
                 $payload['http_status'],
                 $payload['retry_after']
             );
+        } elseif (self::EVENT_CONFIRM_GRANT_RESULT === $event) {
+            if (
+                ! self::has_exact_keys($payload, array('attempt_capability'))
+                || ! self::attempt_capability_matches(
+                    $payload['attempt_capability'],
+                    $record['grant_attempt_id']
+                )
+            ) {
+                return null;
+            }
+
+            if (self::PHASE_OTP_RESULT_PENDING === $phase) {
+                $next['phase'] = self::PHASE_AWAITING_OTP;
+            } elseif (self::PHASE_CREDENTIAL_RESULT_PENDING === $phase) {
+                $next['phase'] = self::PHASE_AWAITING_CREDENTIALS;
+            } else {
+                return null;
+            }
         } elseif (self::EVENT_GRANT_INDETERMINATE === $event) {
             $reason = $payload['reason'] ?? null;
             if (
-                self::PHASE_GRANT_IN_FLIGHT !== $phase
+                ! in_array(
+                    $phase,
+                    array(
+                        self::PHASE_GRANT_IN_FLIGHT,
+                        self::PHASE_OTP_RESULT_PENDING,
+                        self::PHASE_CREDENTIAL_RESULT_PENDING,
+                        self::PHASE_AWAITING_OTP,
+                        self::PHASE_AWAITING_CREDENTIALS,
+                        self::PHASE_SECRET_WRITE_PLANNED,
+                    ),
+                    true
+                )
                 || ! self::has_exact_keys($payload, array('reason', 'http_status'))
                 || ! is_string($reason)
                 || ! isset(self::indeterminate_error_codes()[$reason])
                 || ! self::valid_indeterminate_error($reason, $payload['http_status'])
+                || (
+                    in_array(
+                        $phase,
+                        array(
+                            self::PHASE_AWAITING_OTP,
+                            self::PHASE_AWAITING_CREDENTIALS,
+                            self::PHASE_OTP_RESULT_PENDING,
+                            self::PHASE_CREDENTIAL_RESULT_PENDING,
+                            self::PHASE_SECRET_WRITE_PLANNED,
+                        ),
+                        true
+                    )
+                    && 'local_persistence_unknown' !== $reason
+                )
             ) {
                 return null;
             }
@@ -295,13 +392,23 @@ final class PeerTube_Connection_State_Machine
             $next['last_mutation'] = $payload;
             $next['last_error'] = self::empty_error();
         } elseif (self::EVENT_CONFIRM_SECRET_STORED === $event) {
-            if (self::PHASE_SECRET_WRITE_PLANNED !== $phase || [] !== $payload) {
+            if (
+                [] !== $payload
+                || ! (
+                    self::PHASE_SECRET_WRITE_PLANNED === $phase
+                    || (
+                        self::PHASE_GRANT_INDETERMINATE === $phase
+                        && 'secret_commit' === $record['last_mutation']['kind']
+                    )
+                )
+            ) {
                 return null;
             }
 
             $next['phase'] = self::PHASE_SECRET_STORED;
             $next['secret_record_sha256'] = $record['last_mutation']['after_sha256'];
             $next['secret_generation'] = 1;
+            $next['last_error'] = self::empty_error();
         } elseif (self::EVENT_BEGIN_VERIFICATION === $event) {
             if (
                 ! in_array($phase, array(self::PHASE_SECRET_STORED, self::PHASE_VERIFICATION_FAILED), true)
@@ -530,6 +637,8 @@ final class PeerTube_Connection_State_Machine
             self::PHASE_LINK_PLANNED,
             self::PHASE_DISABLED,
             self::PHASE_GRANT_IN_FLIGHT,
+            self::PHASE_OTP_RESULT_PENDING,
+            self::PHASE_CREDENTIAL_RESULT_PENDING,
             self::PHASE_AWAITING_OTP,
             self::PHASE_AWAITING_CREDENTIALS,
             self::PHASE_GRANT_INDETERMINATE,
@@ -598,6 +707,8 @@ final class PeerTube_Connection_State_Machine
 
         if (in_array($phase, array(
             self::PHASE_GRANT_IN_FLIGHT,
+            self::PHASE_OTP_RESULT_PENDING,
+            self::PHASE_CREDENTIAL_RESULT_PENDING,
             self::PHASE_AWAITING_OTP,
             self::PHASE_AWAITING_CREDENTIALS,
             self::PHASE_GRANT_INDETERMINATE,
@@ -609,6 +720,15 @@ final class PeerTube_Connection_State_Machine
 
             if (self::PHASE_SECRET_WRITE_PLANNED === $phase) {
                 return $no_error && 'secret_commit' === $record['last_mutation']['kind'];
+            }
+
+            if (
+                self::PHASE_GRANT_INDETERMINATE === $phase
+                && 'secret_commit' === $record['last_mutation']['kind']
+            ) {
+                return 'peertube.auth.grant_indeterminate' === $record['last_error']['code']
+                    && 0 === $record['last_error']['http_status']
+                    && 0 === $record['last_error']['retry_after'];
             }
 
             if ('registry_link' !== $record['last_mutation']['kind']) {
@@ -624,8 +744,13 @@ final class PeerTube_Connection_State_Machine
             }
 
             return match ($phase) {
+                self::PHASE_OTP_RESULT_PENDING,
                 self::PHASE_AWAITING_OTP => self::valid_otp_record_error($record['last_error']),
-                self::PHASE_AWAITING_CREDENTIALS => self::valid_credential_record_error($record['last_error']),
+                self::PHASE_CREDENTIAL_RESULT_PENDING => self::valid_credential_record_error(
+                    $record['last_error']
+                ),
+                self::PHASE_AWAITING_CREDENTIALS => self::valid_credential_record_error($record['last_error'])
+                    || self::valid_grant_not_sent_record_error($record['last_error']),
                 self::PHASE_GRANT_INDETERMINATE => self::valid_indeterminate_record_error(
                     $record['last_error']
                 ),
@@ -806,7 +931,7 @@ final class PeerTube_Connection_State_Machine
         }
 
         $codes = array_merge(
-            array('peertube.auth.otp_required'),
+            array('peertube.auth.otp_required', 'peertube.auth.grant_not_sent'),
             array_values(self::credential_error_codes()),
             array_values(self::indeterminate_error_codes()),
             array_values(self::verification_error_codes())
@@ -866,7 +991,7 @@ final class PeerTube_Connection_State_Machine
         return match ($reason) {
             'invalid_credentials', 'invalid_otp' => 400 === $http_status && 0 === $retry_after,
             'invalid_client' => in_array($http_status, array(400, 401), true) && 0 === $retry_after,
-            'permission_denied' => 400 === $http_status && 0 === $retry_after,
+            'permission_denied' => in_array($http_status, array(400, 403), true) && 0 === $retry_after,
             'rate_limited' => 429 === $http_status && self::valid_retry_after($retry_after),
             default => false,
         };
@@ -926,12 +1051,20 @@ final class PeerTube_Connection_State_Machine
         return match ($error['code']) {
             'peertube.auth.invalid' => in_array($error['http_status'], array(400, 401), true)
                 && 0 === $error['retry_after'],
-            'peertube.auth.permission_denied' => 400 === $error['http_status']
+            'peertube.auth.permission_denied' => in_array($error['http_status'], array(400, 403), true)
                 && 0 === $error['retry_after'],
             'peertube.auth.rate_limited' => 429 === $error['http_status']
                 && self::valid_retry_after($error['retry_after']),
             default => false,
         };
+    }
+
+    /** @param array<string, mixed> $error */
+    private static function valid_grant_not_sent_record_error(array $error): bool
+    {
+        return 'peertube.auth.grant_not_sent' === $error['code']
+            && 0 === $error['http_status']
+            && 0 === $error['retry_after'];
     }
 
     /** @param array<string, mixed> $error */
@@ -1065,6 +1198,29 @@ final class PeerTube_Connection_State_Machine
         return is_string($value) && 1 === preg_match('/^attempt_[a-f0-9]{32}$/D', $value)
             ? $value
             : '';
+    }
+
+    private static function attempt_capability(mixed $value): string
+    {
+        return is_string($value) && 1 === preg_match('/^[a-f0-9]{64}$/D', $value)
+            ? $value
+            : '';
+    }
+
+    private static function attempt_commitment(mixed $capability): string
+    {
+        $capability = self::attempt_capability($capability);
+        if ('' === $capability) {
+            return '';
+        }
+
+        return 'attempt_' . substr(hash('sha256', self::GRANT_ATTEMPT_DOMAIN . $capability), 0, 32);
+    }
+
+    private static function attempt_capability_matches(mixed $capability, string $commitment): bool
+    {
+        $derived = self::attempt_commitment($capability);
+        return '' !== $derived && hash_equals($commitment, $derived);
     }
 
     private static function mutation_id(mixed $value): string
