@@ -8,10 +8,11 @@ ArgentWolf Video Processor 2.0 development.
 - `main` is the stable/public line. The stable 1.0 release remains identified by
   `v1.0.0`; later `main` commits are documentation/maintenance history unless a
   new release is deliberately prepared.
-- `develop-2.0` is the next-major integration line.
+- `develop-2.0` is the next-major integration line and contains the validated
+  R37 password-grant bootstrap.
 - `feature/2.0-peertube-grant-bootstrap` preserves the reviewed R37 source and
   validation history. New continuation work branches from `develop-2.0` after
-  R37 integration closes.
+  the R37 integration-closure commit.
 
 Do not develop unfinished 2.0 runtime changes directly on `main`.
 
@@ -714,18 +715,64 @@ identity/channel, activation, adapter, refresh/revoke, upload, or publication
 gate. Preserve the raw reports outside disposable `/tmp` storage if they are
 needed beyond the VM's lifetime.
 
+## R37 integration closure
+
+The documentation-only feature evidence closure
+`228b17fa173185d1a51a2c49f008e1dcd9cf0774` passed Forgejo CI run 66. Its only
+change from the VM-tested `b15e9881bf857c0658e11f1ca7e05a34093591f4`
+tree is this handoff document. The installable runtime object set remains
+identical to both the VM-tested correction and the implementation checkpoint.
+
+R37 was then integrated into `develop-2.0` without rewriting either parent:
+
+- merge commit before this handoff-closure commit:
+  `c7706dea8cff152db8e49e40146b261c4cdef3db`;
+- first parent / prior `develop-2.0` authority:
+  `a21274b1faa5c739f57f90c976cae7e30cb35fd5`;
+- second parent / validated feature closure:
+  `228b17fa173185d1a51a2c49f008e1dcd9cf0774`;
+- merge tree:
+  `3ad4a0496ab49b0c968822ac2e3e15ce2f3dd304`.
+
+Immediately before integration, Forgejo refs were re-fetched and frozen;
+`origin/main` remained `ed3982586d78f10fbb46aaf938d4478eabd322d1`.
+The prior develop authority was the exact merge base and strict ancestor of the
+feature closure. The conflict-free prospective tree, staged merge tree,
+committed merge tree, and feature-closure tree matched exactly. An independent
+read-only audit found no conflict, unstaged path, private operator detail, or
+integration-policy issue.
+
+The complete PHP lint, focused model/backend/PeerTube/grant tests,
+autoload-sensitive CAS/planning/registry/operation-store/managed-secret/
+coordinator/grant tests in both modes, dependency-free, storage, restricted
+`open_basedir`, smoke-load, FFmpeg security/binary/integration, vendor-fetch,
+JavaScript syntax, workflow-YAML, all build/test shell-syntax, and diff gates
+passed on both the prospective and committed merge trees. An exact
+prospective-tree validation package containing 62 entries passed its
+single-root, version/tag, tracked-runtime-content, hls.js 1.6.16,
+repository-material exclusion, and `SHA256SUMS` checks with ZIP SHA-256
+`f6ec9fc8ffd24b3c8771e7053bbcf34b7c672a2b88ee29d2c423b10cb8d5004b`.
+That newly built ZIP was noncanonical development-validation evidence, was not
+promoted or published, and was removed after inspection. Forgejo CI run 67
+passed the exact merge commit in 297 seconds.
+
+Only this handoff document changes after the committed merge tree, so the
+integrated installable runtime remains byte-for-byte the runtime exercised by
+the successful WordPress 6.4/7.1 VM matrix. No additional VM run is required
+for this merge-and-documentation closure. R37 is integrated only on
+`develop-2.0`; `main`, tags, releases, and publication surfaces remain
+untouched.
+
 ## Recommended continuation
 
-R37 source, local, CI, and two-case WordPress VM gates are complete on its
-feature branch. Next:
+R37 source, local, CI, two-case WordPress VM, and exact `develop-2.0`
+integration gates are complete. Next:
 
-1. integrate the validated R37 feature closure into `develop-2.0` through an
-   exact prospective merge tree and post-merge validation;
-2. keep administrator authorization/UI separate, with `manage_options`, nonce,
+1. keep administrator authorization/UI separate, with `manage_options`, nonce,
    exact input validation, safe redirects/notices, and explicit disclosure;
-3. implement identity/destination verification and activation as later reviewed
+2. implement identity/destination verification and activation as later reviewed
    slices;
-4. review refresh/revoke separately and preserve the no-upload boundary until
+3. review refresh/revoke separately and preserve the no-upload boundary until
    tranche 2.0-4 state-machine work.
 
 ## Engineering policy
