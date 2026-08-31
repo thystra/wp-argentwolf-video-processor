@@ -283,6 +283,17 @@ $assert_record = static function (
     );
 };
 
+$assert_transport_error = static function (array $record) use ($assert): void {
+    $assert(
+        array(
+            'code'        => 'peertube.connection.failed',
+            'http_status' => 0,
+            'retry_after' => 0,
+        ) === ($record['last_error'] ?? null),
+        'The dropped token connection was not classified as a transport error.'
+    );
+};
+
 $assert_projection = static function (
     array $result,
     string $status,
@@ -513,6 +524,8 @@ if (isset($preparation[$step])) {
         Atomic_Option_Result::MUTATION_APPLIED,
         $scenarios['transport']['backend_id']
     );
+    $record = $operation_record($scenarios['transport']['backend_id']);
+    $assert_transport_error($record);
     $expected_changes = array(PeerTube_Connection_Operation_Store::OPTION);
 } elseif ('transport-reconcile' === $step) {
     $record = $operation_record($scenarios['transport']['backend_id']);
@@ -582,6 +595,7 @@ if (isset($preparation[$step])) {
         PeerTube_Connection_State_Machine::PHASE_GRANT_INDETERMINATE,
         8
     );
+    $assert_transport_error($transport);
     $assert(
         array('state' => Managed_Backend_Secret_Store::PROVISION_PENDING, 'generation' => 0)
             === $secret_store->provisioning_state(

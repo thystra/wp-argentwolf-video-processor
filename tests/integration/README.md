@@ -184,7 +184,9 @@ encrypted secret planning/application followed by fresh-process confirmation,
 an OTP-required response plus an explicitly supplied retry, and a dropped
 token connection that becomes terminal indeterminate state without another
 HTTP request. Its redacted request log is compared with the exact expected
-sequence.
+sequence. The mock runs behind Docker's init process and rejects readiness if
+PHP is the container's PID 1, so its intentional self-termination proves a
+real connection drop independently of host daemon PID-1 behavior.
 
 The fixture invokes the service explicitly; the plugin registers no
 administrator, AJAX, REST, CLI, cron, activation, or upload entry point for it.

@@ -42,9 +42,10 @@ $problem = static function (int $status, string $code = ''): void {
 };
 
 if ('GET' === $method && '/health' === $target) {
-    if (! function_exists('posix_kill')) {
+    $pid = getmypid();
+    if (! function_exists('posix_kill') || ! is_int($pid) || $pid < 2) {
         http_response_code(500);
-        echo "posix_kill unavailable\n";
+        echo "transport termination unavailable\n";
         return;
     }
 
@@ -193,7 +194,10 @@ if ('POST' === $method && '/api/v1/users/token' === $target) {
     // Terminate the isolated mock only after the reviewed request marker is
     // durable. WordPress must classify the resulting dropped connection as an
     // uncertain transport outcome; all later fixture steps are local-only.
-    posix_kill(getmypid(), 9);
+    $pid = getmypid();
+    if (! is_int($pid) || $pid < 2 || ! posix_kill($pid, 9)) {
+        $problem(500);
+    }
     return;
 }
 

@@ -344,6 +344,25 @@ wait_for_mock() {
     fail "The isolated PeerTube fixture did not become ready for $CURRENT_CASE."
 }
 
+wait_for_transport_drop() {
+    local attempt=''
+    local mock_running=''
+
+    for attempt in $(seq 1 10); do
+        if ! mock_running="$(docker container inspect --format '{{.State.Running}}' "$MOCK_NAME")"; then
+            fail "The stopped transport fixture could not be inspected for $CURRENT_CASE."
+        fi
+        if [[ 'false' == "$mock_running" ]]; then
+            echo "ISOLATED_TRANSPORT_DROP=$CURRENT_CASE:PASS"
+            return 0
+        fi
+        sleep 1
+    done
+
+    docker logs "$MOCK_NAME" || true
+    fail "The transport fixture did not terminate its connection for $CURRENT_CASE."
+}
+
 wp_cli() {
     docker run --rm \
         --network "$NETWORK_NAME" \
@@ -374,7 +393,6 @@ run_case() {
     local process_count=0
     local api_request_log=''
     local expected_api_request_log=''
-    local mock_running=''
     local forbidden_value=''
 
     CURRENT_CASE=$4
@@ -457,6 +475,7 @@ run_case() {
 
     MOCK_CREATE_ATTEMPTED=1
     docker run -d \
+        --init \
         --name "$MOCK_NAME" \
         --label "$RESOURCE_LABEL_KEY=$RUN_TOKEN" \
         --network "$NETWORK_NAME" \
@@ -595,10 +614,7 @@ run_case() {
     echo "PASSWORD_GRANT_OTP_REQUIRED_AND_RETRY=$CURRENT_CASE:PASS"
     echo "PASSWORD_GRANT_TRANSPORT_INDETERMINATE_NO_RETRY=$CURRENT_CASE:PASS"
 
-    mock_running="$(docker container inspect --format '{{.State.Running}}' "$MOCK_NAME")"
-    [[ 'false' == "$mock_running" ]] \
-        || fail "The transport fixture did not terminate its connection for $CURRENT_CASE."
-    echo "ISOLATED_TRANSPORT_DROP=$CURRENT_CASE:PASS"
+    wait_for_transport_drop
 
     for forbidden_value in \
         'r37-oauth-client-id' \
