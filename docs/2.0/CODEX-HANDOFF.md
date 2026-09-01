@@ -9,13 +9,12 @@ ArgentWolf Video Processor 2.0 development.
   `v1.0.0`; later `main` commits are documentation/maintenance history unless a
   new release is deliberately prepared.
 - `develop-2.0` is the next-major integration line and contains the validated
-  R37 password-grant bootstrap.
+  R38 administrator-authorization checkpoint.
 - `feature/2.0-peertube-grant-bootstrap` preserves the reviewed R37 source and
-  validation history. New continuation work branches from `develop-2.0` after
-  the R37 integration-closure commit.
-- `feature/2.0-peertube-admin-authorization` is the active R38 feature branch,
-  based on exact R37 integration-closure tip
-  `03419494b528e8335fff5f6cb10fbec6a99eec7f`.
+  validation history.
+- `feature/2.0-peertube-admin-authorization` preserves the reviewed R38 source
+  and validation history. New continuation work branches from `develop-2.0`
+  after the R38 integration-closure commit.
 
 Do not develop unfinished 2.0 runtime changes directly on `main`.
 
@@ -910,18 +909,62 @@ per-case cleanup. The matrix and global cleanup passed with final
 This closes R38 source, local, exact-commit CI, and two-case Docker development
 checkpoint validation. It is not a real-PeerTube, TLS, exact-ZIP, release,
 upgrade, MySQL, Plugin Check, identity/channel, destination, activation,
-refresh/revoke, or upload gate. The feature evidence-closure commit and CI,
-`develop-2.0` integration commits, and canonical or prospective package
-authority remain pending.
+refresh/revoke, or upload gate.
+
+## R38 integration closure
+
+The documentation-only feature evidence closure
+`a48bc8654162e84f44047048138cedadcca33dca`, tree
+`d49c0d394e1acddeb2c813013b72ec871c0f8984`, passed Forgejo CI run 73 in
+219 seconds. Its only change from the VM-tested
+`cfed42b9c01a1c30e79172bec9a11213c61d2563` checkpoint is this handoff
+document, so the installable runtime object set remains identical to the
+successful two-case Docker matrix.
+
+R38 was then integrated into `develop-2.0` without rewriting either parent:
+
+- merge commit before this handoff-closure commit:
+  `57daf38b29817ecd9d98e5da16b00bd0bf530be4`;
+- first parent / prior `develop-2.0` authority:
+  `03419494b528e8335fff5f6cb10fbec6a99eec7f`;
+- second parent / validated feature closure:
+  `a48bc8654162e84f44047048138cedadcca33dca`;
+- merge tree:
+  `d49c0d394e1acddeb2c813013b72ec871c0f8984`.
+
+Immediately before integration, Forgejo refs were re-fetched and frozen;
+`origin/main` remained `ed3982586d78f10fbb46aaf938d4478eabd322d1`.
+The prior develop authority was the exact merge base and strict ancestor of the
+feature closure. The conflict-free disposable prospective merge, staged real
+merge, committed merge, and feature-closure trees matched exactly.
+
+The complete PHP lint, focused model/backend/PeerTube/administrator/grant tests,
+autoload-sensitive CAS/planning/registry/operation-store/managed-secret/
+coordinator/grant tests in both modes, dependency-free, storage, restricted
+`open_basedir`, smoke-load, FFmpeg security/binary/integration, vendor-fetch,
+JavaScript syntax, workflow-YAML, build/test shell-syntax, and diff gates passed
+on the prospective merge tree. A temporary package built from the exact
+SHA-512-matching hls.js 1.6.16 local npm-cache blob without a registry or curl
+request passed its single-root, version/stable-tag, required hls.js/license,
+repository-material exclusion, and `SHA256SUMS` checks. It was noncanonical
+development evidence, was not promoted or published, had no artifact hash
+recorded here, and was removed with its owned disposable worktree. Forgejo CI
+run 74 passed the exact committed merge in 221 seconds.
+
+Only this handoff document changes after the committed merge tree, so the
+integrated installable runtime remains byte-for-byte the runtime exercised by
+the successful WordPress 6.4/7.1 VM matrix. No additional VM run is required
+for this merge-and-documentation closure. Establish the exact documentation-
+closure commit from Git and require its final Forgejo CI before using it as the
+next branch point. R38 is integrated only on `develop-2.0`; `main`, tags,
+releases, and publication surfaces remain untouched.
 
 ## Recommended continuation
 
-R37 source, local, CI, two-case WordPress VM, and exact `develop-2.0`
-integration gates are complete. R38 source, local, exact-commit CI, and the
-fresh two-case administrator-boundary VM matrix are complete. Commit and
-validate this evidence record, then integrate the reviewed R38 history into
-`develop-2.0` without rewriting either parent and record the exact merge
-closure. After R38 is integrated:
+R38 source, local, exact-commit CI, two-case WordPress VM, feature closure, and
+exact `develop-2.0` merge gates are complete. Treat the Git commit containing
+this documentation-only integration closure as the next branch authority only
+after its exact Forgejo CI is green. Then:
 
 1. implement `/users/me` identity verification and bounded destination discovery
    as a separate reviewed slice;
