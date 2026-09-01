@@ -13,6 +13,9 @@ ArgentWolf Video Processor 2.0 development.
 - `feature/2.0-peertube-grant-bootstrap` preserves the reviewed R37 source and
   validation history. New continuation work branches from `develop-2.0` after
   the R37 integration-closure commit.
+- `feature/2.0-peertube-admin-authorization` is the active R38 feature branch,
+  based on exact R37 integration-closure tip
+  `03419494b528e8335fff5f6cb10fbec6a99eec7f`.
 
 Do not develop unfinished 2.0 runtime changes directly on `main`.
 
@@ -763,15 +766,62 @@ for this merge-and-documentation closure. R37 is integrated only on
 `develop-2.0`; `main`, tags, releases, and publication surfaces remain
 untouched.
 
+## R38 administrator authorization checkpoint
+
+R38 adds a separate **Settings > PeerTube Connection** page over only the
+reviewed R36/R37 local preparation, password-grant, encrypted-token-persistence,
+and credential-free reconciliation boundaries. The page slug is
+`argentwolf-video-processor-peertube`. It requires `manage_options`, and its GET
+render is mutation-free.
+
+The checkpoint registers exactly four authenticated, POST-only `admin_post`
+actions for start, resume, grant, and reconcile. It registers no `nopriv`, AJAX,
+REST, WP-CLI, cron, activation, automatic retry, upload, or media hook. Each
+handler proves capability and an action-specific or operation-bound nonce,
+requires the exact expected scalar field set and domain, invokes at most one
+state-changing coordinator/grant boundary, and returns through a fixed local
+`303` with an allowlisted notice identifier.
+
+The grant form discloses the exact configured external service, ordinary
+transport metadata, transient WordPress HTTP-hook visibility, encrypted
+non-autoloaded token storage, and the remaining incomplete connection work. It
+requires explicit external-service authorization. An allowlisted
+development-only HTTP origin requires a second explicit acknowledgement that
+credentials and returned tokens lack TLS protection in transit. Accepted
+username/password values are unslashed once and validated without text
+transformation; OTP is empty or exactly six digits and those digits are required
+in `awaiting_otp`. Password and OTP values are never repopulated or copied into
+projections, redirects, notices, options, or logs.
+
+Open-operation reads expose only validated bounded non-secret fields. Resume
+advances at most one local preparation boundary, grant performs at most one
+credential-bearing attempt, and reconcile takes no credentials and performs no
+HTTP. An indeterminate operation exposes only credential-free reconciliation
+that may confirm an exact late encrypted-token winner; indeterminate and
+attempt-exhausted operations expose no further grant form, and no browser action
+loops or resubmits automatically.
+
+R38 stops before `/users/me`, channel/destination discovery, activation,
+refresh, revoke, disconnect, operation closure, upload/media mutation,
+model-schema/runtime-version changes, release preparation, or `main`.
+
+This pre-validation source record does not self-assert its eventual exact
+implementation commit/tree; establish those identifiers from Git after the
+source is committed. Forgejo CI authority, the exact WordPress 6.4/7.1 Docker
+VM report and checksum, integration commits, and any prospective package
+evidence remain pending. Do not infer those authorities from this source
+description or record placeholder hashes/results here.
+
 ## Recommended continuation
 
 R37 source, local, CI, two-case WordPress VM, and exact `develop-2.0`
-integration gates are complete. Next:
+integration gates are complete. Complete R38 source review, exact-commit CI, and
+the fresh two-case administrator-boundary VM matrix before integration. After
+R38 is validated and integrated:
 
-1. keep administrator authorization/UI separate, with `manage_options`, nonce,
-   exact input validation, safe redirects/notices, and explicit disclosure;
-2. implement identity/destination verification and activation as later reviewed
-   slices;
+1. implement `/users/me` identity verification and bounded destination discovery
+   as a separate reviewed slice;
+2. implement activation of the disabled descriptor separately;
 3. review refresh/revoke separately and preserve the no-upload boundary until
    tranche 2.0-4 state-machine work.
 

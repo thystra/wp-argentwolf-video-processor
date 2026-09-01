@@ -297,6 +297,7 @@ require_once dirname(__DIR__) . '/includes/Atomic_Option_Result.php';
 require_once dirname(__DIR__) . '/includes/Atomic_Option_Mutation_Plan.php';
 require_once dirname(__DIR__) . '/includes/Atomic_Option_Plan_Result.php';
 require_once dirname(__DIR__) . '/includes/Atomic_Option_Store.php';
+require_once dirname(__DIR__) . '/includes/PeerTube_Connection_Input.php';
 require_once dirname(__DIR__) . '/includes/PeerTube_Connection_State_Machine.php';
 require_once dirname(__DIR__) . '/includes/PeerTube_Connection_Operation_Store.php';
 require_once dirname(__DIR__) . '/includes/Backend_Secret_Store.php';
@@ -304,14 +305,20 @@ require_once dirname(__DIR__) . '/includes/Backend_Secret_Crypto.php';
 require_once dirname(__DIR__) . '/includes/Managed_Backend_Secret_Store.php';
 require_once dirname(__DIR__) . '/includes/Backend_Registry.php';
 require_once dirname(__DIR__) . '/includes/PeerTube_Connection_Coordinator.php';
+require_once dirname(__DIR__) . '/includes/PeerTube_Password_Grant_Api.php';
+require_once dirname(__DIR__) . '/includes/PeerTube_Password_Grant_Service.php';
+require_once dirname(__DIR__) . '/includes/PeerTube_Connection_Admin_Actions.php';
+require_once dirname(__DIR__) . '/includes/PeerTube_Connection_Admin_Service.php';
 
 use ArgentVideo\Atomic_Option_Result;
 use ArgentVideo\Backend_Registry;
 use ArgentVideo\Backend_Secret_Crypto;
 use ArgentVideo\Managed_Backend_Secret_Store;
 use ArgentVideo\PeerTube_Connection_Coordinator as Coordinator;
+use ArgentVideo\PeerTube_Connection_Admin_Service as Admin_Service;
 use ArgentVideo\PeerTube_Connection_Operation_Store as Operation_Store;
 use ArgentVideo\PeerTube_Connection_State_Machine as Machine;
+use ArgentVideo\PeerTube_Password_Grant_Service as Grant_Service;
 
 $expected_autoload = function_exists('wp_autoload_values_to_autoload') ? 'off' : 'no';
 $autoloaded_value = function_exists('wp_autoload_values_to_autoload') ? 'on' : 'yes';
@@ -1703,6 +1710,46 @@ awvp_coordinator_assert_projection(
 awvp_coordinator_assert($journal_before === $database->rows[Operation_Store::OPTION], 'Indeterminate registry read rewrote journal evidence.');
 awvp_coordinator_assert($evidence === awvp_coordinator_record($path['operation_id'])['last_mutation'], 'Indeterminate registry read changed the mutation ID.');
 awvp_coordinator_assert([] === $database->mutations, 'Indeterminate registry read caused a mutation attempt.');
+
+// The administrator adapter exposes only the reviewed, credential-free
+// operation projection. The full journal remains behind the service boundary.
+$database = awvp_coordinator_reset();
+$path = awvp_coordinator_drive(0);
+$operations = new Operation_Store();
+$secrets = new Managed_Backend_Secret_Store();
+$registry = new Backend_Registry();
+$admin_service = new Admin_Service(
+    $operations,
+    new Coordinator($operations, $secrets, $registry),
+    new Grant_Service($operations, $secrets, $registry)
+);
+$open = $admin_service->open_operations();
+awvp_coordinator_assert(is_array($open) && 1 === count($open), 'Admin adapter did not expose one open operation.');
+$projection = $open[0] ?? null;
+awvp_coordinator_assert(
+    is_array($projection)
+        && array(
+            'operation_id',
+            'backend_id',
+            'origin',
+            'label',
+            'phase',
+            'record_revision',
+            'grant_attempt_no',
+            'retry_after',
+            'created_at',
+            'updated_at',
+        ) === array_keys($projection),
+    'Admin adapter projection shape changed.'
+);
+awvp_coordinator_assert(
+    $path['operation_id'] === ($projection['operation_id'] ?? null)
+        && ! array_key_exists('actor_id', $projection)
+        && ! array_key_exists('secret_ref', $projection)
+        && ! array_key_exists('last_mutation', $projection)
+        && ! array_key_exists('last_error', $projection),
+    'Admin adapter exposed internal journal evidence.'
+);
 
 fwrite(
     STDOUT,

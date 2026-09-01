@@ -8,6 +8,8 @@ declare(strict_types=1);
 define('ABSPATH', '/tmp/wordpress/');
 define('MINUTE_IN_SECONDS', 60);
 $GLOBALS['wpdb'] = (object) array('prefix' => 'wp_');
+$GLOBALS['awvp_smoke_actions'] = array();
+$GLOBALS['awvp_smoke_filters'] = array();
 
 function plugin_dir_path(string $file): string
 {
@@ -17,6 +19,11 @@ function plugin_dir_path(string $file): string
 function plugin_dir_url(string $file): string
 {
     return 'https://example.test/wp-content/plugins/' . basename(dirname($file)) . '/';
+}
+
+function plugin_basename(string $file): string
+{
+    return basename(dirname($file)) . '/' . basename($file);
 }
 
 function register_activation_hook(string $file, callable $callback): void
@@ -31,17 +38,19 @@ function register_deactivation_hook(string $file, callable $callback): void
 
 function add_filter(string $hook, callable $callback, int $priority = 10, int $accepted_args = 1): void
 {
-    unset($hook, $callback, $priority, $accepted_args);
+    unset($callback);
+    $GLOBALS['awvp_smoke_filters'][] = array($hook, $priority, $accepted_args);
 }
 
 function add_action(string $hook, callable $callback, int $priority = 10, int $accepted_args = 1): void
 {
-    unset($hook, $callback, $priority, $accepted_args);
+    unset($callback);
+    $GLOBALS['awvp_smoke_actions'][] = array($hook, $priority, $accepted_args);
 }
 
 function is_admin(): bool
 {
-    return false;
+    return true;
 }
 
 $plugin_path = dirname(__DIR__) . '/argentwolf-video-processor.php';
@@ -72,16 +81,48 @@ if (! interface_exists(ArgentVideo\PeerTube_Password_Grant_Api::class, false)) {
     exit(1);
 }
 
+if (! interface_exists(ArgentVideo\PeerTube_Connection_Admin_Actions::class, false)) {
+    fwrite(STDERR, "Plugin smoke load missed required R38 interface " . ArgentVideo\PeerTube_Connection_Admin_Actions::class . ".\n");
+    exit(1);
+}
+
 foreach (
     array(
         ArgentVideo\Atomic_Option_Mutation_Plan::class,
         ArgentVideo\Atomic_Option_Plan_Result::class,
         ArgentVideo\PeerTube_Connection_Coordinator::class,
         ArgentVideo\PeerTube_Password_Grant_Service::class,
+        ArgentVideo\PeerTube_Connection_Input::class,
+        ArgentVideo\PeerTube_Connection_Admin_Service::class,
+        ArgentVideo\PeerTube_Connection_Admin::class,
     ) as $required_class
 ) {
     if (! class_exists($required_class, false)) {
         fwrite(STDERR, "Plugin smoke load missed required R37 class {$required_class}.\n");
+        exit(1);
+    }
+}
+
+$registered_actions = array_column($GLOBALS['awvp_smoke_actions'], 0);
+$expected_admin_posts = array(
+    'admin_post_' . ArgentVideo\PeerTube_Connection_Admin::ACTION_START,
+    'admin_post_' . ArgentVideo\PeerTube_Connection_Admin::ACTION_RESUME,
+    'admin_post_' . ArgentVideo\PeerTube_Connection_Admin::ACTION_GRANT,
+    'admin_post_' . ArgentVideo\PeerTube_Connection_Admin::ACTION_RECONCILE,
+);
+foreach ($expected_admin_posts as $hook) {
+    if (1 !== count(array_keys($registered_actions, $hook, true))) {
+        fwrite(STDERR, "Plugin smoke load missed or duplicated R38 action {$hook}.\n");
+        exit(1);
+    }
+}
+foreach ($registered_actions as $hook) {
+    if (
+        str_starts_with($hook, 'admin_post_nopriv_argentwolf_video_processor_peertube_')
+        || str_starts_with($hook, 'wp_ajax_argentwolf_video_processor_peertube_')
+        || str_starts_with($hook, 'wp_ajax_nopriv_argentwolf_video_processor_peertube_')
+    ) {
+        fwrite(STDERR, "Plugin smoke load exposed an unauthorized R38 action {$hook}.\n");
         exit(1);
     }
 }

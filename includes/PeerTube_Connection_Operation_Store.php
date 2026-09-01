@@ -385,10 +385,7 @@ final class PeerTube_Connection_Operation_Store
 
     private static function operation_id(mixed $value): string
     {
-        return is_string($value)
-            && 1 === preg_match('/^connection_[a-f0-9]{32}$/D', $value)
-                ? $value
-                : '';
+        return PeerTube_Connection_Input::operation_id($value);
     }
 }
 

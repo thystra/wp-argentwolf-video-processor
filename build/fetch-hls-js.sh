@@ -90,7 +90,6 @@ NODE
 }
 
 require_command node
-require_command npm
 require_command tar
 require_command sha256sum
 mkdir -p "${TARGET_DIR}"
@@ -113,7 +112,9 @@ if [[ -n "${PACKAGE_OVERRIDE}" ]]; then
   fi
   PACKAGE_FILE="${TMP_ROOT}/hls.js-${HLS_VERSION}.tgz"
   cp -- "${PACKAGE_OVERRIDE}" "${PACKAGE_FILE}"
+  PACKAGE_SOURCE='local package override'
 else
+  require_command npm
   PACK_OUTPUT="$(
     npm pack "hls.js@${HLS_VERSION}" \
       --silent \
@@ -131,10 +132,11 @@ else
   else
     PACKAGE_FILE="${TMP_ROOT}/${PACK_NAME}"
   fi
+  PACKAGE_SOURCE='npm registry'
 fi
 
 if [[ ! -s "${PACKAGE_FILE}" ]]; then
-  echo 'Downloaded hls.js npm package is missing or empty.' >&2
+  echo 'Selected hls.js npm package is missing or empty.' >&2
   exit 1
 fi
 
@@ -184,7 +186,7 @@ printf '%s\n' "${HLS_VERSION}" > "${TARGET_VERSION}"
 (cd "${TARGET_DIR}" && sha256sum hls.min.js > "$(basename "${TARGET_HASH}")")
 
 validate_runtime_asset "${TARGET_FILE}" "${TARGET_LICENSE}"
-printf 'Fetched and verified hls.js %s (%s) from the npm registry: %s\n' \
-  "${HLS_VERSION}" "${HLS_LICENSE}" "${TARGET_FILE}"
+printf 'Installed and verified hls.js %s (%s) from %s: %s\n' \
+  "${HLS_VERSION}" "${HLS_LICENSE}" "${PACKAGE_SOURCE}" "${TARGET_FILE}"
 
 # EOF: build/fetch-hls-js.sh

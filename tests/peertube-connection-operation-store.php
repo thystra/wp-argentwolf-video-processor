@@ -211,6 +211,7 @@ require_once dirname(__DIR__) . '/includes/PeerTube_Origin.php';
 require_once dirname(__DIR__) . '/includes/Atomic_Option_Snapshot.php';
 require_once dirname(__DIR__) . '/includes/Atomic_Option_Result.php';
 require_once dirname(__DIR__) . '/includes/Atomic_Option_Store.php';
+require_once dirname(__DIR__) . '/includes/PeerTube_Connection_Input.php';
 require_once dirname(__DIR__) . '/includes/PeerTube_Connection_State_Machine.php';
 require_once dirname(__DIR__) . '/includes/PeerTube_Connection_Operation_Store.php';
 

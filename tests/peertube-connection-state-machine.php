@@ -8,6 +8,7 @@ declare(strict_types=1);
 namespace {
     require_once dirname(__DIR__) . '/includes/Backend_Identity.php';
     require_once dirname(__DIR__) . '/includes/PeerTube_Origin.php';
+    require_once dirname(__DIR__) . '/includes/PeerTube_Connection_Input.php';
     require_once dirname(__DIR__) . '/includes/PeerTube_Connection_State_Machine.php';
 
     use ArgentVideo\PeerTube_Connection_State_Machine as Machine;

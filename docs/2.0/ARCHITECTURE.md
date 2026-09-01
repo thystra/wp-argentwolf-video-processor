@@ -243,6 +243,17 @@ be retried automatically.
 
 AWVP must expose connection health without exposing secrets.
 
+Initial connection administration uses a separate server-rendered
+`manage_options` settings page. Loading that page is read-only. Each
+authenticated, nonce-protected POST may advance at most one reviewed local
+preparation, password-grant, or credential-free reconciliation boundary before
+a fixed local `303` redirect. Credential submission requires explicit
+authorization of the displayed exact external origin; an allowlisted
+development-only HTTP origin requires a separate acknowledgement that the
+transport is plaintext. This surface stops after encrypted-token persistence
+and reconciliation and exposes no bearer token or reusable PeerTube credential
+to browser JavaScript.
+
 ## 8. Editor workflow
 
 ### 8.1 Preferred AWVP Video block
@@ -540,6 +551,7 @@ Never change a stored backend ID/UUID and assume the bytes moved.
 - atomic disabled-descriptor persistence;
 - bounded non-secret connection journal and pending/reconciliation states;
 - independently encrypted, non-autoloaded credential records;
+- explicit bounded administrator start/resume/grant/reconcile actions;
 - connection test;
 - capability/version discovery;
 - channel discovery;

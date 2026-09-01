@@ -1,9 +1,9 @@
 # AWVP 2.0 PeerTube Connection, Authentication, and API Contract
 
 Status: tranche 2.0-3 design contract; R34 authenticated API primitives, R35
-local persistence foundation, and R36 local-only pre-grant coordination
-implemented; R37 implements an unregistered password-grant bootstrap through
-encrypted token persistence and has no administrator entry point
+local persistence foundation, R36 local-only pre-grant coordination, R37
+password-grant/encrypted-token persistence, and R38 explicit administrator
+authorization through that checkpoint implemented
 Reviewed runtime baselines: PeerTube 8.1.8 and 8.2.4, 2026-08-22
 Applies to: configured/manageable PeerTube backends
 
@@ -668,8 +668,34 @@ protection.
 
 Future REST endpoints require real `permission_callback`.
 
-Credential bootstrap uses purpose-built server-side actions; password/OTP do not
-go into backend options.
+R38 registers a separate settings page with slug
+`argentwolf-video-processor-peertube` and exactly four authenticated
+`admin_post` actions:
+
+- `argentwolf_video_processor_peertube_connection_start`;
+- `argentwolf_video_processor_peertube_connection_resume`;
+- `argentwolf_video_processor_peertube_connection_grant`;
+- `argentwolf_video_processor_peertube_connection_reconcile`.
+
+It registers no `nopriv`, AJAX, REST, WP-CLI, cron, activation, upload, or media
+hook. Loading the settings page is read-only and exposes only a bounded
+non-secret projection of open operations. Each action requires POST,
+`manage_options`, an action-specific or operation-bound nonce, and the exact
+expected scalar fields before it invokes at most one state-changing coordinator
+or grant service boundary. The response uses a fixed local `303`
+post/redirect/get target and an allowlisted notice identifier; user or remote
+text cannot become a notice or redirect value.
+
+Credential bootstrap uses the purpose-built grant action; password/OTP do not go
+into backend options, operation projections, page re-renders, redirect
+arguments, or notices. The browser fields are unslashed exactly once and
+validated without text transformation before their exact accepted bytes reach
+the service.
+
+The grant form requires explicit authorization to contact the exact displayed
+external service. An allowlisted development-only HTTP origin also requires a
+second explicit acknowledgement that the credential and token transport is
+plaintext and has no TLS protection.
 
 No persistent PeerTube credential is sent to browser JavaScript.
 
@@ -721,6 +747,14 @@ tokens only as authenticated-encrypted, non-autoloaded server-side state; sends
 no media, media metadata, or telemetry; and registers no administrator-facing
 or automatic connection action. This disclosure text is not, by itself, a
 claim of a validated, integrated, or released R37 artifact.
+
+R38 updates those disclosures in the same source slice as the first registered
+administrator boundary. They now identify the separate capability- and
+nonce-gated page, explicit service authorization, the second development-HTTP
+transport acknowledgement, blank/non-reflected credential fields, and the
+absence of any AJAX, REST, WP-CLI, cron, activation, upload, or automatic
+connection invocation. This source disclosure is not, by itself, commit, CI,
+Docker VM, integration, package, or release evidence.
 
 ## 32. Uninstall
 
@@ -986,6 +1020,38 @@ release version. This contract does not embed self-referential commit, Forgejo
 CI, Docker VM, package, integration, or release evidence; establish those facts
 from the exact repository refs and their associated validation records.
 
+### R38 explicit administrator authorization boundary
+
+R38 registers a server-rendered administrator surface over only the existing
+R36/R37 preparation, password-grant, and credential-free reconciliation
+boundaries. Starting an operation records the exact bounded backend ID,
+canonical origin, label, current administrator ID, and time through the
+coordinator. Resume advances at most one local preparation boundary. Grant
+submits at most one explicitly authorized username/password/optional OTP
+attempt. Reconcile accepts no credentials and performs no HTTP.
+
+The page GET performs no coordinator, grant, or reconciliation mutation.
+Operation listings and detail views validate and render only the operation ID,
+backend ID, origin, label, phase, record revision, grant attempt count, bounded
+retry time, and creation/update times. Credential fields are always blank and
+are not repopulated after OTP, credential, rate-limit, conflict, or uncertain
+results.
+
+An indeterminate remote grant remains terminal and offers no further credential
+submission. It may still offer credential-free, no-HTTP reconciliation to
+confirm an exact encrypted-token write that won before the local result became
+uncertain. Retryable OTP or credential states require a fresh explicit form
+submission and authorization; the OTP field is mandatory in the OTP-required
+phase, and there is no loop or automatic resubmission. A single request never
+hides an earlier partial mutation behind a later result, and fixed notices
+direct the administrator to inspect durable state when the outcome may have
+changed.
+
+R38 stops before `/users/me` verification, channel or destination discovery,
+activation of the disabled descriptor, refresh, revoke, disconnect, operation
+closure, upload/media mutation, model-schema or runtime-version changes, and any
+release or `main`-branch work.
+
 ## 37. Adapter factory evolution
 
 Factory may register PeerTube alongside local.
@@ -1106,6 +1172,30 @@ Before runtime implementation merges, prove at minimum:
     credentials;
 74. secret/registry targets are freshly re-proved after journal hooks, with an
     exact ready winner recoverable from terminal commit evidence without HTTP.
+75. only the four reviewed authenticated `admin_post` hooks and the separate
+    `manage_options` settings page are registered; there is no `nopriv`, AJAX,
+    REST, WP-CLI, cron, activation, upload, or media hook;
+76. page GET is read-only and renders only a validated bounded non-secret
+    operation projection;
+77. each action rejects non-POST requests and fails capability, nonce, unexpected
+    field, non-scalar, and domain validation before invoking a state-changing
+    service boundary; grant may first read its bounded non-secret operation
+    projection to validate phase and exact origin;
+78. resume, grant, and reconcile nonces bind the exact operation ID;
+79. accepted username/password bytes are unslashed once but not sanitized or
+    transformed, and OTP is either empty or exactly six digits, with six digits
+    required in `awaiting_otp`;
+80. credential submission requires explicit external-service authorization and
+    allowlisted development HTTP requires a separate plaintext-transport
+    acknowledgement;
+81. each POST invokes at most one coordinator/grant boundary and returns through
+    a fixed local `303` with an allowlisted notice identifier;
+82. password/OTP and arbitrary remote/user text never enter page projections,
+    re-rendered fields, redirects, notices, options, or logs;
+83. an indeterminate or exhausted operation offers no further credential form,
+    and no browser path automatically retries a grant;
+84. the browser authorization boundary is exercised against real WordPress 6.4
+    and 7.1 before the R38 checkpoint is accepted.
 
 ## 40. Recommended implementation order
 
@@ -1121,10 +1211,11 @@ Before runtime implementation merges, prove at minimum:
 10. low-level PeerTube API client and public instance detection;
 11. production login/bootstrap coordinator with OTP handling (R37 feature
     slice through encrypted token persistence only);
-12. `/users/me` verification and destination discovery;
-13. activation writer and adapter/factory integration;
-14. refresh/revoke lifecycle;
-15. admin connection actions;
+12. bounded administrator start/resume/grant/reconcile actions through encrypted
+    token persistence only (R38 feature slice);
+13. `/users/me` verification and destination discovery;
+14. activation writer and adapter/factory integration;
+15. refresh/revoke lifecycle;
 16. diagnostics/Site Health;
 17. service/privacy/help disclosure before runtime PeerTube contact;
 18. full regression/security review.

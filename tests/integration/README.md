@@ -203,3 +203,53 @@ To preserve its report outside the checkout, set an absolute directory:
 AWVP_R37_REPORT_DIR=/absolute/report/path \
     bash tests/integration/peertube-password-grant-smoke.sh
 ```
+
+## PeerTube administrator authorization checkpoint
+
+After the R38 source checkpoint is committed, run its two-case browser-boundary
+smoke from a clean checkout on the disposable Docker host:
+
+```bash
+bash tests/integration/peertube-admin-authorization-smoke.sh
+```
+
+The runner retains R37's exact committed-source export, read-only plugin mount,
+cache-first digest-pinned images, and WordPress 6.4.2/PHP 8.1/MariaDB 10.6.27
+plus WordPress 7.1/PHP 8.3/MariaDB 10.11.18 matrix. Each case owns a fresh
+internal-only network, WordPress volume, database, WordPress container, and
+isolated PeerTube-shaped fixture. No host port is published. An exact image
+already present in Docker's local cache causes no registry request; only a
+missing pinned digest is pulled.
+
+A disposable PHP client reaches WordPress only through the internal Docker
+network and authenticates through the real `wp-login.php` boundary. It proves
+the absence of an unauthenticated `admin_post_nopriv` action, POST-only method
+enforcement, `manage_options` authorization before nonce handling, form- and
+operation-bound nonces, exact field rejection, read-only page GETs, and fixed
+local 303 post/redirect/get responses. It performs one explicit start, seven
+separate one-boundary resume requests, one explicit credential attempt, and
+one credential-free reconciliation. The client also requires the external
+service disclosure, the separate plaintext-HTTP acknowledgement, and blank
+credential inputs; invalid acknowledgements must make no PeerTube request.
+Cookies, nonces, credentials, and response bodies remain in memory and are
+never written to the report.
+
+The R37 success-only PeerTube mock is reused without changing its historical
+fixture. Its redacted log must contain exactly one OAuth-client GET and one
+password-token POST, proving that rejected browser submissions, page reads,
+and reconciliation neither call PeerTube nor retry automatically. A fresh
+WP-CLI process then verifies the exact disabled backend and journal state,
+administrator attribution, encrypted token round-trip, non-autoload private
+options, plaintext-canary exclusion, unchanged attachments and managed upload
+storage, and a clean `WP_DEBUG` log.
+
+This remains focused source-checkpoint evidence, not a real-PeerTube, TLS,
+exact-ZIP, release, upgrade, MySQL, Plugin Check, identity/channel,
+destination, activation, adapter, refresh/revoke, or upload gate.
+
+To preserve its report outside the checkout, set an absolute directory:
+
+```bash
+AWVP_R38_REPORT_DIR=/absolute/report/path \
+    bash tests/integration/peertube-admin-authorization-smoke.sh
+```

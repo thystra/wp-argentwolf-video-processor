@@ -41,9 +41,21 @@ LICENSE
 make_asset "${VALID_PACKAGE_DIR}/dist/hls.min.js"
 tar -czf "${TMP_ROOT}/hls.js-1.6.16-valid.tgz" -C "${TMP_ROOT}/valid" package
 
-ARGENT_VIDEO_HLS_PACKAGE_FILE="${TMP_ROOT}/hls.js-1.6.16-valid.tgz" \
-ARGENT_VIDEO_HLS_TARGET_DIR="${VALID_TARGET_DIR}" \
-  bash "${ROOT_DIR}/build/fetch-hls-js.sh"
+VALID_OUTPUT="$(
+  ARGENT_VIDEO_HLS_PACKAGE_FILE="${TMP_ROOT}/hls.js-1.6.16-valid.tgz" \
+  ARGENT_VIDEO_HLS_TARGET_DIR="${VALID_TARGET_DIR}" \
+    bash "${ROOT_DIR}/build/fetch-hls-js.sh"
+)"
+
+printf '%s\n' "${VALID_OUTPUT}"
+if [[ "${VALID_OUTPUT}" != *'from local package override:'* ]]; then
+  echo 'Vendor fetch did not identify the local package override.' >&2
+  exit 1
+fi
+if [[ "${VALID_OUTPUT}" == *'from the npm registry:'* ]]; then
+  echo 'Vendor fetch incorrectly reported an npm registry source.' >&2
+  exit 1
+fi
 
 test -s "${VALID_TARGET_DIR}/hls.min.js"
 test -s "${VALID_TARGET_DIR}/hls.LICENSE"
