@@ -13,6 +13,9 @@ ArgentWolf Video Processor 2.0 development.
 - `feature/2.0-peertube-grant-bootstrap` preserves the reviewed R37 source and
   validation history. New continuation work branches from `develop-2.0` after
   the R37 integration-closure commit.
+- `feature/2.0-peertube-admin-authorization` is the active R38 feature branch,
+  based on exact R37 integration-closure tip
+  `03419494b528e8335fff5f6cb10fbec6a99eec7f`.
 
 Do not develop unfinished 2.0 runtime changes directly on `main`.
 
@@ -763,15 +766,166 @@ for this merge-and-documentation closure. R37 is integrated only on
 `develop-2.0`; `main`, tags, releases, and publication surfaces remain
 untouched.
 
+## R38 administrator authorization checkpoint
+
+R38 adds a separate **Settings > PeerTube Connection** page over only the
+reviewed R36/R37 local preparation, password-grant, encrypted-token-persistence,
+and credential-free reconciliation boundaries. The page slug is
+`argentwolf-video-processor-peertube`. It requires `manage_options`, and its GET
+render is mutation-free.
+
+The checkpoint registers exactly four authenticated, POST-only `admin_post`
+actions for start, resume, grant, and reconcile. It registers no `nopriv`, AJAX,
+REST, WP-CLI, cron, activation, automatic retry, upload, or media hook. Each
+handler proves capability and an action-specific or operation-bound nonce,
+requires the exact expected scalar field set and domain, invokes at most one
+state-changing coordinator/grant boundary, and returns through a fixed local
+`303` with an allowlisted notice identifier.
+
+The grant form discloses the exact configured external service, ordinary
+transport metadata, transient WordPress HTTP-hook visibility, encrypted
+non-autoloaded token storage, and the remaining incomplete connection work. It
+requires explicit external-service authorization. An allowlisted
+development-only HTTP origin requires a second explicit acknowledgement that
+credentials and returned tokens lack TLS protection in transit. Accepted
+username/password values are unslashed once and validated without text
+transformation; OTP is empty or exactly six digits and those digits are required
+in `awaiting_otp`. Password and OTP values are never repopulated or copied into
+projections, redirects, notices, options, or logs.
+
+Open-operation reads expose only validated bounded non-secret fields. Resume
+advances at most one local preparation boundary, grant performs at most one
+credential-bearing attempt, and reconcile takes no credentials and performs no
+HTTP. An indeterminate operation exposes only credential-free reconciliation
+that may confirm an exact late encrypted-token winner; indeterminate and
+attempt-exhausted operations expose no further grant form, and no browser action
+loops or resubmits automatically.
+
+R38 stops before `/users/me`, channel/destination discovery, activation,
+refresh, revoke, disconnect, operation closure, upload/media mutation,
+model-schema/runtime-version changes, release preparation, or `main`.
+
+The first R38 implementation checkpoint is exact commit
+`71e6991e869187b85dec1e9abacaf06d06a6bdcb`, tree
+`a566e4ebd5796b9e3a3fa8f78e98d28919108439`, with sole parent
+`03419494b528e8335fff5f6cb10fbec6a99eec7f`. Its complete local PHP lint,
+focused and regression suites, both autoload modes, storage/restricted-path/
+smoke-load/FFmpeg/vendor/JavaScript gates, workflow YAML, integration shell
+syntax, and diff checks passed.
+
+Forgejo CI run 69 used that exact commit on `forgejo-workstation`. PHP lint,
+all source tests, whitespace validation, and ZIP construction passed. The final
+ZIP inspection alone exited 141: under `pipefail`, an early successful
+`grep -q` manifest match closed its pipe while `unzip -Z1` was still writing the
+now-larger archive. This is classified as a workflow-inspection defect, not a
+source-test or package-build success. The corrected workflows materialize the
+ZIP listing once and perform the same inclusion/exclusion assertions against
+that complete temporary manifest. A temporary clean export of exact `71e6991`
+then built from SHA-512-verified local npm cache content, passed the corrected
+single-root/content/exclusion/`SHA256SUMS` inspection, and was removed. It is
+noncanonical development evidence and no artifact hash is asserted here.
+
+The workflow correction is exact commit
+`54c03198fced4fa7f2b8eb1643c6d03a539b9189`, tree
+`2fbf2ad802ad279275e672976efde86f31aa0a3c`, with sole parent
+`71e6991e869187b85dec1e9abacaf06d06a6bdcb`.
+It changes only the three workflows and this handoff; its installable runtime
+object set remains the implementation checkpoint. Forgejo CI run 70 passed the
+exact correction commit on `forgejo-workstation` in 219 seconds, including the
+corrected ZIP inspection and artifact upload.
+
+The first R38 VM attempt used exact clean commit
+`54c03198fced4fa7f2b8eb1643c6d03a539b9189`, exact tree
+`2fbf2ad802ad279275e672976efde86f31aa0a3c`, a commit export mounted read-only,
+and all six pinned images from local Docker cache. The WordPress 6.4.2 / PHP
+8.1.34 / MariaDB 10.6.27 case passed network/volume ownership, internal-network,
+database-local and consumer-path readiness, fresh-site, runtime-configuration,
+version, activation, no-host-port, and HTTP-ready gates. Its browser fixture
+then stopped before the authenticated administrator action flow because it
+required the administrator `/wp-admin/` login landing for the subscriber too.
+Both exact local WordPress 6.4.2 and 7.1 cores deliberately redirect a successful
+subscriber that lacks `edit_posts` to `/wp-admin/profile.php`. WordPress 7.1 did
+not run. This is classified as a browser-harness failure, not successful R38 VM
+evidence or a plugin-source failure.
+
+- failed report:
+  `peertube-admin-authorization-smoke-20260901T153342Z-4774.log`;
+- failed report SHA-256:
+  `1aff0f1d396b9b4ccca80b66d7eb12f89fc8a450403152fef3b70ec54b3725c7`;
+- cleanup: `PASS`.
+
+The login-fixture correction is exact commit
+`90704b7653b5cdb6edc2b032e6a3544c8db6a810`, tree
+`276a6214a87e85a8573b2e4d5889f384be8d83a0`, with sole parent
+`54c03198fced4fa7f2b8eb1643c6d03a539b9189`. Forgejo CI run 71 passed that
+exact commit on `forgejo-workstation` in 219 seconds.
+
+The second R38 VM attempt used that exact clean commit and tree, a read-only
+commit export, and all six pinned images from local Docker cache. The WordPress
+6.4.2 case passed both role-specific login boundaries, the complete browser
+flow and administrator HTTP boundary, post-request state assertions, the exact
+one-GET/one-POST PeerTube request sequence, encrypted-secret persistence,
+plaintext-canary exclusion, and no automatic retry or upload mutation. It then
+failed the unfiltered debug-log gate because the fresh site had no recent core,
+plugin, or theme update-check transient. Core's normal `admin_init` hooks tried
+the three WordPress.org APIs on the intentionally internal-only network and
+logged the expected blocked-connection warnings. WordPress 7.1 did not run.
+This is classified as a deterministic browser-harness isolation failure, not a
+plugin-source failure or successful R38 matrix evidence.
+
+- failed report:
+  `peertube-admin-authorization-smoke-20260901T155148Z-9071.log`;
+- failed report SHA-256:
+  `7db136616e319ad528f3c7b3a58daf0e313285d335426c0dfa3196877cd39b1a`;
+- cleanup: `PASS`.
+
+The update-baseline correction is exact commit
+`cfed42b9c01a1c30e79172bec9a11213c61d2563`, tree
+`5992735674c1dd0ec5a758907f7d4cff4a30f9fe`, with sole parent
+`90704b7653b5cdb6edc2b032e6a3544c8db6a810`. It changes only repository test
+infrastructure and documentation; the installable runtime object set remains
+the implementation checkpoint. Forgejo CI run 72 passed that exact commit on
+`forgejo-workstation` in 403 seconds. The slower runner spent 363 seconds in
+the verified FFmpeg build; PHP lint, the complete test suite, ZIP construction
+and inspection, and artifact upload all passed.
+
+The replacement R38 VM matrix used that exact clean commit and tree, a
+read-only commit export, and all six pinned images from local Docker cache. The
+WordPress 6.4.2 / PHP 8.1.34 / MariaDB 10.6.27 and WordPress 7.1 / PHP 8.3.33 /
+MariaDB 10.11.18 cases each passed infrastructure ownership/isolation,
+fresh-site and exact-version gates, activation, the asserted update-cache
+baseline, both role-specific login boundaries, the full browser/HTTP/state
+flow, the exact one-OAuth-GET/one-token-POST request sequence, no automatic
+retry, plaintext-canary exclusion, encrypted-secret persistence, no upload
+mutation, no gated PHP/WordPress debug diagnostics, case assertions, and
+per-case cleanup. The matrix and global cleanup passed with final
+`PEERTUBE_ADMIN_AUTHORIZATION_SMOKE=PASS`.
+
+- successful report:
+  `peertube-admin-authorization-smoke-20260901T194705Z-14213.log`;
+- successful report SHA-256:
+  `efe82a25f264171173f3c1ffcb028316519a50cd928c4a400149ae4481082f8b`;
+- cleanup: `PASS`.
+
+This closes R38 source, local, exact-commit CI, and two-case Docker development
+checkpoint validation. It is not a real-PeerTube, TLS, exact-ZIP, release,
+upgrade, MySQL, Plugin Check, identity/channel, destination, activation,
+refresh/revoke, or upload gate. The feature evidence-closure commit and CI,
+`develop-2.0` integration commits, and canonical or prospective package
+authority remain pending.
+
 ## Recommended continuation
 
 R37 source, local, CI, two-case WordPress VM, and exact `develop-2.0`
-integration gates are complete. Next:
+integration gates are complete. R38 source, local, exact-commit CI, and the
+fresh two-case administrator-boundary VM matrix are complete. Commit and
+validate this evidence record, then integrate the reviewed R38 history into
+`develop-2.0` without rewriting either parent and record the exact merge
+closure. After R38 is integrated:
 
-1. keep administrator authorization/UI separate, with `manage_options`, nonce,
-   exact input validation, safe redirects/notices, and explicit disclosure;
-2. implement identity/destination verification and activation as later reviewed
-   slices;
+1. implement `/users/me` identity verification and bounded destination discovery
+   as a separate reviewed slice;
+2. implement activation of the disabled descriptor separately;
 3. review refresh/revoke separately and preserve the no-upload boundary until
    tranche 2.0-4 state-machine work.
 

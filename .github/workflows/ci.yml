@@ -86,11 +86,13 @@ jobs:
           AWVP_ATOMIC_MODERN_AUTOLOAD=1 php tests/peertube-connection-coordinator.php
           php tests/peertube-password-grant-service.php
           AWVP_ATOMIC_MODERN_AUTOLOAD=1 php tests/peertube-password-grant-service.php
+          php tests/peertube-connection-admin.php
           bash -n tests/integration/peertube-http-smoke.sh
           bash -n tests/integration/peertube-auth-api-smoke.sh
           bash -n tests/integration/peertube-persistence-smoke.sh
           bash -n tests/integration/peertube-connection-coordinator-smoke.sh
           bash -n tests/integration/peertube-password-grant-smoke.sh
+          bash -n tests/integration/peertube-admin-authorization-smoke.sh
           php tests/run.php
           php tests/storage-boundary.php
           php -d open_basedir="${GITHUB_WORKSPACE}:/tmp" tests/open-basedir.php
@@ -112,13 +114,16 @@ jobs:
         run: |
           set -euo pipefail
           ZIP="dist/argentwolf-video-processor-${{ steps.version.outputs.version }}.zip"
-          test "$(unzip -Z1 "${ZIP}" | awk -F/ 'NF {print $1}' | sort -u)" = 'argentwolf-video-processor'
-          unzip -Z1 "${ZIP}" | grep -qx 'argentwolf-video-processor/argentwolf-video-processor.php'
-          unzip -Z1 "${ZIP}" | grep -qx 'argentwolf-video-processor/assets/vendor/hls.min.js'
-          unzip -Z1 "${ZIP}" | grep -qx 'argentwolf-video-processor/assets/vendor/hls.LICENSE'
-          ! unzip -Z1 "${ZIP}" | grep -qx 'argentwolf-video-processor/assets/vendor/hls.VERSION'
-          ! unzip -Z1 "${ZIP}" | grep -qx 'argentwolf-video-processor/assets/vendor/hls.SHA256'
-          ! unzip -Z1 "${ZIP}" | grep -Eq '/(AGENTS|ARCHITECTURE|TODO|tests|build|ops|\.github)'
+          MANIFEST="$(mktemp)"
+          trap 'rm -f -- "${MANIFEST}"' EXIT
+          unzip -Z1 "${ZIP}" > "${MANIFEST}"
+          test "$(awk -F/ 'NF {print $1}' "${MANIFEST}" | sort -u)" = 'argentwolf-video-processor'
+          grep -qx 'argentwolf-video-processor/argentwolf-video-processor.php' "${MANIFEST}"
+          grep -qx 'argentwolf-video-processor/assets/vendor/hls.min.js' "${MANIFEST}"
+          grep -qx 'argentwolf-video-processor/assets/vendor/hls.LICENSE' "${MANIFEST}"
+          ! grep -qx 'argentwolf-video-processor/assets/vendor/hls.VERSION' "${MANIFEST}"
+          ! grep -qx 'argentwolf-video-processor/assets/vendor/hls.SHA256' "${MANIFEST}"
+          ! grep -Eq '/(AGENTS|ARCHITECTURE|TODO|tests|build|ops|\.github)' "${MANIFEST}"
           (cd dist && sha256sum --check SHA256SUMS)
 
       - name: Upload test package

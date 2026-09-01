@@ -38,16 +38,24 @@ not run inside the WP-Cron callback or an administrator web request.
 
 Stable 1.0 processing is local. The unreleased 2.0 development line adds an
 opt-in connection to an operator-configured PeerTube service. Public instance
-detection sends no credentials. When explicitly invoked by a trusted
-server-side caller, the unreleased internal bootstrap sends the supplied
-PeerTube username and password plus an optional six-digit OTP only to that exact
-origin. The password, OTP, and instance-local OAuth client response are not
-retained. Returned access and refresh tokens are authenticated-encrypted in a
-non-autoloaded server-side option. No video, media metadata, or telemetry is
-sent by connection bootstrap. The configured service can observe ordinary
-request metadata, including the WordPress server network address and
-plugin/version User-Agent. This checkpoint registers no administrator-facing or
-automatic connection action.
+detection sends no credentials. A separate PeerTube Connection settings page
+lets authenticated administrators with `manage_options` explicitly start,
+advance, or reconcile a durable operation and authorize one password-grant
+attempt per explicit submission. Its actions are POST-only and nonce-protected;
+loading the page is read-only, and no AJAX, REST, WP-CLI, cron, activation, or
+automatic connection action is registered. Credential submission requires
+explicit authorization of the displayed external service. An allowlisted
+development-only plaintext HTTP origin requires a second transport-risk
+acknowledgement.
+
+The authorized bootstrap sends the entered PeerTube username and password plus
+an optional six-digit OTP only to that exact origin. The password, OTP, and
+instance-local OAuth client response are not retained or reflected into the
+page, redirect, or notice. Returned access and refresh tokens are
+authenticated-encrypted in a non-autoloaded server-side option. No video, media
+metadata, or telemetry is sent by connection bootstrap. The configured service
+can observe ordinary request metadata, including the WordPress server network
+address and plugin/version User-Agent.
 
 == Installation ==
 
@@ -113,9 +121,10 @@ Automatic detached dispatch is unavailable. An operator may invoke
 Stable 1.0 does not: video processing occurs on the WordPress server and the
 pinned hls.js runtime is served locally. The unreleased 2.0 development line can
 contact only an operator-configured PeerTube origin. Public instance detection
-sends no credentials. The explicit internal connection bootstrap exchanges a
-supplied PeerTube username/password and optional OTP for reusable tokens at that
-same origin; it retains only authenticated-encrypted access/refresh tokens.
+sends no credentials. The explicitly administrator-authorized connection
+bootstrap exchanges an entered PeerTube username/password and optional OTP for
+reusable tokens at that same origin; it retains only authenticated-encrypted
+access/refresh tokens.
 Connection bootstrap sends no media, media metadata, or telemetry. Future
 opt-in upload features will send media and selected metadata to that service,
 whose operator terms and privacy policy apply. PeerTube is self-hostable
@@ -133,9 +142,10 @@ original attachment remains unchanged and may retain its original metadata.
 The plugin contains no telemetry. Stable 1.0 sends no media or usage information
 to a remote processing service. Unreleased 2.0 public instance detection reads
 only public configuration from the exact operator-configured PeerTube origin.
-Its explicit internal bootstrap sends the supplied PeerTube username/password
-and optional OTP only to that origin. The password, OTP, and transient local
-OAuth client response are not stored; returned access/refresh tokens are stored
+Its explicitly administrator-authorized bootstrap sends the entered PeerTube
+username/password and optional OTP only to that origin. The password, OTP, and
+transient local OAuth client response are not stored or reflected into the page,
+redirect, or notice; returned access/refresh tokens are stored
 authenticated-encrypted in a non-autoloaded server-side option. Bootstrap sends
 no media, media metadata, or telemetry. That operator can observe the requesting
 server network address and plugin/version User-Agent. Future opt-in uploads will

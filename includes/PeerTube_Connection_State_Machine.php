@@ -64,7 +64,7 @@ final class PeerTube_Connection_State_Machine
     public const EVENT_CONFIRM_ACTIVATION = 'confirm_activation';
     public const EVENT_COMPLETE = 'complete';
 
-    public const MAX_GRANT_ATTEMPTS = 8;
+    public const MAX_GRANT_ATTEMPTS = PeerTube_Connection_Input::MAX_GRANT_ATTEMPTS;
 
     private const MAX_RECORD_BYTES = 16384;
     private const MAX_OPTION_VALUE_BYTES = 1048576;
@@ -1174,9 +1174,7 @@ final class PeerTube_Connection_State_Machine
 
     private static function operation_id(mixed $value): string
     {
-        return is_string($value) && 1 === preg_match('/^connection_[a-f0-9]{32}$/D', $value)
-            ? $value
-            : '';
+        return PeerTube_Connection_Input::operation_id($value);
     }
 
     private static function provisioning_id(mixed $value): string
@@ -1232,21 +1230,7 @@ final class PeerTube_Connection_State_Machine
 
     private static function label(mixed $value): string
     {
-        if (
-            ! is_string($value)
-            || '' === $value
-            || trim($value) !== $value
-            || strlen($value) > 480
-            || 1 !== preg_match('//u', $value)
-            || 1 === preg_match('/[\x00-\x1F\x7F]/', $value)
-            || str_contains($value, '<')
-            || str_contains($value, '>')
-        ) {
-            return '';
-        }
-
-        $length = function_exists('mb_strlen') ? mb_strlen($value) : strlen($value);
-        return $length <= 120 ? $value : '';
+        return PeerTube_Connection_Input::label($value);
     }
 
     private static function machine_name(mixed $value): bool

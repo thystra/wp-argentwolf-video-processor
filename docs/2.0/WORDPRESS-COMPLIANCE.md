@@ -1,11 +1,11 @@
 # ArgentWolf Video Processor 2.0 WordPress Compliance Contract
 
 Status: required companion for all AWVP 2.0 implementation tranches
-Checked against official WordPress developer documentation: 2026-08-23
-Current implementation note: R37 defines an unregistered explicit
-password-grant service through encrypted token persistence. Exact commit, CI,
-and Docker VM authority belongs in checkpoint validation records, not this
-source contract.
+Checked against official WordPress developer documentation: 2026-09-01
+Current implementation note: R38 adds a bounded administrator authorization
+surface over the R37 password-grant service through encrypted token persistence
+and credential-free reconciliation. Exact commit, CI, and Docker VM authority
+belongs in checkpoint validation records, not this source contract.
 
 This document converts WordPress/WordPress.org requirements into stable
 engineering boundaries so compliance is designed in rather than repaired at
@@ -206,6 +206,20 @@ the future `manage_options` plus nonce authorization surface; such a surface
 must be separately implemented and tested before ordinary administrators can
 initiate a connection.
 
+R38 provides that separately reviewed boundary through a dedicated settings
+page and only four authenticated `admin_post` actions: start, resume, grant, and
+credential-free reconcile. Each handler requires POST, `manage_options`, an
+action-specific or operation-bound nonce, the exact expected scalar fields, and
+at most one state-changing coordinator or grant invocation before a fixed local
+`303` redirect.
+Loading the page is read-only. R38 registers no `nopriv`, AJAX, REST, WP-CLI,
+cron, activation, automatic retry, upload, or media hook.
+
+Before a grant, the administrator must explicitly authorize sending the entered
+credentials to the displayed exact external service. An allowlisted
+development-only HTTP origin requires a second acknowledgement that the
+credential and token transport is plaintext and lacks TLS protection.
+
 ## 7. Secrets contract
 
 Backend secrets are server-side secrets.
@@ -250,6 +264,13 @@ or logs, and its disclosure must not imply that independently installed
 WordPress HTTP observers are unable to see it. Later reconciliation may confirm
 the exact encrypted after-state but must never rebuild or replay a token write
 from hash evidence.
+
+At the browser boundary, AWVP unslashes its owned credential fields exactly
+once, validates the username/password byte limits and the OTP as either empty or
+exactly six digits, requires those six digits in `awaiting_otp`, and does not
+apply text sanitization or another transformation to the accepted credential
+bytes. Password and OTP fields are never repopulated; password/OTP never enter
+page projections, redirect arguments, or admin notices.
 
 ## 8. Filesystem/media contract
 
@@ -445,6 +466,11 @@ is easy.
 
 Do not treat a nonce as a capability.
 
+The R38 connection page and all four actions require `manage_options`. The nonce
+proves request intent but does not replace that capability check. Operation
+actions use operation-bound nonce actions, and rendering the page performs only
+bounded, non-secret reads.
+
 ## 12. External input
 
 Treat all of the following as untrusted:
@@ -465,6 +491,12 @@ Treat all of the following as untrusted:
 Validate domains/enums/IDs before use.
 
 Escape at the final output context.
+
+Authenticated browser mutations must reject non-POST requests, unexpected or
+non-scalar fields, invalid canonical values, and tampered nonces before invoking
+the service boundary. Post/redirect/get responses use only fixed local redirect
+targets and allowlisted notice identifiers; remote or user-supplied text never
+becomes an admin notice.
 
 ## 13. Build/package contract
 

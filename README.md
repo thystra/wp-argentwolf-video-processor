@@ -83,6 +83,11 @@ shared hosting.
 - a link to the GitHub project for support and development;
 - bounded database-backed worker diagnostic history and retention controls.
 
+The unreleased 2.0 development line also adds a separate **Settings > PeerTube
+Connection** page. It is available only to authenticated administrators with
+`manage_options`; loading it is read-only, while its explicit POST actions are
+nonce-protected and advance at most one reviewed connection step.
+
 ## WP-CLI
 
 ```bash
@@ -107,19 +112,27 @@ original uploaded attachment is preserved and may retain its original metadata.
 Stable 1.0 processing remains local and the plugin contains no telemetry. The
 unreleased 2.0 development line adds an opt-in, operator-configured PeerTube
 connection. Public instance detection contacts only that configured origin and
-sends no credentials. The unreleased internal password-grant service, when
-explicitly invoked by a trusted server-side caller, sends the supplied PeerTube
-username and password plus an optional six-digit OTP only to that same exact
-origin. The instance-local OAuth client is used transiently; the password, OTP,
-and OAuth client response are not retained. Returned access and refresh tokens
-are authenticated-encrypted in a non-autoloaded server-side option before the
-operation can advance. No media, selected media metadata, or telemetry is sent
-by this connection bootstrap. The configured service can observe ordinary HTTP
-transport metadata, including the WordPress server's network address and the
-plugin product/version User-Agent. Its operator terms and privacy policy apply.
-This checkpoint registers no administrator-facing or automatic connection
-action. Later upload work will separately disclose and send media and selected
-metadata only to the configured service.
+sends no credentials. An authenticated administrator with `manage_options` may
+explicitly start, advance, or reconcile a durable connection operation and may
+authorize one password-grant attempt per explicit submission from the separate
+PeerTube Connection page. Each action is POST-only and nonce-protected; loading
+the page is read-only, and there is no AJAX, REST, WP-CLI, cron, activation, or
+automatic connection invocation. Before credentials are sent, the administrator
+must explicitly authorize the displayed external service. An allowlisted
+development-only plaintext HTTP origin requires a second transport-risk
+acknowledgement.
+
+The explicit grant sends the entered PeerTube username and password plus an
+optional six-digit OTP only to that same exact origin. The instance-local OAuth
+client is used transiently; the password, OTP, and OAuth client response are not
+retained or reflected into the page, redirect, or notice. Returned access and
+refresh tokens are authenticated-encrypted in a non-autoloaded server-side
+option before the operation can advance. No media, selected media metadata, or
+telemetry is sent by this connection bootstrap. The configured service can
+observe ordinary HTTP transport metadata, including the WordPress server's
+network address and the plugin product/version User-Agent. Its operator terms
+and privacy policy apply. Later upload work will separately disclose and send
+media and selected metadata only to the configured service.
 
 hls.js is fetched only during controlled release builds, verified, and served
 locally from the installed plugin. Build-time `hls.VERSION` and `hls.SHA256`

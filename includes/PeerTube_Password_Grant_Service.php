@@ -11,13 +11,13 @@ use Closure;
 use Throwable;
 
 /**
- * Explicit, unregistered password-grant bootstrap boundary.
+ * Explicit password-grant bootstrap boundary.
  *
- * The service is intentionally not wired to an administrator, AJAX, REST,
- * CLI, cron, activation, or upload hook. A caller supplies ephemeral
- * credentials for one manually authorized attempt. The service journals an
- * exact claim before the credential-bearing POST and never retries an
- * uncertain grant automatically.
+ * R38 exposes this service only through its authenticated administrator
+ * boundary; it remains absent from AJAX, REST, CLI, cron, activation, and
+ * upload hooks. A caller supplies ephemeral credentials for one manually
+ * authorized attempt. The service journals an exact claim before the
+ * credential-bearing POST and never retries an uncertain grant automatically.
  */
 final class PeerTube_Password_Grant_Service
 {
@@ -36,8 +36,8 @@ final class PeerTube_Password_Grant_Service
     private const STALE_ATTEMPT_SECONDS = 30;
     private const MAX_PRE_POST_MARK_AGE_SECONDS = 15;
     private const MAX_REQUEST_MARK_ATTEMPTS = 3;
-    private const MAX_USERNAME_BYTES = 1024;
-    private const MAX_SECRET_BYTES = 16384;
+    private const MAX_USERNAME_BYTES = PeerTube_Connection_Input::MAX_USERNAME_BYTES;
+    private const MAX_SECRET_BYTES = PeerTube_Connection_Input::MAX_PASSWORD_BYTES;
     private const MIN_USABLE_TOKEN_LIFETIME_SECONDS = 60;
     private const MAX_TOKEN_LIFETIME_SECONDS = 315576000;
 
@@ -1597,9 +1597,7 @@ final class PeerTube_Password_Grant_Service
         string $password,
         string $otp
     ): bool {
-        return self::bounded_no_whitespace($username, self::MAX_USERNAME_BYTES)
-            && self::bounded_request_text($password, self::MAX_SECRET_BYTES, true)
-            && ('' === $otp || 1 === preg_match('/^[0-9]{6}$/D', $otp));
+        return PeerTube_Connection_Input::valid_credentials($username, $password, $otp);
     }
 
     private static function bounded_no_whitespace(mixed $value, int $maximum_bytes): bool
@@ -1736,10 +1734,7 @@ final class PeerTube_Password_Grant_Service
 
     private static function projected_operation_id(mixed $value): string
     {
-        return is_string($value)
-            && 1 === preg_match('/^connection_[a-f0-9]{32}$/D', $value)
-                ? $value
-                : '';
+        return PeerTube_Connection_Input::operation_id($value);
     }
 
     /**
