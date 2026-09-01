@@ -825,10 +825,43 @@ then built from SHA-512-verified local npm cache content, passed the corrected
 single-root/content/exclusion/`SHA256SUMS` inspection, and was removed. It is
 noncanonical development evidence and no artifact hash is asserted here.
 
-The exact correction commit and its Forgejo CI authority, the WordPress
-6.4/7.1 Docker VM report and checksum, integration commits, and canonical or
-prospective package authority remain pending. Do not infer those authorities
-from this source description or record placeholder hashes/results here.
+The workflow correction is exact commit
+`54c03198fced4fa7f2b8eb1643c6d03a539b9189`, tree
+`2fbf2ad802ad279275e672976efde86f31aa0a3c`, with sole parent
+`71e6991e869187b85dec1e9abacaf06d06a6bdcb`.
+It changes only the three workflows and this handoff; its installable runtime
+object set remains the implementation checkpoint. Forgejo CI run 70 passed the
+exact correction commit on `forgejo-workstation` in 219 seconds, including the
+corrected ZIP inspection and artifact upload.
+
+The first R38 VM attempt used exact clean commit
+`54c03198fced4fa7f2b8eb1643c6d03a539b9189`, exact tree
+`2fbf2ad802ad279275e672976efde86f31aa0a3c`, a commit export mounted read-only,
+and all six pinned images from local Docker cache. The WordPress 6.4.2 / PHP
+8.1.34 / MariaDB 10.6.27 case passed network/volume ownership, internal-network,
+database-local and consumer-path readiness, fresh-site, runtime-configuration,
+version, activation, no-host-port, and HTTP-ready gates. Its browser fixture
+then stopped before the authenticated administrator action flow because it
+required the administrator `/wp-admin/` login landing for the subscriber too.
+Both exact local WordPress 6.4.2 and 7.1 cores deliberately redirect a successful
+subscriber that lacks `edit_posts` to `/wp-admin/profile.php`. WordPress 7.1 did
+not run. This is classified as a browser-harness failure, not successful R38 VM
+evidence or a plugin-source failure.
+
+- failed report:
+  `peertube-admin-authorization-smoke-20260901T153342Z-4774.log`;
+- failed report SHA-256:
+  `1aff0f1d396b9b4ccca80b66d7eb12f89fc8a450403152fef3b70ec54b3725c7`;
+- cleanup: `PASS`.
+
+The corrected fixture supplies, allowlists, and proves the exact administrator
+and subscriber landing paths separately, requires a non-redirecting HTTP 200
+from each, and emits distinct non-secret completion markers. This pre-validation
+source record does not self-assert the fixture-fix commit; establish that exact
+identifier from Git after this source is committed. Forgejo CI, the replacement
+two-case VM report/checksum, integration commits, and canonical or prospective
+package authority remain pending. Do not infer those authorities from this
+source description or record placeholder hashes/results here.
 
 ## Recommended continuation
 

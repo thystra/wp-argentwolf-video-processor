@@ -200,8 +200,18 @@ function awvp_r38_login(
     string $base_url,
     string $login,
     string $password,
+    string $expected_landing_path,
     array &$cookies
 ): void {
+    awvp_r38_assert(
+        in_array(
+            $expected_landing_path,
+            array('/wp-admin/', '/wp-admin/profile.php'),
+            true
+        ),
+        'The browser fixture attempted an unreviewed login landing path.'
+    );
+
     $login_page = awvp_r38_request($base_url, 'GET', '/wp-login.php', $cookies);
     awvp_r38_assert(200 === $login_page->status, 'The WordPress login page was unavailable.');
 
@@ -214,14 +224,14 @@ function awvp_r38_login(
             'log'         => $login,
             'pwd'         => $password,
             'wp-submit'   => 'Log In',
-            'redirect_to' => $base_url . '/wp-admin/',
+            'redirect_to' => $base_url . $expected_landing_path,
             'testcookie'  => '1',
         )
     );
     awvp_r38_assert(302 === $response->status, 'The disposable WordPress login failed.');
     $locations = $response->header_values('Location');
     awvp_r38_assert(
-        array($base_url . '/wp-admin/') === $locations,
+        array($base_url . $expected_landing_path) === $locations,
         'WordPress returned an unexpected login redirect.'
     );
 
@@ -233,8 +243,11 @@ function awvp_r38_login(
     }
     awvp_r38_assert($has_logged_in_cookie, 'WordPress did not establish an authenticated session.');
 
-    $dashboard = awvp_r38_request($base_url, 'GET', '/wp-admin/', $cookies);
-    awvp_r38_assert(200 === $dashboard->status, 'The authenticated dashboard was unavailable.');
+    $landing = awvp_r38_request($base_url, 'GET', $expected_landing_path, $cookies);
+    awvp_r38_assert(
+        200 === $landing->status && [] === $landing->header_values('Location'),
+        'The authenticated login landing page was unavailable.'
+    );
 }
 
 /** @return array<string, string> */
@@ -600,13 +613,24 @@ awvp_r38_assert(
     'The unprivileged admin-post action was not rejected by WordPress.'
 );
 
-awvp_r38_login($base_url, AWVP_R38_ADMIN_LOGIN, AWVP_R38_ADMIN_PASSWORD, $admin_cookies);
+// Core maps the default admin destination to profile.php for a subscriber,
+// which has read but not edit_posts. Supply and prove each exact landing path.
+awvp_r38_login(
+    $base_url,
+    AWVP_R38_ADMIN_LOGIN,
+    AWVP_R38_ADMIN_PASSWORD,
+    '/wp-admin/',
+    $admin_cookies
+);
+echo "WORDPRESS_ADMIN_LOGIN_BOUNDARY=PASS\n";
 awvp_r38_login(
     $base_url,
     AWVP_R38_SUBSCRIBER_LOGIN,
     AWVP_R38_SUBSCRIBER_PASSWORD,
+    '/wp-admin/profile.php',
     $subscriber_cookies
 );
+echo "WORDPRESS_SUBSCRIBER_LOGIN_BOUNDARY=PASS\n";
 
 $initial_page = awvp_r38_settings_get($base_url, $admin_cookies);
 $initial_start_form = awvp_r38_action_form(
