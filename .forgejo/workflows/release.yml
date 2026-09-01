@@ -196,13 +196,16 @@ jobs:
           ZIP="dist/argentwolf-video-processor-${VERSION}.zip"
 
           test -f "${ZIP}"
-          test "$(unzip -Z1 "${ZIP}" | awk -F/ 'NF {print $1}' | sort -u)" = 'argentwolf-video-processor'
-          unzip -Z1 "${ZIP}" | grep -qx 'argentwolf-video-processor/argentwolf-video-processor.php'
-          unzip -Z1 "${ZIP}" | grep -qx 'argentwolf-video-processor/assets/vendor/hls.min.js'
-          unzip -Z1 "${ZIP}" | grep -qx 'argentwolf-video-processor/assets/vendor/hls.LICENSE'
-          ! unzip -Z1 "${ZIP}" | grep -qx 'argentwolf-video-processor/assets/vendor/hls.VERSION'
-          ! unzip -Z1 "${ZIP}" | grep -qx 'argentwolf-video-processor/assets/vendor/hls.SHA256'
-          ! unzip -Z1 "${ZIP}" | grep -Eq '/(AGENTS|ARCHITECTURE|TODO|tests|build|ops|\.github|\.forgejo)'
+          MANIFEST="$(mktemp)"
+          trap 'rm -f -- "${MANIFEST}"' EXIT
+          unzip -Z1 "${ZIP}" > "${MANIFEST}"
+          test "$(awk -F/ 'NF {print $1}' "${MANIFEST}" | sort -u)" = 'argentwolf-video-processor'
+          grep -qx 'argentwolf-video-processor/argentwolf-video-processor.php' "${MANIFEST}"
+          grep -qx 'argentwolf-video-processor/assets/vendor/hls.min.js' "${MANIFEST}"
+          grep -qx 'argentwolf-video-processor/assets/vendor/hls.LICENSE' "${MANIFEST}"
+          ! grep -qx 'argentwolf-video-processor/assets/vendor/hls.VERSION' "${MANIFEST}"
+          ! grep -qx 'argentwolf-video-processor/assets/vendor/hls.SHA256' "${MANIFEST}"
+          ! grep -Eq '/(AGENTS|ARCHITECTURE|TODO|tests|build|ops|\.github|\.forgejo)' "${MANIFEST}"
           (cd dist && sha256sum --check SHA256SUMS)
 
       - name: Record release provenance

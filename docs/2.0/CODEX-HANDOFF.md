@@ -805,12 +805,30 @@ R38 stops before `/users/me`, channel/destination discovery, activation,
 refresh, revoke, disconnect, operation closure, upload/media mutation,
 model-schema/runtime-version changes, release preparation, or `main`.
 
-This pre-validation source record does not self-assert its eventual exact
-implementation commit/tree; establish those identifiers from Git after the
-source is committed. Forgejo CI authority, the exact WordPress 6.4/7.1 Docker
-VM report and checksum, integration commits, and any prospective package
-evidence remain pending. Do not infer those authorities from this source
-description or record placeholder hashes/results here.
+The first R38 implementation checkpoint is exact commit
+`71e6991e869187b85dec1e9abacaf06d06a6bdcb`, tree
+`a566e4ebd5796b9e3a3fa8f78e98d28919108439`, with sole parent
+`03419494b528e8335fff5f6cb10fbec6a99eec7f`. Its complete local PHP lint,
+focused and regression suites, both autoload modes, storage/restricted-path/
+smoke-load/FFmpeg/vendor/JavaScript gates, workflow YAML, integration shell
+syntax, and diff checks passed.
+
+Forgejo CI run 69 used that exact commit on `forgejo-workstation`. PHP lint,
+all source tests, whitespace validation, and ZIP construction passed. The final
+ZIP inspection alone exited 141: under `pipefail`, an early successful
+`grep -q` manifest match closed its pipe while `unzip -Z1` was still writing the
+now-larger archive. This is classified as a workflow-inspection defect, not a
+source-test or package-build success. The corrected workflows materialize the
+ZIP listing once and perform the same inclusion/exclusion assertions against
+that complete temporary manifest. A temporary clean export of exact `71e6991`
+then built from SHA-512-verified local npm cache content, passed the corrected
+single-root/content/exclusion/`SHA256SUMS` inspection, and was removed. It is
+noncanonical development evidence and no artifact hash is asserted here.
+
+The exact correction commit and its Forgejo CI authority, the WordPress
+6.4/7.1 Docker VM report and checksum, integration commits, and canonical or
+prospective package authority remain pending. Do not infer those authorities
+from this source description or record placeholder hashes/results here.
 
 ## Recommended continuation
 
