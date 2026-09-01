@@ -879,22 +879,49 @@ plugin-source failure or successful R38 matrix evidence.
   `7db136616e319ad528f3c7b3a58daf0e313285d335426c0dfa3196877cd39b1a`;
 - cleanup: `PASS`.
 
-The prospective harness correction seeds complete recent core/plugin/theme
-update-cache objects after activation and verifies their exact database round
-trip before the browser starts. It neither removes the core update hooks,
-allows external HTTP, nor filters the debug log. This pre-validation source
-record does not self-assert the update-baseline fix commit; establish that exact
-identifier from Git after this source is committed. Forgejo CI, a replacement
-two-case VM report/checksum, integration commits, and canonical or prospective
-package authority remain pending. Do not infer those authorities from this
-source description or record placeholder hashes/results here.
+The update-baseline correction is exact commit
+`cfed42b9c01a1c30e79172bec9a11213c61d2563`, tree
+`5992735674c1dd0ec5a758907f7d4cff4a30f9fe`, with sole parent
+`90704b7653b5cdb6edc2b032e6a3544c8db6a810`. It changes only repository test
+infrastructure and documentation; the installable runtime object set remains
+the implementation checkpoint. Forgejo CI run 72 passed that exact commit on
+`forgejo-workstation` in 403 seconds. The slower runner spent 363 seconds in
+the verified FFmpeg build; PHP lint, the complete test suite, ZIP construction
+and inspection, and artifact upload all passed.
+
+The replacement R38 VM matrix used that exact clean commit and tree, a
+read-only commit export, and all six pinned images from local Docker cache. The
+WordPress 6.4.2 / PHP 8.1.34 / MariaDB 10.6.27 and WordPress 7.1 / PHP 8.3.33 /
+MariaDB 10.11.18 cases each passed infrastructure ownership/isolation,
+fresh-site and exact-version gates, activation, the asserted update-cache
+baseline, both role-specific login boundaries, the full browser/HTTP/state
+flow, the exact one-OAuth-GET/one-token-POST request sequence, no automatic
+retry, plaintext-canary exclusion, encrypted-secret persistence, no upload
+mutation, no gated PHP/WordPress debug diagnostics, case assertions, and
+per-case cleanup. The matrix and global cleanup passed with final
+`PEERTUBE_ADMIN_AUTHORIZATION_SMOKE=PASS`.
+
+- successful report:
+  `peertube-admin-authorization-smoke-20260901T194705Z-14213.log`;
+- successful report SHA-256:
+  `efe82a25f264171173f3c1ffcb028316519a50cd928c4a400149ae4481082f8b`;
+- cleanup: `PASS`.
+
+This closes R38 source, local, exact-commit CI, and two-case Docker development
+checkpoint validation. It is not a real-PeerTube, TLS, exact-ZIP, release,
+upgrade, MySQL, Plugin Check, identity/channel, destination, activation,
+refresh/revoke, or upload gate. The feature evidence-closure commit and CI,
+`develop-2.0` integration commits, and canonical or prospective package
+authority remain pending.
 
 ## Recommended continuation
 
 R37 source, local, CI, two-case WordPress VM, and exact `develop-2.0`
-integration gates are complete. Complete R38 source review, exact-commit CI, and
-the fresh two-case administrator-boundary VM matrix before integration. After
-R38 is validated and integrated:
+integration gates are complete. R38 source, local, exact-commit CI, and the
+fresh two-case administrator-boundary VM matrix are complete. Commit and
+validate this evidence record, then integrate the reviewed R38 history into
+`develop-2.0` without rewriting either parent and record the exact merge
+closure. After R38 is integrated:
 
 1. implement `/users/me` identity verification and bounded destination discovery
    as a separate reviewed slice;
