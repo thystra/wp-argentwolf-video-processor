@@ -854,11 +854,37 @@ evidence or a plugin-source failure.
   `1aff0f1d396b9b4ccca80b66d7eb12f89fc8a450403152fef3b70ec54b3725c7`;
 - cleanup: `PASS`.
 
-The corrected fixture supplies, allowlists, and proves the exact administrator
-and subscriber landing paths separately, requires a non-redirecting HTTP 200
-from each, and emits distinct non-secret completion markers. This pre-validation
-source record does not self-assert the fixture-fix commit; establish that exact
-identifier from Git after this source is committed. Forgejo CI, the replacement
+The login-fixture correction is exact commit
+`90704b7653b5cdb6edc2b032e6a3544c8db6a810`, tree
+`276a6214a87e85a8573b2e4d5889f384be8d83a0`, with sole parent
+`54c03198fced4fa7f2b8eb1643c6d03a539b9189`. Forgejo CI run 71 passed that
+exact commit on `forgejo-workstation` in 219 seconds.
+
+The second R38 VM attempt used that exact clean commit and tree, a read-only
+commit export, and all six pinned images from local Docker cache. The WordPress
+6.4.2 case passed both role-specific login boundaries, the complete browser
+flow and administrator HTTP boundary, post-request state assertions, the exact
+one-GET/one-POST PeerTube request sequence, encrypted-secret persistence,
+plaintext-canary exclusion, and no automatic retry or upload mutation. It then
+failed the unfiltered debug-log gate because the fresh site had no recent core,
+plugin, or theme update-check transient. Core's normal `admin_init` hooks tried
+the three WordPress.org APIs on the intentionally internal-only network and
+logged the expected blocked-connection warnings. WordPress 7.1 did not run.
+This is classified as a deterministic browser-harness isolation failure, not a
+plugin-source failure or successful R38 matrix evidence.
+
+- failed report:
+  `peertube-admin-authorization-smoke-20260901T155148Z-9071.log`;
+- failed report SHA-256:
+  `7db136616e319ad528f3c7b3a58daf0e313285d335426c0dfa3196877cd39b1a`;
+- cleanup: `PASS`.
+
+The prospective harness correction seeds complete recent core/plugin/theme
+update-cache objects after activation and verifies their exact database round
+trip before the browser starts. It neither removes the core update hooks,
+allows external HTTP, nor filters the debug log. This pre-validation source
+record does not self-assert the update-baseline fix commit; establish that exact
+identifier from Git after this source is committed. Forgejo CI, a replacement
 two-case VM report/checksum, integration commits, and canonical or prospective
 package authority remain pending. Do not infer those authorities from this
 source description or record placeholder hashes/results here.

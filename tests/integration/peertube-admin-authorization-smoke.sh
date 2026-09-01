@@ -554,6 +554,11 @@ run_case() {
     wp_cli --context=cli plugin is-active argentwolf-video-processor
     echo "PLUGIN_ACTIVATION=$CURRENT_CASE:PASS"
 
+    wp_cli --context=cli eval-file \
+        "/var/www/html/wp-content/plugins/argentwolf-video-processor/$FIXTURE_RELATIVE/seed-update-check-baseline.php" \
+        --use-include
+    echo "WORDPRESS_UPDATE_CHECK_BASELINE=$CURRENT_CASE:PASS"
+
     wait_for_wordpress_http
 
     docker run --rm \
@@ -633,6 +638,8 @@ done
 
 [[ -f "$FIXTURE_ROOT/assert-browser.php" ]] || fail 'The R38 browser fixture is missing.'
 [[ -f "$FIXTURE_ROOT/assert-state.php" ]] || fail 'The R38 state fixture is missing.'
+[[ -f "$FIXTURE_ROOT/seed-update-check-baseline.php" ]] \
+    || fail 'The R38 update-check baseline fixture is missing.'
 [[ -f "$MOCK_ROOT/mock-router.php" ]] || fail 'The reusable password-grant mock is missing.'
 [[ -f "$REPOSITORY_ROOT/argentwolf-video-processor.php" ]] || fail 'The plugin bootstrap is missing.'
 
@@ -666,6 +673,8 @@ rm -f -- "$WORK_DIRECTORY/source.tar"
 chmod -R a+rX "$SOURCE_EXPORT"
 [[ -f "$EXPORTED_FIXTURE_ROOT/assert-browser.php" ]] || fail 'The committed browser fixture was not exported.'
 [[ -f "$EXPORTED_FIXTURE_ROOT/assert-state.php" ]] || fail 'The committed state fixture was not exported.'
+[[ -f "$EXPORTED_FIXTURE_ROOT/seed-update-check-baseline.php" ]] \
+    || fail 'The committed update-check baseline fixture was not exported.'
 [[ -f "$EXPORTED_MOCK_ROOT/mock-router.php" ]] || fail 'The committed reusable mock was not exported.'
 echo 'SOURCE_EXPORT_FROM_COMMIT=PASS'
 echo 'SOURCE_EXPORT_RUNTIME_MOUNT=READ_ONLY'

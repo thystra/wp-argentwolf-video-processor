@@ -234,6 +234,14 @@ credential inputs; invalid acknowledgements must make no PeerTube request.
 Cookies, nonces, credentials, and response bodies remain in memory and are
 never written to the report.
 
+Before the first authenticated administrator request, the runner seeds complete
+recent core, plugin, and theme update-check transients in the disposable site
+and verifies their exact round trip. This lets WordPress's normal `admin_init`
+update hooks use a deterministic cache baseline instead of attempting
+WordPress.org requests on the internal-only network. External HTTP remains
+blocked and the debug-log gate continues to reject every PHP or WordPress
+diagnostic; the harness does not filter or allowlist update warnings.
+
 The R37 success-only PeerTube mock is reused without changing its historical
 fixture. Its redacted log must contain exactly one OAuth-client GET and one
 password-token POST, proving that rejected browser submissions, page reads,
