@@ -520,15 +520,32 @@ final class PeerTube_Connection_Admin
             <thead><tr><th><?php esc_html_e('Label', 'argentwolf-video-processor'); ?></th><th><?php esc_html_e('Origin', 'argentwolf-video-processor'); ?></th><th><?php esc_html_e('State', 'argentwolf-video-processor'); ?></th><th><?php esc_html_e('Lifecycle', 'argentwolf-video-processor'); ?></th><th><?php esc_html_e('Explicit actions', 'argentwolf-video-processor'); ?></th></tr></thead>
             <tbody>
             <?php foreach ($backends as $backend) : ?>
+                <?php
+                $state = (string) $backend['state'];
+                $lifecycle_action = (string) $backend['lifecycle_action'];
+                $lifecycle_phase = (string) $backend['lifecycle_phase'];
+                $disconnect_pending = 'disconnect' === $lifecycle_action
+                    && 'disconnect_complete' !== $lifecycle_phase;
+                $refresh_blocks_disconnect = 'refresh' === $lifecycle_action
+                    && ! in_array(
+                        $lifecycle_phase,
+                        array('refresh_complete', 'refresh_reauthentication_required', 'refresh_indeterminate'),
+                        true
+                    );
+                ?>
                 <tr>
                     <td><?php echo esc_html((string) $backend['label']); ?><br><code><?php echo esc_html((string) $backend['backend_id']); ?></code></td>
                     <td><code><?php echo esc_html((string) $backend['origin']); ?></code></td>
-                    <td><?php echo esc_html((string) $backend['state']); ?></td>
-                    <td><code><?php echo esc_html((string) $backend['lifecycle_phase']); ?></code></td>
+                    <td><?php echo esc_html($state); ?></td>
+                    <td><code><?php echo esc_html($lifecycle_phase); ?></code></td>
                     <td>
-                    <?php if ('active' === $backend['state']) : ?>
+                    <?php if ('active' === $state && ! $disconnect_pending) : ?>
                         <?php $this->render_backend_action(self::ACTION_REFRESH, self::NONCE_REFRESH, (string) $backend['backend_id'], __('Refresh token lifecycle', 'argentwolf-video-processor')); ?>
-                        <?php $this->render_backend_action(self::ACTION_DISCONNECT, self::NONCE_DISCONNECT, (string) $backend['backend_id'], __('Disconnect PeerTube', 'argentwolf-video-processor'), true); ?>
+                        <?php if (! $refresh_blocks_disconnect) : ?>
+                            <?php $this->render_backend_action(self::ACTION_DISCONNECT, self::NONCE_DISCONNECT, (string) $backend['backend_id'], __('Disconnect PeerTube', 'argentwolf-video-processor'), true); ?>
+                        <?php endif; ?>
+                    <?php elseif ($disconnect_pending && in_array($state, array('active', 'retired'), true)) : ?>
+                        <?php $this->render_backend_action(self::ACTION_DISCONNECT, self::NONCE_DISCONNECT, (string) $backend['backend_id'], __('Continue disconnect', 'argentwolf-video-processor'), true); ?>
                     <?php else : ?>
                         <?php esc_html_e('No active remote credential action.', 'argentwolf-video-processor'); ?>
                     <?php endif; ?>

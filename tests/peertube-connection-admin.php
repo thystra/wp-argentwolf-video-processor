@@ -1221,6 +1221,81 @@ awvp_admin_assert(! str_contains($html, 'name="password" type="password" value='
 awvp_admin_assert(str_contains($html, 'No media, media metadata, or telemetry'), 'Required no-media disclosure is missing.');
 awvp_admin_assert(str_contains($html, 'dedicated least-privilege PeerTube account'), 'Dedicated-account guidance is missing.');
 
+// R41 disconnect remains explicitly continuable after the consequential local
+// registry retirement. The page must not strand a restart-safe lifecycle
+// between descriptor retirement and exact-generation secret deletion.
+$lifecycle_actions = new Awvp_Admin_Fake_Actions();
+$lifecycle_actions->operations = array();
+$lifecycle_controller = awvp_admin_controller($lifecycle_actions);
+$lifecycle_backend = array(
+    'backend_id' => 'r38-admin',
+    'label' => 'Managed PeerTube',
+    'origin' => 'https://video.example.org',
+    'state' => 'active',
+    'lifecycle_action' => 'disconnect',
+    'lifecycle_phase' => 'disconnect_retire_planned',
+    'lifecycle_revision' => 4,
+);
+$lifecycle_actions->backends = array($lifecycle_backend);
+awvp_admin_reset_request();
+$_GET = array('page' => PeerTube_Connection_Admin::PAGE_SLUG);
+ob_start();
+$lifecycle_controller->page();
+$active_disconnect_html = (string) ob_get_clean();
+awvp_admin_assert(
+    1 === substr_count(
+        $active_disconnect_html,
+        'name="action" value="' . PeerTube_Connection_Admin::ACTION_DISCONNECT . '"'
+    ),
+    'An active in-progress disconnect did not expose exactly one continuation action.'
+);
+awvp_admin_assert(
+    ! str_contains(
+        $active_disconnect_html,
+        'name="action" value="' . PeerTube_Connection_Admin::ACTION_REFRESH . '"'
+    ),
+    'Refresh remained available during a nonterminal disconnect.'
+);
+
+$lifecycle_backend['state'] = 'retired';
+$lifecycle_actions->backends = array($lifecycle_backend);
+awvp_admin_reset_request();
+$_GET = array('page' => PeerTube_Connection_Admin::PAGE_SLUG);
+ob_start();
+$lifecycle_controller->page();
+$retired_disconnect_html = (string) ob_get_clean();
+awvp_admin_assert(
+    1 === substr_count(
+        $retired_disconnect_html,
+        'name="action" value="' . PeerTube_Connection_Admin::ACTION_DISCONNECT . '"'
+    )
+        && str_contains($retired_disconnect_html, 'Continue disconnect'),
+    'A retired in-progress disconnect was stranded before local cleanup completed.'
+);
+awvp_admin_assert(
+    ! str_contains(
+        $retired_disconnect_html,
+        'name="action" value="' . PeerTube_Connection_Admin::ACTION_REFRESH . '"'
+    ),
+    'Refresh was exposed after local backend retirement.'
+);
+
+$lifecycle_backend['lifecycle_phase'] = 'disconnect_complete';
+$lifecycle_actions->backends = array($lifecycle_backend);
+awvp_admin_reset_request();
+$_GET = array('page' => PeerTube_Connection_Admin::PAGE_SLUG);
+ob_start();
+$lifecycle_controller->page();
+$completed_disconnect_html = (string) ob_get_clean();
+awvp_admin_assert(
+    ! str_contains(
+        $completed_disconnect_html,
+        'name="action" value="' . PeerTube_Connection_Admin::ACTION_DISCONNECT . '"'
+    )
+        && str_contains($completed_disconnect_html, 'No active remote credential action.'),
+    'A completed retired disconnect still exposed a remote credential action.'
+);
+
 // Awaiting-destination page loads remain local until the administrator submits
 // the explicit nonce-bound GET. Returned channel text is strictly projected
 // and escaped before an exact selection POST is offered.
