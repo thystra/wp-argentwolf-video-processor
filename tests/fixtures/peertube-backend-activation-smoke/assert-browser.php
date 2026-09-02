@@ -86,8 +86,11 @@ $complete_page = awvp_r38_settings_get($base_url, $admin_cookies, $operation_id)
 awvp_r38_assert_no_grant_canaries($complete_page->body);
 awvp_r38_assert(
     str_contains($complete_page->body, 'No open PeerTube connection operations.')
-        && str_contains($complete_page->body, 'Media upload remains unavailable.'),
-    'The completed activation did not close the operation without exposing media work.'
+        && str_contains(
+            $complete_page->body,
+            'Activation changes local AWVP registry state only; it does not upload media'
+        ),
+    'The completed activation did not close the operation without preserving the no-media-work boundary.'
 );
 awvp_r38_assert_no_form($complete_page->body, AWVP_R40_ACTION_ACTIVATE);
 awvp_r38_assert_no_form($complete_page->body, AWVP_R38_ACTION_GRANT);
