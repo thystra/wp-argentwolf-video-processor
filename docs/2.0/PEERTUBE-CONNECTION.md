@@ -2,8 +2,9 @@
 
 Status: tranche 2.0-3 design contract; R34 authenticated API primitives, R35
 local persistence foundation, R36 local-only pre-grant coordination, R37
-password-grant/encrypted-token persistence, and R38 explicit administrator
-authorization through that checkpoint implemented
+password-grant/encrypted-token persistence, R38 explicit administrator
+authorization, and R39 authenticated identity/owned-destination selection
+implemented through that checkpoint
 Reviewed runtime baselines: PeerTube 8.1.8 and 8.2.4, 2026-08-22
 Applies to: configured/manageable PeerTube backends
 
@@ -1218,7 +1219,8 @@ Before runtime implementation merges, prove at minimum:
     credentials;
 74. secret/registry targets are freshly re-proved after journal hooks, with an
     exact ready winner recoverable from terminal commit evidence without HTTP.
-75. only the four reviewed authenticated `admin_post` hooks and the separate
+75. only the six reviewed authenticated `admin_post` hooks (the four R38
+    connection/grant actions plus R39 verification and selection) and the separate
     `manage_options` settings page are registered; there is no `nopriv`, AJAX,
     REST, WP-CLI, cron, activation, upload, or media hook;
 76. page GET is read-only and renders only a validated bounded non-secret

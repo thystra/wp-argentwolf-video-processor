@@ -102,3 +102,19 @@
 - [x] Publish `trunk`, `tags/1.0.0`, and directory assets to WordPress.org SVN.
 - [x] Merge the completed `release/1.x` line into `main`.
 - [x] Forward-port the stable 1.0 baseline into `develop-2.0`.
+
+## 2.0 development status
+
+- [x] R33: bounded PeerTube origin detection and safe HTTP foundation.
+- [x] R34: authenticated PeerTube API and identity primitives.
+- [x] R35: durable connection and encrypted-secret persistence foundation.
+- [x] R36: restart-safe local connection coordinator.
+- [x] R37: bounded password/OTP grant bootstrap and encrypted token persistence.
+- [x] R38: explicit administrator authorization and settings boundary.
+- [x] R39: authenticated identity verification and owned-destination selection.
+- [ ] R40: activate the verified PeerTube descriptor and make the adapter/factory
+  eligible without crossing the media-upload boundary.
+- [ ] Review and implement token refresh, revoke, and disconnect lifecycle as a
+  separately bounded tranche.
+- [ ] Begin tranche 2.0-4 staged source transfer/upload and remote-state work only
+  after the connection/activation lifecycle is independently validated.
