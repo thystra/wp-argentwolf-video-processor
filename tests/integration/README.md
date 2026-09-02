@@ -273,7 +273,10 @@ bash tests/integration/peertube-identity-destination-smoke.sh
 
 The wrapper reuses the R38 clean-commit export, cache-first digest-pinned image
 matrix, internal-only network, update-cache baseline, real WordPress login, and
-unfiltered debug-log gates. It first proves the complete R38 bootstrap, then
+unfiltered debug-log gates. The exact commit's fixture parent is mounted
+read-only in the browser container so the R39 continuation can require its
+declared R38 support fixture; both paths are checked before container startup
+and again after commit export. It first proves the complete R38 bootstrap, then
 journals verification intent without HTTP. A later explicit POST performs one
 bearer `/users/me` read and two public channel pages containing exactly 101
 strictly ordered owned channels. Ordinary page GETs remain local; only the

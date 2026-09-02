@@ -16,6 +16,8 @@ FIXTURE_RELATIVE="${AWVP_ADMIN_FIXTURE_RELATIVE:-tests/fixtures/peertube-admin-a
 FIXTURE_ROOT="$REPOSITORY_ROOT/$FIXTURE_RELATIVE"
 MOCK_RELATIVE="${AWVP_ADMIN_MOCK_RELATIVE:-tests/fixtures/peertube-password-grant-smoke}"
 MOCK_ROOT="$REPOSITORY_ROOT/$MOCK_RELATIVE"
+BROWSER_SUPPORT_RELATIVE="${AWVP_ADMIN_BROWSER_SUPPORT_RELATIVE:-$FIXTURE_RELATIVE}"
+BROWSER_SUPPORT_ROOT="$REPOSITORY_ROOT/$BROWSER_SUPPORT_RELATIVE"
 
 if [[ ! "$SMOKE_CLASS" =~ ^[a-z][a-z0-9-]{0,15}$ ]]; then
     echo 'The administrator smoke class is invalid.' >&2
@@ -25,12 +27,13 @@ if [[ ! "$SMOKE_MARKER" =~ ^[A-Z][A-Z0-9_]{0,63}$ ]]; then
     echo 'The administrator smoke marker is invalid.' >&2
     exit 2
 fi
-for relative_path in "$FIXTURE_RELATIVE" "$MOCK_RELATIVE"; do
+for relative_path in "$FIXTURE_RELATIVE" "$MOCK_RELATIVE" "$BROWSER_SUPPORT_RELATIVE"; do
     if [[ ! "$relative_path" =~ ^tests/fixtures/[a-z0-9-]+$ ]]; then
         echo 'An administrator smoke fixture path is invalid.' >&2
         exit 2
     fi
 done
+FIXTURE_NAME="${FIXTURE_RELATIVE##*/}"
 
 WP64_IMAGE='wordpress:6.4.2-php8.1-apache@sha256:edb987c81a75daa2cde1520b307ef7b8490864301468b564cdb61b58f920dc1c'
 WP64_CLI_IMAGE='wordpress:cli-php8.1@sha256:ab5fb76caa861f32c21e1d95a057f52007f4af7130fb16a0f68874dabe0549a4'
@@ -45,8 +48,10 @@ RESOURCE_LABEL_KEY='org.argentwolf.awvp.test.run'
 
 WORK_DIRECTORY=''
 SOURCE_EXPORT=''
+EXPORTED_FIXTURES_ROOT=''
 EXPORTED_FIXTURE_ROOT=''
 EXPORTED_MOCK_ROOT=''
+EXPORTED_BROWSER_SUPPORT_ROOT=''
 CURRENT_CASE=''
 CASE_STATE_DIRECTORY=''
 REQUEST_LOG=''
@@ -586,9 +591,9 @@ run_case() {
         --tmpfs /tmp:rw,nosuid,nodev,noexec,size=16m \
         --entrypoint php \
         -e AWVP_R38_WORDPRESS_URL=http://wp \
-        -v "$EXPORTED_FIXTURE_ROOT:/awvp-r38:ro" \
+        -v "$EXPORTED_FIXTURES_ROOT:/awvp-fixtures:ro" \
         "$WP_CLI_IMAGE" \
-        /awvp-r38/assert-browser.php
+        "/awvp-fixtures/$FIXTURE_NAME/assert-browser.php"
     echo "${SMOKE_MARKER}_BROWSER=$CURRENT_CASE:PASS"
 
     wp_cli --context=cli eval-file \
@@ -663,6 +668,8 @@ done
 [[ -f "$FIXTURE_ROOT/seed-update-check-baseline.php" ]] \
     || fail 'The administrator update-check baseline fixture is missing.'
 [[ -f "$MOCK_ROOT/mock-router.php" ]] || fail 'The reusable password-grant mock is missing.'
+[[ -f "$BROWSER_SUPPORT_ROOT/assert-browser.php" ]] \
+    || fail 'The administrator browser support fixture is missing.'
 [[ -f "$REPOSITORY_ROOT/argentwolf-video-processor.php" ]] || fail 'The plugin bootstrap is missing.'
 
 docker info >/dev/null 2>&1 || fail 'Docker is unavailable to the current account.'
@@ -686,8 +693,10 @@ echo 'VALIDATION_CLASS=DEVELOPMENT_CHECKPOINT_NOT_RELEASE_GATE'
 
 WORK_DIRECTORY="$(mktemp -d "/tmp/awvp-$SMOKE_CLASS-work.XXXXXX")"
 SOURCE_EXPORT="$WORK_DIRECTORY/argentwolf-video-processor"
+EXPORTED_FIXTURES_ROOT="$SOURCE_EXPORT/tests/fixtures"
 EXPORTED_FIXTURE_ROOT="$SOURCE_EXPORT/$FIXTURE_RELATIVE"
 EXPORTED_MOCK_ROOT="$SOURCE_EXPORT/$MOCK_RELATIVE"
+EXPORTED_BROWSER_SUPPORT_ROOT="$SOURCE_EXPORT/$BROWSER_SUPPORT_RELATIVE"
 mkdir -p -- "$SOURCE_EXPORT"
 git -C "$REPOSITORY_ROOT" archive --format=tar --output="$WORK_DIRECTORY/source.tar" HEAD
 tar -xf "$WORK_DIRECTORY/source.tar" -C "$SOURCE_EXPORT"
@@ -698,6 +707,8 @@ chmod -R a+rX "$SOURCE_EXPORT"
 [[ -f "$EXPORTED_FIXTURE_ROOT/seed-update-check-baseline.php" ]] \
     || fail 'The committed update-check baseline fixture was not exported.'
 [[ -f "$EXPORTED_MOCK_ROOT/mock-router.php" ]] || fail 'The committed reusable mock was not exported.'
+[[ -f "$EXPORTED_BROWSER_SUPPORT_ROOT/assert-browser.php" ]] \
+    || fail 'The committed browser support fixture was not exported.'
 echo 'SOURCE_EXPORT_FROM_COMMIT=PASS'
 echo 'SOURCE_EXPORT_RUNTIME_MOUNT=READ_ONLY'
 
