@@ -613,8 +613,13 @@ run_case() {
         fail "The isolated administrator request sequence differed for $CURRENT_CASE."
     fi
     echo "ISOLATED_ADMIN_AUTHORIZATION_REQUEST_SEQUENCE=$CURRENT_CASE:PASS"
-    echo "ADMIN_AUTHORIZATION_OAUTH_GET_COUNT=$CURRENT_CASE:1"
-    echo "ADMIN_AUTHORIZATION_TOKEN_POST_COUNT=$CURRENT_CASE:1"
+    local oauth_get_count token_post_count revoke_post_count
+    oauth_get_count="$(grep -c '^GET /api/v1/oauth-clients/local ' "$REQUEST_LOG" || true)"
+    token_post_count="$(grep -c '^POST /api/v1/users/token ' "$REQUEST_LOG" || true)"
+    revoke_post_count="$(grep -c '^POST /api/v1/users/revoke-token ' "$REQUEST_LOG" || true)"
+    echo "ADMIN_AUTHORIZATION_OAUTH_GET_COUNT=$CURRENT_CASE:$oauth_get_count"
+    echo "ADMIN_AUTHORIZATION_TOKEN_POST_COUNT=$CURRENT_CASE:$token_post_count"
+    echo "ADMIN_AUTHORIZATION_REVOKE_POST_COUNT=$CURRENT_CASE:$revoke_post_count"
     echo "ADMIN_AUTHORIZATION_AUTOMATIC_REMOTE_RETRY=$CURRENT_CASE:NONE"
 
     for forbidden_value in \
@@ -624,6 +629,8 @@ run_case() {
         'r37-success-password-canary' \
         'r37-success-access-token-canary' \
         'r37-success-refresh-token-canary' \
+        'r41-refreshed-access-token-canary' \
+        'r41-refreshed-refresh-token-canary' \
         'AWVP-disposable-test-only-123!' \
         'AWVP-subscriber-test-only-123!'; do
         if grep --fixed-strings --quiet -- "$forbidden_value" "$REPORT_FILE"; then
@@ -640,7 +647,11 @@ run_case() {
         fi
     done
     echo "ADMIN_AUTHORIZATION_PLAINTEXT_CANARIES=$CURRENT_CASE:NONE"
-    echo "ADMIN_AUTHORIZATION_ENCRYPTED_SECRET_PERSISTENCE=$CURRENT_CASE:PASS"
+    if [[ "$SMOKE_CLASS" == 'r41' ]]; then
+        echo "ADMIN_AUTHORIZATION_MANAGED_SECRET_REMOVAL=$CURRENT_CASE:PASS"
+    else
+        echo "ADMIN_AUTHORIZATION_ENCRYPTED_SECRET_PERSISTENCE=$CURRENT_CASE:PASS"
+    fi
     echo "ADMIN_AUTHORIZATION_UPLOAD_MUTATIONS=$CURRENT_CASE:NONE"
 
     if docker exec "$WORDPRESS_NAME" \

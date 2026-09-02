@@ -119,7 +119,9 @@
   `e1819ecb83377bf97d03cd331fc31c6400ea1b41` was merged into `develop-2.0` as
   `67bb455f59450bab66cca1d59389e8fb637755ba`, and integration CI run 88 passed
   in 9 seconds.
-- [ ] R41: review and implement token refresh, revoke, and disconnect lifecycle as
-  a separately bounded tranche.
+- [ ] R41: bounded token refresh, revoke, and disconnect lifecycle implemented on
+  `feature/2.0-peertube-token-lifecycle`; source validation is required before the
+  exact feature commit may be accepted, followed by Forgejo CI and the isolated
+  WordPress 6.4/7.1 Docker lifecycle matrix. No media upload is authorized by R41.
 - [ ] Begin tranche 2.0-4 staged source transfer/upload and remote-state work only
   after the connection/activation lifecycle is independently validated.

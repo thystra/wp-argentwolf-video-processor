@@ -940,6 +940,7 @@ final class Atomic_Option_Store
                 'registry_link',
                 'secret_commit',
                 'registry_activate',
+                'registry_retire',
             ),
             true
         ) && 1 === preg_match('/^mutation_[a-f0-9]{32}$/D', $mutation_id);

@@ -562,3 +562,22 @@ The implementation tranche following this contract must prove at minimum:
 Machine gates should validate stable code/data contracts and observable
 outcomes. Natural-language documentation formatting is not itself a machine
 contract.
+
+## R41 PeerTube credential lifecycle and health
+
+R41 does not expand the PeerTube capability set. The adapter still exposes only
+`delivery.embed`; all ingest/upload, processing, managed-library, publication,
+retention, and remote-delete capabilities remain false.
+
+For an active descriptor with a valid managed credential, health is derived from
+the current encrypted token metadata rather than persisted as registry truth. A
+usable access token is `peertube.auth.operational`. An access token at or inside
+the bounded refresh horizon while its refresh credential remains usable is the
+non-blocking warning `peertube.auth.refresh_required`. An unusable/expired refresh
+credential is the blocking `peertube.auth.reauthentication_required`. A retired
+descriptor is never eligible for new work regardless of adapter health.
+
+Refresh/revoke/disconnect are administrator lifecycle operations, not backend
+capabilities. They are not invoked by `eligible()`, page GET, cron, routing, or
+media processing. Registry retirement uses an exact active-to-retired CAS that
+preserves unrelated descriptors and fails closed on competing state.

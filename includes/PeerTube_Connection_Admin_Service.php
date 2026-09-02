@@ -19,7 +19,8 @@ final class PeerTube_Connection_Admin_Service implements PeerTube_Connection_Adm
         private readonly PeerTube_Connection_Coordinator $coordinator,
         private readonly PeerTube_Password_Grant_Service $grants,
         private readonly PeerTube_Identity_Destination_Service $identity_destinations,
-        private readonly PeerTube_Backend_Activation_Service $activation
+        private readonly PeerTube_Backend_Activation_Service $activation,
+        private readonly ?PeerTube_Token_Lifecycle_Service $token_lifecycle = null
     ) {
     }
 
@@ -75,6 +76,25 @@ final class PeerTube_Connection_Admin_Service implements PeerTube_Connection_Adm
     public function activate(string $operation_id, int $now): array
     {
         return $this->activation->advance($operation_id, $now);
+    }
+
+    public function refresh_backend(string $backend_id, int $now): array
+    {
+        return null !== $this->token_lifecycle
+            ? $this->token_lifecycle->refresh($backend_id, $now)
+            : array('status' => PeerTube_Token_Lifecycle_Service::STATUS_REFUSED);
+    }
+
+    public function disconnect_backend(string $backend_id, int $now): array
+    {
+        return null !== $this->token_lifecycle
+            ? $this->token_lifecycle->disconnect($backend_id, $now)
+            : array('status' => PeerTube_Token_Lifecycle_Service::STATUS_REFUSED);
+    }
+
+    public function managed_backends(): array
+    {
+        return null !== $this->token_lifecycle ? $this->token_lifecycle->managed_backends() : array();
     }
 
     public function open_operations(): ?array

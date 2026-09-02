@@ -340,3 +340,39 @@ To preserve its report outside the checkout, set the generic runner directory:
 AWVP_ADMIN_REPORT_DIR=/absolute/report/path \
     bash tests/integration/peertube-backend-activation-smoke.sh
 ```
+
+## PeerTube token lifecycle checkpoint
+
+After the R41 source checkpoint is committed, run its two-case real-WordPress
+browser/state matrix from a clean checkout:
+
+```bash
+bash tests/integration/peertube-token-lifecycle-smoke.sh
+```
+
+The wrapper first reproduces the reviewed R38→R39→R40 connection and activation
+sequence. R41 then authorizes only three additional PeerTube requests: one
+OAuth-client GET, one exact refresh-token grant POST, and one empty-body bearer
+revoke POST. The redacted request transcript must match exactly; token/client
+values are never logged.
+
+Refresh is driven through separate explicit administrator POSTs for lifecycle
+initialization, the single claimed remote mutation, and independent persisted
+result confirmation. Disconnect similarly separates initialization, one claimed
+revoke, registry-retirement planning/application/confirmation, and exact secret
+deletion. The final WP-CLI state gate requires the descriptor to be `retired`,
+the lifecycle to be `disconnect_complete`, refreshed generation 2 to have been
+the disconnect fence, the managed secret record to be absent, `delivery.embed`
+to be ineligible, attachments/uploads unchanged, and no plaintext credential
+canary in WordPress options or `WP_DEBUG`.
+
+This is development-checkpoint evidence, not a real-PeerTube/TLS, exact-ZIP,
+release, upgrade, MySQL, Plugin Check, media-upload, processing, publication, or
+remote-media gate.
+
+To preserve the report outside the checkout:
+
+```bash
+AWVP_ADMIN_REPORT_DIR=/absolute/report/path \
+    bash tests/integration/peertube-token-lifecycle-smoke.sh
+```

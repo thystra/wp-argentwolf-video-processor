@@ -231,9 +231,9 @@ awvp_coordinator_assert(is_array($active_descriptor), 'Active descriptor disappe
 $health = $bundle['factory']->resolve(Backend_Registry::PEERTUBE_TYPE)?->health($active_descriptor);
 awvp_coordinator_assert(
     $health instanceof Backend_Health
-        && Backend_Health::WARNING === $health->status()
-        && 'peertube.lifecycle.refresh_pending' === ($health->checks()[0]['code'] ?? null),
-    'R40 adapter did not surface the reviewed non-blocking refresh-pending health state.'
+        && Backend_Health::OK === $health->status()
+        && 'peertube.auth.operational' === ($health->checks()[0]['code'] ?? null),
+    'PeerTube adapter did not surface the reviewed operational token health state.'
 );
 
 $invalid_destination_descriptor = $active_descriptor;
@@ -324,37 +324,36 @@ awvp_coordinator_assert(
     'Conflict replan overwrote unrelated state or activated prematurely.'
 );
 
-// An access token that is expired/near-expiry at final eligibility time blocks
-// operation close. Refresh is deliberately outside R40.
+// R41 permits an active backend to remain eligible when only the access
+// token needs refresh and the refresh credential remains usable.
 $fixture = awvp_activation_ready_fixture(4050);
 $operation_id = $fixture['operation_id'];
 $early = awvp_activation_service(3000);
 $early['service']->advance($operation_id, 4000);
 $early['service']->advance($operation_id, 4001);
 $early['service']->advance($operation_id, 4002);
-$before_block = awvp_coordinator_record($operation_id);
-awvp_coordinator_assert(Machine::PHASE_ACTIVE_PENDING_CLOSE === $before_block['phase'], 'Expiry fixture did not reach pending-close.');
+$before_close = awvp_coordinator_record($operation_id);
+awvp_coordinator_assert(Machine::PHASE_ACTIVE_PENDING_CLOSE === $before_close['phase'], 'Refresh-required fixture did not reach pending-close.');
 $late = awvp_activation_service(4000);
 awvp_coordinator_clear_activity();
-$blocked = $late['service']->advance($operation_id, 4003);
+$closed = $late['service']->advance($operation_id, 4003);
 awvp_activation_assert_projection(
-    $blocked,
-    Activation_Service::STATUS_REFUSED,
-    Atomic_Option_Result::MUTATION_NONE,
-    Machine::PHASE_ACTIVE_PENDING_CLOSE,
-    14,
-    'Expired access-token close'
+    $closed,
+    Activation_Service::STATUS_ACTIVE,
+    Atomic_Option_Result::MUTATION_APPLIED,
+    Machine::PHASE_COMPLETE,
+    15,
+    'Refresh-required access-token close'
 );
-awvp_coordinator_assert(array() === awvp_coordinator_mutation_targets(), 'Blocked health close mutated the journal.');
-$blocked_descriptor = $late['registry']->get($before_block['backend_id']);
-$blocked_health = is_array($blocked_descriptor)
-    ? $late['factory']->resolve(Backend_Registry::PEERTUBE_TYPE)?->health($blocked_descriptor)
+$warning_descriptor = $late['registry']->get($before_close['backend_id']);
+$warning_health = is_array($warning_descriptor)
+    ? $late['factory']->resolve(Backend_Registry::PEERTUBE_TYPE)?->health($warning_descriptor)
     : null;
 awvp_coordinator_assert(
-    $blocked_health instanceof Backend_Health
-        && Backend_Health::BLOCKING === $blocked_health->status()
-        && 'peertube.auth.access_token_unusable' === ($blocked_health->checks()[0]['code'] ?? null),
-    'Expired access token did not produce the reviewed blocking health state.'
+    $warning_health instanceof Backend_Health
+        && Backend_Health::WARNING === $warning_health->status()
+        && 'peertube.auth.refresh_required' === ($warning_health->checks()[0]['code'] ?? null),
+    'Near-expiry access token did not produce the reviewed refresh-required warning.'
 );
 
 fwrite(STDOUT, "AWVP PeerTube backend activation tests passed.\n");

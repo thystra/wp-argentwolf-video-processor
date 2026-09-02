@@ -1,0 +1,17 @@
+GET /api/v1/oauth-clients/local auth=none body=none
+POST /api/v1/users/token scenario=success otp=none form=password
+GET /api/v1/users/me auth=bearer body=none
+GET /api/v1/accounts/awvp_service/video-channels start=0 count=100 sort=id auth=none body=none
+GET /api/v1/accounts/awvp_service/video-channels start=100 count=100 sort=id auth=none body=none
+GET /api/v1/users/me auth=bearer body=none
+GET /api/v1/accounts/awvp_service/video-channels start=0 count=100 sort=id auth=none body=none
+GET /api/v1/accounts/awvp_service/video-channels start=100 count=100 sort=id auth=none body=none
+GET /api/v1/users/me auth=bearer body=none
+GET /api/v1/accounts/awvp_service/video-channels start=0 count=100 sort=id auth=none body=none
+GET /api/v1/accounts/awvp_service/video-channels start=100 count=100 sort=id auth=none body=none
+GET /api/v1/users/me auth=bearer body=none
+GET /api/v1/accounts/awvp_service/video-channels start=0 count=100 sort=id auth=none body=none
+GET /api/v1/accounts/awvp_service/video-channels start=100 count=100 sort=id auth=none body=none
+GET /api/v1/oauth-clients/local auth=none body=none
+POST /api/v1/users/token scenario=refresh-success form=refresh
+POST /api/v1/users/revoke-token auth=bearer body=none

@@ -223,6 +223,15 @@ final class Awvp_Admin_Fake_Actions implements PeerTube_Connection_Admin_Actions
     /** @var array<string, mixed> */
     public array $activate_result;
 
+    /** @var array<string, mixed> */
+    public array $refresh_result = array('status' => 'advanced');
+
+    /** @var array<string, mixed> */
+    public array $disconnect_result = array('status' => 'advanced');
+
+    /** @var list<array<string,mixed>> */
+    public array $backends = array();
+
     public bool $throw = false;
 
     public function __construct()
@@ -306,6 +315,24 @@ final class Awvp_Admin_Fake_Actions implements PeerTube_Connection_Admin_Actions
     {
         $this->called('activate', array($operation_id, $now));
         return $this->activate_result;
+    }
+
+    public function refresh_backend(string $backend_id, int $now): array
+    {
+        $this->called('refresh_backend', array($backend_id, $now));
+        return $this->refresh_result;
+    }
+
+    public function disconnect_backend(string $backend_id, int $now): array
+    {
+        $this->called('disconnect_backend', array($backend_id, $now));
+        return $this->disconnect_result;
+    }
+
+    public function managed_backends(): array
+    {
+        $this->called('managed_backends', array());
+        return $this->backends;
     }
 
     public function open_operations(): ?array
@@ -1184,8 +1211,9 @@ $_GET = array(
 ob_start();
 $controller->page();
 $html = (string) ob_get_clean();
-awvp_admin_assert(count($actions->calls) === $calls_before_page + 1, 'Page performed more than one read.');
-awvp_admin_assert('open_operations' === $actions->calls[array_key_last($actions->calls)]['method'], 'Page performed a mutation.');
+awvp_admin_assert(count($actions->calls) === $calls_before_page + 2, 'Page performed an unexpected number of reads.');
+awvp_admin_assert('open_operations' === $actions->calls[$calls_before_page]['method'], 'Page did not read connection operations first.');
+awvp_admin_assert('managed_backends' === $actions->calls[array_key_last($actions->calls)]['method'], 'Page performed a mutation.');
 awvp_admin_assert(str_contains($html, 'Primary &amp; private'), 'Operation label was not escaped.');
 awvp_admin_assert(str_contains($html, 'https://video.example.org'), 'Exact origin was not disclosed.');
 awvp_admin_assert(str_contains($html, 'name="password" type="password"'), 'Password field is missing.');

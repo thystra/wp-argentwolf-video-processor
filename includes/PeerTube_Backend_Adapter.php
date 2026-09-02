@@ -66,19 +66,22 @@ final class PeerTube_Backend_Adapter implements Backend_Adapter
         }
 
         $now = $this->now();
-        if (
-            $now < 1
-            || $now > PHP_INT_MAX - self::TOKEN_SKEW_SECONDS
-            || $secret['access_expires_at'] <= $now + self::TOKEN_SKEW_SECONDS
-        ) {
+        if ($now < 1 || $now > PHP_INT_MAX - self::TOKEN_SKEW_SECONDS) {
             unset($secret);
-            return Backend_Health::peertube_blocking('access_token_unusable');
+            return Backend_Health::peertube_blocking('secret_unavailable');
         }
 
         $generation = $secret['generation'];
+        if ($secret['refresh_expires_at'] <= $now + self::TOKEN_SKEW_SECONDS) {
+            unset($secret);
+            return Backend_Health::peertube_blocking('refresh_token_unusable');
+        }
+        if ($secret['access_expires_at'] <= $now + self::TOKEN_SKEW_SECONDS) {
+            unset($secret);
+            return Backend_Health::peertube_refresh_required($generation);
+        }
         unset($secret);
-
-        return Backend_Health::peertube_activation_ready($generation);
+        return Backend_Health::peertube_operational($generation);
     }
 
     /** @param array<string, mixed> $descriptor */

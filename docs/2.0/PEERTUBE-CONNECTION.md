@@ -1255,9 +1255,9 @@ Before runtime implementation merges, prove at minimum:
     credentials;
 74. secret/registry targets are freshly re-proved after journal hooks, with an
     exact ready winner recoverable from terminal commit evidence without HTTP.
-75. only the seven reviewed authenticated `admin_post` hooks (the four R38
-    connection/grant actions, R39 verification and selection, and the R40 local
-    activation continuation) and the separate `manage_options` settings page are
+75. only the nine reviewed authenticated `admin_post` hooks (the four R38
+    connection/grant actions, R39 verification and selection, the R40 local
+    activation continuation, and the two R41 refresh/disconnect actions) and the separate `manage_options` settings page are
     registered; there is no `nopriv`, AJAX, REST, WP-CLI, cron, automatic upload,
     processing, or media hook;
 76. page GET is read-only and renders only a validated bounded non-secret
@@ -1370,3 +1370,34 @@ WordPress HTTP behavior was reviewed against current official documentation for
 
 Re-check primary documentation during implementation for API details that may
 have changed.
+
+### R41 explicit token refresh, revoke, and disconnect boundary
+
+R41 operates only on an already-active managed PeerTube descriptor produced by
+R40. Token refresh is explicit administrator work: it reads the current OAuth
+client, durably claims `refresh_in_flight`, performs at most one reviewed
+`grant_type=refresh_token` POST, replaces exactly the expected encrypted secret
+generation, and requires a later explicit request to observe generation `N+1`
+before closing `refresh_complete`. A 429 during the read-only OAuth-client
+preflight is journaled as bounded `refresh_wait`; expiry of that wait only returns
+to `refresh_ready` and does not combine that transition with remote I/O. An
+observed unresolved `refresh_in_flight` state is classified indeterminate and is
+never replayed automatically.
+
+Disconnect is also explicit. It durably claims `disconnect_revoke_in_flight`
+before at most one bearer-authorized `/api/v1/users/revoke-token` POST. A later
+request plans an exact shared-registry active-to-retired CAS, another request may
+apply that CAS, a later observation confirms retirement, and only then is the
+exact expected managed-secret generation deleted. An uncertain revoke is never
+automatically retried; local retirement may continue explicitly without claiming
+remote revocation was proven. The non-secret lifecycle journal contains no OAuth
+client secret, access token, refresh token, password, or OTP material.
+
+The settings boundary therefore contains nine authenticated `admin_post` actions.
+Refresh and disconnect require `manage_options`, a backend-scoped nonce, the exact
+canonical backend ID, and fixed local redirects. Ordinary settings-page GET,
+cron, AJAX, REST, and WP-CLI own none of the lifecycle mutations.
+
+R41 does not upload media, create or alter PeerTube videos, process local media,
+publish, manage remote libraries, retain/delete media, or add background token
+refresh. The PeerTube adapter continues to claim only `delivery.embed`.

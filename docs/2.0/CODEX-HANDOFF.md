@@ -1215,3 +1215,35 @@ or publication surface failed.
 Historical local branch pointers may lag Forgejo. Always `git fetch origin
 --prune` and establish exact remote authority before mutation. A pre-cleanup
 all-ref bundle and exact R32 staged patch were created before this handoff.
+
+## R41 token lifecycle feature slice — implementation pending external qualification
+
+R41 branches from the documented post-R40 `develop-2.0` authority and adds only
+the bounded PeerTube credential lifecycle. The source slice introduces a
+non-secret per-backend lifecycle journal, exact-generation encrypted token
+refresh, bounded refresh-token and revoke API calls, exact shared-registry
+active-to-retired CAS, managed-secret deletion after confirmed retirement,
+health states for operational/refresh-required/reauthentication-required
+credentials, and two additional authenticated administrator actions.
+
+Remote mutation authority is fail-closed. A refresh POST occurs only after a
+durable `refresh_in_flight` claim and is never replayed when an old generation
+is later observed under that claim. A revoke POST occurs only after a durable
+`disconnect_revoke_in_flight` claim and is never replayed after an uncertain
+outcome. Rate limiting during the read-only OAuth-client preflight is durably
+bounded without claiming the token mutation. Disconnect separates remote revoke,
+registry retirement, retirement confirmation, and exact-generation secret
+removal across explicit requests.
+
+The PeerTube adapter still claims only `delivery.embed`; R41 adds no upload,
+processing, publication, managed-library, retention, remote-delete, cron,
+background refresh, AJAX, REST, or WP-CLI mutation path. The real-WordPress R41
+continuation must preserve the complete R40 transcript and add only one OAuth
+client GET, one refresh-token POST, and one revoke POST, then prove the descriptor
+retired and the managed secret removed on both supported WordPress/PHP/MariaDB
+cases.
+
+This section records implemented/local source scope only. Do not mark R41
+qualified or integrated until an exact feature commit passes Forgejo CI and the
+clean exact-commit WordPress 6.4/7.1 Docker lifecycle matrix. Record those exact
+commit/tree/report/checksum values in a later documentation-only closure.

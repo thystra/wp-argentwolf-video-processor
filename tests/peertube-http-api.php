@@ -174,6 +174,7 @@ namespace ArgentVideo {
     require_once dirname(__DIR__) . '/includes/PeerTube_Http_Client.php';
     require_once dirname(__DIR__) . '/includes/PeerTube_Password_Grant_Api.php';
     require_once dirname(__DIR__) . '/includes/PeerTube_Identity_Destination_Api.php';
+    require_once dirname(__DIR__) . '/includes/PeerTube_Token_Lifecycle_Api.php';
     require_once dirname(__DIR__) . '/includes/PeerTube_Api_Client.php';
 
     $assert = static function (bool $condition, string $message): void {
@@ -1232,6 +1233,64 @@ namespace ArgentVideo {
         'response_too_large' === $oversized_channels['error']['code'],
         'Oversized channel-page error code mismatch.'
     );
+
+    // R41 exact refresh-token and revoke-token contracts.
+    $before_refresh = count($GLOBALS['awvp_http_requests']);
+    $queue(
+        $response(
+            200,
+            json_encode(
+                array(
+                    'token_type' => 'Bearer',
+                    'access_token' => 'access-refresh-r41',
+                    'refresh_token' => 'refresh-refresh-r41',
+                    'expires_in' => 3600,
+                    'refresh_token_expires_in' => 1209600,
+                    'unreviewed' => 'must-not-escape',
+                ),
+                JSON_THROW_ON_ERROR
+            ),
+            array('Content-Type' => 'application/json')
+        )
+    );
+    $refreshed = $api->refresh_token(
+        array('client_id' => 'client-r41', 'client_secret' => 'client-secret-r41'),
+        'refresh-old-r41',
+        1700000000
+    );
+    $assert(true === $refreshed['ok'], 'Valid R41 refresh-token exchange failed.');
+    $assert(
+        array('access_token', 'refresh_token', 'access_expires_at', 'refresh_expires_at')
+            === array_keys($refreshed['data']),
+        'R41 refresh exposed unreviewed token-response fields.'
+    );
+    $refresh_request = $GLOBALS['awvp_http_requests'][array_key_last($GLOBALS['awvp_http_requests'])];
+    $assert($before_refresh + 1 === count($GLOBALS['awvp_http_requests']), 'R41 refresh performed an extra HTTP request.');
+    $assert('https://video.example.org/api/v1/users/token' === $refresh_request['url'], 'R41 refresh URL mismatch.');
+    $assert('POST' === $refresh_request['args']['method'], 'R41 refresh must use POST.');
+    $refresh_form = array();
+    parse_str((string) $refresh_request['args']['body'], $refresh_form);
+    $assert(
+        array('client_id', 'client_secret', 'grant_type', 'refresh_token') === array_keys($refresh_form)
+            && 'refresh_token' === $refresh_form['grant_type']
+            && 'refresh-old-r41' === $refresh_form['refresh_token'],
+        'R41 refresh form fields changed from the reviewed exact set.'
+    );
+    $assert(
+        ! array_key_exists('Authorization', $refresh_request['args']['headers']),
+        'R41 refresh unexpectedly sent bearer authority.'
+    );
+
+    $before_revoke = count($GLOBALS['awvp_http_requests']);
+    $queue($response(200, '', array()));
+    $revoked = $api->revoke_token('access-refresh-r41');
+    $assert(true === $revoked['ok'] && true === $revoked['data']['revoked'], 'Valid R41 revoke failed.');
+    $revoke_request = $GLOBALS['awvp_http_requests'][array_key_last($GLOBALS['awvp_http_requests'])];
+    $assert($before_revoke + 1 === count($GLOBALS['awvp_http_requests']), 'R41 revoke performed an extra HTTP request.');
+    $assert('https://video.example.org/api/v1/users/revoke-token' === $revoke_request['url'], 'R41 revoke URL mismatch.');
+    $assert('POST' === $revoke_request['args']['method'], 'R41 revoke must use POST.');
+    $assert('Bearer access-refresh-r41' === ($revoke_request['args']['headers']['Authorization'] ?? ''), 'R41 revoke bearer mismatch.');
+    $assert('' === ($revoke_request['args']['body'] ?? null), 'R41 revoke must send an empty body.');
 
     $dev_http = new PeerTube_Http_Client('http://127.0.0.1:9000');
     $dev_api = new PeerTube_Api_Client($dev_http);

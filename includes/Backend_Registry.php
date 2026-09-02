@@ -784,6 +784,177 @@ final class Backend_Registry
         return $active;
     }
 
+    /**
+     * Prepare one exact active-to-retired PeerTube descriptor mutation.
+     *
+     * @param array<string,mixed> $active_descriptor
+     */
+    public function prepare_peertube_retirement(
+        array $active_descriptor,
+        string $mutation_id
+    ): Atomic_Option_Plan_Result {
+        if (! self::valid_active_peertube_descriptor($active_descriptor)) {
+            return Atomic_Option_Plan_Result::refused();
+        }
+
+        $store = new Atomic_Option_Store(self::OPTION);
+        $snapshot = $store->snapshot();
+        if (Atomic_Option_Snapshot::INDETERMINATE === $snapshot->state()) {
+            return Atomic_Option_Plan_Result::indeterminate();
+        }
+        if (! $this->preservable_registry_snapshot($snapshot)) {
+            return $snapshot->is_absent()
+                ? Atomic_Option_Plan_Result::conflict()
+                : Atomic_Option_Plan_Result::refused();
+        }
+
+        $replacement = $this->prepare_peertube_retirement_from_state(
+            $active_descriptor,
+            $snapshot->value()
+        );
+        if (null === $replacement) {
+            return Atomic_Option_Plan_Result::conflict();
+        }
+
+        return $store->prepare_compare_exchange(
+            $snapshot,
+            $replacement,
+            'registry_retire',
+            $mutation_id
+        );
+    }
+
+    /** @param array<string,mixed> $evidence */
+    public function reconcile_peertube_retirement(
+        array $active_descriptor,
+        array $evidence
+    ): Atomic_Option_Result {
+        $probe = $this->probe_peertube_retirement($active_descriptor, $evidence);
+        if (Atomic_Option_Store::PROBE_AFTER === $probe) {
+            return Atomic_Option_Result::satisfied();
+        }
+        if (Atomic_Option_Store::PROBE_INDETERMINATE === $probe) {
+            return Atomic_Option_Result::indeterminate(
+                Atomic_Option_Result::MUTATION_NONE,
+                Atomic_Option_Result::PHASE_VALIDATION
+            );
+        }
+        if (Atomic_Option_Store::PROBE_REFUSED === $probe) {
+            return Atomic_Option_Result::refused();
+        }
+        if (Atomic_Option_Store::PROBE_BEFORE !== $probe) {
+            return Atomic_Option_Result::conflict(Atomic_Option_Result::PHASE_VALIDATION);
+        }
+
+        $mutation_id = $evidence['mutation_id'] ?? null;
+        if (! is_string($mutation_id)) {
+            return Atomic_Option_Result::refused();
+        }
+        $prepared = $this->prepare_peertube_retirement($active_descriptor, $mutation_id);
+        $plan = $prepared->plan();
+        if (
+            Atomic_Option_Plan_Result::READY !== $prepared->status()
+            || null === $plan
+            || $plan->evidence() !== $evidence
+        ) {
+            return self::plan_failure($prepared);
+        }
+        return (new Atomic_Option_Store(self::OPTION))->apply_plan($plan);
+    }
+
+    /** @param array<string,mixed> $evidence */
+    public function probe_peertube_retirement(
+        array $active_descriptor,
+        array $evidence
+    ): string {
+        if (
+            ! self::valid_active_peertube_descriptor($active_descriptor)
+            || 'registry_retire' !== ($evidence['kind'] ?? null)
+        ) {
+            return Atomic_Option_Store::PROBE_REFUSED;
+        }
+
+        $store = new Atomic_Option_Store(self::OPTION);
+        $probe = $store->probe_evidence($evidence);
+        if (in_array($probe, array(Atomic_Option_Store::PROBE_INDETERMINATE, Atomic_Option_Store::PROBE_REFUSED), true)) {
+            return $probe;
+        }
+        if (Atomic_Option_Store::PROBE_AFTER === $this->probe_retired_peertube_state($active_descriptor)) {
+            return Atomic_Option_Store::PROBE_AFTER;
+        }
+        return Atomic_Option_Store::PROBE_BEFORE === $probe
+            ? $store->probe_evidence($evidence)
+            : Atomic_Option_Store::PROBE_OTHER;
+    }
+
+    /** @param array<string,mixed> $active_descriptor */
+    public function probe_retired_peertube_state(array $active_descriptor): string
+    {
+        if (! self::valid_active_peertube_descriptor($active_descriptor)) {
+            return Atomic_Option_Store::PROBE_REFUSED;
+        }
+        $snapshot = (new Atomic_Option_Store(self::OPTION))->snapshot();
+        if (Atomic_Option_Snapshot::INDETERMINATE === $snapshot->state()) {
+            return Atomic_Option_Store::PROBE_INDETERMINATE;
+        }
+        if (! $this->preservable_registry_snapshot($snapshot)) {
+            return $snapshot->is_absent()
+                ? Atomic_Option_Store::PROBE_OTHER
+                : Atomic_Option_Store::PROBE_REFUSED;
+        }
+        $retired = $active_descriptor;
+        $retired['state'] = 'retired';
+        return $this->registry_snapshot_has_descriptor($snapshot, $retired)
+            ? Atomic_Option_Store::PROBE_AFTER
+            : Atomic_Option_Store::PROBE_OTHER;
+    }
+
+    /** @param array<string,mixed> $active_descriptor */
+    private function prepare_peertube_retirement_from_state(
+        array $active_descriptor,
+        mixed $stored
+    ): ?array {
+        if (! is_array($stored)) {
+            return null;
+        }
+        $strict = self::strict_structure($stored);
+        if (! is_array($strict) || $strict !== $stored) {
+            return null;
+        }
+        if (($stored['backends'][$active_descriptor['id']] ?? null) !== $active_descriptor) {
+            return null;
+        }
+        $stored['backends'][$active_descriptor['id']]['state'] = 'retired';
+        return $stored;
+    }
+
+    /** @param array<string,mixed> $descriptor */
+    private static function valid_active_peertube_descriptor(array $descriptor): bool
+    {
+        if (
+            ! self::has_exact_keys(
+                $descriptor,
+                array('id', 'type', 'label', 'state', 'default_destination', 'secret_ref', 'config_version', 'config')
+            )
+            || self::PEERTUBE_TYPE !== ($descriptor['type'] ?? null)
+            || 'active' !== ($descriptor['state'] ?? null)
+            || ! is_string($descriptor['id'] ?? null)
+            || '' === $descriptor['id']
+            || self::LOCAL_ID === $descriptor['id']
+            || $descriptor['id'] !== Backend_Identity::sanitize($descriptor['id'])
+            || ! is_string($descriptor['default_destination'] ?? null)
+            || $descriptor['default_destination'] !== PeerTube_Connection_Input::destination_id($descriptor['default_destination'])
+            || ! is_string($descriptor['secret_ref'] ?? null)
+            || '' === $descriptor['secret_ref']
+            || $descriptor['secret_ref'] !== Backend_Identity::sanitize_opaque($descriptor['secret_ref'], 191)
+            || self::PEERTUBE_CONFIG_VERSION !== ($descriptor['config_version'] ?? null)
+            || null === self::sanitize_peertube_config($descriptor['config'] ?? null)
+        ) {
+            return false;
+        }
+        return true;
+    }
+
     private function supported_registry_snapshot(
         Atomic_Option_Snapshot $snapshot
     ): bool {
