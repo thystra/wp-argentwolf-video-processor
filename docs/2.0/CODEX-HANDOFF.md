@@ -959,18 +959,97 @@ closure commit from Git and require its final Forgejo CI before using it as the
 next branch point. R38 is integrated only on `develop-2.0`; `main`, tags,
 releases, and publication surfaces remain untouched.
 
+## R39 authenticated identity and destination checkpoint
+
+R39 adds the bounded identity/destination service and administrator flow
+described in `docs/2.0/PEERTUBE-CONNECTION.md`. Verification and destination
+selection are separate explicit requests. Each authenticated read uses only the
+exact encrypted access-token generation bound to the open operation and
+re-proves the operation, disabled descriptor, secret generation, and exact
+journal state after WordPress hooks. Public owned-channel pages receive no
+bearer token. Destination observations remain ephemeral; selection repeats the
+current remote authority read, and a final explicit verification must prove the
+selected channel before the operation reaches `activation_ready`.
+
+The descriptor remains disabled and its `default_destination` remains empty.
+R39 registers no automatic retry, activation, refresh, revoke, disconnect,
+upload, media, cron, REST, AJAX, or WP-CLI mutation path. It does not change the
+model schema, plugin version, release state, or `main`.
+
+The implementation checkpoint is exact commit
+`80011754beb78e05e95e33681be2b5f479ffd491`, tree
+`0eeb6243d86e1475bcbce15f7bfb3d66f6fa3e80`, with sole parent
+`8e2de3a9b67810ce93dadc6d7e837070fd794932`. Its complete local PHP lint,
+focused and regression suites, both autoload modes, storage/restricted-path/
+smoke-load/FFmpeg/vendor/JavaScript gates, workflow YAML, integration shell
+syntax, and diff checks passed. A temporary noncanonical package containing 68
+entries passed its single-root, runtime-content, repository-material exclusion,
+and checksum checks with ZIP SHA-256
+`bef00c1d9c5bea3312b519174b375387cf49f6592be05c1a028b3892d0426391`.
+It was not promoted or published and was removed after inspection. Forgejo CI
+run 76 passed the exact implementation commit in 219 seconds.
+
+The first R39 VM attempt used that exact clean implementation commit and tree,
+a read-only commit export, and all six pinned images from local Docker cache.
+The WordPress 6.4.2 case passed infrastructure isolation, fresh installation,
+exact runtime versions, activation, the update-check baseline, and HTTP
+readiness. The browser fixture then failed before an R39 browser or API flow
+because the wrapper required its sibling R38 support fixture while the runner
+had mounted only the R39 fixture directory. WordPress 7.1 did not run. This is
+classified as a deterministic harness fixture-mount failure, not a plugin
+failure or successful R39 VM evidence.
+
+- failed report: `peertube-r39-smoke-20260902T100559Z-24220.log`;
+- failed report SHA-256:
+  `9a2142919ebf7fb245cf45ff6cd093542be3d2359bcef569b92eec7ee729ce31`;
+- cleanup: `PASS`.
+
+The correction validates every selected fixture/support path against the exact
+commit export, mounts that export's complete `tests/fixtures` directory
+read-only, and invokes only the validated fixture basename. R39 declares its
+R38 support fixture explicitly, while the R38 defaults continue through the
+same generalized runner. This is the focused regression guard for the failure
+class. The correction is exact commit
+`b1ca597d0ca843257b9225f9daf59a330ca748d6`, tree
+`16c0a7694b071f86fb8c57f8e4819046023ae9e3`, with sole parent the implementation
+checkpoint. It changes only excluded repository test/documentation files, so
+the installable runtime object set remains identical. Forgejo CI run 77 passed
+that exact correction commit in 219 seconds.
+
+The replacement R39 VM matrix used that exact clean correction commit and tree,
+a read-only exact-commit export, and all six pinned images from local Docker
+cache. The WordPress 6.4.2 / PHP 8.1.34 / MariaDB 10.6.27 and WordPress 7.1 /
+PHP 8.3.33 / MariaDB 10.11.18 cases each passed infrastructure ownership and
+isolation, no-host-port and database-consumer-path gates, fresh installation,
+the exact runtime-version gates, activation, the update-check baseline, both
+role-specific login boundaries, the R38 authorization plus R39 browser/state
+flows, the exact isolated request sequence, encrypted-secret persistence,
+plaintext-canary exclusion, no automatic retry or upload mutation, no gated
+WordPress/PHP debug diagnostics, case assertions, and per-case cleanup. The
+matrix and global cleanup passed with final
+`PEERTUBE_IDENTITY_DESTINATION_SMOKE=PASS`.
+
+- successful report: `peertube-r39-smoke-20260902T102529Z-27043.log`;
+- successful report SHA-256:
+  `fba950a267f50b63a2ac5258c812c75813405b22628122fd01eae76d41e0b82d`;
+- cleanup: `PASS`.
+
+This closes R39 source, local, exact-commit CI, and two-case Docker development
+checkpoint validation. It is not a real-PeerTube, TLS, exact-ZIP, release,
+upgrade, MySQL, Plugin Check, activation/adapter, refresh/revoke, or upload gate.
+
 ## Recommended continuation
 
-R38 source, local, exact-commit CI, two-case WordPress VM, feature closure, and
-exact `develop-2.0` merge gates are complete. Treat the Git commit containing
-this documentation-only integration closure as the next branch authority only
-after its exact Forgejo CI is green. Then:
+Create and validate a documentation-only R39 feature-evidence closure, then
+integrate that exact closure into `develop-2.0` without rewriting either parent.
+Require exact Forgejo CI for the feature closure and integration commit before
+using the resulting documented `develop-2.0` commit as a new branch authority.
+Then:
 
-1. implement `/users/me` identity verification and bounded destination discovery
-   as a separate reviewed slice;
-2. implement activation of the disabled descriptor separately;
-3. review refresh/revoke separately and preserve the no-upload boundary until
-   tranche 2.0-4 state-machine work.
+1. implement activation of the disabled descriptor and adapter/factory
+   eligibility as a separate reviewed slice;
+2. review refresh/revoke separately;
+3. preserve the no-upload boundary until tranche 2.0-4 state-machine work.
 
 ## Engineering policy
 

@@ -17,7 +17,8 @@ final class PeerTube_Connection_Admin_Service implements PeerTube_Connection_Adm
     public function __construct(
         private readonly PeerTube_Connection_Operation_Store $operations,
         private readonly PeerTube_Connection_Coordinator $coordinator,
-        private readonly PeerTube_Password_Grant_Service $grants
+        private readonly PeerTube_Password_Grant_Service $grants,
+        private readonly PeerTube_Identity_Destination_Service $identity_destinations
     ) {
     }
 
@@ -44,6 +45,30 @@ final class PeerTube_Connection_Admin_Service implements PeerTube_Connection_Adm
     public function reconcile(string $operation_id, int $now): array
     {
         return $this->grants->reconcile($operation_id, $now);
+    }
+
+    public function verify_identity(string $operation_id, int $now): array
+    {
+        return $this->identity_destinations->advance($operation_id, $now);
+    }
+
+    public function discover_destinations(string $operation_id, int $now): array
+    {
+        return $this->identity_destinations->discover($operation_id, $now);
+    }
+
+    public function select_destination(
+        string $operation_id,
+        string $destination_id,
+        int $actor_id,
+        int $now
+    ): array {
+        return $this->identity_destinations->select(
+            $operation_id,
+            $destination_id,
+            $actor_id,
+            $now
+        );
     }
 
     public function open_operations(): ?array

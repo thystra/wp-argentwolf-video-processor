@@ -32,6 +32,20 @@ interface PeerTube_Connection_Admin_Actions
     /** @return array<string, mixed> */
     public function reconcile(string $operation_id, int $now): array;
 
+    /** @return array<string, mixed> */
+    public function verify_identity(string $operation_id, int $now): array;
+
+    /** @return array<string, mixed> */
+    public function discover_destinations(string $operation_id, int $now): array;
+
+    /** @return array<string, mixed> */
+    public function select_destination(
+        string $operation_id,
+        string $destination_id,
+        int $actor_id,
+        int $now
+    ): array;
+
     /**
      * Return only the reviewed non-secret projection used by the page.
      *

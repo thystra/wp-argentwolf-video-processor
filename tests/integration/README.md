@@ -261,3 +261,45 @@ To preserve its report outside the checkout, set an absolute directory:
 AWVP_R38_REPORT_DIR=/absolute/report/path \
     bash tests/integration/peertube-admin-authorization-smoke.sh
 ```
+
+## PeerTube identity/destination checkpoint
+
+After the R39 source checkpoint is committed, run its two-case browser and
+state matrix from a clean checkout on the disposable Docker host:
+
+```bash
+bash tests/integration/peertube-identity-destination-smoke.sh
+```
+
+The wrapper reuses the R38 clean-commit export, cache-first digest-pinned image
+matrix, internal-only network, update-cache baseline, real WordPress login, and
+unfiltered debug-log gates. The exact commit's fixture parent is mounted
+read-only in the browser container so the R39 continuation can require its
+declared R38 support fixture; both paths are checked before container startup
+and again after commit export. It first proves the complete R38 bootstrap, then
+journals verification intent without HTTP. A later explicit POST performs one
+bearer `/users/me` read and two public channel pages containing exactly 101
+strictly ordered owned channels. Ordinary page GETs remain local; only the
+nonce-bound discovery GET repeats that read-only sequence.
+
+Selection of channel `101` repeats current authority before journaling the
+exact ID. A final explicit verification repeats it again and stops at
+`activation_ready`. The redacted request log must therefore contain exactly one
+OAuth-client GET, one password-token POST, and four identical one-identity/two-
+page channel sequences. Bearer material is never logged and public channel
+requests must carry no authorization header.
+
+A fresh WP-CLI process proves the exact selected ID and bounded identity,
+generation/time binding, unchanged disabled descriptor and empty
+`default_destination`, absence of a persisted channel-list cache, encrypted
+non-autoloaded token storage, no attachment or managed-upload mutation, and a
+clean `WP_DEBUG` log. This remains development-checkpoint evidence, not a real-
+PeerTube, TLS, exact-ZIP, release, upgrade, MySQL, Plugin Check, activation,
+adapter, refresh/revoke, or upload gate.
+
+To preserve its report outside the checkout, set the generic runner directory:
+
+```bash
+AWVP_ADMIN_REPORT_DIR=/absolute/report/path \
+    bash tests/integration/peertube-identity-destination-smoke.sh
+```

@@ -29,6 +29,21 @@ final class PeerTube_Connection_Input
                 : '';
     }
 
+    /**
+     * PeerTube destination identifiers are retained as exact opaque decimal
+     * strings. Rejecting non-canonical input prevents a browser or service
+     * boundary from silently rewriting the selected authority.
+     */
+    public static function destination_id(mixed $value): string
+    {
+        if (! is_string($value) || 1 !== preg_match('/^[1-9][0-9]*$/D', $value)) {
+            return '';
+        }
+
+        $parsed = filter_var($value, FILTER_VALIDATE_INT, array('options' => array('min_range' => 1)));
+        return false !== $parsed && (string) $parsed === $value ? $value : '';
+    }
+
     public static function label(mixed $value): string
     {
         if (

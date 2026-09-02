@@ -3,13 +3,25 @@
 
 ## 2.0.0 - Unreleased
 
-- Add an origin-bound WordPress safe-HTTP client and bounded, read-only PeerTube
-  instance detection through `GET /api/v1/config`.
-- Preserve the existing local backend and 1.0 runtime behavior; this checkpoint
-  adds no authentication, upload, remote mutation, or administrator connection
-  action.
-- Add focused PeerTube HTTP/API security tests to all CI/release-test workflows
-  and a real-WordPress, isolated-network Docker development smoke.
+- Add an origin-bound WordPress safe-HTTP client and bounded PeerTube instance
+  detection through `GET /api/v1/config`, followed by authenticated identity and
+  owned-channel discovery through the configured PeerTube origin.
+- Add the tranche 2.0-3 connection foundation: durable connection journaling,
+  encrypted server-side token persistence, restart-safe coordination, and an
+  explicit password/OTP grant bootstrap that keeps credentials out of durable
+  operation state and browser projections.
+- Add a dedicated administrator settings boundary with capability- and
+  nonce-protected connection, grant, reconciliation, identity-verification, and
+  destination-selection actions.
+- Add fail-closed identity verification and owned-destination selection that
+  re-prove current remote authority before selection and before the operation may
+  reach `activation_ready`.
+- Preserve the existing local backend and 1.0 runtime behavior. The PeerTube
+  descriptor remains disabled with no default destination; activation, refresh,
+  revoke/disconnect, media upload, and remote media mutation remain later
+  separately reviewed work.
+- Expand focused PeerTube security/state tests and isolated real-WordPress Docker
+  development matrices through the R39 identity/destination checkpoint.
 
 ## 1.0.0 - 2026-08-22
 

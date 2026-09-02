@@ -215,6 +215,15 @@ at most one state-changing coordinator or grant invocation before a fixed local
 Loading the page is read-only. R38 registers no `nopriv`, AJAX, REST, WP-CLI,
 cron, activation, automatic retry, upload, or media hook.
 
+R39 adds only two more authenticated `admin_post` actions to that same settings
+boundary: explicit identity verification and owned-destination selection. The
+aggregate R39 browser boundary therefore has six authenticated actions. Identity
+and channel reads remain explicit, capability- and nonce-bound requests; ordinary
+page GET is read-only. Destination selection repeats current remote authority, and
+a final explicit verification must prove the selected channel before the operation
+may reach `activation_ready`. R39 still registers no `nopriv`, AJAX, REST, WP-CLI,
+cron, automatic retry, activation, refresh/revoke, upload, or media-mutation path.
+
 Before a grant, the administrator must explicitly authorize sending the entered
 credentials to the displayed exact external service. An allowlisted
 development-only HTTP origin requires a second acknowledgement that the

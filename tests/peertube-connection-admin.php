@@ -175,6 +175,8 @@ require_once dirname(__DIR__) . '/includes/PeerTube_Connection_State_Machine.php
 require_once dirname(__DIR__) . '/includes/PeerTube_Connection_Coordinator.php';
 require_once dirname(__DIR__) . '/includes/PeerTube_Password_Grant_Api.php';
 require_once dirname(__DIR__) . '/includes/PeerTube_Password_Grant_Service.php';
+require_once dirname(__DIR__) . '/includes/PeerTube_Identity_Destination_Api.php';
+require_once dirname(__DIR__) . '/includes/PeerTube_Identity_Destination_Service.php';
 require_once dirname(__DIR__) . '/includes/PeerTube_Connection_Admin_Actions.php';
 require_once dirname(__DIR__) . '/includes/PeerTube_Connection_Admin.php';
 
@@ -184,6 +186,7 @@ use ArgentVideo\PeerTube_Connection_Admin_Actions;
 use ArgentVideo\PeerTube_Connection_Coordinator;
 use ArgentVideo\PeerTube_Connection_Input;
 use ArgentVideo\PeerTube_Connection_State_Machine as Machine;
+use ArgentVideo\PeerTube_Identity_Destination_Service;
 use ArgentVideo\PeerTube_Password_Grant_Service;
 
 final class Awvp_Admin_Fake_Actions implements PeerTube_Connection_Admin_Actions
@@ -206,6 +209,15 @@ final class Awvp_Admin_Fake_Actions implements PeerTube_Connection_Admin_Actions
     /** @var array<string, mixed> */
     public array $reconcile_result;
 
+    /** @var array<string, mixed> */
+    public array $verify_result;
+
+    /** @var array<string, mixed> */
+    public array $discover_result;
+
+    /** @var array<string, mixed> */
+    public array $select_result;
+
     public bool $throw = false;
 
     public function __construct()
@@ -223,6 +235,14 @@ final class Awvp_Admin_Fake_Actions implements PeerTube_Connection_Admin_Actions
             PeerTube_Password_Grant_Service::STATUS_READY_FOR_VERIFICATION,
             Atomic_Option_Result::MUTATION_NONE
         );
+        $this->verify_result = awvp_admin_identity_result(
+            PeerTube_Identity_Destination_Service::STATUS_ADVANCED,
+            Atomic_Option_Result::MUTATION_APPLIED,
+            'connection_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+            Machine::PHASE_VERIFICATION_IN_FLIGHT
+        );
+        $this->discover_result = awvp_admin_discovery_result();
+        $this->select_result = $this->verify_result;
     }
 
     public function start(array $intent, int $actor_id, int $now): array
@@ -252,6 +272,28 @@ final class Awvp_Admin_Fake_Actions implements PeerTube_Connection_Admin_Actions
     {
         $this->called('reconcile', array($operation_id, $now));
         return $this->reconcile_result;
+    }
+
+    public function verify_identity(string $operation_id, int $now): array
+    {
+        $this->called('verify_identity', array($operation_id, $now));
+        return $this->verify_result;
+    }
+
+    public function discover_destinations(string $operation_id, int $now): array
+    {
+        $this->called('discover_destinations', array($operation_id, $now));
+        return $this->discover_result;
+    }
+
+    public function select_destination(
+        string $operation_id,
+        string $destination_id,
+        int $actor_id,
+        int $now
+    ): array {
+        $this->called('select_destination', array($operation_id, $destination_id, $actor_id, $now));
+        return $this->select_result;
     }
 
     public function open_operations(): ?array
@@ -297,6 +339,61 @@ function awvp_admin_grant_result(
     return array_merge(
         awvp_admin_result($status, $mutation, $operation_id, $phase),
         array('retry_after' => 0)
+    );
+}
+
+/** @return array<string, mixed> */
+function awvp_admin_identity_result(
+    string $status,
+    string $mutation,
+    string $operation_id = 'connection_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+    string $phase = Machine::PHASE_VERIFICATION_IN_FLIGHT
+): array {
+    return array_merge(
+        awvp_admin_result($status, $mutation, $operation_id, $phase),
+        array('retry_after' => 0)
+    );
+}
+
+/** @return array<string, mixed> */
+function awvp_admin_discovery_result(
+    string $status = PeerTube_Identity_Destination_Service::STATUS_DESTINATIONS_READY
+): array {
+    $success = in_array(
+        $status,
+        array(
+            PeerTube_Identity_Destination_Service::STATUS_DESTINATIONS_READY,
+            PeerTube_Identity_Destination_Service::STATUS_NO_DESTINATIONS,
+        ),
+        true
+    );
+    return array_merge(
+        awvp_admin_identity_result(
+            $status,
+            Atomic_Option_Result::MUTATION_NONE,
+            'connection_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+            Machine::PHASE_AWAITING_DESTINATION
+        ),
+        array(
+            'identity' => $success
+                ? array(
+                    'user_id' => '17',
+                    'username' => 'awvp_service',
+                    'account_id' => '23',
+                    'account_name' => 'awvp_service',
+                )
+                : array(),
+            'destinations' => PeerTube_Identity_Destination_Service::STATUS_DESTINATIONS_READY === $status
+                ? array(
+                    array(
+                        'id' => '41',
+                        'name' => 'primary',
+                        'display_name' => 'Primary & Owned',
+                        'authority' => 'owned',
+                    ),
+                )
+                : array(),
+        )
     );
 }
 
@@ -399,6 +496,13 @@ awvp_admin_assert(
     '' === PeerTube_Connection_Input::operation_id('connection_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'),
     'Noncanonical operation ID was accepted.'
 );
+awvp_admin_assert('41' === PeerTube_Connection_Input::destination_id('41'), 'Exact destination ID was rejected.');
+foreach (array('', '0', '041', '41 ', '4.1', '9223372036854775808') as $invalid_destination) {
+    awvp_admin_assert(
+        '' === PeerTube_Connection_Input::destination_id($invalid_destination),
+        'Noncanonical destination ID was accepted.'
+    );
+}
 awvp_admin_assert(
     'Primary & private' === PeerTube_Connection_Input::label('Primary & private'),
     'Valid connection label was transformed.'
@@ -490,6 +594,18 @@ $remaining_handler_cases = array(
         PeerTube_Connection_Admin::ACTION_RECONCILE,
         'argentwolf_video_processor_peertube_connection_reconcile:' . $operation_id,
         array('operation_id' => $operation_id),
+    ),
+    array(
+        'verify_identity_action',
+        PeerTube_Connection_Admin::ACTION_VERIFY_IDENTITY,
+        'argentwolf_video_processor_peertube_connection_verify_identity:' . $operation_id,
+        array('operation_id' => $operation_id),
+    ),
+    array(
+        'select_destination_action',
+        PeerTube_Connection_Admin::ACTION_SELECT_DESTINATION,
+        'argentwolf_video_processor_peertube_connection_select_destination:' . $operation_id,
+        array('operation_id' => $operation_id, 'destination_id' => '41'),
     ),
 );
 foreach ($remaining_handler_cases as [$method, $action, $nonce_action, $fields]) {
@@ -846,6 +962,104 @@ $result = awvp_admin_invoke(array($controller, 'reconcile_action'));
 awvp_admin_assert($result instanceof Awvp_Admin_Redirect && 303 === $result->status, 'Reconcile did not use 303 PRG.');
 awvp_admin_assert(1 === awvp_admin_call_count($actions, 'reconcile'), 'Reconcile did not invoke exactly once.');
 
+// Identity verification and destination selection are separate operation-bound
+// POSTs. The browser cannot normalize or invent a destination identifier.
+$identity_actions = new Awvp_Admin_Fake_Actions();
+$identity_actions->operations = array(
+    awvp_admin_operation($operation_id, 'https://video.example.org', Machine::PHASE_SECRET_STORED, 1)
+);
+$identity_controller = awvp_admin_controller($identity_actions);
+awvp_admin_reset_request();
+awvp_admin_post(
+    PeerTube_Connection_Admin::ACTION_VERIFY_IDENTITY,
+    'argentwolf_video_processor_peertube_connection_verify_identity:' . $operation_id,
+    array('operation_id' => $operation_id)
+);
+$result = awvp_admin_invoke(array($identity_controller, 'verify_identity_action'));
+awvp_admin_assert(
+    $result instanceof Awvp_Admin_Redirect && 303 === $result->status,
+    'Identity verification did not use 303 PRG.'
+);
+awvp_admin_assert(
+    array($operation_id, 1700000000)
+        === array_values(array_filter(
+            $identity_actions->calls,
+            static fn (array $call): bool => 'verify_identity' === $call['method']
+        ))[0]['args'],
+    'Identity verification inputs changed before the service boundary.'
+);
+awvp_admin_assert(str_contains($result->url, 'verification_advanced'), 'Identity step got the wrong fixed notice.');
+
+$identity_actions->select_result = awvp_admin_identity_result(
+    PeerTube_Identity_Destination_Service::STATUS_ADVANCED,
+    Atomic_Option_Result::MUTATION_APPLIED,
+    $operation_id,
+    Machine::PHASE_VERIFICATION_IN_FLIGHT
+);
+awvp_admin_reset_request();
+awvp_admin_post(
+    PeerTube_Connection_Admin::ACTION_SELECT_DESTINATION,
+    'argentwolf_video_processor_peertube_connection_select_destination:' . $operation_id,
+    array('operation_id' => $operation_id, 'destination_id' => '41')
+);
+$result = awvp_admin_invoke(array($identity_controller, 'select_destination_action'));
+awvp_admin_assert($result instanceof Awvp_Admin_Redirect && 303 === $result->status, 'Selection did not use 303 PRG.');
+$select_calls = array_values(array_filter(
+    $identity_actions->calls,
+    static fn (array $call): bool => 'select_destination' === $call['method']
+));
+awvp_admin_assert(
+    1 === count($select_calls)
+        && array($operation_id, '41', 17, 1700000000) === $select_calls[0]['args'],
+    'Destination selection inputs changed before the service boundary.'
+);
+
+// A failed fresh authority read during selection is read-only: the durable
+// operation remains awaiting_destination and the service reports no mutation.
+$identity_actions->select_result = awvp_admin_identity_result(
+    PeerTube_Identity_Destination_Service::STATUS_VERIFICATION_FAILED,
+    Atomic_Option_Result::MUTATION_NONE,
+    $operation_id,
+    Machine::PHASE_AWAITING_DESTINATION
+);
+awvp_admin_reset_request();
+awvp_admin_post(
+    PeerTube_Connection_Admin::ACTION_SELECT_DESTINATION,
+    'argentwolf_video_processor_peertube_connection_select_destination:' . $operation_id,
+    array('operation_id' => $operation_id, 'destination_id' => '42')
+);
+$result = awvp_admin_invoke(array($identity_controller, 'select_destination_action'));
+awvp_admin_assert(
+    $result instanceof Awvp_Admin_Redirect
+        && 303 === $result->status
+        && str_contains($result->url, 'verification_failed'),
+    'Read-only selection verification failure was not classified safely.'
+);
+
+awvp_admin_reset_request();
+awvp_admin_post(
+    PeerTube_Connection_Admin::ACTION_SELECT_DESTINATION,
+    'argentwolf_video_processor_peertube_connection_select_destination:' . $operation_id,
+    array('operation_id' => $operation_id, 'destination_id' => '041')
+);
+$result = awvp_admin_invoke(array($identity_controller, 'select_destination_action'));
+awvp_admin_assert(str_contains($result->url, 'invalid_request'), 'Noncanonical destination was not rejected.');
+awvp_admin_assert(
+    2 === awvp_admin_call_count($identity_actions, 'select_destination'),
+    'Noncanonical destination reached the selection service.'
+);
+
+$identity_actions->verify_result['access_token'] = 'RESULT-TOKEN-CANARY';
+awvp_admin_reset_request();
+awvp_admin_post(
+    PeerTube_Connection_Admin::ACTION_VERIFY_IDENTITY,
+    'argentwolf_video_processor_peertube_connection_verify_identity:' . $operation_id,
+    array('operation_id' => $operation_id)
+);
+$result = awvp_admin_invoke(array($identity_controller, 'verify_identity_action'));
+awvp_admin_assert(str_contains($result->url, 'state_may_have_changed'), 'Malformed identity result was trusted.');
+awvp_admin_assert(! str_contains($result->url, 'RESULT-TOKEN-CANARY'), 'Malformed identity secret reached redirect.');
+
 // Exceptions and terminal indeterminate grants never expose exception text or
 // offer an automatic retry.
 $actions->throw = true;
@@ -880,6 +1094,98 @@ awvp_admin_assert(str_contains($html, 'name="password" type="password"'), 'Passw
 awvp_admin_assert(! str_contains($html, 'name="password" type="password" value='), 'Password field was repopulated.');
 awvp_admin_assert(str_contains($html, 'No media, media metadata, or telemetry'), 'Required no-media disclosure is missing.');
 awvp_admin_assert(str_contains($html, 'dedicated least-privilege PeerTube account'), 'Dedicated-account guidance is missing.');
+
+// Awaiting-destination page loads remain local until the administrator submits
+// the explicit nonce-bound GET. Returned channel text is strictly projected
+// and escaped before an exact selection POST is offered.
+$destination_actions = new Awvp_Admin_Fake_Actions();
+$destination_actions->operations = array(
+    awvp_admin_operation(
+        $operation_id,
+        'https://video.example.org',
+        Machine::PHASE_AWAITING_DESTINATION,
+        1
+    )
+);
+$destination_controller = awvp_admin_controller($destination_actions);
+awvp_admin_reset_request();
+$_GET = array(
+    'page' => PeerTube_Connection_Admin::PAGE_SLUG,
+    'argentwolf_peertube_operation' => $operation_id,
+);
+ob_start();
+$destination_controller->page();
+$destination_local_html = (string) ob_get_clean();
+awvp_admin_assert(
+    0 === awvp_admin_call_count($destination_actions, 'discover_destinations'),
+    'Ordinary page GET contacted PeerTube without the explicit discovery request.'
+);
+awvp_admin_assert(
+    str_contains($destination_local_html, 'Read current owned destinations')
+        && str_contains($destination_local_html, 'method="get"'),
+    'Awaiting-destination page did not render the explicit read-only discovery form.'
+);
+
+awvp_admin_reset_request();
+$GLOBALS['awvp_admin_expected_nonce_action'] =
+    'argentwolf_video_processor_peertube_connection_discover_destinations:' . $operation_id;
+$_GET = array(
+    'page' => PeerTube_Connection_Admin::PAGE_SLUG,
+    'argentwolf_peertube_operation' => $operation_id,
+    'argentwolf_peertube_discover' => '1',
+    PeerTube_Connection_Admin::NONCE_FIELD => 'valid-nonce',
+);
+ob_start();
+$destination_controller->page();
+$destination_html = (string) ob_get_clean();
+awvp_admin_assert(
+    1 === awvp_admin_call_count($destination_actions, 'discover_destinations'),
+    'Explicit destination read did not invoke exactly one read-only service boundary.'
+);
+awvp_admin_assert(
+    str_contains($destination_html, 'Primary &amp; Owned')
+        && str_contains($destination_html, 'value="41"')
+        && str_contains(
+            $destination_html,
+            'name="action" value="' . PeerTube_Connection_Admin::ACTION_SELECT_DESTINATION . '"'
+        ),
+    'Reviewed destination projection was not escaped and rendered for exact selection.'
+);
+awvp_admin_assert(
+    ! str_contains($destination_html, 'access_token')
+        && ! str_contains($destination_html, 'refresh_token'),
+    'Destination page exposed a persistent-secret field.'
+);
+
+$destination_actions->discover_result['access_token'] = 'DISCOVERY-TOKEN-CANARY';
+ob_start();
+$destination_controller->page();
+$malformed_discovery_html = (string) ob_get_clean();
+awvp_admin_assert(
+    ! str_contains($malformed_discovery_html, 'DISCOVERY-TOKEN-CANARY')
+        && ! str_contains(
+            $malformed_discovery_html,
+            'name="action" value="' . PeerTube_Connection_Admin::ACTION_SELECT_DESTINATION . '"'
+        ),
+    'Malformed discovery projection reached the destination selector.'
+);
+
+awvp_admin_reset_request();
+$GLOBALS['awvp_admin_expected_nonce_action'] =
+    'argentwolf_video_processor_peertube_connection_discover_destinations:' . $operation_id;
+$GLOBALS['awvp_admin_nonce_valid'] = false;
+$_GET = array(
+    'page' => PeerTube_Connection_Admin::PAGE_SLUG,
+    'argentwolf_peertube_operation' => $operation_id,
+    'argentwolf_peertube_discover' => '1',
+    PeerTube_Connection_Admin::NONCE_FIELD => 'valid-nonce',
+);
+$result = awvp_admin_invoke(array($destination_controller, 'page'));
+awvp_admin_assert($result instanceof Awvp_Admin_Die, 'Bad destination-read nonce did not terminate.');
+awvp_admin_assert(
+    2 === awvp_admin_call_count($destination_actions, 'discover_destinations'),
+    'Bad destination-read nonce reached the service boundary.'
+);
 
 $malformed_projection = awvp_admin_operation();
 $malformed_projection['password'] = 'PROJECTION-SECRET-CANARY';

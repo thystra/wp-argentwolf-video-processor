@@ -70,11 +70,17 @@ final class Plugin
                 $peertube_secrets,
                 $this->backend_registry
             );
+            $peertube_identity_destinations = new PeerTube_Identity_Destination_Service(
+                $peertube_operations,
+                $peertube_secrets,
+                $this->backend_registry
+            );
             $peertube_admin = new PeerTube_Connection_Admin(
                 new PeerTube_Connection_Admin_Service(
                     $peertube_operations,
                     $peertube_coordinator,
-                    $peertube_grants
+                    $peertube_grants,
+                    $peertube_identity_destinations
                 )
             );
 
@@ -104,6 +110,14 @@ final class Plugin
             add_action(
                 'admin_post_' . PeerTube_Connection_Admin::ACTION_RECONCILE,
                 array($peertube_admin, 'reconcile_action')
+            );
+            add_action(
+                'admin_post_' . PeerTube_Connection_Admin::ACTION_VERIFY_IDENTITY,
+                array($peertube_admin, 'verify_identity_action')
+            );
+            add_action(
+                'admin_post_' . PeerTube_Connection_Admin::ACTION_SELECT_DESTINATION,
+                array($peertube_admin, 'select_destination_action')
             );
             add_action('admin_notices', array($admin, 'notices'));
             add_action('admin_notices', array($peertube_admin, 'notices'));
