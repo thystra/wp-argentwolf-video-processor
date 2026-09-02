@@ -177,6 +177,7 @@ final class Awvp_Registry_Atomic_Fake_Wpdb
 
 require_once dirname(__DIR__) . '/includes/Backend_Identity.php';
 require_once dirname(__DIR__) . '/includes/PeerTube_Origin.php';
+require_once dirname(__DIR__) . '/includes/PeerTube_Connection_Input.php';
 require_once dirname(__DIR__) . '/includes/Atomic_Option_Snapshot.php';
 require_once dirname(__DIR__) . '/includes/Atomic_Option_Result.php';
 require_once dirname(__DIR__) . '/includes/Atomic_Option_Mutation_Plan.php';
@@ -424,6 +425,170 @@ $assert(
     'Registry probe race changed the concurrent registry state.'
 );
 $assert([] === $GLOBALS['wpdb']->mutations, 'Registry probe race attempted a mutation.');
+
+// R40 activation changes only the exact target descriptor state and destination,
+// preserving all unrelated current-v1/future registry state.
+$registry = $reset();
+$activation_before = array(
+    'version' => 1,
+    'future_registry_field' => array('r40' => 'preserve'),
+    'backends' => array(
+        'local' => $local('active'),
+        'home-peertube' => $descriptor(),
+        'future-kind' => array(
+            'id' => 'future-kind',
+            'type' => 'future-kind',
+            'label' => 'Future Kind',
+            'state' => 'active',
+            'default_destination' => 'opaque',
+            'secret_ref' => 'managed:future-kind',
+            'config_version' => 9,
+            'config' => array('future' => array('nested' => true)),
+            'future_field' => 'untouched',
+        ),
+    ),
+);
+$seed($activation_before, $expected_autoload);
+$activation_plan_result = $registry->prepare_peertube_activation(
+    $descriptor(),
+    '42',
+    'mutation_' . str_repeat('b', 32)
+);
+$activation_plan = $activation_plan_result->plan();
+$assert(
+    Atomic_Option_Plan_Result::READY === $activation_plan_result->status()
+        && null !== $activation_plan,
+    'Exact PeerTube activation plan was not prepared.'
+);
+$assert(
+    'registry_activate' === ($activation_plan->evidence()['kind'] ?? null),
+    'PeerTube activation plan used the wrong mutation kind.'
+);
+$activation_apply = $registry->apply_peertube_activation_plan(
+    $descriptor(),
+    '42',
+    $activation_plan
+);
+$assert(
+    Atomic_Option_Result::APPLIED === $activation_apply->status()
+        && Atomic_Option_Result::MUTATION_APPLIED === $activation_apply->mutation(),
+    'Exact PeerTube activation CAS did not apply.'
+);
+$activation_after = $stored();
+$expected_active = $descriptor();
+$expected_active['state'] = 'active';
+$expected_active['default_destination'] = '42';
+$assert(
+    $expected_active === ($activation_after['backends']['home-peertube'] ?? null),
+    'Activation did not produce the exact reviewed active descriptor.'
+);
+$activation_without_target = $activation_after;
+unset($activation_without_target['backends']['home-peertube']);
+$before_without_target = $activation_before;
+unset($before_without_target['backends']['home-peertube']);
+$assert(
+    $before_without_target === $activation_without_target,
+    'Activation reconstructed or changed unrelated registry state.'
+);
+$assert(
+    Atomic_Option_Store::PROBE_AFTER === $registry->probe_active_peertube_state($descriptor(), '42'),
+    'Active PeerTube semantic postcondition was not provable.'
+);
+$assert(
+    Atomic_Option_Store::PROBE_AFTER === $registry->probe_peertube_activation(
+        $descriptor(),
+        '42',
+        $activation_plan->evidence()
+    ),
+    'Journaled activation evidence did not reconcile to the active semantic postcondition.'
+);
+$activation_satisfied = $registry->reconcile_peertube_activation(
+    $descriptor(),
+    '42',
+    $activation_plan->evidence()
+);
+$assert(
+    Atomic_Option_Result::APPLIED === $activation_satisfied->status()
+        && Atomic_Option_Result::MUTATION_NONE === $activation_satisfied->mutation(),
+    'Already-active exact descriptor was not treated as satisfied without mutation.'
+);
+
+// An unrelated later registry append does not invalidate an already-confirmed
+// target activation; the target semantic postcondition is independent of whole
+// option byte identity.
+$post_activation_future = $activation_after;
+$post_activation_future['backends']['later-future'] = $descriptor('later-future');
+$seed($post_activation_future, $expected_autoload);
+$assert(
+    Atomic_Option_Store::PROBE_AFTER === $registry->probe_peertube_activation(
+        $descriptor(),
+        '42',
+        $activation_plan->evidence()
+    ),
+    'Unrelated later registry state incorrectly invalidated a confirmed activation.'
+);
+
+// A stale shared-registry plan cannot overwrite an unrelated winner. After a
+// definite conflict, a fresh explicit plan may incorporate that winner.
+$registry = $reset();
+$stale_before = array(
+    'version' => 1,
+    'backends' => array('local' => $local('active'), 'home-peertube' => $descriptor()),
+);
+$seed($stale_before, $expected_autoload);
+$stale_prepared = $registry->prepare_peertube_activation(
+    $descriptor(),
+    '42',
+    'mutation_' . str_repeat('c', 32)
+);
+$stale_plan = $stale_prepared->plan();
+$assert(null !== $stale_plan, 'Stale activation fixture could not prepare a plan.');
+$concurrent_activation = $stale_before;
+$concurrent_activation['backends']['concurrent-winner'] = $descriptor('concurrent-winner');
+$seed($concurrent_activation, $expected_autoload);
+$stale_apply = $registry->apply_peertube_activation_plan($descriptor(), '42', $stale_plan);
+$assert(
+    Atomic_Option_Result::CONFLICT === $stale_apply->status()
+        && Atomic_Option_Result::MUTATION_NONE === $stale_apply->mutation(),
+    'Stale activation plan did not fail closed as a no-mutation conflict.'
+);
+$assert($concurrent_activation === $stored(), 'Stale activation plan overwrote the concurrent winner.');
+$fresh_prepared = $registry->prepare_peertube_activation(
+    $descriptor(),
+    '42',
+    'mutation_' . str_repeat('d', 32)
+);
+$assert(
+    Atomic_Option_Plan_Result::READY === $fresh_prepared->status()
+        && null !== $fresh_prepared->plan(),
+    'Fresh explicit activation replan could not preserve the unrelated winner.'
+);
+
+// Activation refuses malformed destinations and target drift without SQL.
+$registry = $reset();
+$seed($stale_before, $expected_autoload);
+$invalid_destination = $registry->prepare_peertube_activation(
+    $descriptor(),
+    '042',
+    'mutation_' . str_repeat('e', 32)
+);
+$assert(
+    Atomic_Option_Plan_Result::REFUSED === $invalid_destination->status(),
+    'Noncanonical PeerTube destination was accepted for activation.'
+);
+$drifted = $stale_before;
+$drifted['backends']['home-peertube']['label'] = 'Changed Elsewhere';
+$seed($drifted, $expected_autoload);
+$drifted_result = $registry->prepare_peertube_activation(
+    $descriptor(),
+    '42',
+    'mutation_' . str_repeat('f', 32)
+);
+$assert(
+    Atomic_Option_Plan_Result::CONFLICT === $drifted_result->status(),
+    'Drifted target descriptor was not treated as an activation conflict.'
+);
+$assert([] === $GLOBALS['wpdb']->mutations, 'Activation validation/conflict path attempted SQL unexpectedly.');
 
 echo 'AWVP atomic backend registry tests passed ('
     . (function_exists('wp_autoload_values_to_autoload') ? 'modern/off' : 'wp64/no')

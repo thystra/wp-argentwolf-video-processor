@@ -1085,13 +1085,41 @@ This documented closure is the branch authority for R40. R40 may activate the
 verified PeerTube descriptor and make the adapter/factory eligible, but must
 preserve the existing no-media-upload boundary.
 
+## R40 backend activation feature slice — source state pending branch qualification
+
+R40 is authorized from `develop-2.0` closure `090b85b` and is staged on
+`feature/2.0-peertube-backend-activation`. The source slice adds an exact
+disabled-to-active shared-registry CAS, a restart-safe activation service using
+the already-defined activation journal phases, a conservative PeerTube adapter
+registered in the backend factory, descriptor-aware health, and a seventh
+authenticated administrator activation action.
+
+The slice preserves the no-media boundary. The PeerTube adapter claims only
+`delivery.embed`; ingest, processing, managed-library, publication, retention,
+and remote-delete capabilities are false. Activation itself owns no PeerTube HTTP
+client. It plans/applies/confirms local registry state and closes only after
+re-proving the exact secret generation, destination, adapter/capability, and
+non-blocking health. Refresh/revoke/disconnect remain outside R40.
+
+Focused source tests cover exact shared-registry preservation/CAS conflict,
+restart-safe activation boundaries, adapter/health eligibility, administrator
+POST validation, and smoke-load registration in both supported autoload modes.
+The R40 real-WordPress continuation reuses the R39 remote request transcript and
+then performs four explicit local activation continuations; any additional
+PeerTube request fails the request-log gate.
+
+This paragraph records staged source intent and local validation only. It does
+**not** claim a feature-branch commit, Forgejo CI result, Docker matrix result,
+merge, package, release, or deployment. Those exact identifiers belong in the
+R40 closure after external qualification.
+
 ## Recommended continuation
 
-Branch R40 from the documented `develop-2.0` closure and then:
+Complete R40 from the documented `develop-2.0` closure and then:
 
-1. implement activation of the disabled descriptor and adapter/factory
-   eligibility as a separate reviewed slice;
-2. review refresh/revoke separately;
+1. apply/review the R40 activation feature patch and require exact branch CI plus
+   the isolated WordPress 6.4/7.1 Docker matrix;
+2. after R40 closes, review refresh/revoke separately;
 3. preserve the no-upload boundary until tranche 2.0-4 state-machine work.
 
 ## Engineering policy

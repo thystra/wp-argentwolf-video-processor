@@ -18,7 +18,8 @@ final class PeerTube_Connection_Admin_Service implements PeerTube_Connection_Adm
         private readonly PeerTube_Connection_Operation_Store $operations,
         private readonly PeerTube_Connection_Coordinator $coordinator,
         private readonly PeerTube_Password_Grant_Service $grants,
-        private readonly PeerTube_Identity_Destination_Service $identity_destinations
+        private readonly PeerTube_Identity_Destination_Service $identity_destinations,
+        private readonly PeerTube_Backend_Activation_Service $activation
     ) {
     }
 
@@ -69,6 +70,11 @@ final class PeerTube_Connection_Admin_Service implements PeerTube_Connection_Adm
             $actor_id,
             $now
         );
+    }
+
+    public function activate(string $operation_id, int $now): array
+    {
+        return $this->activation->advance($operation_id, $now);
     }
 
     public function open_operations(): ?array

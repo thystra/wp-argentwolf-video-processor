@@ -16,12 +16,16 @@
 - Add fail-closed identity verification and owned-destination selection that
   re-prove current remote authority before selection and before the operation may
   reach `activation_ready`.
-- Preserve the existing local backend and 1.0 runtime behavior. The PeerTube
-  descriptor remains disabled with no default destination; activation, refresh,
-  revoke/disconnect, media upload, and remote media mutation remain later
+- Preserve the existing local backend and 1.0 runtime behavior while adding an
+  explicit, restart-safe local activation path for a freshly verified PeerTube
+  descriptor. Activation changes only the exact registry state/default destination
+  and makes the conservative PeerTube adapter/factory surface eligible; refresh,
+  revoke/disconnect, media upload, processing, and remote media mutation remain
   separately reviewed work.
 - Expand focused PeerTube security/state tests and isolated real-WordPress Docker
-  development matrices through the R39 identity/destination checkpoint.
+  development matrices through the R39 identity/destination checkpoint, with an
+  R40 activation continuation that proves activation performs no additional
+  PeerTube HTTP request or media mutation.
 - Move routine CI to a project-owned FFmpeg 9.0.1 toolchain image so ordinary
   source/test runs do not repeatedly compile the same verified FFmpeg build on
   each runner; retain the signed-source build as the image bootstrap/provenance

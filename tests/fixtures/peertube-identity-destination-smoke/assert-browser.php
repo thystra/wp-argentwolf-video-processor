@@ -177,9 +177,9 @@ $ready_page = awvp_r38_settings_get($base_url, $admin_cookies, $operation_id);
 awvp_r38_assert_no_grant_canaries($ready_page->body);
 awvp_r38_assert(
     str_contains($ready_page->body, 'Identity and destination verified; activation pending')
-        && str_contains($ready_page->body, 'The backend remains disabled')
-        && str_contains($ready_page->body, 'activation is a separate reviewed tranche.'),
-    'The browser did not stop at the exact activation-ready boundary.'
+        && str_contains($ready_page->body, 'Activation changes only local AWVP backend-registry state')
+        && str_contains($ready_page->body, 'does not upload media'),
+    'The browser did not reach the exact activation-ready boundary.'
 );
 awvp_r38_assert_no_form($ready_page->body, AWVP_R38_ACTION_GRANT);
 awvp_r38_assert_no_form($ready_page->body, AWVP_R38_ACTION_VERIFY_IDENTITY);

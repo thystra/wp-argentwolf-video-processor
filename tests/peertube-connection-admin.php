@@ -177,6 +177,7 @@ require_once dirname(__DIR__) . '/includes/PeerTube_Password_Grant_Api.php';
 require_once dirname(__DIR__) . '/includes/PeerTube_Password_Grant_Service.php';
 require_once dirname(__DIR__) . '/includes/PeerTube_Identity_Destination_Api.php';
 require_once dirname(__DIR__) . '/includes/PeerTube_Identity_Destination_Service.php';
+require_once dirname(__DIR__) . '/includes/PeerTube_Backend_Activation_Service.php';
 require_once dirname(__DIR__) . '/includes/PeerTube_Connection_Admin_Actions.php';
 require_once dirname(__DIR__) . '/includes/PeerTube_Connection_Admin.php';
 
@@ -187,6 +188,7 @@ use ArgentVideo\PeerTube_Connection_Coordinator;
 use ArgentVideo\PeerTube_Connection_Input;
 use ArgentVideo\PeerTube_Connection_State_Machine as Machine;
 use ArgentVideo\PeerTube_Identity_Destination_Service;
+use ArgentVideo\PeerTube_Backend_Activation_Service;
 use ArgentVideo\PeerTube_Password_Grant_Service;
 
 final class Awvp_Admin_Fake_Actions implements PeerTube_Connection_Admin_Actions
@@ -218,6 +220,9 @@ final class Awvp_Admin_Fake_Actions implements PeerTube_Connection_Admin_Actions
     /** @var array<string, mixed> */
     public array $select_result;
 
+    /** @var array<string, mixed> */
+    public array $activate_result;
+
     public bool $throw = false;
 
     public function __construct()
@@ -243,6 +248,7 @@ final class Awvp_Admin_Fake_Actions implements PeerTube_Connection_Admin_Actions
         );
         $this->discover_result = awvp_admin_discovery_result();
         $this->select_result = $this->verify_result;
+        $this->activate_result = awvp_admin_activation_result();
     }
 
     public function start(array $intent, int $actor_id, int $now): array
@@ -294,6 +300,12 @@ final class Awvp_Admin_Fake_Actions implements PeerTube_Connection_Admin_Actions
     ): array {
         $this->called('select_destination', array($operation_id, $destination_id, $actor_id, $now));
         return $this->select_result;
+    }
+
+    public function activate(string $operation_id, int $now): array
+    {
+        $this->called('activate', array($operation_id, $now));
+        return $this->activate_result;
     }
 
     public function open_operations(): ?array
@@ -352,6 +364,25 @@ function awvp_admin_identity_result(
     return array_merge(
         awvp_admin_result($status, $mutation, $operation_id, $phase),
         array('retry_after' => 0)
+    );
+}
+
+/** @return array<string, mixed> */
+function awvp_admin_activation_result(
+    string $status = PeerTube_Backend_Activation_Service::STATUS_ADVANCED,
+    string $mutation = Atomic_Option_Result::MUTATION_APPLIED,
+    string $operation_id = 'connection_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+    string $phase = Machine::PHASE_ACTIVATION_PLANNED,
+    int $revision = 6
+): array {
+    return array(
+        'status'          => $status,
+        'mutation'        => $mutation,
+        'operation_id'    => $operation_id,
+        'backend_id'      => '' === $operation_id ? '' : 'peertube_primary',
+        'phase'           => $phase,
+        'record_revision' => '' === $operation_id ? 0 : $revision,
+        'retry_after'     => 0,
     );
 }
 
@@ -607,6 +638,12 @@ $remaining_handler_cases = array(
         'argentwolf_video_processor_peertube_connection_select_destination:' . $operation_id,
         array('operation_id' => $operation_id, 'destination_id' => '41'),
     ),
+    array(
+        'activate_action',
+        PeerTube_Connection_Admin::ACTION_ACTIVATE,
+        'argentwolf_video_processor_peertube_connection_activate:' . $operation_id,
+        array('operation_id' => $operation_id),
+    ),
 );
 foreach ($remaining_handler_cases as [$method, $action, $nonce_action, $fields]) {
     $case_actions = new Awvp_Admin_Fake_Actions();
@@ -771,6 +808,67 @@ awvp_admin_assert(
     str_contains($result->url, 'state_may_have_changed'),
     'Coordinator advanced result accepted a phase outside the R38 checkpoint.'
 );
+
+// Activation is exact-operation-bound and accepts only the reviewed R40
+// phase/status projection. It never accepts an uncertain mutation as success.
+$actions = new Awvp_Admin_Fake_Actions();
+$controller = awvp_admin_controller($actions);
+awvp_admin_reset_request();
+awvp_admin_post(
+    PeerTube_Connection_Admin::ACTION_ACTIVATE,
+    'argentwolf_video_processor_peertube_connection_activate:' . $operation_id,
+    array('operation_id' => $operation_id)
+);
+$result = awvp_admin_invoke(array($controller, 'activate_action'));
+awvp_admin_assert($result instanceof Awvp_Admin_Redirect && 303 === $result->status, 'Activation did not use 303 PRG.');
+awvp_admin_assert(1 === awvp_admin_call_count($actions, 'activate'), 'Activation did not invoke exactly once.');
+awvp_admin_assert(str_contains($result->url, 'activation_advanced'), 'Activation advance got the wrong notice.');
+
+$actions->activate_result = awvp_admin_activation_result(
+    PeerTube_Backend_Activation_Service::STATUS_ACTIVE,
+    Atomic_Option_Result::MUTATION_APPLIED,
+    $operation_id,
+    Machine::PHASE_COMPLETE,
+    8
+);
+awvp_admin_reset_request();
+awvp_admin_post(
+    PeerTube_Connection_Admin::ACTION_ACTIVATE,
+    'argentwolf_video_processor_peertube_connection_activate:' . $operation_id,
+    array('operation_id' => $operation_id)
+);
+$result = awvp_admin_invoke(array($controller, 'activate_action'));
+awvp_admin_assert(str_contains($result->url, 'backend_activated'), 'Completed activation got the wrong notice.');
+
+$actions->activate_result = awvp_admin_activation_result(
+    PeerTube_Backend_Activation_Service::STATUS_CONFLICT,
+    Atomic_Option_Result::MUTATION_UNKNOWN,
+    $operation_id,
+    Machine::PHASE_ACTIVATION_PLANNED
+);
+awvp_admin_reset_request();
+awvp_admin_post(
+    PeerTube_Connection_Admin::ACTION_ACTIVATE,
+    'argentwolf_video_processor_peertube_connection_activate:' . $operation_id,
+    array('operation_id' => $operation_id)
+);
+$result = awvp_admin_invoke(array($controller, 'activate_action'));
+awvp_admin_assert(str_contains($result->url, 'state_may_have_changed'), 'Unknown activation mutation was downgraded.');
+
+$actions->activate_result = awvp_admin_activation_result(
+    PeerTube_Backend_Activation_Service::STATUS_ADVANCED,
+    Atomic_Option_Result::MUTATION_NONE,
+    $operation_id,
+    Machine::PHASE_AWAITING_DESTINATION
+);
+awvp_admin_reset_request();
+awvp_admin_post(
+    PeerTube_Connection_Admin::ACTION_ACTIVATE,
+    'argentwolf_video_processor_peertube_connection_activate:' . $operation_id,
+    array('operation_id' => $operation_id)
+);
+$result = awvp_admin_invoke(array($controller, 'activate_action'));
+awvp_admin_assert(str_contains($result->url, 'state_may_have_changed'), 'Activation accepted an impossible positive phase.');
 
 // Credential submission preserves exact unslashed bytes, requires explicit
 // service authorization, and invokes exactly one grant boundary.
@@ -1324,6 +1422,45 @@ awvp_admin_assert(
     $grant_count_before_delayed_post === awvp_admin_call_count($actions, 'grant'),
     'Premature retry POST reached the grant service.'
 );
+
+// R40 activation phases render only the explicit local activation action.
+foreach (
+    array(
+        Machine::PHASE_ACTIVATION_READY => 'Begin backend activation',
+        Machine::PHASE_ACTIVATION_PLANNED => 'Continue backend activation',
+        Machine::PHASE_ACTIVE_PENDING_CLOSE => 'Finalize backend activation',
+    ) as $activation_phase => $activation_label
+) {
+    $activation_actions = new Awvp_Admin_Fake_Actions();
+    $activation_actions->operations = array(
+        awvp_admin_operation($operation_id, 'https://video.example.org', $activation_phase, 1)
+    );
+    $activation_controller = awvp_admin_controller($activation_actions);
+    awvp_admin_reset_request();
+    $_GET = array(
+        'page' => PeerTube_Connection_Admin::PAGE_SLUG,
+        'argentwolf_peertube_operation' => $operation_id,
+    );
+    ob_start();
+    $activation_controller->page();
+    $activation_html = (string) ob_get_clean();
+    awvp_admin_assert(
+        str_contains(
+            $activation_html,
+            'name="action" value="' . PeerTube_Connection_Admin::ACTION_ACTIVATE . '"'
+        ) && str_contains($activation_html, $activation_label),
+        'Activation phase did not render its exact local continuation action.'
+    );
+    awvp_admin_assert(
+        0 === awvp_admin_call_count($activation_actions, 'activate'),
+        'Activation page GET crossed a mutation boundary.'
+    );
+    awvp_admin_assert(
+        ! str_contains($activation_html, 'name="username"')
+            && ! str_contains($activation_html, 'name="destination_id"'),
+        'Activation phase rendered an unrelated credential or destination mutation field.'
+    );
+}
 
 // Notice query tampering cannot introduce arbitrary text or HTML.
 awvp_admin_reset_request();

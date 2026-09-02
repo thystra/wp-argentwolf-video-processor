@@ -66,14 +66,34 @@ $assert(user_can($admin, 'manage_options'), 'The disposable administrator lacks 
 
 $records = (new PeerTube_Connection_Operation_Store())->open_operations();
 $assert(is_array($records), 'The operation journal was unreadable.');
-$matches = array_values(
-    array_filter(
-        $records,
-        static fn (array $record): bool => 'r38-admin' === ($record['backend_id'] ?? null)
-    )
-);
-$assert(1 === count($matches), 'The R38 operation was not uniquely present.');
-$assert(1 === count($records), 'An unexpected open connection operation was present.');
+$expect_complete = defined('AWVP_ADMIN_SMOKE_EXPECT_COMPLETE')
+    && true === AWVP_ADMIN_SMOKE_EXPECT_COMPLETE;
+if ($expect_complete) {
+    $assert(array() === $records, 'A completed connection operation remained open.');
+    $journal = get_option(PeerTube_Connection_Operation_Store::OPTION, null);
+    $assert(
+        is_array($journal)
+            && 1 === ($journal['version'] ?? null)
+            && is_array($journal['operations'] ?? null),
+        'The completed operation journal was unavailable.'
+    );
+    $matches = array_values(
+        array_filter(
+            $journal['operations'],
+            static fn (array $record): bool => 'r38-admin' === ($record['backend_id'] ?? null)
+        )
+    );
+    $assert(1 === count($matches), 'The completed operation was not uniquely present in the journal.');
+} else {
+    $matches = array_values(
+        array_filter(
+            $records,
+            static fn (array $record): bool => 'r38-admin' === ($record['backend_id'] ?? null)
+        )
+    );
+    $assert(1 === count($matches), 'The R38 operation was not uniquely present.');
+    $assert(1 === count($records), 'An unexpected open connection operation was present.');
+}
 
 $record = $matches[0];
 $assert(PeerTube_Connection_State_Machine::valid($record), 'The R38 operation record was invalid.');
@@ -142,17 +162,23 @@ $assert(
 );
 
 $descriptor = (new Backend_Registry())->get('r38-admin');
+$expected_descriptor_state = defined('AWVP_ADMIN_SMOKE_EXPECT_DESCRIPTOR_STATE')
+    ? AWVP_ADMIN_SMOKE_EXPECT_DESCRIPTOR_STATE
+    : 'disabled';
+$expected_descriptor_destination = defined('AWVP_ADMIN_SMOKE_EXPECT_DESCRIPTOR_DESTINATION')
+    ? AWVP_ADMIN_SMOKE_EXPECT_DESCRIPTOR_DESTINATION
+    : '';
 $expected_descriptor = array(
     'id'                  => 'r38-admin',
     'type'                => 'peertube',
     'label'               => 'R38 Admin Authorization',
-    'state'               => 'disabled',
-    'default_destination' => '',
+    'state'               => $expected_descriptor_state,
+    'default_destination' => $expected_descriptor_destination,
     'secret_ref'          => $record['secret_ref'],
     'config_version'      => 1,
     'config'              => array('origin' => 'http://peertube.test:9000'),
 );
-$assert($expected_descriptor === $descriptor, 'The disabled backend descriptor differed.');
+$assert($expected_descriptor === $descriptor, 'The backend descriptor differed from the expected checkpoint state.');
 
 $secret = (new Managed_Backend_Secret_Store())->read(
     $record['secret_ref'],

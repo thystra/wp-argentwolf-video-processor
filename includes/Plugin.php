@@ -38,9 +38,11 @@ final class Plugin
         $player = new Player();
         $renderer = new Renderer($player);
         $diagnostics = new Diagnostics();
+        $peertube_secrets = new Managed_Backend_Secret_Store();
         $this->backend_registry = new Backend_Registry();
         $this->backend_factory = new Backend_Adapter_Factory(
-            new Local_Backend_Adapter($queue, $diagnostics)
+            new Local_Backend_Adapter($queue, $diagnostics),
+            new PeerTube_Backend_Adapter($peertube_secrets)
         );
         $admin = new Admin($jobs, $queue, $bulk, $launcher, $diagnostics, $worker_logs);
 
@@ -59,7 +61,6 @@ final class Plugin
 
         if (is_admin()) {
             $peertube_operations = new PeerTube_Connection_Operation_Store();
-            $peertube_secrets = new Managed_Backend_Secret_Store();
             $peertube_coordinator = new PeerTube_Connection_Coordinator(
                 $peertube_operations,
                 $peertube_secrets,
@@ -75,12 +76,19 @@ final class Plugin
                 $peertube_secrets,
                 $this->backend_registry
             );
+            $peertube_activation = new PeerTube_Backend_Activation_Service(
+                $peertube_operations,
+                $peertube_secrets,
+                $this->backend_registry,
+                $this->backend_factory
+            );
             $peertube_admin = new PeerTube_Connection_Admin(
                 new PeerTube_Connection_Admin_Service(
                     $peertube_operations,
                     $peertube_coordinator,
                     $peertube_grants,
-                    $peertube_identity_destinations
+                    $peertube_identity_destinations,
+                    $peertube_activation
                 )
             );
 
@@ -118,6 +126,10 @@ final class Plugin
             add_action(
                 'admin_post_' . PeerTube_Connection_Admin::ACTION_SELECT_DESTINATION,
                 array($peertube_admin, 'select_destination_action')
+            );
+            add_action(
+                'admin_post_' . PeerTube_Connection_Admin::ACTION_ACTIVATE,
+                array($peertube_admin, 'activate_action')
             );
             add_action('admin_notices', array($admin, 'notices'));
             add_action('admin_notices', array($peertube_admin, 'notices'));

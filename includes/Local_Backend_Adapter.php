@@ -28,8 +28,10 @@ final class Local_Backend_Adapter implements Backend_Adapter
         return Backend_Capabilities::local();
     }
 
-    public function health(): Backend_Health
+    /** @param array<string, mixed> $descriptor */
+    public function health(array $descriptor): Backend_Health
     {
+        unset($descriptor);
         return Backend_Health::from_local_diagnostics($this->diagnostics->checks());
     }
 

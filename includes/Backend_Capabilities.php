@@ -41,6 +41,31 @@ final class Backend_Capabilities
         );
     }
 
+    /**
+     * R40 exposes only the non-mutating managed-video delivery surface.
+     * Upload, processing, library, publication, retention, and delete claims
+     * stay false until their operational interfaces are implemented.
+     *
+     * @return array<string, bool>
+     */
+    public static function peertube_activation(): array
+    {
+        return array(
+            self::INGEST_WORDPRESS_ATTACHMENT => false,
+            self::INGEST_AWVP_STAGING          => false,
+            self::INGEST_SERVER_PUSH           => false,
+            self::INGEST_DIRECT_BROWSER        => false,
+            self::PROCESSING_VIDEO             => false,
+            self::LIBRARY_ACCOUNT_VIDEOS       => false,
+            self::ASSET_SELECT_EXISTING        => false,
+            self::DELIVERY_EMBED               => true,
+            self::PUBLICATION_PRIVACY          => false,
+            self::PUBLICATION_SCHEDULE         => false,
+            self::SOURCE_BACKEND_RETENTION     => false,
+            self::ASSET_REMOTE_DELETE          => false,
+        );
+    }
+
     /** @param array<string, bool> $capabilities */
     public static function supports(array $capabilities, string $capability): bool
     {

@@ -3,7 +3,7 @@
 Status: tranche 2.0-3 design contract; R34 authenticated API primitives, R35
 local persistence foundation, R36 local-only pre-grant coordination, R37
 password-grant/encrypted-token persistence, R38 explicit administrator
-authorization, and R39 authenticated identity/owned-destination selection
+authorization, R39 authenticated identity/owned-destination selection, and R40 local backend activation
 implemented through that checkpoint
 Reviewed runtime baselines: PeerTube 8.1.8 and 8.2.4, 2026-08-22
 Applies to: configured/manageable PeerTube backends
@@ -1099,6 +1099,42 @@ cron, automatic retry, activation, refresh/revoke, upload, or media mutation
 path. The backend descriptor remains disabled with an empty
 `default_destination`; activation is the next separately reviewed tranche.
 
+### R40 explicit local backend activation boundary
+
+R40 consumes only a durable `activation_ready` operation produced by R39. It
+adds no PeerTube HTTP endpoint or remote mutation. The administrator must submit
+a seventh authenticated POST action,
+`argentwolf_video_processor_peertube_connection_activate`, for every continuation.
+Each request requires `manage_options`, an operation-bound nonce, and the exact
+operation ID.
+
+The restart-safe sequence deliberately separates four local boundaries:
+
+1. prove the current managed-secret generation, exact disabled descriptor,
+   verified destination, and installed PeerTube adapter, then journal an exact
+   `registry_activate` compare-and-swap plan;
+2. apply or reconcile that exact shared-registry plan, changing only target
+   `state` to `active` and `default_destination` to the already re-verified ID;
+3. on a later explicit request, confirm the authoritative active descriptor in
+   the journal;
+4. independently re-prove secret generation, exact active descriptor, adapter
+   registration, conservative capability, and non-blocking descriptor-aware
+   health, then close the operation as `complete`.
+
+An unrelated shared-registry winner is never overwritten. A definite stale-plan
+conflict may be replanned only after a fresh semantic probe proves the exact
+target descriptor is still disabled and unchanged. Unknown mutation authority,
+malformed/future target state, missing adapter, changed secret generation, bad
+destination, unreadable secret, or an expired/near-expiry access token fails
+closed.
+
+The registered R40 PeerTube adapter exposes only `delivery.embed`; every
+media-ingest, processing, managed-library, publication, retention, and delete
+capability remains false. Usable local credential state reports a warning because
+token refresh/live operational health remain R41 work. The activation action
+performs no PeerTube HTTP request, upload, processing, remote mutation, refresh,
+revoke, or disconnect.
+
 ## 37. Adapter factory evolution
 
 Factory may register PeerTube alongside local.
@@ -1219,10 +1255,11 @@ Before runtime implementation merges, prove at minimum:
     credentials;
 74. secret/registry targets are freshly re-proved after journal hooks, with an
     exact ready winner recoverable from terminal commit evidence without HTTP.
-75. only the six reviewed authenticated `admin_post` hooks (the four R38
-    connection/grant actions plus R39 verification and selection) and the separate
-    `manage_options` settings page are registered; there is no `nopriv`, AJAX,
-    REST, WP-CLI, cron, activation, upload, or media hook;
+75. only the seven reviewed authenticated `admin_post` hooks (the four R38
+    connection/grant actions, R39 verification and selection, and the R40 local
+    activation continuation) and the separate `manage_options` settings page are
+    registered; there is no `nopriv`, AJAX, REST, WP-CLI, cron, automatic upload,
+    processing, or media hook;
 76. page GET is read-only and renders only a validated bounded non-secret
     operation projection;
 77. each action rejects non-POST requests and fails capability, nonce, unexpected
@@ -1267,7 +1304,31 @@ Before runtime implementation merges, prove at minimum:
     `default_destination` and performs no activation, upload, refresh, revoke,
     disconnect, schema, runtime-version, or release mutation;
 95. the complete R39 browser and state boundary is exercised against real
-    WordPress 6.4 and 7.1 before the checkpoint is accepted.
+    WordPress 6.4 and 7.1 before the checkpoint is accepted;
+96. R40 activation accepts only a valid `activation_ready`, `activation_planned`,
+    or `active_pending_close` journal state and never invents missing R39 proof;
+97. an activation plan is durable before the registry CAS and contains exact
+    `registry_activate` evidence; planning does not change the registry;
+98. the registry CAS preserves unrelated/future v1 state and may change only the
+    exact target descriptor from disabled/empty destination to active/the exact
+    re-verified destination;
+99. each explicit activation request crosses at most one consequential local
+    persistence boundary, and a successful registry write is confirmed in the
+    journal only by a later request;
+100. shared-registry conflict replan requires definite no-mutation authority plus
+    a fresh proof that the exact target remains disabled and unchanged;
+101. final close independently re-proves current secret generation, active
+    descriptor/destination, adapter installation, capability, and non-blocking
+    descriptor-aware health;
+102. missing/unreadable/expired credential state or an unavailable adapter blocks
+    operation closure without falsely claiming completion;
+103. the R40 PeerTube adapter claims only `delivery.embed`; upload, processing,
+    managed-library, publication, retention, and remote-delete capabilities remain
+    false;
+104. the activation browser sequence performs no PeerTube HTTP request beyond the
+    exact R39 request log and creates no attachment/upload/media mutation;
+105. the complete R40 browser/state boundary is exercised against real WordPress
+    6.4 and 7.1 before R40 is accepted.
 
 ## 40. Recommended implementation order
 
@@ -1286,7 +1347,7 @@ Before runtime implementation merges, prove at minimum:
 12. bounded administrator start/resume/grant/reconcile actions through encrypted
     token persistence only (R38 feature slice);
 13. `/users/me` verification and destination discovery;
-14. activation writer and adapter/factory integration;
+14. activation writer and adapter/factory integration (R40 feature slice);
 15. refresh/revoke lifecycle;
 16. diagnostics/Site Health;
 17. service/privacy/help disclosure before runtime PeerTube contact;

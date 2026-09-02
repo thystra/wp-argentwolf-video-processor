@@ -14,7 +14,8 @@ interface Backend_Adapter
     /** @return array<string, bool> */
     public function capabilities(): array;
 
-    public function health(): Backend_Health;
+    /** @param array<string, mixed> $descriptor */
+    public function health(array $descriptor): Backend_Health;
 }
 
 // EOF: includes/Backend_Adapter.php
