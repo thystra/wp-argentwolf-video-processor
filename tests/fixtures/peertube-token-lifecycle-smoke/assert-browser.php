@@ -25,11 +25,12 @@ const AWVP_R41_ACTION_DISCONNECT = 'argentwolf_video_processor_peertube_disconne
 const AWVP_R41_BACKEND_ID = 'r38-admin';
 
 /**
- * Locate one exact lifecycle form scoped to the expected managed backend.
+ * Locate one exact lifecycle form inside the expected managed-backend row.
  *
- * The settings page may legitimately render the same lifecycle action for
- * more than one active PeerTube backend, so action-name uniqueness is not a
- * valid R41 invariant.
+ * R41 renders lifecycle controls per managed backend.  The durable UI
+ * invariant is therefore one row for the backend identity and one requested
+ * action inside that row, not global uniqueness across every form on the
+ * settings page.
  *
  * @return array{attributes:array<string,string>,inputs:list<array<string,string>>,html:string,nonce:string}
  */
@@ -39,39 +40,30 @@ function awvp_r41_backend_action_form(
     string $backend_id,
     string $base_url
 ): array {
-    $matches = array();
-    foreach (awvp_r38_forms($body) as $form) {
-        $action_inputs = awvp_r38_named_inputs($form['inputs'], 'action');
-        $backend_inputs = awvp_r38_named_inputs($form['inputs'], 'backend_id');
-        if (
-            1 === count($action_inputs)
-            && $action === ($action_inputs[0]['value'] ?? null)
-            && 1 === count($backend_inputs)
-            && $backend_id === ($backend_inputs[0]['value'] ?? null)
-        ) {
-            $matches[] = $form;
-        }
-    }
+    $matched = preg_match_all('~<tr\\b[^>]*>(.*?)</tr>~is', $body, $row_matches, PREG_SET_ORDER);
+    awvp_r38_assert(false !== $matched, 'The managed-backend rows could not be parsed.');
+
+    $rows = array_values(
+        array_filter(
+            $row_matches,
+            static fn (array $match): bool => str_contains(
+                $match[0],
+                '<code>' . $backend_id . '</code>'
+            )
+        )
+    );
     awvp_r38_assert(
-        1 === count($matches),
-        'The expected backend-scoped administrator action form was not unique.'
+        1 === count($rows),
+        'The expected managed-backend row was not unique.'
     );
 
-    $form = $matches[0];
+    $form = awvp_r38_action_form($rows[0][0], $action, $base_url);
+    $backend_inputs = awvp_r38_named_inputs($form['inputs'], 'backend_id');
     awvp_r38_assert(
-        'post' === strtolower($form['attributes']['method'] ?? '')
-            && $base_url . '/wp-admin/admin-post.php' === ($form['attributes']['action'] ?? ''),
-        'The backend-scoped administrator action form target differed.'
+        1 === count($backend_inputs)
+            && $backend_id === ($backend_inputs[0]['value'] ?? null),
+        'The lifecycle form backend identity differed.'
     );
-
-    $nonce_inputs = awvp_r38_named_inputs($form['inputs'], AWVP_R38_NONCE_FIELD);
-    awvp_r38_assert(1 === count($nonce_inputs), 'The backend-scoped nonce field was not unique.');
-    $nonce = $nonce_inputs[0]['value'] ?? '';
-    awvp_r38_assert(
-        1 === preg_match('/^[0-9A-Za-z]{10}$/D', $nonce),
-        'The backend-scoped nonce was malformed.'
-    );
-    $form['nonce'] = $nonce;
     return $form;
 }
 
