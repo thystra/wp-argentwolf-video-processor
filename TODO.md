@@ -112,10 +112,10 @@
 - [x] R37: bounded password/OTP grant bootstrap and encrypted token persistence.
 - [x] R38: explicit administrator authorization and settings boundary.
 - [x] R39: authenticated identity verification and owned-destination selection.
-- [ ] R40: activate the verified PeerTube descriptor and make the adapter/factory
-  eligible without crossing the media-upload boundary. Source/unit/browser-matrix
-  implementation is staged on the R40 feature branch; exact branch CI and the
-  isolated WordPress 6.4/7.1 Docker matrix remain acceptance gates.
+- [x] R40: activate the verified PeerTube descriptor and make the adapter/factory
+  eligible without crossing the media-upload boundary. Exact feature commit
+  `1fcb8e45fd9b1aaeb4fe2aad1e31928327cc0d69` passed Forgejo CI run 86 and the
+  isolated WordPress 6.4/7.1 Docker activation matrix.
 - [ ] Review and implement token refresh, revoke, and disconnect lifecycle as a
   separately bounded tranche.
 - [ ] Begin tranche 2.0-4 staged source transfer/upload and remote-state work only

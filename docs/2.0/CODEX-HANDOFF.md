@@ -1085,7 +1085,7 @@ This documented closure is the branch authority for R40. R40 may activate the
 verified PeerTube descriptor and make the adapter/factory eligible, but must
 preserve the existing no-media-upload boundary.
 
-## R40 backend activation feature slice — source state pending branch qualification
+## R40 backend activation feature slice — qualified feature closure
 
 R40 is authorized from `develop-2.0` closure `090b85b` and is staged on
 `feature/2.0-peertube-backend-activation`. The source slice adds an exact
@@ -1108,18 +1108,68 @@ The R40 real-WordPress continuation reuses the R39 remote request transcript and
 then performs four explicit local activation continuations; any additional
 PeerTube request fails the request-log gate.
 
-This paragraph records staged source intent and local validation only. It does
-**not** claim a feature-branch commit, Forgejo CI result, Docker matrix result,
-merge, package, release, or deployment. Those exact identifiers belong in the
-R40 closure after external qualification.
+The initial implementation checkpoint is exact commit
+`ce8d370b0aefb5598e8fd0843defa0629bc9ae3b`, tree
+`b82bcbdcdb7ef39cbc0624eabc805221cafa7cc0`. Forgejo CI run 84 passed that
+exact source in 9 seconds. The first isolated Docker matrix used that same clean
+commit and read-only exact-commit export. It reached the R39 identity/destination
+browser boundary successfully, then the R40 browser fixture rejected the new
+`activation_advanced` / `backend_activated` redirect notices because the shared
+reviewed-notice allowlist still reflected the R38/R39 boundary. Product activation
+code was not the failing assertion. Cleanup passed.
+
+- first failed report: `peertube-r40-smoke-20260902T160226Z-1200093.log`;
+- first failed report SHA-256:
+  `817ac615a15e417283cf5afc12cf6bec2fe4e313c69404536b429e088ead4b90`;
+- first failed final result: `PEERTUBE_BACKEND_ACTIVATION_SMOKE=FAIL`.
+
+The fixture-only correction is exact commit
+`5ebffdc9f2b8c5aa21103dbea2292fe0f24a12df`, tree
+`aefcaea63089b39fb01794ddff8ae3cd34b6c42e`. Forgejo CI run 85 passed that
+exact correction in 13 seconds. The second Docker run progressed through the new
+redirect-notice checks and completed activation, then found a second fixture-only
+expectation defect: a subsequent plain settings-page GET incorrectly expected a
+transient redirect notice that it had not requested. The durable page already
+contained the persistent no-media-work warning. Cleanup passed.
+
+- second failed report: `peertube-r40-smoke-20260902T161017Z-1205313.log`;
+- second failed report SHA-256:
+  `7091a032104c0576e60ca56b2bd8cf3cf4fbb42753871e69310f6ec93cc5947c`;
+- second failed final result: `PEERTUBE_BACKEND_ACTIVATION_SMOKE=FAIL`.
+
+The final fixture correction is exact commit
+`1fcb8e45fd9b1aaeb4fe2aad1e31928327cc0d69`, tree
+`d8c2dfa324e6bf2365740a39ae13ff4ab2edf2cb`. Forgejo CI run 86 passed that
+exact feature state in 24 seconds. The replacement isolated Docker matrix used a
+clean exact-commit export mounted read-only and passed both supported cases:
+WordPress 6.4.2 / PHP 8.1.34 / MariaDB 10.6.27 and WordPress 7.1 / PHP 8.3.33 /
+MariaDB 10.11.18. Both cases passed administrator/subscriber boundaries, the R38
+authorization flow, R39 identity/destination flow, R40 HTTP/browser activation,
+durable activation-state assertions, exact isolated request-sequence checks,
+encrypted-secret persistence, plaintext-canary exclusion, no automatic remote
+retry, no upload mutations, no gated `WP_DEBUG` diagnostics, and cleanup. The
+matrix and global cleanup passed with final
+`PEERTUBE_BACKEND_ACTIVATION_SMOKE=PASS`.
+
+- successful report: `peertube-r40-smoke-20260902T161711Z-1209854.log`;
+- successful report SHA-256:
+  `dfe5dc7928d7e946e31e531ac3a4c94798c7da62d3f6ca505dce4230b3e6b605`;
+- cleanup: `PASS`.
+
+This closes R40 source, local, exact-commit CI, and two-case Docker development
+checkpoint qualification. It is not a real-PeerTube, TLS, exact-ZIP, release,
+upgrade, MySQL, Plugin Check, refresh/revoke/disconnect, upload, processing, or
+remote-media-mutation gate. This documentation-only closure must itself pass
+Forgejo CI before it is merged into `develop-2.0`; `main`, tags, releases, and
+publication surfaces remain untouched.
 
 ## Recommended continuation
 
-Complete R40 from the documented `develop-2.0` closure and then:
+Complete R40 integration from the qualified feature closure and then:
 
-1. apply/review the R40 activation feature patch and require exact branch CI plus
-   the isolated WordPress 6.4/7.1 Docker matrix;
-2. after R40 closes, review refresh/revoke separately;
+1. require Forgejo CI on this documentation-only closure and merge the exact
+   validated feature history into `develop-2.0` without rewriting either parent;
+2. after the R40 integration closure, review refresh/revoke/disconnect separately;
 3. preserve the no-upload boundary until tranche 2.0-4 state-machine work.
 
 ## Engineering policy
