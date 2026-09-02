@@ -119,7 +119,14 @@
   `e1819ecb83377bf97d03cd331fc31c6400ea1b41` was merged into `develop-2.0` as
   `67bb455f59450bab66cca1d59389e8fb637755ba`, and integration CI run 88 passed
   in 9 seconds.
-- [ ] R41: review and implement token refresh, revoke, and disconnect lifecycle as
-  a separately bounded tranche.
-- [ ] Begin tranche 2.0-4 staged source transfer/upload and remote-state work only
-  after the connection/activation lifecycle is independently validated.
+- [x] R41: bounded token refresh, revoke, and disconnect lifecycle. Exact
+  qualified feature commit `7276ef4fab4d2d0bc96afd16c0da39c0d0dca72d`, tree
+  `39b54899930bbe0abbdb0dde8a4604d3cab016fc`, passed Forgejo CI run 96 and the
+  isolated WordPress 6.4/7.1 Docker lifecycle matrix. The matrix proved exact
+  refresh/revoke request counts, no automatic remote retry, no plaintext token
+  canaries, managed-secret removal after confirmed retirement, no upload
+  mutations, and clean `WP_DEBUG`. R41 remains a development checkpoint and
+  authorizes no media upload.
+- [ ] Merge the exact qualified R41 feature history into `develop-2.0`, require
+  integration CI, and record the resulting merge/tree authority before beginning
+  tranche 2.0-4 staged source transfer/upload and remote-state work.

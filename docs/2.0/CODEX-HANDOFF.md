@@ -1215,3 +1215,87 @@ or publication surface failed.
 Historical local branch pointers may lag Forgejo. Always `git fetch origin
 --prune` and establish exact remote authority before mutation. A pre-cleanup
 all-ref bundle and exact R32 staged patch were created before this handoff.
+
+## R41 token lifecycle feature slice — qualified feature checkpoint
+
+R41 branches from the documented post-R40 `develop-2.0` authority and adds only
+the bounded PeerTube credential lifecycle. The source slice introduces a
+non-secret per-backend lifecycle journal, exact-generation encrypted token
+refresh, bounded refresh-token and revoke API calls, exact shared-registry
+active-to-retired CAS, managed-secret deletion after confirmed retirement,
+health states for operational/refresh-required/reauthentication-required
+credentials, and two additional authenticated administrator actions.
+
+Remote mutation authority is fail-closed. A refresh POST occurs only after a
+durable `refresh_in_flight` claim and is never replayed when an old generation
+is later observed under that claim. A revoke POST occurs only after a durable
+`disconnect_revoke_in_flight` claim and is never replayed after an uncertain
+outcome. Rate limiting during the read-only OAuth-client preflight is durably
+bounded without claiming the token mutation. Disconnect separates remote revoke,
+registry retirement, retirement confirmation, and exact-generation secret
+removal across explicit requests.
+
+The PeerTube adapter still claims only `delivery.embed`; R41 adds no upload,
+processing, publication, managed-library, retention, remote-delete, cron,
+background refresh, AJAX, REST, or WP-CLI mutation path.
+
+### R41 qualification evidence
+
+The exact qualified feature state is commit
+`7276ef4fab4d2d0bc96afd16c0da39c0d0dca72d`, tree
+`39b54899930bbe0abbdb0dde8a4604d3cab016fc`, on
+`feature/2.0-peertube-token-lifecycle`. Forgejo CI run 96 passed that exact
+feature state.
+
+The successful isolated Docker continuation report is
+`peertube-r41-smoke-20260902T232036Z-1302656.log` with SHA-256
+`4d845c105a13c892621bc8dfcd6b0716480b2db5682c8c0d1e04e8337449d30f`.
+The harness classified the run as `DEVELOPMENT_CHECKPOINT_NOT_RELEASE_GATE`,
+exported the exact clean source commit, mounted the runtime source read-only, and
+passed both supported cases:
+
+- WordPress 6.4.2 / PHP 8.1.34 / MariaDB 10.6.27;
+- WordPress 7.1 / PHP 8.3.33 / MariaDB 10.11.18.
+
+Both cases passed the complete R38 authorization, R39 identity/destination, R40
+backend-activation, and R41 token-lifecycle HTTP/browser/state continuation. The
+observed isolated PeerTube transcript contained exactly two OAuth-client GETs,
+two token POSTs total (the original password grant plus the R41 refresh grant),
+and one revoke POST. Both cases independently proved no automatic remote retry,
+no plaintext credential canaries, exact managed-secret removal after confirmed
+backend retirement, no upload mutations, no gated `WP_DEBUG` diagnostics, and
+clean resource teardown. The matrix ended with
+`PEERTUBE_TOKEN_LIFECYCLE_MATRIX_ASSERTIONS=PASS`, `RESOURCE_CLEANUP=PASS`, and
+`PEERTUBE_TOKEN_LIFECYCLE_SMOKE=PASS`.
+
+Qualification also exposed and corrected several checkpoint assumptions before
+the final green run. Older R39/R40 browser fixtures had coupled state assertions
+to page-wide explanatory copy; those fixtures were tightened to durable
+activation boundaries. The initial R41 form locator incorrectly assumed page-wide
+form uniqueness and was replaced with backend-row-scoped selection. More
+importantly, Docker testing exposed a product/UI defect: after the disconnect
+retired the backend, the settings page hid the continuation action even though
+the restart-safe lifecycle still required an explicit retirement-confirmation
+and exact-generation secret-removal request. The administrator UI now preserves
+`Continue disconnect` for a nonterminal retired backend, suppresses refresh while
+disconnect is pending, and removes the continuation after
+`disconnect_complete`. The final state fixture also records the reviewed happy
+path at lifecycle revision 9.
+
+This closes R41 source, local, exact-feature CI, and two-case Docker development
+checkpoint qualification. It does **not** qualify a live PeerTube instance, TLS,
+release ZIP bytes, upgrade behavior, Plugin Check, upload, processing,
+publication, remote-media mutation, or release publication. R41 is qualified but
+not yet integrated into `develop-2.0`.
+
+## Recommended continuation after R41 qualification
+
+1. commit this documentation-only qualification closure on the existing R41
+   feature branch and require exact-commit Forgejo CI to pass;
+2. merge the exact qualified R41 feature history into `develop-2.0` without
+   rewriting either parent;
+3. require integration CI and record the merge commit/tree/parents as the next
+   branch authority;
+4. only then begin tranche 2.0-4 staged source transfer/upload and remote-state
+   work, preserving the explicit state-machine and no-silent-retry discipline
+   established in R33-R41.

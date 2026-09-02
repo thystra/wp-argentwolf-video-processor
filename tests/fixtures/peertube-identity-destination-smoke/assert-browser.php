@@ -178,7 +178,7 @@ awvp_r38_assert_no_grant_canaries($ready_page->body);
 awvp_r38_assert(
     str_contains($ready_page->body, 'Identity and destination verified; activation pending')
         && str_contains($ready_page->body, 'Activation changes only local AWVP backend-registry state')
-        && str_contains($ready_page->body, 'does not upload media'),
+        && str_contains($ready_page->body, 'performs no PeerTube HTTP request or media upload'),
     'The browser did not reach the exact activation-ready boundary.'
 );
 awvp_r38_assert_no_form($ready_page->body, AWVP_R38_ACTION_GRANT);

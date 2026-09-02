@@ -28,6 +28,8 @@ final class PeerTube_Connection_Admin
     public const ACTION_VERIFY_IDENTITY = 'argentwolf_video_processor_peertube_connection_verify_identity';
     public const ACTION_SELECT_DESTINATION = 'argentwolf_video_processor_peertube_connection_select_destination';
     public const ACTION_ACTIVATE = 'argentwolf_video_processor_peertube_connection_activate';
+    public const ACTION_REFRESH = 'argentwolf_video_processor_peertube_token_refresh';
+    public const ACTION_DISCONNECT = 'argentwolf_video_processor_peertube_disconnect';
 
     public const NONCE_FIELD = 'argentwolf_video_processor_peertube_nonce';
 
@@ -39,6 +41,8 @@ final class PeerTube_Connection_Admin
     private const NONCE_DISCOVER_DESTINATIONS = 'argentwolf_video_processor_peertube_connection_discover_destinations:';
     private const NONCE_SELECT_DESTINATION = 'argentwolf_video_processor_peertube_connection_select_destination:';
     private const NONCE_ACTIVATE = 'argentwolf_video_processor_peertube_connection_activate:';
+    private const NONCE_REFRESH = 'argentwolf_video_processor_peertube_token_refresh:';
+    private const NONCE_DISCONNECT = 'argentwolf_video_processor_peertube_disconnect:';
 
     private const NOTICE_QUERY = 'argentwolf_peertube_notice';
     private const OPERATION_QUERY = 'argentwolf_peertube_operation';
@@ -359,6 +363,48 @@ final class PeerTube_Connection_Admin
         $this->redirect_activation_result($result, $operation_id);
     }
 
+    public function refresh_action(): void
+    {
+        $this->lifecycle_action(self::ACTION_REFRESH, self::NONCE_REFRESH, 'refresh_backend');
+    }
+
+    public function disconnect_action(): void
+    {
+        $this->lifecycle_action(self::ACTION_DISCONNECT, self::NONCE_DISCONNECT, 'disconnect_backend');
+    }
+
+    private function lifecycle_action(string $expected_action, string $nonce_prefix, string $method): void
+    {
+        $this->require_post_administrator();
+        $backend_id = isset($_POST['backend_id']) && is_string($_POST['backend_id'])
+            ? Backend_Identity::sanitize(wp_unslash($_POST['backend_id']))
+            : '';
+        if ('' === $backend_id || Backend_Registry::LOCAL_ID === $backend_id) {
+            $this->reject_invalid_request();
+        }
+        $this->verify_nonce($nonce_prefix . $backend_id);
+        $values = $this->post_fields(array('action', self::NONCE_FIELD, 'backend_id'));
+        if (null === $values || $expected_action !== $values['action'] || $backend_id !== $values['backend_id']) {
+            $this->redirect_notice('invalid_request');
+        }
+        try {
+            $result = $this->actions->{$method}($backend_id, $this->now());
+        } catch (Throwable) {
+            $this->redirect_notice('state_may_have_changed');
+        }
+        $notice = match ($result['status'] ?? '') {
+            PeerTube_Token_Lifecycle_Service::STATUS_COMPLETE =>
+                self::ACTION_DISCONNECT === $expected_action ? 'backend_disconnected' : 'token_refreshed',
+            PeerTube_Token_Lifecycle_Service::STATUS_ADVANCED => 'lifecycle_advanced',
+            PeerTube_Token_Lifecycle_Service::STATUS_WAIT => 'refresh_rate_limited',
+            PeerTube_Token_Lifecycle_Service::STATUS_REAUTHENTICATION_REQUIRED => 'reauthentication_required',
+            PeerTube_Token_Lifecycle_Service::STATUS_INDETERMINATE => 'lifecycle_indeterminate',
+            PeerTube_Token_Lifecycle_Service::STATUS_CONFLICT => 'connection_conflict',
+            default => 'request_refused',
+        };
+        $this->redirect_notice($notice);
+    }
+
     public function notices(): void
     {
         if (! current_user_can('manage_options') || self::PAGE_SLUG !== $this->query_page()) {
@@ -373,11 +419,12 @@ final class PeerTube_Connection_Admin
 
         $class = match ($notice) {
             'connection_advanced', 'ready_for_credentials', 'credentials_stored',
-            'identity_verified', 'destination_verified', 'backend_activated' =>
+            'identity_verified', 'destination_verified', 'backend_activated',
+            'token_refreshed', 'backend_disconnected' =>
                 'notice notice-success',
             'invalid_request', 'request_refused', 'connection_conflict' =>
                 'notice notice-error',
-            'verification_advanced', 'activation_advanced' => 'notice notice-info',
+            'verification_advanced', 'activation_advanced', 'lifecycle_advanced' => 'notice notice-info',
             default => 'notice notice-warning',
         };
 
@@ -425,10 +472,15 @@ final class PeerTube_Connection_Admin
                 $selected['operation_id']
             );
         }
+        try {
+            $managed_backends = $this->actions->managed_backends();
+        } catch (Throwable) {
+            $managed_backends = array();
+        }
         ?>
         <div class="wrap">
             <h1><?php esc_html_e('PeerTube Connection — ArgentWolf Video Processor', 'argentwolf-video-processor'); ?></h1>
-            <div class="notice notice-warning inline"><p><?php esc_html_e('This unreleased development checkpoint can prepare and explicitly activate a verified PeerTube backend descriptor after storing login tokens, verifying the authenticated identity, and selecting a currently owned local channel. Activation changes local AWVP registry state only; it does not upload media, refresh tokens, revoke tokens, or otherwise mutate PeerTube.', 'argentwolf-video-processor'); ?></p></div>
+            <div class="notice notice-warning inline"><p><?php esc_html_e('This unreleased development checkpoint can explicitly refresh a managed PeerTube token pair and disconnect a backend by revoking its current token, retiring its local descriptor, and deleting the managed credential. No media upload, processing, publication, library, retention, or remote-media mutation is implemented.', 'argentwolf-video-processor'); ?></p></div>
 
             <h2><?php esc_html_e('Start a connection operation', 'argentwolf-video-processor'); ?></h2>
             <p><?php esc_html_e('Use an exact canonical HTTPS origin with no path, query, fragment, credentials, or trailing slash. A backend ID is a permanent lowercase identifier.', 'argentwolf-video-processor'); ?></p>
@@ -443,6 +495,9 @@ final class PeerTube_Connection_Admin
                 <p><button class="button button-primary" type="submit"><?php esc_html_e('Start disabled connection', 'argentwolf-video-processor'); ?></button></p>
             </form>
 
+            <h2><?php esc_html_e('Managed PeerTube backends', 'argentwolf-video-processor'); ?></h2>
+            <?php $this->render_managed_backends($managed_backends); ?>
+
             <h2><?php esc_html_e('Open connection operations', 'argentwolf-video-processor'); ?></h2>
             <?php $this->render_operation_list($operations, $selected_id); ?>
 
@@ -450,6 +505,68 @@ final class PeerTube_Connection_Admin
                 <?php $this->render_selected_operation($selected, $discovery); ?>
             <?php endif; ?>
         </div>
+        <?php
+    }
+
+    /** @param list<array<string,mixed>> $backends */
+    private function render_managed_backends(array $backends): void
+    {
+        if ([] === $backends) {
+            echo '<p>' . esc_html__('No managed PeerTube backends are registered.', 'argentwolf-video-processor') . '</p>';
+            return;
+        }
+        ?>
+        <table class="widefat striped" style="max-width:1100px">
+            <thead><tr><th><?php esc_html_e('Label', 'argentwolf-video-processor'); ?></th><th><?php esc_html_e('Origin', 'argentwolf-video-processor'); ?></th><th><?php esc_html_e('State', 'argentwolf-video-processor'); ?></th><th><?php esc_html_e('Lifecycle', 'argentwolf-video-processor'); ?></th><th><?php esc_html_e('Explicit actions', 'argentwolf-video-processor'); ?></th></tr></thead>
+            <tbody>
+            <?php foreach ($backends as $backend) : ?>
+                <?php
+                $state = (string) $backend['state'];
+                $lifecycle_action = (string) $backend['lifecycle_action'];
+                $lifecycle_phase = (string) $backend['lifecycle_phase'];
+                $disconnect_pending = 'disconnect' === $lifecycle_action
+                    && 'disconnect_complete' !== $lifecycle_phase;
+                $refresh_blocks_disconnect = 'refresh' === $lifecycle_action
+                    && ! in_array(
+                        $lifecycle_phase,
+                        array('refresh_complete', 'refresh_reauthentication_required', 'refresh_indeterminate'),
+                        true
+                    );
+                ?>
+                <tr>
+                    <td><?php echo esc_html((string) $backend['label']); ?><br><code><?php echo esc_html((string) $backend['backend_id']); ?></code></td>
+                    <td><code><?php echo esc_html((string) $backend['origin']); ?></code></td>
+                    <td><?php echo esc_html($state); ?></td>
+                    <td><code><?php echo esc_html($lifecycle_phase); ?></code></td>
+                    <td>
+                    <?php if ('active' === $state && ! $disconnect_pending) : ?>
+                        <?php $this->render_backend_action(self::ACTION_REFRESH, self::NONCE_REFRESH, (string) $backend['backend_id'], __('Refresh token lifecycle', 'argentwolf-video-processor')); ?>
+                        <?php if (! $refresh_blocks_disconnect) : ?>
+                            <?php $this->render_backend_action(self::ACTION_DISCONNECT, self::NONCE_DISCONNECT, (string) $backend['backend_id'], __('Disconnect PeerTube', 'argentwolf-video-processor'), true); ?>
+                        <?php endif; ?>
+                    <?php elseif ($disconnect_pending && in_array($state, array('active', 'retired'), true)) : ?>
+                        <?php $this->render_backend_action(self::ACTION_DISCONNECT, self::NONCE_DISCONNECT, (string) $backend['backend_id'], __('Continue disconnect', 'argentwolf-video-processor'), true); ?>
+                    <?php else : ?>
+                        <?php esc_html_e('No active remote credential action.', 'argentwolf-video-processor'); ?>
+                    <?php endif; ?>
+                    </td>
+                </tr>
+            <?php endforeach; ?>
+            </tbody>
+        </table>
+        <p><?php esc_html_e('Refresh and disconnect are explicit administrator POST actions. Disconnect may retire local authority after an uncertain revoke, but AWVP never retries an uncertain revoke automatically.', 'argentwolf-video-processor'); ?></p>
+        <?php
+    }
+
+    private function render_backend_action(string $action, string $nonce_prefix, string $backend_id, string $label, bool $destructive = false): void
+    {
+        ?>
+        <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" style="display:inline-block;margin-right:6px">
+            <input type="hidden" name="action" value="<?php echo esc_attr($action); ?>">
+            <input type="hidden" name="backend_id" value="<?php echo esc_attr($backend_id); ?>">
+            <?php wp_nonce_field($nonce_prefix . $backend_id, self::NONCE_FIELD, false); ?>
+            <button class="button<?php echo $destructive ? ' button-secondary' : ''; ?>" type="submit"><?php echo esc_html($label); ?></button>
+        </form>
         <?php
     }
 
@@ -1744,6 +1861,12 @@ final class PeerTube_Connection_Admin
             'destination_verified' => __('The selected owned channel and authenticated identity were re-verified. The backend remains disabled until an explicit local activation request is completed.', 'argentwolf-video-processor'),
             'activation_advanced' => __('Backend activation advanced by one local persistence step. No PeerTube HTTP request or media mutation was performed.', 'argentwolf-video-processor'),
             'backend_activated' => __('The verified PeerTube backend descriptor is active and eligible for the non-mutating R40 adapter surface. Media upload remains unavailable.', 'argentwolf-video-processor'),
+            'lifecycle_advanced' => __('The PeerTube credential lifecycle advanced one reviewed step. Continue explicitly if another step remains.', 'argentwolf-video-processor'),
+            'token_refreshed' => __('The managed PeerTube token pair was refreshed and stored as a new encrypted generation.', 'argentwolf-video-processor'),
+            'backend_disconnected' => __('The PeerTube backend is locally retired and its managed credential has been removed.', 'argentwolf-video-processor'),
+            'refresh_rate_limited' => __('PeerTube requested a bounded delay before refresh may continue.', 'argentwolf-video-processor'),
+            'reauthentication_required' => __('The PeerTube refresh credential is no longer usable. A new connection authorization is required.', 'argentwolf-video-processor'),
+            'lifecycle_indeterminate' => __('A remote token operation has an uncertain outcome. AWVP will not replay that remote mutation automatically.', 'argentwolf-video-processor'),
             'destination_unavailable' => __('That destination is not in the account’s current eligible owned-channel set. No selection was changed.', 'argentwolf-video-processor'),
             'grant_indeterminate' => __('The remote password-grant outcome is uncertain and terminal. AWVP will not retry it automatically.', 'argentwolf-video-processor'),
             'connection_conflict' => __('The operation changed concurrently. Reload its durable status before choosing another explicit action.', 'argentwolf-video-processor'),

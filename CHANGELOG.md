@@ -19,9 +19,13 @@
 - Preserve the existing local backend and 1.0 runtime behavior while adding an
   explicit, restart-safe local activation path for a freshly verified PeerTube
   descriptor. Activation changes only the exact registry state/default destination
-  and makes the conservative PeerTube adapter/factory surface eligible; refresh,
-  revoke/disconnect, media upload, processing, and remote media mutation remain
-  separately reviewed work.
+  and makes the conservative PeerTube adapter/factory surface eligible.
+- Add an explicit, restart-safe PeerTube credential lifecycle: bounded refresh-token
+  rotation into a new encrypted managed-secret generation, explicit token revocation,
+  exact local descriptor retirement, and exact-generation secret deletion. Uncertain
+  refresh/revoke outcomes are never automatically replayed, and media upload,
+  processing, publication, library, retention, and remote-media mutation remain
+  outside this checkpoint.
 - Expand focused PeerTube security/state tests and isolated real-WordPress Docker
   development matrices through the R39 identity/destination checkpoint, with an
   R40 activation continuation that proves activation performs no additional

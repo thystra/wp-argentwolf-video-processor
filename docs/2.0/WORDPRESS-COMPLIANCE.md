@@ -235,6 +235,20 @@ action owns no PeerTube HTTP client and performs no upload, processing, remote
 mutation, automatic retry, token refresh, revoke, or disconnect. No `nopriv`,
 AJAX, REST, WP-CLI, cron, or media hook is added.
 
+R41 adds two more authenticated `admin_post` actions on the same settings page,
+for an aggregate of nine: explicit managed-token refresh and explicit disconnect.
+Both are POST-only, `manage_options`- and backend-scoped-nonce-bound. Refresh
+journals a durable in-flight claim before the single reviewed refresh-token POST,
+rotates the encrypted managed-secret generation, and closes only after a later
+explicit request independently observes the new generation. An observed uncertain
+in-flight refresh is never replayed. Disconnect journals a durable revoke claim
+before one bearer-authorized revoke POST; a definite or indeterminate revoke then
+requires separate explicit local steps to plan/apply/confirm exact descriptor
+retirement and delete the exact managed-secret generation. An uncertain revoke is
+never retried automatically. R41 adds no `nopriv`, AJAX, REST, WP-CLI, cron,
+background retry, upload, processing, publication, library, retention, or
+remote-media-mutation path.
+
 Before a grant, the administrator must explicitly authorize sending the entered
 credentials to the displayed exact external service. An allowlisted
 development-only HTTP origin requires a second acknowledgement that the

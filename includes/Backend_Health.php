@@ -79,22 +79,29 @@ final class Backend_Health
         );
     }
 
-    public static function peertube_activation_ready(int $generation): self
+    public static function peertube_operational(int $generation): self
     {
-        if ($generation < 1) {
-            return self::peertube_blocking('secret_unavailable');
-        }
+        return new self(
+            self::OK,
+            array(array(
+                'code' => 'peertube.auth.operational',
+                'status' => self::OK,
+                'message' => 'PeerTube credentials are locally available and the access token is within its usable lifetime.',
+                'data' => array('secret_generation' => max($generation, 0)),
+            ))
+        );
+    }
 
+    public static function peertube_refresh_required(int $generation): self
+    {
         return new self(
             self::WARNING,
-            array(
-                array(
-                    'code'    => 'peertube.lifecycle.refresh_pending',
-                    'status'  => self::WARNING,
-                    'message' => 'PeerTube activation is locally verified; token refresh and live operational health are not implemented in this checkpoint.',
-                    'data'    => array('secret_generation' => $generation),
-                ),
-            )
+            array(array(
+                'code' => 'peertube.auth.refresh_required',
+                'status' => self::WARNING,
+                'message' => 'The PeerTube access token requires an explicit administrator refresh; the stored refresh credential remains locally usable.',
+                'data' => array('secret_generation' => max($generation, 0)),
+            ))
         );
     }
 
@@ -105,9 +112,9 @@ final class Backend_Health
                 'code' => 'peertube.descriptor.invalid',
                 'message' => 'The active PeerTube descriptor is not structurally usable.',
             ),
-            'access_token_unusable' => array(
-                'code' => 'peertube.auth.access_token_unusable',
-                'message' => 'The stored PeerTube access token is expired or too close to expiry; refresh is not implemented in this checkpoint.',
+            'refresh_token_unusable' => array(
+                'code' => 'peertube.auth.reauthentication_required',
+                'message' => 'The stored PeerTube refresh credential is expired or unavailable; administrator reauthentication is required.',
             ),
             default => array(
                 'code' => 'peertube.auth.secret_unavailable',
@@ -117,13 +124,11 @@ final class Backend_Health
 
         return new self(
             self::BLOCKING,
-            array(
-                array(
-                    'code'    => $detail['code'],
-                    'status'  => self::BLOCKING,
-                    'message' => $detail['message'],
-                ),
-            )
+            array(array(
+                'code' => $detail['code'],
+                'status' => self::BLOCKING,
+                'message' => $detail['message'],
+            ))
         );
     }
 

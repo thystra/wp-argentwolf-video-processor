@@ -86,6 +86,11 @@ if (! interface_exists(ArgentVideo\PeerTube_Connection_Admin_Actions::class, fal
     exit(1);
 }
 
+if (! interface_exists(ArgentVideo\PeerTube_Token_Lifecycle_Api::class, false)) {
+    fwrite(STDERR, "Plugin smoke load missed required R41 interface " . ArgentVideo\PeerTube_Token_Lifecycle_Api::class . ".\n");
+    exit(1);
+}
+
 foreach (
     array(
         ArgentVideo\Atomic_Option_Mutation_Plan::class,
@@ -97,6 +102,8 @@ foreach (
         ArgentVideo\PeerTube_Connection_Admin::class,
         ArgentVideo\PeerTube_Backend_Adapter::class,
         ArgentVideo\PeerTube_Backend_Activation_Service::class,
+        ArgentVideo\PeerTube_Token_Lifecycle_Store::class,
+        ArgentVideo\PeerTube_Token_Lifecycle_Service::class,
     ) as $required_class
 ) {
     if (! class_exists($required_class, false)) {
@@ -114,6 +121,8 @@ $expected_admin_posts = array(
     'admin_post_' . ArgentVideo\PeerTube_Connection_Admin::ACTION_VERIFY_IDENTITY,
     'admin_post_' . ArgentVideo\PeerTube_Connection_Admin::ACTION_SELECT_DESTINATION,
     'admin_post_' . ArgentVideo\PeerTube_Connection_Admin::ACTION_ACTIVATE,
+    'admin_post_' . ArgentVideo\PeerTube_Connection_Admin::ACTION_REFRESH,
+    'admin_post_' . ArgentVideo\PeerTube_Connection_Admin::ACTION_DISCONNECT,
 );
 foreach ($expected_admin_posts as $hook) {
     if (1 !== count(array_keys($registered_actions, $hook, true))) {

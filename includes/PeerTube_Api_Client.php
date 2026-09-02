@@ -14,7 +14,7 @@ namespace ArgentVideo;
  * ephemeral caller-owned values. This class performs no option writes and
  * never returns an unreviewed raw response object.
  */
-final class PeerTube_Api_Client implements PeerTube_Password_Grant_Api, PeerTube_Identity_Destination_Api
+final class PeerTube_Api_Client implements PeerTube_Password_Grant_Api, PeerTube_Identity_Destination_Api, PeerTube_Token_Lifecycle_Api
 {
     private const CONFIG_PATH = '/api/v1/config';
     private const MAX_VERSION_BYTES = 64;
@@ -175,6 +175,91 @@ final class PeerTube_Api_Client implements PeerTube_Password_Grant_Api, PeerTube
                 'refresh_expires_at' => $refresh_expires_at,
             )
         );
+    }
+
+    /**
+     * Exchange one stored refresh token for a fresh bounded token pair.
+     *
+     * @param array<string, mixed> $oauth_client Exact output of local_oauth_client().
+     * @return array{ok:bool,data:array<string,mixed>|null,error:array<string,mixed>|null}
+     */
+    public function refresh_token(
+        array $oauth_client,
+        string $refresh_token,
+        int $received_at
+    ): array {
+        if (array('client_id', 'client_secret') !== array_keys($oauth_client)) {
+            return self::failure(PeerTube_Api_Error::invalid_response('oauth_client_input_invalid'));
+        }
+
+        $client_id = self::opaque_secret($oauth_client['client_id'] ?? null, 1024);
+        $client_secret = self::opaque_secret($oauth_client['client_secret'] ?? null, self::MAX_SECRET_BYTES);
+        $refresh_token = self::opaque_secret($refresh_token, self::MAX_SECRET_BYTES);
+        if ('' === $client_id || '' === $client_secret || '' === $refresh_token || $received_at < 1) {
+            return self::failure(PeerTube_Api_Error::invalid_response('refresh_token_input_invalid'));
+        }
+
+        $decoded = self::success_object(
+            $this->http->post_refresh_token(
+                array(
+                    'client_id' => $client_id,
+                    'client_secret' => $client_secret,
+                    'grant_type' => 'refresh_token',
+                    'refresh_token' => $refresh_token,
+                )
+            ),
+            200,
+            'token'
+        );
+        if (! $decoded['ok']) {
+            return $decoded;
+        }
+
+        $access_token = self::opaque_secret($decoded['data']['access_token'] ?? null, self::MAX_SECRET_BYTES);
+        $new_refresh_token = self::opaque_secret($decoded['data']['refresh_token'] ?? null, self::MAX_SECRET_BYTES);
+        $access_expires_at = self::absolute_expiry($decoded['data']['expires_in'] ?? null, $received_at);
+        $refresh_expires_at = self::absolute_expiry(
+            $decoded['data']['refresh_token_expires_in'] ?? null,
+            $received_at
+        );
+        if (
+            'Bearer' !== ($decoded['data']['token_type'] ?? null)
+            || '' === $access_token
+            || '' === $new_refresh_token
+            || $access_token === $new_refresh_token
+            || $access_expires_at < 1
+            || $refresh_expires_at < 1
+        ) {
+            return self::failure(PeerTube_Api_Error::invalid_response('refresh_token_shape_invalid', 200));
+        }
+
+        return self::success(
+            array(
+                'access_token' => $access_token,
+                'refresh_token' => $new_refresh_token,
+                'access_expires_at' => $access_expires_at,
+                'refresh_expires_at' => $refresh_expires_at,
+            )
+        );
+    }
+
+    /** @return array{ok:bool,data:array<string,mixed>|null,error:array<string,mixed>|null} */
+    public function revoke_token(string $access_token): array
+    {
+        if ('' === self::opaque_secret($access_token, self::MAX_SECRET_BYTES)) {
+            return self::failure(PeerTube_Api_Error::invalid_response('access_token_input_invalid'));
+        }
+
+        $response = $this->http->post_revoke_token($access_token);
+        if (! is_array($response) || true !== ($response['ok'] ?? null)) {
+            return self::failure(is_array($response['error'] ?? null) ? $response['error'] : null);
+        }
+        $http_status = is_int($response['http_status'] ?? null) ? $response['http_status'] : 0;
+        if (200 !== $http_status) {
+            return self::failure(PeerTube_Api_Error::invalid_response('revoke_status_invalid', $http_status));
+        }
+
+        return self::success(array('revoked' => true));
     }
 
     /**

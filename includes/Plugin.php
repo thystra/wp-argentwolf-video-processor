@@ -82,13 +82,19 @@ final class Plugin
                 $this->backend_registry,
                 $this->backend_factory
             );
+            $peertube_lifecycle = new PeerTube_Token_Lifecycle_Service(
+                new PeerTube_Token_Lifecycle_Store(),
+                $peertube_secrets,
+                $this->backend_registry
+            );
             $peertube_admin = new PeerTube_Connection_Admin(
                 new PeerTube_Connection_Admin_Service(
                     $peertube_operations,
                     $peertube_coordinator,
                     $peertube_grants,
                     $peertube_identity_destinations,
-                    $peertube_activation
+                    $peertube_activation,
+                    $peertube_lifecycle
                 )
             );
 
@@ -130,6 +136,14 @@ final class Plugin
             add_action(
                 'admin_post_' . PeerTube_Connection_Admin::ACTION_ACTIVATE,
                 array($peertube_admin, 'activate_action')
+            );
+            add_action(
+                'admin_post_' . PeerTube_Connection_Admin::ACTION_REFRESH,
+                array($peertube_admin, 'refresh_action')
+            );
+            add_action(
+                'admin_post_' . PeerTube_Connection_Admin::ACTION_DISCONNECT,
+                array($peertube_admin, 'disconnect_action')
             );
             add_action('admin_notices', array($admin, 'notices'));
             add_action('admin_notices', array($peertube_admin, 'notices'));

@@ -25,6 +25,7 @@ final class PeerTube_Http_Client
     private const CONFIG_PATH = '/api/v1/config';
     private const OAUTH_CLIENT_PATH = '/api/v1/oauth-clients/local';
     private const TOKEN_PATH = '/api/v1/users/token';
+    private const REVOKE_TOKEN_PATH = '/api/v1/users/revoke-token';
     private const CURRENT_USER_PATH = '/api/v1/users/me';
 
     public function __construct(private readonly string $origin)
@@ -115,6 +116,54 @@ final class PeerTube_Http_Client
             'token',
             $headers,
             http_build_query($fields, '', '&', PHP_QUERY_RFC3986)
+        );
+    }
+
+    /**
+     * @param array<string, string> $fields
+     * @return array<string, mixed>
+     */
+    public function post_refresh_token(array $fields): array
+    {
+        $expected = array('client_id', 'client_secret', 'grant_type', 'refresh_token');
+        if ($expected !== array_keys($fields)) {
+            throw new InvalidArgumentException('PeerTube refresh-token form fields are not the reviewed exact set.');
+        }
+
+        foreach ($fields as $name => $value) {
+            $maximum = in_array($name, array('client_secret', 'refresh_token'), true) ? 16384 : 1024;
+            if (! self::safe_request_value($value, $maximum, true)) {
+                throw new InvalidArgumentException('PeerTube refresh-token form contains an unsafe value.');
+            }
+        }
+        if ('refresh_token' !== $fields['grant_type']) {
+            throw new InvalidArgumentException('PeerTube refresh-token request is outside the reviewed contract.');
+        }
+
+        return $this->request(
+            'POST',
+            self::TOKEN_PATH,
+            self::MAX_METADATA_RESPONSE_BYTES,
+            'token',
+            array('Content-Type' => 'application/x-www-form-urlencoded'),
+            http_build_query($fields, '', '&', PHP_QUERY_RFC3986)
+        );
+    }
+
+    /** @return array<string, mixed> */
+    public function post_revoke_token(string $access_token): array
+    {
+        if (! self::safe_bearer_token($access_token)) {
+            throw new InvalidArgumentException('PeerTube access token is unsafe for an Authorization header.');
+        }
+
+        return $this->request(
+            'POST',
+            self::REVOKE_TOKEN_PATH,
+            self::MAX_METADATA_RESPONSE_BYTES,
+            'bearer',
+            array('Authorization' => 'Bearer ' . $access_token),
+            ''
         );
     }
 

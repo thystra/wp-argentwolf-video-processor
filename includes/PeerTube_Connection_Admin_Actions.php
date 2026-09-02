@@ -49,6 +49,15 @@ interface PeerTube_Connection_Admin_Actions
     /** @return array<string, mixed> */
     public function activate(string $operation_id, int $now): array;
 
+    /** @return array<string, mixed> */
+    public function refresh_backend(string $backend_id, int $now): array;
+
+    /** @return array<string, mixed> */
+    public function disconnect_backend(string $backend_id, int $now): array;
+
+    /** @return list<array<string,mixed>> */
+    public function managed_backends(): array;
+
     /**
      * Return only the reviewed non-secret projection used by the page.
      *

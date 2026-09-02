@@ -36,12 +36,19 @@ if ($registry->eligible('r38-admin', Backend_Capabilities::PROCESSING_VIDEO, $fa
     throw new RuntimeException('R40 incorrectly exposed PeerTube processing/upload capability.');
 }
 $health = $factory->resolve(Backend_Registry::PEERTUBE_TYPE)?->health($descriptor);
-if (! $health instanceof Backend_Health || Backend_Health::WARNING !== $health->status()) {
-    throw new RuntimeException('The R40 PeerTube adapter health did not retain the reviewed refresh-pending warning.');
+if (
+    ! $health instanceof Backend_Health
+    || ! in_array($health->status(), array(Backend_Health::OK, Backend_Health::WARNING), true)
+) {
+    throw new RuntimeException('The activated PeerTube adapter health became blocking after R41 lifecycle support.');
 }
 $checks = $health->checks();
-if ('peertube.lifecycle.refresh_pending' !== ($checks[0]['code'] ?? null)) {
-    throw new RuntimeException('The R40 PeerTube adapter health diagnostic differed.');
+if (! in_array(
+    $checks[0]['code'] ?? null,
+    array('peertube.auth.operational', 'peertube.auth.refresh_required'),
+    true
+)) {
+    throw new RuntimeException('The post-R41 PeerTube adapter health diagnostic differed.');
 }
 
 echo "PEERTUBE_BACKEND_ACTIVATION_STATE_ASSERTIONS=PASS\n";
