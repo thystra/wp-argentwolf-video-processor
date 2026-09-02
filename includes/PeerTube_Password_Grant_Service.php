@@ -13,11 +13,12 @@ use Throwable;
 /**
  * Explicit password-grant bootstrap boundary.
  *
- * R38 exposes this service only through its authenticated administrator
- * boundary; it remains absent from AJAX, REST, CLI, cron, activation, and
- * upload hooks. A caller supplies ephemeral credentials for one manually
- * authorized attempt. The service journals an exact claim before the
- * credential-bearing POST and never retries an uncertain grant automatically.
+ * The authenticated administrator boundary exposes this service only through
+ * one explicit form submission; it remains absent from AJAX, REST, CLI, cron,
+ * activation, and upload hooks. A caller supplies ephemeral credentials for
+ * one manually authorized attempt. The service journals an exact claim before
+ * the credential-bearing POST and never retries an uncertain grant
+ * automatically.
  */
 final class PeerTube_Password_Grant_Service
 {

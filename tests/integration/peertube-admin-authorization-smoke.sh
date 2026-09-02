@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Real-WordPress/browser smoke for the explicit R38 administrator boundary.
+# Real-WordPress/browser smoke for the explicit administrator connection boundary.
 #
 # This exports one exact clean commit and runs it against the oldest and newest
 # supported WordPress/PHP/MariaDB cases. It is development-checkpoint evidence,
@@ -10,10 +10,27 @@ umask 077
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 REPOSITORY_ROOT="$(cd -- "$SCRIPT_DIR/../.." && pwd -P)"
-FIXTURE_RELATIVE='tests/fixtures/peertube-admin-authorization-smoke'
+SMOKE_CLASS="${AWVP_ADMIN_SMOKE_CLASS:-r38}"
+SMOKE_MARKER="${AWVP_ADMIN_SMOKE_MARKER:-PEERTUBE_ADMIN_AUTHORIZATION}"
+FIXTURE_RELATIVE="${AWVP_ADMIN_FIXTURE_RELATIVE:-tests/fixtures/peertube-admin-authorization-smoke}"
 FIXTURE_ROOT="$REPOSITORY_ROOT/$FIXTURE_RELATIVE"
-MOCK_RELATIVE='tests/fixtures/peertube-password-grant-smoke'
+MOCK_RELATIVE="${AWVP_ADMIN_MOCK_RELATIVE:-tests/fixtures/peertube-password-grant-smoke}"
 MOCK_ROOT="$REPOSITORY_ROOT/$MOCK_RELATIVE"
+
+if [[ ! "$SMOKE_CLASS" =~ ^[a-z][a-z0-9-]{0,15}$ ]]; then
+    echo 'The administrator smoke class is invalid.' >&2
+    exit 2
+fi
+if [[ ! "$SMOKE_MARKER" =~ ^[A-Z][A-Z0-9_]{0,63}$ ]]; then
+    echo 'The administrator smoke marker is invalid.' >&2
+    exit 2
+fi
+for relative_path in "$FIXTURE_RELATIVE" "$MOCK_RELATIVE"; do
+    if [[ ! "$relative_path" =~ ^tests/fixtures/[a-z0-9-]+$ ]]; then
+        echo 'An administrator smoke fixture path is invalid.' >&2
+        exit 2
+    fi
+done
 
 WP64_IMAGE='wordpress:6.4.2-php8.1-apache@sha256:edb987c81a75daa2cde1520b307ef7b8490864301468b564cdb61b58f920dc1c'
 WP64_CLI_IMAGE='wordpress:cli-php8.1@sha256:ab5fb76caa861f32c21e1d95a057f52007f4af7130fb16a0f68874dabe0549a4'
@@ -23,7 +40,7 @@ WP71_CLI_IMAGE='wordpress:cli-php8.3@sha256:2b5e9d4d3e51909dca1aaa4732e9f5e5bf03
 MARIADB1011_IMAGE='mariadb:10.11.18@sha256:de61fed4a40d3842f3ee09944ba52792156cfd9adf489b2cc670fc6ded28df8d'
 
 RUN_TOKEN="$(date -u +%Y%m%dT%H%M%SZ)-$$"
-RESOURCE_PREFIX="awvp-r38-$RUN_TOKEN"
+RESOURCE_PREFIX="awvp-$SMOKE_CLASS-$RUN_TOKEN"
 RESOURCE_LABEL_KEY='org.argentwolf.awvp.test.run'
 
 WORK_DIRECTORY=''
@@ -53,36 +70,37 @@ WORDPRESS_CREATE_ATTEMPTED=0
 MOCK_CREATE_ATTEMPTED=0
 RESULT='FAIL'
 
-if [[ -n "${AWVP_R38_REPORT_DIR:-}" ]]; then
-    if [[ "$AWVP_R38_REPORT_DIR" != /* ]]; then
-        echo 'AWVP_R38_REPORT_DIR must be an absolute path.' >&2
+REPORT_DIRECTORY_INPUT="${AWVP_ADMIN_REPORT_DIR:-${AWVP_R38_REPORT_DIR:-}}"
+if [[ -n "$REPORT_DIRECTORY_INPUT" ]]; then
+    if [[ "$REPORT_DIRECTORY_INPUT" != /* ]]; then
+        echo 'The administrator smoke report directory must be an absolute path.' >&2
         exit 2
     fi
-    case "$AWVP_R38_REPORT_DIR/" in
+    case "$REPORT_DIRECTORY_INPUT/" in
         "$REPOSITORY_ROOT/"*)
-            echo 'AWVP_R38_REPORT_DIR must remain outside the repository checkout.' >&2
+            echo 'The administrator smoke report directory must remain outside the repository checkout.' >&2
             exit 2
             ;;
     esac
-    mkdir -p -- "$AWVP_R38_REPORT_DIR"
-    REPORT_DIRECTORY="$(cd -- "$AWVP_R38_REPORT_DIR" && pwd -P)"
+    mkdir -p -- "$REPORT_DIRECTORY_INPUT"
+    REPORT_DIRECTORY="$(cd -- "$REPORT_DIRECTORY_INPUT" && pwd -P)"
 else
-    REPORT_DIRECTORY="$(mktemp -d /tmp/awvp-r38-report.XXXXXX)"
+    REPORT_DIRECTORY="$(mktemp -d "/tmp/awvp-$SMOKE_CLASS-report.XXXXXX")"
 fi
 
 case "$REPORT_DIRECTORY/" in
     "$REPOSITORY_ROOT/"*)
-        echo 'AWVP_R38_REPORT_DIR must remain outside the repository checkout.' >&2
+        echo 'The administrator smoke report directory must remain outside the repository checkout.' >&2
         exit 2
         ;;
 esac
 
-REPORT_FILE="$REPORT_DIRECTORY/peertube-admin-authorization-smoke-$RUN_TOKEN.log"
+REPORT_FILE="$REPORT_DIRECTORY/peertube-$SMOKE_CLASS-smoke-$RUN_TOKEN.log"
 touch -- "$REPORT_FILE"
 exec > >(tee -a "$REPORT_FILE") 2>&1
 
 fail() {
-    echo "PEERTUBE_ADMIN_AUTHORIZATION_SMOKE_ERROR=$*" >&2
+    echo "${SMOKE_MARKER}_SMOKE_ERROR=$*" >&2
     exit 1
 }
 
@@ -238,7 +256,7 @@ cleanup() {
 
     if [[ -n "$WORK_DIRECTORY" ]]; then
         case "$WORK_DIRECTORY" in
-            /tmp/awvp-r38-work.*)
+            /tmp/awvp-*-work.*)
                 if ! rm -rf -- "$WORK_DIRECTORY"; then
                     cleanup_failed=1
                 fi
@@ -260,7 +278,7 @@ cleanup() {
         fi
     fi
 
-    echo "PEERTUBE_ADMIN_AUTHORIZATION_SMOKE=$RESULT"
+    echo "${SMOKE_MARKER}_SMOKE=$RESULT"
     echo "REPORT_FILE=$REPORT_FILE"
     printf 'REPORT_VIEW_COMMAND=cat %q\n' "$REPORT_FILE"
     exit "$original_status"
@@ -505,7 +523,7 @@ run_case() {
 
     wp_cli core install \
         --url='http://wp' \
-        --title="AWVP R38 administrator authorization smoke $CURRENT_CASE" \
+        --title="AWVP $SMOKE_CLASS administrator connection smoke $CURRENT_CASE" \
         --admin_user=awvpadmin \
         --admin_password='AWVP-disposable-test-only-123!' \
         --admin_email=awvp@example.invalid \
@@ -527,7 +545,7 @@ run_case() {
             && defined( "DISABLE_WP_CRON" ) && true === DISABLE_WP_CRON
             && isset( $_SERVER["HTTP_HOST"] ) && "wp" === $_SERVER["HTTP_HOST"];
         if ( ! $valid ) {
-            fwrite( STDERR, "The R38 runtime configuration is incomplete.\n" );
+            fwrite( STDERR, "The administrator smoke runtime configuration is incomplete.\n" );
             exit( 1 );
         }
         echo "WORDPRESS_RUNTIME_CONFIGURATION=PASS\n";
@@ -571,16 +589,20 @@ run_case() {
         -v "$EXPORTED_FIXTURE_ROOT:/awvp-r38:ro" \
         "$WP_CLI_IMAGE" \
         /awvp-r38/assert-browser.php
-    echo "PEERTUBE_ADMIN_AUTHORIZATION_BROWSER=$CURRENT_CASE:PASS"
+    echo "${SMOKE_MARKER}_BROWSER=$CURRENT_CASE:PASS"
 
     wp_cli --context=cli eval-file \
         "/var/www/html/wp-content/plugins/argentwolf-video-processor/$FIXTURE_RELATIVE/assert-state.php" \
         --use-include
-    echo "PEERTUBE_ADMIN_AUTHORIZATION_STATE=$CURRENT_CASE:PASS"
+    echo "${SMOKE_MARKER}_STATE=$CURRENT_CASE:PASS"
 
     [[ -f "$REQUEST_LOG" ]] || fail "The isolated fixture did not produce a request log for $CURRENT_CASE."
     api_request_log="$(sed -n '1,40p' "$REQUEST_LOG")"
-    expected_api_request_log=$'GET /api/v1/oauth-clients/local auth=none body=none\nPOST /api/v1/users/token scenario=success otp=none form=password'
+    if [[ -f "$EXPORTED_FIXTURE_ROOT/expected-requests.log" ]]; then
+        expected_api_request_log="$(sed -n '1,40p' "$EXPORTED_FIXTURE_ROOT/expected-requests.log")"
+    else
+        expected_api_request_log=$'GET /api/v1/oauth-clients/local auth=none body=none\nPOST /api/v1/users/token scenario=success otp=none form=password'
+    fi
     if [[ "$expected_api_request_log" != "$api_request_log" ]]; then
         echo 'ISOLATED_FIXTURE_REQUEST_LOG_DIFFERED=YES'
         fail "The isolated administrator request sequence differed for $CURRENT_CASE."
@@ -636,10 +658,10 @@ for command_name in chmod date docker git grep id mkdir mktemp openssl rm sed se
     require_command "$command_name"
 done
 
-[[ -f "$FIXTURE_ROOT/assert-browser.php" ]] || fail 'The R38 browser fixture is missing.'
-[[ -f "$FIXTURE_ROOT/assert-state.php" ]] || fail 'The R38 state fixture is missing.'
+[[ -f "$FIXTURE_ROOT/assert-browser.php" ]] || fail 'The administrator browser fixture is missing.'
+[[ -f "$FIXTURE_ROOT/assert-state.php" ]] || fail 'The administrator state fixture is missing.'
 [[ -f "$FIXTURE_ROOT/seed-update-check-baseline.php" ]] \
-    || fail 'The R38 update-check baseline fixture is missing.'
+    || fail 'The administrator update-check baseline fixture is missing.'
 [[ -f "$MOCK_ROOT/mock-router.php" ]] || fail 'The reusable password-grant mock is missing.'
 [[ -f "$REPOSITORY_ROOT/argentwolf-video-processor.php" ]] || fail 'The plugin bootstrap is missing.'
 
@@ -662,7 +684,7 @@ echo "SOURCE_TREE=$SOURCE_TREE"
 echo 'SOURCE_WORKTREE=CLEAN'
 echo 'VALIDATION_CLASS=DEVELOPMENT_CHECKPOINT_NOT_RELEASE_GATE'
 
-WORK_DIRECTORY="$(mktemp -d /tmp/awvp-r38-work.XXXXXX)"
+WORK_DIRECTORY="$(mktemp -d "/tmp/awvp-$SMOKE_CLASS-work.XXXXXX")"
 SOURCE_EXPORT="$WORK_DIRECTORY/argentwolf-video-processor"
 EXPORTED_FIXTURE_ROOT="$SOURCE_EXPORT/$FIXTURE_RELATIVE"
 EXPORTED_MOCK_ROOT="$SOURCE_EXPORT/$MOCK_RELATIVE"
@@ -708,4 +730,4 @@ run_case \
     "$MARIADB1011_IMAGE"
 
 RESULT='PASS'
-echo 'PEERTUBE_ADMIN_AUTHORIZATION_MATRIX_ASSERTIONS=PASS'
+echo "${SMOKE_MARKER}_MATRIX_ASSERTIONS=PASS"

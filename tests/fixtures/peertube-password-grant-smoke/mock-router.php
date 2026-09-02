@@ -201,6 +201,68 @@ if ('POST' === $method && '/api/v1/users/token' === $target) {
     return;
 }
 
+if ('GET' === $method && '/api/v1/users/me' === $target) {
+    if (
+        'Bearer r37-success-access-token-canary' !== $authorization
+        || '' !== $otp
+        || '' !== $body
+    ) {
+        $reject('identity-authority');
+        return;
+    }
+    if (! $append_log('GET /api/v1/users/me auth=bearer body=none')) {
+        $problem(500);
+        return;
+    }
+    $json(
+        array(
+            'id'       => 17,
+            'username' => 'awvp_service',
+            'blocked'  => false,
+            'account'  => array('id' => 23, 'name' => 'awvp_service'),
+        )
+    );
+    return;
+}
+
+if (
+    'GET' === $method
+    && 1 === preg_match(
+        '#^/api/v1/accounts/awvp_service/video-channels\?start=(0|100)&count=100&sort=id$#D',
+        $target,
+        $matches
+    )
+) {
+    if ('' !== $authorization || '' !== $otp || '' !== $body) {
+        $reject('channels-authority');
+        return;
+    }
+
+    $start = (int) $matches[1];
+    if (! $append_log(
+        'GET /api/v1/accounts/awvp_service/video-channels start=' . $start
+            . ' count=100 sort=id auth=none body=none'
+    )) {
+        $problem(500);
+        return;
+    }
+
+    $channels = array();
+    $end = 0 === $start ? 100 : 101;
+    for ($id = $start + 1; $id <= $end; $id++) {
+        $channels[] = array(
+            'id'           => $id,
+            'name'         => 'channel_' . str_pad((string) $id, 3, '0', STR_PAD_LEFT),
+            'displayName'  => 'Owned Channel ' . $id,
+            'ownerAccount' => array('id' => 23),
+            'isLocal'      => true,
+        );
+    }
+
+    $json(array('total' => 101, 'data' => $channels));
+    return;
+}
+
 $append_log('REJECT route');
 $problem('GET' === $method ? 404 : 405);
 

@@ -30,6 +30,7 @@ const AWVP_R38_ACTION_START = 'argentwolf_video_processor_peertube_connection_st
 const AWVP_R38_ACTION_RESUME = 'argentwolf_video_processor_peertube_connection_resume';
 const AWVP_R38_ACTION_GRANT = 'argentwolf_video_processor_peertube_connection_grant';
 const AWVP_R38_ACTION_RECONCILE = 'argentwolf_video_processor_peertube_connection_reconcile';
+const AWVP_R38_ACTION_VERIFY_IDENTITY = 'argentwolf_video_processor_peertube_connection_verify_identity';
 const AWVP_R38_NONCE_FIELD = 'argentwolf_video_processor_peertube_nonce';
 const AWVP_R38_NOTICE_QUERY = 'argentwolf_peertube_notice';
 const AWVP_R38_OPERATION_QUERY = 'argentwolf_peertube_operation';
@@ -438,6 +439,11 @@ function awvp_r38_redirect(
         'otp_required',
         'credentials_required',
         'credentials_stored',
+        'verification_advanced',
+        'verification_failed',
+        'identity_verified',
+        'destination_verified',
+        'destination_unavailable',
         'grant_indeterminate',
         'connection_conflict',
         'state_check_required',
@@ -922,7 +928,7 @@ foreach (array('username', 'password', 'otp') as $credential_name) {
         'A credential input remained available after token storage.'
     );
 }
-awvp_r38_action_form($final_page->body, AWVP_R38_ACTION_RECONCILE, $base_url);
+awvp_r38_action_form($final_page->body, AWVP_R38_ACTION_VERIFY_IDENTITY, $base_url);
 
 echo "PEERTUBE_ADMIN_AUTHORIZATION_HTTP_BOUNDARY=PASS\n";
 echo "PEERTUBE_ADMIN_AUTHORIZATION_BROWSER_FLOW=PASS\n";

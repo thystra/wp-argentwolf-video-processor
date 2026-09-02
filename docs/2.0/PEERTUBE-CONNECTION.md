@@ -1052,6 +1052,52 @@ activation of the disabled descriptor, refresh, revoke, disconnect, operation
 closure, upload/media mutation, model-schema or runtime-version changes, and any
 release or `main`-branch work.
 
+### R39 authenticated identity and owned-destination boundary
+
+R39 adds a dedicated `PeerTube_Identity_Destination_Api` boundary and a
+restart-safe `PeerTube_Identity_Destination_Service` over the credential already
+committed by R37/R38. It never accepts a bearer token from the browser. It reads
+only the exact managed-secret generation bound to the open operation, requires
+the exact disabled descriptor to remain present, applies a 60-second access-
+token skew margin, and re-proves the operation, secret generation, and registry
+after WordPress HTTP hooks have run. An applied journal transition is confirmed
+only after the same prerequisites and exact journal record are re-proved after
+its WordPress option hooks; a changed prerequisite is an indeterminate partial
+mutation, never a clean conflict or successful checkpoint.
+
+Verification is two explicit administrator requests. The first request journals
+`verification_in_flight` without contacting PeerTube. A later request in that
+phase invokes `owned_channels()`, which performs one authenticated `/users/me`
+read followed by deterministic public account-channel pages without the bearer.
+It journals only the reviewed user/account identity projection or an allowlisted
+bounded failure. The ephemeral destination list, raw response, bearer, and
+arbitrary remote detail never enter the operation journal or backend registry.
+
+An ordinary settings-page GET makes no PeerTube request. In
+`awaiting_destination`, an explicit nonce-bound administrator GET may refresh
+the current destination chooser. The chooser validates at most 500 strictly
+ordered, unique, local owned-channel projections and escapes all rendered text.
+Submitting a destination does not trust the browser's prior list: the service
+repeats the complete identity/channel read, requires the exact submitted opaque
+decimal ID in that current owned set, and only then journals selection intent.
+That transition deliberately clears the earlier identity and returns to
+`verification_in_flight`. A final explicit verification must prove the selected
+channel still belongs to the current bearer identity before the operation may
+reach `activation_ready`.
+
+No missing or changed channel silently rewrites `selected_destination`. A
+selected channel that disappears produces `peertube.channels.unauthorized` and
+retains the exact selection for operator review. An account with no eligible
+owned channel cannot advance. Identity and channel reads are safe to repeat but
+are never automatic, and rate-limit evidence blocks an early explicit retry.
+
+R39 registers only two additional authenticated `admin_post` actions, for
+verification and selection. Discovery is a capability- and nonce-bound,
+read-only settings request. There is still no `nopriv`, AJAX, REST, WP-CLI,
+cron, automatic retry, activation, refresh/revoke, upload, or media mutation
+path. The backend descriptor remains disabled with an empty
+`default_destination`; activation is the next separately reviewed tranche.
+
 ## 37. Adapter factory evolution
 
 Factory may register PeerTube alongside local.
@@ -1195,7 +1241,31 @@ Before runtime implementation merges, prove at minimum:
 83. an indeterminate or exhausted operation offers no further credential form,
     and no browser path automatically retries a grant;
 84. the browser authorization boundary is exercised against real WordPress 6.4
-    and 7.1 before the R38 checkpoint is accepted.
+    and 7.1 before the R38 checkpoint is accepted;
+85. verification intent is durable before the first authenticated identity
+    read, and starting that intent performs no PeerTube HTTP;
+86. identity/destination HTTP uses only the exact decrypted access-token
+    generation bound to the operation and re-proves the disabled descriptor and
+    secret generation after HTTP hooks, then re-proves those prerequisites and
+    the exact journal record after every applied journal transition;
+87. an ordinary administrator page GET performs no PeerTube request;
+88. explicit destination discovery is `manage_options` and nonce bound, is
+    read-only, and returns only a bounded normalized projection;
+89. the public account-channel pages never receive the bearer token;
+90. destination observations are not persisted as an unbounded/stale cache;
+91. selection repeats current remote authority and refuses a missing,
+    noncanonical, nonlocal, foreign-owner, duplicate, unordered, or otherwise
+    malformed destination before journaling the ID;
+92. selection clears prior identity evidence and a separate explicit
+    verification must bind the selected channel to the same current credential
+    generation before `activation_ready`;
+93. a disappeared selected channel is retained exactly and fails closed rather
+    than silently rewriting the default or selection;
+94. R39 leaves the registry descriptor disabled with an empty
+    `default_destination` and performs no activation, upload, refresh, revoke,
+    disconnect, schema, runtime-version, or release mutation;
+95. the complete R39 browser and state boundary is exercised against real
+    WordPress 6.4 and 7.1 before the checkpoint is accepted.
 
 ## 40. Recommended implementation order
 

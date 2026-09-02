@@ -307,6 +307,8 @@ require_once dirname(__DIR__) . '/includes/Backend_Registry.php';
 require_once dirname(__DIR__) . '/includes/PeerTube_Connection_Coordinator.php';
 require_once dirname(__DIR__) . '/includes/PeerTube_Password_Grant_Api.php';
 require_once dirname(__DIR__) . '/includes/PeerTube_Password_Grant_Service.php';
+require_once dirname(__DIR__) . '/includes/PeerTube_Identity_Destination_Api.php';
+require_once dirname(__DIR__) . '/includes/PeerTube_Identity_Destination_Service.php';
 require_once dirname(__DIR__) . '/includes/PeerTube_Connection_Admin_Actions.php';
 require_once dirname(__DIR__) . '/includes/PeerTube_Connection_Admin_Service.php';
 
@@ -318,6 +320,7 @@ use ArgentVideo\PeerTube_Connection_Coordinator as Coordinator;
 use ArgentVideo\PeerTube_Connection_Admin_Service as Admin_Service;
 use ArgentVideo\PeerTube_Connection_Operation_Store as Operation_Store;
 use ArgentVideo\PeerTube_Connection_State_Machine as Machine;
+use ArgentVideo\PeerTube_Identity_Destination_Service as Identity_Service;
 use ArgentVideo\PeerTube_Password_Grant_Service as Grant_Service;
 
 $expected_autoload = function_exists('wp_autoload_values_to_autoload') ? 'off' : 'no';
@@ -1721,7 +1724,8 @@ $registry = new Backend_Registry();
 $admin_service = new Admin_Service(
     $operations,
     new Coordinator($operations, $secrets, $registry),
-    new Grant_Service($operations, $secrets, $registry)
+    new Grant_Service($operations, $secrets, $registry),
+    new Identity_Service($operations, $secrets, $registry)
 );
 $open = $admin_service->open_operations();
 awvp_coordinator_assert(is_array($open) && 1 === count($open), 'Admin adapter did not expose one open operation.');

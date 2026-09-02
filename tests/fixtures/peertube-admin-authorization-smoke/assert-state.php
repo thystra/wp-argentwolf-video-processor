@@ -91,13 +91,47 @@ $assert(
     'The authoritative PeerTube origin changed.'
 );
 $assert('R38 Admin Authorization' === $record['label'], 'The connection label changed.');
+$expected_phase = defined('AWVP_ADMIN_SMOKE_EXPECTED_PHASE')
+    ? AWVP_ADMIN_SMOKE_EXPECTED_PHASE
+    : PeerTube_Connection_State_Machine::PHASE_SECRET_STORED;
+$expected_revision = defined('AWVP_ADMIN_SMOKE_EXPECTED_REVISION')
+    ? AWVP_ADMIN_SMOKE_EXPECTED_REVISION
+    : 9;
 $assert(
-    PeerTube_Connection_State_Machine::PHASE_SECRET_STORED === $record['phase'],
-    'The browser sequence did not reach confirmed encrypted-token storage.'
+    $expected_phase === $record['phase'],
+    'The browser sequence did not reach its exact expected connection phase.'
 );
-$assert(9 === $record['record_revision'], 'The browser sequence crossed an unexpected revision count.');
+$assert(
+    $expected_revision === $record['record_revision'],
+    'The browser sequence crossed an unexpected revision count.'
+);
 $assert(1 === $record['grant_attempt_no'], 'The browser sequence did not perform exactly one grant attempt.');
 $assert(1 === $record['secret_generation'], 'The encrypted secret generation was not confirmed.');
+$expected_destination = defined('AWVP_ADMIN_SMOKE_EXPECTED_DESTINATION')
+    ? AWVP_ADMIN_SMOKE_EXPECTED_DESTINATION
+    : '';
+$assert(
+    $expected_destination === $record['selected_destination'],
+    'The durable selected destination differed.'
+);
+if ('' !== $expected_destination) {
+    $assert(
+        array(
+            'user_id'      => '17',
+            'username'     => 'awvp_service',
+            'account_id'   => '23',
+            'account_name' => 'awvp_service',
+        ) === $record['verified_identity'],
+        'The bounded authenticated identity projection differed.'
+    );
+    $assert(
+        1 === $record['verified_secret_generation']
+            && $record['verified_at'] >= $record['activation_requested_at']
+            && $record['activation_requested_at'] > 0
+            && (int) $admin->ID === $record['activation_requested_by'],
+        'Destination activation intent was not bound to fresh identity evidence.'
+    );
+}
 $assert((int) $admin->ID === $record['created_by'], 'The administrator actor was not recorded exactly.');
 $assert(
     $record['created_at'] > 0
