@@ -5,14 +5,14 @@
 # plugin's runtime policy of using administrator-configured system FFmpeg.
 #
 # Usage:
-#   bash build/install-ci-ffmpeg.sh 8.1.2
+#   bash build/install-ci-ffmpeg.sh 9.0.1
 #
 # Environment:
 #   ARGENT_VIDEO_CI_FFMPEG_PREFIX  installation prefix
 #   ARGENT_VIDEO_CI_FFMPEG_JOBS    make parallelism (default 2)
 
 main() {
-    local version="${1:-8.1.2}"
+    local version="${1:-9.0.1}"
     local fingerprint='FCF986EA15E6E293A5644F10B4322F04D67658D8'
     local jobs="${ARGENT_VIDEO_CI_FFMPEG_JOBS:-2}"
     local runner_tmp="${RUNNER_TEMP:-/tmp}"
@@ -27,7 +27,7 @@ main() {
     }
 
     case "${version}" in
-        8.1.2) ;;
+        8.1.2|9.0.1) ;;
         *)
             fail "Unsupported CI FFmpeg version: ${version}. Review security advisories before changing the pinned release."
             return 1

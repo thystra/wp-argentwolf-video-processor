@@ -12,12 +12,13 @@ permissions:
 jobs:
   validate:
     runs-on: ubuntu-latest
+    container:
+      image: forgejo.argentwolf.org/alan/wp-argentwolf-video-processor/ci-ffmpeg:9.0.1-bookworm-v1
     env:
-      ARGENT_VIDEO_CI_FFMPEG_VERSION: '8.1.2'
-      ARGENT_VIDEO_CI_FFMPEG_PREFIX: /tmp/argentwolf-ci-ffmpeg-8.1.2
-      ARGENT_VIDEO_CI_FFMPEG_JOBS: '2'
-      ARGENT_VIDEO_TEST_FFMPEG: /tmp/argentwolf-ci-ffmpeg-8.1.2/bin/ffmpeg
-      ARGENT_VIDEO_TEST_FFPROBE: /tmp/argentwolf-ci-ffmpeg-8.1.2/bin/ffprobe
+      ARGENT_VIDEO_CI_FFMPEG_VERSION: '9.0.1'
+      ARGENT_VIDEO_CI_FFMPEG_PREFIX: /opt/awvp-ffmpeg
+      ARGENT_VIDEO_TEST_FFMPEG: /opt/awvp-ffmpeg/bin/ffmpeg
+      ARGENT_VIDEO_TEST_FFPROBE: /opt/awvp-ffmpeg/bin/ffprobe
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -34,33 +35,8 @@ jobs:
           fi
           echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
 
-      - name: Install build tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install --yes --no-install-recommends \
-            build-essential \
-            ca-certificates \
-            curl \
-            gnupg \
-            libopus-dev \
-            libvpx-dev \
-            libx264-dev \
-            nasm \
-            pkg-config \
-            rsync \
-            unzip \
-            yasm \
-            zip
-
-      - name: Build verified security-patched FFmpeg
-        run: bash build/install-ci-ffmpeg.sh "${ARGENT_VIDEO_CI_FFMPEG_VERSION}"
-
-      - name: Verify Node, npm, and FFmpeg
-        run: |
-          node --version
-          npm --version
-          "${ARGENT_VIDEO_TEST_FFMPEG}" -version
-          "${ARGENT_VIDEO_TEST_FFPROBE}" -version
+      - name: Verify CI toolchain image
+        run: awvp-verify-ci-image
 
       - name: PHP syntax check
         run: find . -type f -name '*.php' -not -path './dist/*' -print0 | sort -z | xargs -0 -n1 php -l

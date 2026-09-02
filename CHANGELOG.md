@@ -22,6 +22,10 @@
   separately reviewed work.
 - Expand focused PeerTube security/state tests and isolated real-WordPress Docker
   development matrices through the R39 identity/destination checkpoint.
+- Move routine CI to a project-owned FFmpeg 9.0.1 toolchain image so ordinary
+  source/test runs do not repeatedly compile the same verified FFmpeg build on
+  each runner; retain the signed-source build as the image bootstrap/provenance
+  path.
 
 ## 1.0.0 - 2026-08-22
 

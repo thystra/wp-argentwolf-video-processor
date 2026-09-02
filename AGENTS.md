@@ -116,7 +116,7 @@ Existing legacy identifiers remain where compatibility requires them. New global
 - Use administrator-configured system FFmpeg, FFprobe, and WP-CLI binaries. Do
   not bundle FFmpeg.
 - Treat FFmpeg security advisories as capability-aware runtime gates. Record the CVE ID and NVD URL, check whether the affected decoder/encoder is compiled in, recognize known fixed release floors, and block new transcoding when an affected enabled capability is not known patched.
-- CI must not process media with an FFmpeg build that the runtime security gate would block. `build/install-ci-ffmpeg.sh` pins a reviewed security-patched FFmpeg release, verifies the official release signature and signing-key fingerprint, and keeps MagicYUV enabled so CVE-2026-8461 tests exercise the patched decoder path. Review current advisories before changing that pin.
+- CI must not process media with an FFmpeg build that the runtime security gate would block. `build/install-ci-ffmpeg.sh` pins reviewed security-patched FFmpeg releases, verifies the official release signature and signing-key fingerprint, and keeps MagicYUV enabled so CVE-2026-8461 tests exercise the patched decoder path. Routine CI should consume the project-owned prebuilt image under `build/ci/ffmpeg/` rather than recompiling the same FFmpeg release on every runner. Compile again when the FFmpeg/image definition changes or when compilation/provenance itself is the test objective. Review current advisories before changing the pin or image.
 - Treat shell command paths and arguments as untrusted. Validate configuration,
   use fixed argument construction, and quote arguments safely before execution.
 - Public requests must never directly execute FFmpeg.

@@ -167,6 +167,26 @@ fixture or all coverage for either MariaDB or MySQL.
 Pin Docker images by digest when a reviewed successful fixture is available.
 Record resolved image IDs/digests in every run report.
 
+### Repeated heavyweight CI toolchains
+
+When routine CI repeatedly compiles the same substantial dependency or
+toolchain, and that compilation is not itself the behavior under test, move the
+reviewed build into a project-owned CI image rather than spending every runner
+cycle rebuilding identical inputs. The image build remains a separate validated
+supply-chain operation.
+
+For AWVP, `build/ci/ffmpeg/` owns the routine CI image. Its FFmpeg layer must be
+built through `build/install-ci-ffmpeg.sh`, retain official release-signature and
+key-fingerprint verification, and preserve the decoder/encoder capabilities
+required by security and integration tests. Publish versioned image tags once,
+never overwrite them, and pin the ordinary CI workflows to the reviewed registry
+digest after the first successful image qualification.
+
+Recompile in ordinary CI only when there is an explicit reason, such as testing
+the compiler/toolchain, source-build reproducibility, upstream provenance, or a
+new image/FFmpeg definition. A mutable cache is not a substitute for a reviewed
+immutable image.
+
 Historical release payloads retain the exact WordPress versions and image
 digests that formed their release evidence. Update the active/future payload;
 do not rewrite an already-closed payload merely because the current-version

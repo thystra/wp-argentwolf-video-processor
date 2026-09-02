@@ -23,6 +23,7 @@ $cases = array(
     array('8.1.1', $decoder_present, false, 'vulnerable'),
     array('8.1.2', $decoder_present, true, 'patched'),
     array('9.0', $decoder_present, true, 'patched'),
+    array('9.0.1', $decoder_present, true, 'patched'),
 );
 
 $failures = array();
