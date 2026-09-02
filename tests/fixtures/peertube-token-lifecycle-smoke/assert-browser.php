@@ -24,6 +24,57 @@ const AWVP_R41_ACTION_REFRESH = 'argentwolf_video_processor_peertube_token_refre
 const AWVP_R41_ACTION_DISCONNECT = 'argentwolf_video_processor_peertube_disconnect';
 const AWVP_R41_BACKEND_ID = 'r38-admin';
 
+/**
+ * Locate one exact lifecycle form scoped to the expected managed backend.
+ *
+ * The settings page may legitimately render the same lifecycle action for
+ * more than one active PeerTube backend, so action-name uniqueness is not a
+ * valid R41 invariant.
+ *
+ * @return array{attributes:array<string,string>,inputs:list<array<string,string>>,html:string,nonce:string}
+ */
+function awvp_r41_backend_action_form(
+    string $body,
+    string $action,
+    string $backend_id,
+    string $base_url
+): array {
+    $matches = array();
+    foreach (awvp_r38_forms($body) as $form) {
+        $action_inputs = awvp_r38_named_inputs($form['inputs'], 'action');
+        $backend_inputs = awvp_r38_named_inputs($form['inputs'], 'backend_id');
+        if (
+            1 === count($action_inputs)
+            && $action === ($action_inputs[0]['value'] ?? null)
+            && 1 === count($backend_inputs)
+            && $backend_id === ($backend_inputs[0]['value'] ?? null)
+        ) {
+            $matches[] = $form;
+        }
+    }
+    awvp_r38_assert(
+        1 === count($matches),
+        'The expected backend-scoped administrator action form was not unique.'
+    );
+
+    $form = $matches[0];
+    awvp_r38_assert(
+        'post' === strtolower($form['attributes']['method'] ?? '')
+            && $base_url . '/wp-admin/admin-post.php' === ($form['attributes']['action'] ?? ''),
+        'The backend-scoped administrator action form target differed.'
+    );
+
+    $nonce_inputs = awvp_r38_named_inputs($form['inputs'], AWVP_R38_NONCE_FIELD);
+    awvp_r38_assert(1 === count($nonce_inputs), 'The backend-scoped nonce field was not unique.');
+    $nonce = $nonce_inputs[0]['value'] ?? '';
+    awvp_r38_assert(
+        1 === preg_match('/^[0-9A-Za-z]{10}$/D', $nonce),
+        'The backend-scoped nonce was malformed.'
+    );
+    $form['nonce'] = $nonce;
+    return $form;
+}
+
 /** @param array<string,string> $cookies */
 function awvp_r41_submit_lifecycle(
     string $base_url,
@@ -33,10 +84,11 @@ function awvp_r41_submit_lifecycle(
 ): void {
     $page = awvp_r38_settings_get($base_url, $cookies);
     awvp_r38_assert_no_grant_canaries($page->body);
-    $form = awvp_r38_action_form($page->body, $action, $base_url);
-    awvp_r38_assert(
-        AWVP_R41_BACKEND_ID === awvp_r38_form_value($form, 'backend_id'),
-        'A lifecycle action form targeted the wrong backend.'
+    $form = awvp_r41_backend_action_form(
+        $page->body,
+        $action,
+        AWVP_R41_BACKEND_ID,
+        $base_url
     );
     $response = awvp_r38_request(
         $base_url,
