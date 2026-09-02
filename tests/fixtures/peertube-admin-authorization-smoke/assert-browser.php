@@ -444,6 +444,8 @@ function awvp_r38_redirect(
         'identity_verified',
         'destination_verified',
         'destination_unavailable',
+        'activation_advanced',
+        'backend_activated',
         'grant_indeterminate',
         'connection_conflict',
         'state_check_required',
