@@ -22,7 +22,7 @@ signature and capability checks.
 Current image coordinates:
 
 ```text
-forgejo.argentwolf.org/alan/wp-argentwolf-video-processor/ci-ffmpeg:9.0.1-bookworm-v1
+forgejo.argentwolf.org/alan/wp-argentwolf-video-processor/ci-ffmpeg:9.0.1-bookworm-v2
 ```
 
 Treat the versioned tag as immutable. Never overwrite an already-published tag;

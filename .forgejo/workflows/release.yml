@@ -29,9 +29,9 @@ jobs:
     runs-on: forgejo-build
     timeout-minutes: 60
     container:
-      image: forgejo.argentwolf.org/alan/wp-argentwolf-video-processor/ci-ffmpeg:9.0.1-bookworm-v1
+      image: forgejo.argentwolf.org/alan/wp-argentwolf-video-processor/ci-ffmpeg:9.0.1-bookworm-v2
     env:
-      ARGENT_VIDEO_CI_IMAGE: forgejo.argentwolf.org/alan/wp-argentwolf-video-processor/ci-ffmpeg:9.0.1-bookworm-v1
+      ARGENT_VIDEO_CI_IMAGE: forgejo.argentwolf.org/alan/wp-argentwolf-video-processor/ci-ffmpeg:9.0.1-bookworm-v2
       ARGENT_VIDEO_CI_FFMPEG_VERSION: '9.0.1'
       ARGENT_VIDEO_CI_FFMPEG_PREFIX: /opt/awvp-ffmpeg
       ARGENT_VIDEO_TEST_FFMPEG: /opt/awvp-ffmpeg/bin/ffmpeg

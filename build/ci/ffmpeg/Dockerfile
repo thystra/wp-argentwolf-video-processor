@@ -57,6 +57,7 @@ RUN apt-get update \
         libvpx7 \
         libx264-164 \
         php-cli \
+        python3 \
         rsync \
         unzip \
         zip \

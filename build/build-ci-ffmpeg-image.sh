@@ -24,7 +24,7 @@ if [[ -n "$(git status --porcelain)" ]]; then
 fi
 
 repository="${AWVP_CI_IMAGE_REPOSITORY:-forgejo.argentwolf.org/alan/wp-argentwolf-video-processor/ci-ffmpeg}"
-tag="${AWVP_CI_IMAGE_TAG:-9.0.1-bookworm-v1}"
+tag="${AWVP_CI_IMAGE_TAG:-9.0.1-bookworm-v2}"
 ffmpeg_version="${AWVP_CI_FFMPEG_VERSION:-9.0.1}"
 build_jobs="${AWVP_CI_FFMPEG_BUILD_JOBS:-4}"
 base_tag="${AWVP_CI_BASE_IMAGE:-node:24-bookworm-slim}"

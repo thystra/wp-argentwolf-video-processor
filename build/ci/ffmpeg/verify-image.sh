@@ -5,7 +5,7 @@ version="${ARGENT_VIDEO_CI_FFMPEG_VERSION:-9.0.1}"
 ffmpeg="${ARGENT_VIDEO_TEST_FFMPEG:-/opt/awvp-ffmpeg/bin/ffmpeg}"
 ffprobe="${ARGENT_VIDEO_TEST_FFPROBE:-/opt/awvp-ffmpeg/bin/ffprobe}"
 
-for command in awk grep ldd php node npm git curl rsync sed unzip zip; do
+for command in awk grep ldd php python3 node npm git curl rsync sed unzip zip; do
     command -v "${command}" >/dev/null 2>&1 || {
         printf 'ERROR: required CI command is missing: %s\n' "${command}" >&2
         exit 1
