@@ -485,6 +485,39 @@ codes may identify registry malformed, implementation unavailable, backend
 disabled, FFmpeg unavailable/security-blocked, storage unavailable, and
 destination ambiguous conditions.
 
+## 14.1 R40 PeerTube activation adapter boundary
+
+R40 registers `PeerTube_Backend_Adapter` beside the local implementation only
+after the R39 connection state can reach a freshly verified
+`activation_ready` operation. Registration alone does not activate a backend.
+
+The R40 adapter deliberately exposes only the non-mutating `delivery.embed`
+capability. All ingest, processing, library-selection, publication, retention,
+and remote-delete capability keys remain false. This is an eligibility surface,
+not an upload API; the common adapter interface still contains no PeerTube media
+mutation method.
+
+Health is descriptor-aware in R40: `Backend_Adapter::health(array $descriptor)`
+receives the exact configured descriptor. For PeerTube, health fails closed if
+the descriptor is not the reviewed active v1 shape, the managed secret cannot
+be decrypted for the exact backend ID, or the access token is expired/within
+the fixed safety skew. A usable credential reports a non-blocking warning rather
+than `ok`, because refresh and live operational health are intentionally not yet
+implemented. No token value enters the health projection.
+
+`Backend_Registry::eligible()` additionally requires a canonical non-empty
+PeerTube destination ID before consulting capability and health. Consequently an
+active-looking descriptor cannot become eligible merely because an adapter type
+is installed.
+
+The R40 activation writer is a shared-option compare-and-swap operation. It may
+change only the exact target descriptor from `disabled`/empty destination to
+`active`/the re-verified destination, while preserving unrelated and future
+registry state. Planning, applying the registry CAS, confirming it in the
+connection journal, and final eligibility/operation closure are separate explicit
+local persistence boundaries. R40 performs no PeerTube HTTP request and no media
+operation.
+
 ## 15. Implementation acceptance gates
 
 The implementation tranche following this contract must prove at minimum:

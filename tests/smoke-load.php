@@ -95,10 +95,12 @@ foreach (
         ArgentVideo\PeerTube_Connection_Input::class,
         ArgentVideo\PeerTube_Connection_Admin_Service::class,
         ArgentVideo\PeerTube_Connection_Admin::class,
+        ArgentVideo\PeerTube_Backend_Adapter::class,
+        ArgentVideo\PeerTube_Backend_Activation_Service::class,
     ) as $required_class
 ) {
     if (! class_exists($required_class, false)) {
-        fwrite(STDERR, "Plugin smoke load missed required R37 class {$required_class}.\n");
+        fwrite(STDERR, "Plugin smoke load missed required connection/activation class {$required_class}.\n");
         exit(1);
     }
 }
@@ -109,10 +111,13 @@ $expected_admin_posts = array(
     'admin_post_' . ArgentVideo\PeerTube_Connection_Admin::ACTION_RESUME,
     'admin_post_' . ArgentVideo\PeerTube_Connection_Admin::ACTION_GRANT,
     'admin_post_' . ArgentVideo\PeerTube_Connection_Admin::ACTION_RECONCILE,
+    'admin_post_' . ArgentVideo\PeerTube_Connection_Admin::ACTION_VERIFY_IDENTITY,
+    'admin_post_' . ArgentVideo\PeerTube_Connection_Admin::ACTION_SELECT_DESTINATION,
+    'admin_post_' . ArgentVideo\PeerTube_Connection_Admin::ACTION_ACTIVATE,
 );
 foreach ($expected_admin_posts as $hook) {
     if (1 !== count(array_keys($registered_actions, $hook, true))) {
-        fwrite(STDERR, "Plugin smoke load missed or duplicated R38 action {$hook}.\n");
+        fwrite(STDERR, "Plugin smoke load missed or duplicated connection action {$hook}.\n");
         exit(1);
     }
 }
@@ -122,7 +127,7 @@ foreach ($registered_actions as $hook) {
         || str_starts_with($hook, 'wp_ajax_argentwolf_video_processor_peertube_')
         || str_starts_with($hook, 'wp_ajax_nopriv_argentwolf_video_processor_peertube_')
     ) {
-        fwrite(STDERR, "Plugin smoke load exposed an unauthorized R38 action {$hook}.\n");
+        fwrite(STDERR, "Plugin smoke load exposed an unauthorized connection action {$hook}.\n");
         exit(1);
     }
 }

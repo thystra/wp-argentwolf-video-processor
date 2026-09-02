@@ -303,3 +303,40 @@ To preserve its report outside the checkout, set the generic runner directory:
 AWVP_ADMIN_REPORT_DIR=/absolute/report/path \
     bash tests/integration/peertube-identity-destination-smoke.sh
 ```
+
+## PeerTube backend activation checkpoint
+
+After the R40 source checkpoint is committed, run its two-case browser and
+state matrix from a clean checkout on the disposable Docker host:
+
+```bash
+bash tests/integration/peertube-backend-activation-smoke.sh
+```
+
+The wrapper reuses the complete R39 browser/bootstrap fixture and its exact
+redacted PeerTube request transcript. R40 then advances only local activation
+state through four explicit nonce-bound administrator POSTs: journal the exact
+registry mutation plan, apply the disabled-to-active shared-registry CAS, confirm
+the already-active descriptor into `active_pending_close`, and independently
+re-prove secret generation, descriptor/destination, adapter capability, and
+non-blocking health before closing the journal at `complete`.
+
+No R40 step owns a PeerTube HTTP client. The request-log gate must remain byte-
+for-byte equivalent to R39: one OAuth-client GET, one password-token POST, and
+four identical identity/channel-discovery sequences. Any additional remote
+request fails the checkpoint. A fresh WP-CLI process then proves the active
+PeerTube descriptor, selected destination, encrypted/non-autoloaded credential,
+`delivery.embed` eligibility, continued denial of `processing.video`, the
+refresh-pending health warning, unchanged attachments and managed upload
+storage, and a clean `WP_DEBUG` log.
+
+This remains development-checkpoint evidence, not a real-PeerTube, TLS,
+exact-ZIP, release, upgrade, MySQL, Plugin Check, refresh/revoke, upload, remote
+media mutation, or publication gate.
+
+To preserve its report outside the checkout, set the generic runner directory:
+
+```bash
+AWVP_ADMIN_REPORT_DIR=/absolute/report/path \
+    bash tests/integration/peertube-backend-activation-smoke.sh
+```

@@ -224,6 +224,17 @@ a final explicit verification must prove the selected channel before the operati
 may reach `activation_ready`. R39 still registers no `nopriv`, AJAX, REST, WP-CLI,
 cron, automatic retry, activation, refresh/revoke, upload, or media-mutation path.
 
+R40 adds one seventh authenticated `admin_post` action for explicit local backend
+activation. It is POST-only, `manage_options`- and operation-nonce-bound, accepts
+only the exact operation identifier, and advances at most one consequential local
+persistence boundary per request. The sequence journals an exact registry CAS,
+applies/reconciles that CAS, confirms the active descriptor, and only then closes
+the operation after independently re-proving managed-secret generation, exact
+destination, adapter registration, capability, and non-blocking health. The R40
+action owns no PeerTube HTTP client and performs no upload, processing, remote
+mutation, automatic retry, token refresh, revoke, or disconnect. No `nopriv`,
+AJAX, REST, WP-CLI, cron, or media hook is added.
+
 Before a grant, the administrator must explicitly authorize sending the entered
 credentials to the displayed exact external service. An allowlisted
 development-only HTTP origin requires a second acknowledgement that the

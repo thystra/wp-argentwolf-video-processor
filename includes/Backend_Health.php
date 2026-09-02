@@ -79,6 +79,54 @@ final class Backend_Health
         );
     }
 
+    public static function peertube_activation_ready(int $generation): self
+    {
+        if ($generation < 1) {
+            return self::peertube_blocking('secret_unavailable');
+        }
+
+        return new self(
+            self::WARNING,
+            array(
+                array(
+                    'code'    => 'peertube.lifecycle.refresh_pending',
+                    'status'  => self::WARNING,
+                    'message' => 'PeerTube activation is locally verified; token refresh and live operational health are not implemented in this checkpoint.',
+                    'data'    => array('secret_generation' => $generation),
+                ),
+            )
+        );
+    }
+
+    public static function peertube_blocking(string $reason): self
+    {
+        $detail = match ($reason) {
+            'descriptor_invalid' => array(
+                'code' => 'peertube.descriptor.invalid',
+                'message' => 'The active PeerTube descriptor is not structurally usable.',
+            ),
+            'access_token_unusable' => array(
+                'code' => 'peertube.auth.access_token_unusable',
+                'message' => 'The stored PeerTube access token is expired or too close to expiry; refresh is not implemented in this checkpoint.',
+            ),
+            default => array(
+                'code' => 'peertube.auth.secret_unavailable',
+                'message' => 'The managed PeerTube credential is unavailable or unreadable.',
+            ),
+        };
+
+        return new self(
+            self::BLOCKING,
+            array(
+                array(
+                    'code'    => $detail['code'],
+                    'status'  => self::BLOCKING,
+                    'message' => $detail['message'],
+                ),
+            )
+        );
+    }
+
     public function status(): string
     {
         return $this->status;

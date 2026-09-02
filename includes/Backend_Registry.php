@@ -20,7 +20,7 @@ final class Backend_Registry
     public const PEERTUBE_ID_REFUSED = 'refused';
     public const PEERTUBE_ID_INDETERMINATE = 'indeterminate';
 
-    private const PEERTUBE_TYPE = 'peertube';
+    public const PEERTUBE_TYPE = 'peertube';
     private const PEERTUBE_CONFIG_VERSION = 1;
     private const NONAUTOLOAD_VALUES = array('no', 'off', 'auto-off');
 
@@ -57,6 +57,17 @@ final class Backend_Registry
             return false;
         }
 
+        if (self::PEERTUBE_TYPE === ($descriptor['type'] ?? null)) {
+            $destination = $descriptor['default_destination'] ?? null;
+            if (
+                ! is_string($destination)
+                || '' === $destination
+                || $destination !== PeerTube_Connection_Input::destination_id($destination)
+            ) {
+                return false;
+            }
+        }
+
         $adapter = $factory->resolve((string) ($descriptor['type'] ?? ''));
         if (null === $adapter) {
             return false;
@@ -66,7 +77,11 @@ final class Backend_Registry
             return false;
         }
 
-        return in_array($adapter->health()->status(), array(Backend_Health::OK, Backend_Health::WARNING), true);
+        return in_array(
+            $adapter->health($descriptor)->status(),
+            array(Backend_Health::OK, Backend_Health::WARNING),
+            true
+        );
     }
 
     /**
@@ -461,6 +476,312 @@ final class Backend_Registry
         }
 
         return $this->apply_disabled_peertube_plan($descriptor, $plan);
+    }
+
+    /**
+     * Prospectively describe one exact disabled-to-active PeerTube mutation.
+     *
+     * Only the target descriptor's state and default destination change. The
+     * current whole-registry snapshot must be a preservable v1 registry and
+     * must contain the exact disabled descriptor supplied by the connection
+     * journal. No mutation occurs until apply_peertube_activation_plan().
+     */
+    public function prepare_peertube_activation(
+        mixed $disabled_descriptor,
+        mixed $destination_id,
+        string $mutation_id
+    ): Atomic_Option_Plan_Result {
+        $disabled_descriptor = $this->sanitize_peertube_descriptor($disabled_descriptor);
+        $destination_id = PeerTube_Connection_Input::destination_id($destination_id);
+        if (
+            null === $disabled_descriptor
+            || '' !== $disabled_descriptor['default_destination']
+            || '' === $destination_id
+        ) {
+            return Atomic_Option_Plan_Result::refused();
+        }
+
+        $store = new Atomic_Option_Store(self::OPTION);
+        $snapshot = $store->snapshot();
+        if (Atomic_Option_Snapshot::INDETERMINATE === $snapshot->state()) {
+            return Atomic_Option_Plan_Result::indeterminate();
+        }
+        if ($snapshot->is_absent()) {
+            return Atomic_Option_Plan_Result::conflict();
+        }
+        if (! $this->preservable_registry_snapshot($snapshot)) {
+            return Atomic_Option_Plan_Result::refused();
+        }
+
+        $replacement = $this->prepare_peertube_activation_from_state(
+            $disabled_descriptor,
+            $destination_id,
+            $snapshot->value()
+        );
+        if (null === $replacement) {
+            return Atomic_Option_Plan_Result::conflict();
+        }
+
+        return $store->prepare_compare_exchange(
+            $snapshot,
+            $replacement,
+            'registry_activate',
+            $mutation_id
+        );
+    }
+
+    public function apply_peertube_activation_plan(
+        mixed $disabled_descriptor,
+        mixed $destination_id,
+        Atomic_Option_Mutation_Plan $plan
+    ): Atomic_Option_Result {
+        $disabled_descriptor = $this->sanitize_peertube_descriptor($disabled_descriptor);
+        $destination_id = PeerTube_Connection_Input::destination_id($destination_id);
+        if (
+            null === $disabled_descriptor
+            || '' !== $disabled_descriptor['default_destination']
+            || '' === $destination_id
+            || ! $this->valid_peertube_activation_plan(
+                $disabled_descriptor,
+                $destination_id,
+                $plan
+            )
+        ) {
+            return Atomic_Option_Result::refused();
+        }
+
+        return (new Atomic_Option_Store(self::OPTION))->apply_plan($plan);
+    }
+
+    /**
+     * Probe journaled activation evidence against current authoritative state.
+     *
+     * An exact active target is the semantic postcondition even when unrelated
+     * descriptors were appended later. A disabled exact-before state remains
+     * eligible for reconciliation; every other target state is `other`.
+     *
+     * @param array<string, mixed> $evidence
+     */
+    public function probe_peertube_activation(
+        mixed $disabled_descriptor,
+        mixed $destination_id,
+        array $evidence
+    ): string {
+        $disabled_descriptor = $this->sanitize_peertube_descriptor($disabled_descriptor);
+        $destination_id = PeerTube_Connection_Input::destination_id($destination_id);
+        if (
+            null === $disabled_descriptor
+            || '' !== $disabled_descriptor['default_destination']
+            || '' === $destination_id
+            || 'registry_activate' !== ($evidence['kind'] ?? null)
+        ) {
+            return Atomic_Option_Store::PROBE_REFUSED;
+        }
+
+        $store = new Atomic_Option_Store(self::OPTION);
+        $probe = $store->probe_evidence($evidence);
+        if (in_array(
+            $probe,
+            array(
+                Atomic_Option_Store::PROBE_INDETERMINATE,
+                Atomic_Option_Store::PROBE_REFUSED,
+            ),
+            true
+        )) {
+            return $probe;
+        }
+
+        $active_probe = $this->probe_active_peertube_state(
+            $disabled_descriptor,
+            $destination_id
+        );
+        if (Atomic_Option_Store::PROBE_AFTER === $active_probe) {
+            return Atomic_Option_Store::PROBE_AFTER;
+        }
+        if (in_array(
+            $active_probe,
+            array(
+                Atomic_Option_Store::PROBE_INDETERMINATE,
+                Atomic_Option_Store::PROBE_REFUSED,
+            ),
+            true
+        )) {
+            return $active_probe;
+        }
+
+        if (Atomic_Option_Store::PROBE_BEFORE !== $probe) {
+            return Atomic_Option_Store::PROBE_OTHER;
+        }
+
+        // Re-read the exact evidence after the semantic probe so a concurrent
+        // shared-registry change cannot leave a stale `before` classification.
+        return $store->probe_evidence($evidence);
+    }
+
+    /**
+     * Prove the durable active descriptor independently of original plan bytes.
+     */
+    public function probe_active_peertube_state(
+        mixed $disabled_descriptor,
+        mixed $destination_id
+    ): string {
+        $disabled_descriptor = $this->sanitize_peertube_descriptor($disabled_descriptor);
+        $destination_id = PeerTube_Connection_Input::destination_id($destination_id);
+        if (
+            null === $disabled_descriptor
+            || '' !== $disabled_descriptor['default_destination']
+            || '' === $destination_id
+        ) {
+            return Atomic_Option_Store::PROBE_REFUSED;
+        }
+
+        $snapshot = (new Atomic_Option_Store(self::OPTION))->snapshot();
+        if (Atomic_Option_Snapshot::INDETERMINATE === $snapshot->state()) {
+            return Atomic_Option_Store::PROBE_INDETERMINATE;
+        }
+        if (
+            Atomic_Option_Snapshot::REFUSED === $snapshot->state()
+            || ($snapshot->is_present() && ! $this->preservable_registry_snapshot($snapshot))
+        ) {
+            return Atomic_Option_Store::PROBE_REFUSED;
+        }
+        if ($snapshot->is_absent()) {
+            return Atomic_Option_Store::PROBE_OTHER;
+        }
+
+        $active = self::activated_peertube_descriptor($disabled_descriptor, $destination_id);
+        return $this->registry_snapshot_has_descriptor($snapshot, $active)
+            ? Atomic_Option_Store::PROBE_AFTER
+            : Atomic_Option_Store::PROBE_OTHER;
+    }
+
+    /**
+     * Reconcile only one already-journaled activation plan.
+     *
+     * @param array<string, mixed> $evidence
+     */
+    public function reconcile_peertube_activation(
+        mixed $disabled_descriptor,
+        mixed $destination_id,
+        array $evidence
+    ): Atomic_Option_Result {
+        $probe = $this->probe_peertube_activation(
+            $disabled_descriptor,
+            $destination_id,
+            $evidence
+        );
+        if (Atomic_Option_Store::PROBE_AFTER === $probe) {
+            return Atomic_Option_Result::satisfied();
+        }
+        if (Atomic_Option_Store::PROBE_INDETERMINATE === $probe) {
+            return Atomic_Option_Result::indeterminate(
+                Atomic_Option_Result::MUTATION_NONE,
+                Atomic_Option_Result::PHASE_VALIDATION
+            );
+        }
+        if (Atomic_Option_Store::PROBE_REFUSED === $probe) {
+            return Atomic_Option_Result::refused();
+        }
+        if (Atomic_Option_Store::PROBE_BEFORE !== $probe) {
+            return Atomic_Option_Result::conflict(Atomic_Option_Result::PHASE_VALIDATION);
+        }
+
+        $mutation_id = $evidence['mutation_id'] ?? null;
+        if (! is_string($mutation_id)) {
+            return Atomic_Option_Result::refused();
+        }
+
+        $prepared = $this->prepare_peertube_activation(
+            $disabled_descriptor,
+            $destination_id,
+            $mutation_id
+        );
+        $plan = $prepared->plan();
+        if (
+            Atomic_Option_Plan_Result::READY !== $prepared->status()
+            || null === $plan
+            || $plan->evidence() !== $evidence
+        ) {
+            return self::plan_failure($prepared);
+        }
+
+        return $this->apply_peertube_activation_plan(
+            $disabled_descriptor,
+            $destination_id,
+            $plan
+        );
+    }
+
+    /**
+     * @param array<string, mixed> $descriptor
+     */
+    private function valid_peertube_activation_plan(
+        array $descriptor,
+        string $destination_id,
+        Atomic_Option_Mutation_Plan $plan
+    ): bool {
+        if (
+            self::OPTION !== $plan->option()
+            || 'registry_activate' !== $plan->kind()
+            || ! $plan->before()->is_present()
+            || ! $this->preservable_registry_snapshot($plan->before())
+            || ! $this->preservable_registry_snapshot($plan->written())
+        ) {
+            return false;
+        }
+
+        $replacement = $this->prepare_peertube_activation_from_state(
+            $descriptor,
+            $destination_id,
+            $plan->before()->value()
+        );
+
+        return null !== $replacement && $replacement === $plan->written()->value();
+    }
+
+    /**
+     * @param array<string, mixed> $descriptor
+     * @return array<string, mixed>|null
+     */
+    private function prepare_peertube_activation_from_state(
+        array $descriptor,
+        string $destination_id,
+        mixed $stored
+    ): ?array {
+        if (! is_array($stored)) {
+            return null;
+        }
+
+        $strict = self::strict_structure($stored);
+        if (! is_array($strict) || $strict !== $stored) {
+            return null;
+        }
+
+        $current = $stored['backends'][$descriptor['id']] ?? null;
+        if ($descriptor !== $current) {
+            return null;
+        }
+
+        $value = $stored;
+        $value['backends'][$descriptor['id']] = self::activated_peertube_descriptor(
+            $descriptor,
+            $destination_id
+        );
+        return $value;
+    }
+
+    /**
+     * @param array<string, mixed> $disabled_descriptor
+     * @return array<string, mixed>
+     */
+    private static function activated_peertube_descriptor(
+        array $disabled_descriptor,
+        string $destination_id
+    ): array {
+        $active = $disabled_descriptor;
+        $active['state'] = 'active';
+        $active['default_destination'] = $destination_id;
+        return $active;
     }
 
     private function supported_registry_snapshot(

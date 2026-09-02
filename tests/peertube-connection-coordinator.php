@@ -304,6 +304,11 @@ require_once dirname(__DIR__) . '/includes/Backend_Secret_Store.php';
 require_once dirname(__DIR__) . '/includes/Backend_Secret_Crypto.php';
 require_once dirname(__DIR__) . '/includes/Managed_Backend_Secret_Store.php';
 require_once dirname(__DIR__) . '/includes/Backend_Registry.php';
+require_once dirname(__DIR__) . '/includes/Backend_Capabilities.php';
+require_once dirname(__DIR__) . '/includes/Backend_Health.php';
+require_once dirname(__DIR__) . '/includes/Backend_Adapter.php';
+require_once dirname(__DIR__) . '/includes/Backend_Adapter_Factory.php';
+require_once dirname(__DIR__) . '/includes/PeerTube_Backend_Activation_Service.php';
 require_once dirname(__DIR__) . '/includes/PeerTube_Connection_Coordinator.php';
 require_once dirname(__DIR__) . '/includes/PeerTube_Password_Grant_Api.php';
 require_once dirname(__DIR__) . '/includes/PeerTube_Password_Grant_Service.php';
@@ -1725,7 +1730,13 @@ $admin_service = new Admin_Service(
     $operations,
     new Coordinator($operations, $secrets, $registry),
     new Grant_Service($operations, $secrets, $registry),
-    new Identity_Service($operations, $secrets, $registry)
+    new Identity_Service($operations, $secrets, $registry),
+    new \ArgentVideo\PeerTube_Backend_Activation_Service(
+        $operations,
+        $secrets,
+        $registry,
+        new \ArgentVideo\Backend_Adapter_Factory()
+    )
 );
 $open = $admin_service->open_operations();
 awvp_coordinator_assert(is_array($open) && 1 === count($open), 'Admin adapter did not expose one open operation.');

@@ -27,6 +27,7 @@ final class PeerTube_Connection_Admin
     public const ACTION_RECONCILE = 'argentwolf_video_processor_peertube_connection_reconcile';
     public const ACTION_VERIFY_IDENTITY = 'argentwolf_video_processor_peertube_connection_verify_identity';
     public const ACTION_SELECT_DESTINATION = 'argentwolf_video_processor_peertube_connection_select_destination';
+    public const ACTION_ACTIVATE = 'argentwolf_video_processor_peertube_connection_activate';
 
     public const NONCE_FIELD = 'argentwolf_video_processor_peertube_nonce';
 
@@ -37,6 +38,7 @@ final class PeerTube_Connection_Admin
     private const NONCE_VERIFY_IDENTITY = 'argentwolf_video_processor_peertube_connection_verify_identity:';
     private const NONCE_DISCOVER_DESTINATIONS = 'argentwolf_video_processor_peertube_connection_discover_destinations:';
     private const NONCE_SELECT_DESTINATION = 'argentwolf_video_processor_peertube_connection_select_destination:';
+    private const NONCE_ACTIVATE = 'argentwolf_video_processor_peertube_connection_activate:';
 
     private const NOTICE_QUERY = 'argentwolf_peertube_notice';
     private const OPERATION_QUERY = 'argentwolf_peertube_operation';
@@ -328,6 +330,35 @@ final class PeerTube_Connection_Admin
         $this->redirect_identity_result($result, $operation_id);
     }
 
+    public function activate_action(): void
+    {
+        $this->require_post_administrator();
+        $operation_id = $this->raw_operation_id();
+        if ('' === $operation_id) {
+            $this->reject_invalid_request();
+        }
+        $this->verify_nonce(self::NONCE_ACTIVATE . $operation_id);
+
+        $values = $this->post_fields(
+            array('action', self::NONCE_FIELD, 'operation_id')
+        );
+        if (
+            null === $values
+            || self::ACTION_ACTIVATE !== $values['action']
+            || $operation_id !== $values['operation_id']
+        ) {
+            $this->redirect_notice('invalid_request', $operation_id);
+        }
+
+        try {
+            $result = $this->actions->activate($operation_id, $this->now());
+        } catch (Throwable) {
+            $this->redirect_notice('state_may_have_changed', $operation_id);
+        }
+
+        $this->redirect_activation_result($result, $operation_id);
+    }
+
     public function notices(): void
     {
         if (! current_user_can('manage_options') || self::PAGE_SLUG !== $this->query_page()) {
@@ -342,11 +373,11 @@ final class PeerTube_Connection_Admin
 
         $class = match ($notice) {
             'connection_advanced', 'ready_for_credentials', 'credentials_stored',
-            'identity_verified', 'destination_verified' =>
+            'identity_verified', 'destination_verified', 'backend_activated' =>
                 'notice notice-success',
             'invalid_request', 'request_refused', 'connection_conflict' =>
                 'notice notice-error',
-            'verification_advanced' => 'notice notice-info',
+            'verification_advanced', 'activation_advanced' => 'notice notice-info',
             default => 'notice notice-warning',
         };
 
@@ -397,7 +428,7 @@ final class PeerTube_Connection_Admin
         ?>
         <div class="wrap">
             <h1><?php esc_html_e('PeerTube Connection — ArgentWolf Video Processor', 'argentwolf-video-processor'); ?></h1>
-            <div class="notice notice-warning inline"><p><?php esc_html_e('This unreleased development checkpoint can prepare a disabled PeerTube backend, store login tokens, verify the authenticated identity, and select a currently owned local channel. It does not activate the backend, upload media, refresh tokens, or disconnect the remote session.', 'argentwolf-video-processor'); ?></p></div>
+            <div class="notice notice-warning inline"><p><?php esc_html_e('This unreleased development checkpoint can prepare and explicitly activate a verified PeerTube backend descriptor after storing login tokens, verifying the authenticated identity, and selecting a currently owned local channel. Activation changes local AWVP registry state only; it does not upload media, refresh tokens, revoke tokens, or otherwise mutate PeerTube.', 'argentwolf-video-processor'); ?></p></div>
 
             <h2><?php esc_html_e('Start a connection operation', 'argentwolf-video-processor'); ?></h2>
             <p><?php esc_html_e('Use an exact canonical HTTPS origin with no path, query, fragment, credentials, or trailing slash. A backend ID is a permanent lowercase identifier.', 'argentwolf-video-processor'); ?></p>
@@ -590,10 +621,38 @@ final class PeerTube_Connection_Admin
             return;
         }
 
-        if (PeerTube_Connection_State_Machine::PHASE_ACTIVATION_READY === $phase) {
-            echo '<div class="notice notice-success inline"><p>'
-                . esc_html__('The authenticated identity and selected owned channel are re-verified. The backend remains disabled; activation is a separate reviewed tranche.', 'argentwolf-video-processor')
-                . '</p></div>';
+        if (in_array(
+            $phase,
+            array(
+                PeerTube_Connection_State_Machine::PHASE_ACTIVATION_READY,
+                PeerTube_Connection_State_Machine::PHASE_ACTIVATION_PLANNED,
+                PeerTube_Connection_State_Machine::PHASE_ACTIVE_PENDING_CLOSE,
+            ),
+            true
+        )) {
+            $message = match ($phase) {
+                PeerTube_Connection_State_Machine::PHASE_ACTIVATION_READY =>
+                    __('The authenticated identity and selected owned channel are re-verified. Activation changes only local AWVP backend-registry state and performs no PeerTube HTTP request or media upload.', 'argentwolf-video-processor'),
+                PeerTube_Connection_State_Machine::PHASE_ACTIVATION_PLANNED =>
+                    __('An exact disabled-to-active registry mutation is journaled. Each explicit continuation applies or reconciles at most one local persistence boundary; no PeerTube HTTP or media action occurs.', 'argentwolf-video-processor'),
+                default =>
+                    __('The active descriptor is confirmed. Finalization re-proves the managed credential generation, selected destination, registered adapter, and non-blocking adapter health before closing the operation.', 'argentwolf-video-processor'),
+            };
+            echo '<div class="notice notice-info inline"><p>' . esc_html($message) . '</p></div>';
+
+            $button = match ($phase) {
+                PeerTube_Connection_State_Machine::PHASE_ACTIVATION_READY =>
+                    __('Begin backend activation', 'argentwolf-video-processor'),
+                PeerTube_Connection_State_Machine::PHASE_ACTIVATION_PLANNED =>
+                    __('Continue backend activation', 'argentwolf-video-processor'),
+                default => __('Finalize backend activation', 'argentwolf-video-processor'),
+            };
+            $this->render_operation_form(
+                self::ACTION_ACTIVATE,
+                self::NONCE_ACTIVATE . $operation['operation_id'],
+                $operation['operation_id'],
+                $button
+            );
             return;
         }
 
@@ -636,7 +695,7 @@ final class PeerTube_Connection_Admin
         }
 
         echo '<p>'
-            . esc_html__('This operation is beyond the identity/destination checkpoint. Activation, refresh, revoke, and upload actions are not available in this tranche.', 'argentwolf-video-processor')
+            . esc_html__('This operation is outside the reviewed R40 connection/activation checkpoint. Refresh, revoke, and upload actions are not available in this tranche.', 'argentwolf-video-processor')
             . '</p>';
     }
 
@@ -977,6 +1036,46 @@ final class PeerTube_Connection_Admin
             PeerTube_Identity_Destination_Service::STATUS_CONFLICT => 'connection_conflict',
             PeerTube_Identity_Destination_Service::STATUS_INDETERMINATE => 'state_check_required',
             PeerTube_Identity_Destination_Service::STATUS_REFUSED => 'request_refused',
+            default => 'outside_checkpoint',
+        };
+        $this->redirect_notice($notice, $operation_id);
+    }
+
+    /** @param array<string, mixed> $result */
+    private function redirect_activation_result(array $result, string $expected_operation_id): never
+    {
+        $validated = self::validated_activation_result($result, $expected_operation_id);
+        if (null === $validated) {
+            $this->redirect_notice('state_may_have_changed', $expected_operation_id);
+        }
+
+        $operation_id = '' !== $validated['operation_id']
+            ? $validated['operation_id']
+            : $expected_operation_id;
+        $status = $validated['status'];
+        $mutation = $validated['mutation'];
+        $positive = in_array(
+            $status,
+            array(
+                PeerTube_Backend_Activation_Service::STATUS_ADVANCED,
+                PeerTube_Backend_Activation_Service::STATUS_ACTIVE,
+            ),
+            true
+        );
+
+        if (
+            Atomic_Option_Result::MUTATION_UNKNOWN === $mutation
+            || (Atomic_Option_Result::MUTATION_APPLIED === $mutation && ! $positive)
+        ) {
+            $this->redirect_notice('state_may_have_changed', $operation_id);
+        }
+
+        $notice = match ($status) {
+            PeerTube_Backend_Activation_Service::STATUS_ADVANCED => 'activation_advanced',
+            PeerTube_Backend_Activation_Service::STATUS_ACTIVE => 'backend_activated',
+            PeerTube_Backend_Activation_Service::STATUS_CONFLICT => 'connection_conflict',
+            PeerTube_Backend_Activation_Service::STATUS_INDETERMINATE => 'state_check_required',
+            PeerTube_Backend_Activation_Service::STATUS_REFUSED => 'request_refused',
             default => 'outside_checkpoint',
         };
         $this->redirect_notice($notice, $operation_id);
@@ -1348,6 +1447,88 @@ final class PeerTube_Connection_Admin
         return $result;
     }
 
+    /** @param array<string, mixed> $result @return array<string, mixed>|null */
+    private static function validated_activation_result(
+        array $result,
+        string $expected_operation_id
+    ): ?array {
+        if (
+            array(
+                'status',
+                'mutation',
+                'operation_id',
+                'backend_id',
+                'phase',
+                'record_revision',
+                'retry_after',
+            ) !== array_keys($result)
+            || ! in_array(
+                $result['status'] ?? null,
+                array(
+                    PeerTube_Backend_Activation_Service::STATUS_ADVANCED,
+                    PeerTube_Backend_Activation_Service::STATUS_ACTIVE,
+                    PeerTube_Backend_Activation_Service::STATUS_CONFLICT,
+                    PeerTube_Backend_Activation_Service::STATUS_INDETERMINATE,
+                    PeerTube_Backend_Activation_Service::STATUS_REFUSED,
+                    PeerTube_Backend_Activation_Service::STATUS_OUTSIDE_SCOPE,
+                ),
+                true
+            )
+            || ! in_array(
+                $result['mutation'] ?? null,
+                array(
+                    Atomic_Option_Result::MUTATION_NONE,
+                    Atomic_Option_Result::MUTATION_APPLIED,
+                    Atomic_Option_Result::MUTATION_UNKNOWN,
+                ),
+                true
+            )
+            || ! is_string($result['operation_id'] ?? null)
+            || $result['operation_id'] !== $expected_operation_id
+            || '' === PeerTube_Connection_Input::operation_id($result['operation_id'])
+            || ! is_string($result['backend_id'] ?? null)
+            || ('' !== $result['backend_id']
+                && ('local' === $result['backend_id']
+                    || $result['backend_id'] !== Backend_Identity::sanitize($result['backend_id'])))
+            || ! is_string($result['phase'] ?? null)
+            || ('' !== $result['phase'] && '' === PeerTube_Connection_Input::phase($result['phase']))
+            || ! is_int($result['record_revision'] ?? null)
+            || $result['record_revision'] < 0
+            || 0 !== ($result['retry_after'] ?? null)
+        ) {
+            return null;
+        }
+
+        if (PeerTube_Backend_Activation_Service::STATUS_ADVANCED === $result['status']) {
+            if (
+                '' === $result['backend_id']
+                || $result['record_revision'] < 1
+                || ! in_array(
+                    $result['phase'],
+                    array(
+                        PeerTube_Connection_State_Machine::PHASE_ACTIVATION_PLANNED,
+                        PeerTube_Connection_State_Machine::PHASE_ACTIVE_PENDING_CLOSE,
+                    ),
+                    true
+                )
+            ) {
+                return null;
+            }
+        }
+
+        if (PeerTube_Backend_Activation_Service::STATUS_ACTIVE === $result['status']) {
+            if (
+                '' === $result['backend_id']
+                || PeerTube_Connection_State_Machine::PHASE_COMPLETE !== $result['phase']
+                || $result['record_revision'] < 1
+            ) {
+                return null;
+            }
+        }
+
+        return $result;
+    }
+
     /** @param mixed $result @return array<string, mixed>|null */
     private static function validated_discovery_result(
         mixed $result,
@@ -1560,11 +1741,13 @@ final class PeerTube_Connection_Admin
             'verification_advanced' => __('Identity verification advanced by one explicit step. Review the next read-only PeerTube request before continuing.', 'argentwolf-video-processor'),
             'verification_failed' => __('PeerTube identity or owned-channel authority could not be verified. The backend remains disabled.', 'argentwolf-video-processor'),
             'identity_verified' => __('The authenticated identity and at least one owned local channel were verified. Select a current destination explicitly.', 'argentwolf-video-processor'),
-            'destination_verified' => __('The selected owned channel and authenticated identity were re-verified. The backend remains disabled pending the separate activation tranche.', 'argentwolf-video-processor'),
+            'destination_verified' => __('The selected owned channel and authenticated identity were re-verified. The backend remains disabled until an explicit local activation request is completed.', 'argentwolf-video-processor'),
+            'activation_advanced' => __('Backend activation advanced by one local persistence step. No PeerTube HTTP request or media mutation was performed.', 'argentwolf-video-processor'),
+            'backend_activated' => __('The verified PeerTube backend descriptor is active and eligible for the non-mutating R40 adapter surface. Media upload remains unavailable.', 'argentwolf-video-processor'),
             'destination_unavailable' => __('That destination is not in the account’s current eligible owned-channel set. No selection was changed.', 'argentwolf-video-processor'),
             'grant_indeterminate' => __('The remote password-grant outcome is uncertain and terminal. AWVP will not retry it automatically.', 'argentwolf-video-processor'),
             'connection_conflict' => __('The operation changed concurrently. Reload its durable status before choosing another explicit action.', 'argentwolf-video-processor'),
-            'state_check_required' => __('The local outcome could not be confirmed. Use only the available credential-free reconciliation action.', 'argentwolf-video-processor'),
+            'state_check_required' => __('The local outcome could not be confirmed. Review durable status and use only the explicit action offered for that state.', 'argentwolf-video-processor'),
             'state_may_have_changed' => __('Local state may have changed before the request became uncertain. AWVP did not repeat the action; review durable status.', 'argentwolf-video-processor'),
             'request_refused' => __('The PeerTube connection request was refused without claiming success.', 'argentwolf-video-processor'),
             'invalid_request' => __('The PeerTube connection request contained invalid or unexpected input and was not performed.', 'argentwolf-video-processor'),
@@ -1592,6 +1775,9 @@ final class PeerTube_Connection_Admin
             PeerTube_Connection_State_Machine::PHASE_VERIFICATION_FAILED => __('Identity or destination verification failed', 'argentwolf-video-processor'),
             PeerTube_Connection_State_Machine::PHASE_AWAITING_DESTINATION => __('Awaiting owned destination selection', 'argentwolf-video-processor'),
             PeerTube_Connection_State_Machine::PHASE_ACTIVATION_READY => __('Identity and destination verified; activation pending', 'argentwolf-video-processor'),
+            PeerTube_Connection_State_Machine::PHASE_ACTIVATION_PLANNED => __('Backend activation planned', 'argentwolf-video-processor'),
+            PeerTube_Connection_State_Machine::PHASE_ACTIVE_PENDING_CLOSE => __('Active backend pending final eligibility check', 'argentwolf-video-processor'),
+            PeerTube_Connection_State_Machine::PHASE_COMPLETE => __('PeerTube backend active', 'argentwolf-video-processor'),
             default => __('Outside this checkpoint', 'argentwolf-video-processor'),
         };
     }

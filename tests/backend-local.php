@@ -483,7 +483,7 @@ namespace {
     $factory = new Backend_Adapter_Factory($adapter);
 
     $assert('local' === $adapter->type(), 'Local adapter type mismatch.');
-    $assert(Backend_Health::OK === $adapter->health()->status(), 'Healthy local diagnostics should be OK.');
+    $assert(Backend_Health::OK === $adapter->health($valid['backends']['local'])->status(), 'Healthy local diagnostics should be OK.');
 
     $GLOBALS['awvp_backend_option_value'] = $valid;
     $assert(
