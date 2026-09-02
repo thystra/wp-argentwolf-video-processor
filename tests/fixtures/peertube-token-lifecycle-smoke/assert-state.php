@@ -60,7 +60,7 @@ $assert(is_array($lifecycle), 'The R41 lifecycle journal was unavailable.');
 $assert('disconnect' === $lifecycle['action'], 'The lifecycle did not finish as disconnect.');
 $assert('disconnect_complete' === $lifecycle['phase'], 'The disconnect lifecycle was incomplete.');
 $assert(2 === $lifecycle['expected_generation'], 'Disconnect was not fenced to the refreshed secret generation.');
-$assert(8 === $lifecycle['revision'], 'The lifecycle crossed an unexpected revision count.');
+$assert(9 === $lifecycle['revision'], 'The lifecycle crossed an unexpected revision count.');
 $assert(array() === $lifecycle['last_error'] && array() === $lifecycle['last_mutation'], 'Completed lifecycle retained transient error/mutation state.');
 
 $secrets = new Managed_Backend_Secret_Store();

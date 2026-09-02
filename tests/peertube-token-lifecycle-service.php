@@ -119,6 +119,7 @@ awvp_coordinator_assert(null === (new Managed_Backend_Secret_Store())->read($des
 
 $journal = (new PeerTube_Token_Lifecycle_Store())->read($backend_id);
 awvp_coordinator_assert('disconnect_complete' === ($journal['phase'] ?? ''), 'R41 lifecycle journal did not close disconnect.');
+awvp_coordinator_assert(9 === ($journal['revision'] ?? 0), 'R41 lifecycle crossed the reviewed happy-path revision count.');
 $serialized = serialize($journal);
 foreach (array('access-token-v2', 'refresh-token-v2', 'client-secret') as $canary) {
     awvp_coordinator_assert(! str_contains($serialized, $canary), 'R41 lifecycle journal leaked secret material.');
