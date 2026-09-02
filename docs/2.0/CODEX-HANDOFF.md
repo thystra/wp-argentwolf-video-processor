@@ -1085,7 +1085,7 @@ This documented closure is the branch authority for R40. R40 may activate the
 verified PeerTube descriptor and make the adapter/factory eligible, but must
 preserve the existing no-media-upload boundary.
 
-## R40 backend activation feature slice — qualified feature closure
+## R40 backend activation feature slice — qualified and integrated
 
 R40 is authorized from `develop-2.0` closure `090b85b` and is staged on
 `feature/2.0-peertube-backend-activation`. The source slice adds an exact
@@ -1159,17 +1159,37 @@ matrix and global cleanup passed with final
 This closes R40 source, local, exact-commit CI, and two-case Docker development
 checkpoint qualification. It is not a real-PeerTube, TLS, exact-ZIP, release,
 upgrade, MySQL, Plugin Check, refresh/revoke/disconnect, upload, processing, or
-remote-media-mutation gate. This documentation-only closure must itself pass
-Forgejo CI before it is merged into `develop-2.0`; `main`, tags, releases, and
-publication surfaces remain untouched.
+remote-media-mutation gate.
+
+### R40 `develop-2.0` integration closure
+
+The documentation-only qualified R40 feature closure is exact commit
+`e1819ecb83377bf97d03cd331fc31c6400ea1b41`. It was merged into `develop-2.0`
+without rewriting either parent:
+
+- merge commit: `67bb455f59450bab66cca1d59389e8fb637755ba`;
+- merge tree: `8955bca16050546731080fa8e0420c779493d519`;
+- first parent / prior `develop-2.0` authority:
+  `090b85be4f48513efdc7b2582601c40cad9ffbd3`;
+- second parent / qualified R40 feature closure:
+  `e1819ecb83377bf97d03cd331fc31c6400ea1b41`.
+
+Forgejo CI run 88 passed the exact R40 integration merge in 9 seconds. The merge
+preserved the qualified R40 content tree and no product behavior was rewritten
+at integration. `main`, tags, releases, and publication surfaces remain
+untouched.
+
+This `67bb455f59450bab66cca1d59389e8fb637755ba` integration is the branch
+authority for R41. R41 may add bounded token refresh, revoke, and disconnect
+lifecycle behavior, but must preserve the no-media-upload boundary until the
+separate tranche 2.0-4 transfer/upload state-machine work is authorized.
 
 ## Recommended continuation
 
-Complete R40 integration from the qualified feature closure and then:
-
-1. require Forgejo CI on this documentation-only closure and merge the exact
-   validated feature history into `develop-2.0` without rewriting either parent;
-2. after the R40 integration closure, review refresh/revoke/disconnect separately;
+1. branch R41 from exact `develop-2.0` authority
+   `67bb455f59450bab66cca1d59389e8fb637755ba`;
+2. review and implement refresh/revoke/disconnect as a separately bounded
+   lifecycle tranche with restart-safe and concurrency-safe tests;
 3. preserve the no-upload boundary until tranche 2.0-4 state-machine work.
 
 ## Engineering policy

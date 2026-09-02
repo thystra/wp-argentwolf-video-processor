@@ -115,8 +115,11 @@
 - [x] R40: activate the verified PeerTube descriptor and make the adapter/factory
   eligible without crossing the media-upload boundary. Exact feature commit
   `1fcb8e45fd9b1aaeb4fe2aad1e31928327cc0d69` passed Forgejo CI run 86 and the
-  isolated WordPress 6.4/7.1 Docker activation matrix.
-- [ ] Review and implement token refresh, revoke, and disconnect lifecycle as a
-  separately bounded tranche.
+  isolated WordPress 6.4/7.1 Docker activation matrix; qualified feature closure
+  `e1819ecb83377bf97d03cd331fc31c6400ea1b41` was merged into `develop-2.0` as
+  `67bb455f59450bab66cca1d59389e8fb637755ba`, and integration CI run 88 passed
+  in 9 seconds.
+- [ ] R41: review and implement token refresh, revoke, and disconnect lifecycle as
+  a separately bounded tranche.
 - [ ] Begin tranche 2.0-4 staged source transfer/upload and remote-state work only
   after the connection/activation lifecycle is independently validated.
