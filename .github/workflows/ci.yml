@@ -13,7 +13,7 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     container:
-      image: forgejo.argentwolf.org/alan/wp-argentwolf-video-processor/ci-ffmpeg:9.0.1-bookworm-v2
+      image: forgejo.argentwolf.org/alan/wp-argentwolf-video-processor/ci-ffmpeg@sha256:bd97a501289e54169996c6ab6860719b09e09b99994d15bd809ecd6c2dfca74b
     env:
       ARGENT_VIDEO_CI_FFMPEG_VERSION: '9.0.1'
       ARGENT_VIDEO_CI_FFMPEG_PREFIX: /opt/awvp-ffmpeg

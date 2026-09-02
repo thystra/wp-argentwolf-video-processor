@@ -19,16 +19,19 @@ signature and capability checks.
 - The image is repository-only test infrastructure. AWVP runtime installations
   continue to use administrator-configured system FFmpeg/FFprobe binaries.
 
-Current image coordinates:
+Current qualified image:
 
 ```text
-forgejo.argentwolf.org/alan/wp-argentwolf-video-processor/ci-ffmpeg:9.0.1-bookworm-v2
+immutable tag: forgejo.argentwolf.org/alan/wp-argentwolf-video-processor/ci-ffmpeg:9.0.1-bookworm-v2
+OCI index:     sha256:bd97a501289e54169996c6ab6860719b09e09b99994d15bd809ecd6c2dfca74b
+linux/amd64:   sha256:b57467f7d93cbaa5b3ba0ce328183379a15623a5cbfb6a6854c1997c022a2d47
 ```
 
-Treat the versioned tag as immutable. Never overwrite an already-published tag;
-change the suffix (`v2`, `v3`, ...) when the image definition changes. After the
-first successful image qualification, record and use the registry digest in CI
-instead of relying indefinitely on the tag.
+Routine CI and release workflows use the OCI index digest, not the mutable name.
+Docker selects the reviewed `linux/amd64` manifest from that index; the published
+index also carries the image's attestation manifest. Treat the versioned tag as
+immutable. Never overwrite an already-published tag; change the suffix (`v2`,
+`v3`, ...) when the image definition changes.
 
 ## Build and qualify
 
@@ -59,8 +62,9 @@ bash build/build-ci-ffmpeg-image.sh --push
 ```
 
 The helper pulls the just-published image and prints its immutable registry
-digest. Preserve that output as image qualification evidence; the next small CI
-lock patch should replace the versioned tag in the workflows with that digest.
+digest. Preserve that output as image qualification evidence. After the complete
+AWVP CI suite passes in that image, pin the workflows to the OCI index digest.
+The current `v2` image completed that qualification in Forgejo CI run 82.
 
 The package must be anonymously pullable before the mirrored GitHub Actions job
 is switched to the Forgejo-hosted image. If public pull is intentionally not

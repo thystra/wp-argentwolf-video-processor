@@ -9,12 +9,13 @@ ArgentWolf Video Processor 2.0 development.
   `v1.0.0`; later `main` commits are documentation/maintenance history unless a
   new release is deliberately prepared.
 - `develop-2.0` is the next-major integration line and contains the validated
-  R38 administrator-authorization checkpoint.
-- `feature/2.0-peertube-grant-bootstrap` preserves the reviewed R37 source and
-  validation history.
-- `feature/2.0-peertube-admin-authorization` preserves the reviewed R38 source
-  and validation history. New continuation work branches from `develop-2.0`
-  after the R38 integration-closure commit.
+  R39 identity/destination checkpoint plus the qualified prebuilt FFmpeg CI
+  toolchain.
+- `feature/2.0-peertube-identity-destination` preserves the reviewed R39 source
+  and validation history. Earlier feature branches preserve their corresponding
+  R33-R38 checkpoints.
+- New continuation work branches from the documented `develop-2.0` closure after
+  the R39 integration and CI-image qualification.
 
 Do not develop unfinished 2.0 runtime changes directly on `main`.
 
@@ -1038,13 +1039,55 @@ This closes R39 source, local, exact-commit CI, and two-case Docker development
 checkpoint validation. It is not a real-PeerTube, TLS, exact-ZIP, release,
 upgrade, MySQL, Plugin Check, activation/adapter, refresh/revoke, or upload gate.
 
+## R39 integration and prebuilt FFmpeg CI closure
+
+The documentation-only R39 feature closure is exact commit
+`6e99ac2ca48eb7f5d540f9d3c69bc7a589ecb0b6`. Forgejo CI run 79 passed that
+feature closure in 3m39s. R39 was then integrated into `develop-2.0` without
+rewriting either parent:
+
+- merge commit: `d2a60ae5e4e63b12a5c4d360740fd88f2286279a`;
+- first parent / prior `develop-2.0` authority:
+  `8e2de3a9b67810ce93dadc6d7e837070fd794932`;
+- second parent / validated R39 feature closure:
+  `6e99ac2ca48eb7f5d540f9d3c69bc7a589ecb0b6`.
+
+Forgejo CI run 80 passed the exact R39 merge in 3m39s. Product runtime behavior
+remained the validated R39 tree; `main`, tags, releases, and publication surfaces
+were untouched.
+
+Routine CI was then moved from compiling FFmpeg on every runner execution to a
+repository-owned image that still builds FFmpeg 9.0.1 from the signed upstream
+source and verifies the required codec/security capabilities. The first
+image-backed run exposed `python3` as an undeclared runner dependency in
+`tests/vendor-fetch.sh`; this was an image/harness dependency defect rather than
+an AWVP product failure. The image definition was corrected and published under
+a new immutable `v2` tag rather than overwriting `v1`.
+
+The qualified image authority is:
+
+- immutable tag:
+  `forgejo.argentwolf.org/alan/wp-argentwolf-video-processor/ci-ffmpeg:9.0.1-bookworm-v2`;
+- OCI index digest:
+  `sha256:bd97a501289e54169996c6ab6860719b09e09b99994d15bd809ecd6c2dfca74b`;
+- Linux/amd64 manifest digest:
+  `sha256:b57467f7d93cbaa5b3ba0ce328183379a15623a5cbfb6a6854c1997c022a2d47`.
+
+Forgejo CI run 82 passed the complete image-backed validation in 13 seconds,
+including the dependency-free suite, storage/restricted-path/smoke gates, FFmpeg
+9.0.1 advisory binary check, real FFmpeg integration with adaptive HLS, vendor
+fetch regression, and the remaining workflow checks. Routine Forgejo/GitHub CI
+and the canonical release workflow are therefore pinned to the OCI index digest
+rather than the versioned tag. Rebuilding FFmpeg remains a separate image
+qualification operation rather than ordinary source-test work.
+
+This documented closure is the branch authority for R40. R40 may activate the
+verified PeerTube descriptor and make the adapter/factory eligible, but must
+preserve the existing no-media-upload boundary.
+
 ## Recommended continuation
 
-Create and validate a documentation-only R39 feature-evidence closure, then
-integrate that exact closure into `develop-2.0` without rewriting either parent.
-Require exact Forgejo CI for the feature closure and integration commit before
-using the resulting documented `develop-2.0` commit as a new branch authority.
-Then:
+Branch R40 from the documented `develop-2.0` closure and then:
 
 1. implement activation of the disabled descriptor and adapter/factory
    eligibility as a separate reviewed slice;
