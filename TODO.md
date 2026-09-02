@@ -122,11 +122,18 @@
 - [x] R41: bounded token refresh, revoke, and disconnect lifecycle. Exact
   qualified feature commit `7276ef4fab4d2d0bc96afd16c0da39c0d0dca72d`, tree
   `39b54899930bbe0abbdb0dde8a4604d3cab016fc`, passed Forgejo CI run 96 and the
-  isolated WordPress 6.4/7.1 Docker lifecycle matrix. The matrix proved exact
-  refresh/revoke request counts, no automatic remote retry, no plaintext token
-  canaries, managed-secret removal after confirmed retirement, no upload
-  mutations, and clean `WP_DEBUG`. R41 remains a development checkpoint and
-  authorizes no media upload.
-- [ ] Merge the exact qualified R41 feature history into `develop-2.0`, require
-  integration CI, and record the resulting merge/tree authority before beginning
-  tranche 2.0-4 staged source transfer/upload and remote-state work.
+  isolated WordPress 6.4/7.1 Docker lifecycle matrix. Documentation-only
+  qualification closure `911b1ff57893ffe30bafeffa26a2852a213b51a6` passed
+  Forgejo CI run 97, was merged into `develop-2.0` as
+  `dfc5c2b6e2521f0ecbba6806dc398608d0968b0e`, tree
+  `f15847a00d2907cf70dd9d53325267e861e5755b`, and integration CI run 98 passed.
+  The qualified lifecycle proved exact refresh/revoke request counts, no
+  automatic remote retry, no plaintext token canaries, managed-secret removal
+  after confirmed retirement, no upload mutations, and clean `WP_DEBUG`. R41
+  remains a development checkpoint and authorizes no media upload.
+- [x] Integrate the exact qualified R41 feature history into `develop-2.0` and
+  qualify merge `dfc5c2b6e2521f0ecbba6806dc398608d0968b0e` with Forgejo CI run
+  98.
+- [ ] Commit the R41 integration closure on `develop-2.0`, require exact-commit
+  Forgejo CI, and use that resulting clean branch tip as the authority for the
+  first tranche 2.0-4 staged source transfer/upload and remote-state checkpoint.

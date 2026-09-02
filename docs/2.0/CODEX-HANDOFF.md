@@ -1216,7 +1216,7 @@ Historical local branch pointers may lag Forgejo. Always `git fetch origin
 --prune` and establish exact remote authority before mutation. A pre-cleanup
 all-ref bundle and exact R32 staged patch were created before this handoff.
 
-## R41 token lifecycle feature slice — qualified feature checkpoint
+## R41 token lifecycle feature slice — qualified and integrated
 
 R41 branches from the documented post-R40 `develop-2.0` authority and adds only
 the bounded PeerTube credential lifecycle. The source slice introduces a
@@ -1285,17 +1285,46 @@ path at lifecycle revision 9.
 This closes R41 source, local, exact-feature CI, and two-case Docker development
 checkpoint qualification. It does **not** qualify a live PeerTube instance, TLS,
 release ZIP bytes, upgrade behavior, Plugin Check, upload, processing,
-publication, remote-media mutation, or release publication. R41 is qualified but
-not yet integrated into `develop-2.0`.
+publication, remote-media mutation, or release publication.
 
-## Recommended continuation after R41 qualification
+### R41 `develop-2.0` integration closure
 
-1. commit this documentation-only qualification closure on the existing R41
-   feature branch and require exact-commit Forgejo CI to pass;
-2. merge the exact qualified R41 feature history into `develop-2.0` without
-   rewriting either parent;
-3. require integration CI and record the merge commit/tree/parents as the next
-   branch authority;
-4. only then begin tranche 2.0-4 staged source transfer/upload and remote-state
-   work, preserving the explicit state-machine and no-silent-retry discipline
-   established in R33-R41.
+The documentation-only qualified R41 feature closure is exact commit
+`911b1ff57893ffe30bafeffa26a2852a213b51a6`. Forgejo CI run 97 passed that exact
+feature closure. It was then merged into `develop-2.0` without rewriting either
+parent:
+
+- merge commit: `dfc5c2b6e2521f0ecbba6806dc398608d0968b0e`;
+- merge tree: `f15847a00d2907cf70dd9d53325267e861e5755b`;
+- first parent / prior `develop-2.0` authority:
+  `669064e6a994d0e7f99e5559d7a91fae2f1ec8db`;
+- second parent / qualified R41 feature closure:
+  `911b1ff57893ffe30bafeffa26a2852a213b51a6`.
+
+Forgejo CI run 98 passed the exact R41 integration merge. The merge preserved the
+qualified feature content and introduced no new product behavior at integration.
+`main`, tags, releases, and publication surfaces remain untouched.
+
+Merge `dfc5c2b6e2521f0ecbba6806dc398608d0968b0e` is the exact integrated R41
+product-state authority. This documentation-only integration closure must itself
+pass Forgejo CI on `develop-2.0`; after that gate, the resulting clean
+`develop-2.0` tip becomes the branch authority for the first tranche 2.0-4 staged
+source transfer/upload and remote-state checkpoint. R41 itself still authorizes
+no media upload. Any next checkpoint that crosses that boundary must define and
+qualify its own explicit remote-mutation state machine rather than inheriting
+upload authority implicitly.
+
+## Recommended continuation after R41 integration
+
+1. commit this documentation-only integration closure on `develop-2.0` and
+   require exact-commit Forgejo CI to pass;
+2. branch the first tranche 2.0-4 checkpoint from that resulting clean
+   `develop-2.0` closure authority;
+3. define staged source transfer/upload and remote-state transitions with durable
+   mutation claims, explicit reconciliation, and no silent retry after uncertain
+   remote mutation;
+4. keep publication, retention, remote delete, and unrelated PeerTube mutation
+   surfaces outside that checkpoint unless they are separately scoped and
+   qualified;
+5. require exact-feature Forgejo CI and isolated real-WordPress integration
+   qualification before merging the next checkpoint into `develop-2.0`.
