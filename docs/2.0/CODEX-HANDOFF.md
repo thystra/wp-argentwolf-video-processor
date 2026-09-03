@@ -1445,3 +1445,53 @@ Before any production entry point is enabled, the next checkpoint must durably
 commit the positively created PeerTube identity into AWVP remote-asset
 persistence and define restart-safe processing/readiness reconciliation without
 weakening the existing no-replay rule for uncertain media mutation.
+
+## R42/R43 `develop-2.0` integration closure
+
+The documentation-only R42/R43 feature qualification closure is exact commit
+`55058b0ecfbb3cc00f220d000158799ea966d6d5`. Forgejo CI run 102 passed that
+exact feature closure in 17 seconds. It was then merged into `develop-2.0`
+without rewriting either parent:
+
+- merge commit: `080d9f5455842d7dd2d1279693e15e59140cdbfe`;
+- merge tree: `52c1db86bee485215417e243bacb23f9656258a8`;
+- first parent / R41 closed `develop-2.0` authority:
+  `45b8faed47147f3052a557aa6511d84ad25dca9c`;
+- second parent / qualified R42/R43 feature closure:
+  `55058b0ecfbb3cc00f220d000158799ea966d6d5`.
+
+Forgejo CI run 103 passed the exact integration merge in 16 seconds. The merge
+preserved the qualified R42/R43 feature history and introduced no new product
+behavior at integration. `main`, tags, releases, and publication surfaces remain
+untouched.
+
+Merge `080d9f5455842d7dd2d1279693e15e59140cdbfe`, tree
+`52c1db86bee485215417e243bacb23f9656258a8`, is therefore the exact integrated
+R42/R43 product-state authority. Its reviewed media-mutation boundary remains the
+private resumable-upload executor only: no production WordPress/admin/REST/AJAX/
+WP-CLI/cron/worker upload entry point is enabled, no AWVP remote-asset row is yet
+committed from `remote_created`, staged-source cleanup is not authorized, and
+publication/retention/remote-delete surfaces remain outside scope.
+
+This documentation-only integration closure must itself pass Forgejo CI on
+`develop-2.0`. After that exact-commit gate, the resulting clean `develop-2.0`
+tip becomes the branch authority for the next checkpoint. The next product slice
+should durably convert positively observed `remote_created` identity into AWVP
+remote-asset persistence and add restart-safe PeerTube processing/readiness
+reconciliation before exposing any production upload entry point.
+
+## Recommended continuation after R42/R43 integration
+
+1. commit this documentation-only integration closure on `develop-2.0` and
+   require exact-commit Forgejo CI to pass;
+2. branch the next checkpoint from that resulting clean closure authority;
+3. make `remote_created` -> AWVP remote-asset persistence an explicit durable
+   boundary, retaining exact backend/destination/source provenance and the
+   positively observed PeerTube id/UUID;
+4. define restart-safe processing/readiness observation and reconciliation without
+   weakening the no-replay rule for uncertain media mutation;
+5. keep production upload entry points, source cleanup, publication, retention,
+   remote deletion, and unrelated PeerTube mutation disabled until separately
+   scoped and qualified;
+6. require exact-feature Forgejo CI and isolated real-WordPress/mock-PeerTube
+   qualification for the next consequential remote-state checkpoint.

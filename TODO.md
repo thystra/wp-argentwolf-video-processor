@@ -157,3 +157,17 @@
   `68f25862862784862343aec197a184fd36588f945f3143a8d7f6c9ded0e37c0d`.
   R43 remains a development checkpoint: its executor is not reachable from a
   production WordPress/admin/REST/AJAX/CLI/cron/worker entry point.
+
+- [x] R42/R43 qualification closure and integration: documentation-only feature
+  closure `55058b0ecfbb3cc00f220d000158799ea966d6d5` passed Forgejo CI run 102
+  (17s) and was merged into `develop-2.0` as
+  `080d9f5455842d7dd2d1279693e15e59140cdbfe`, tree
+  `52c1db86bee485215417e243bacb23f9656258a8`, with first parent
+  `45b8faed47147f3052a557aa6511d84ad25dca9c` and second parent
+  `55058b0ecfbb3cc00f220d000158799ea966d6d5`. Forgejo integration CI run 103
+  passed in 16 seconds.
+- [ ] Commit the R42/R43 integration closure on `develop-2.0`, require exact-commit
+  Forgejo CI, and use the resulting clean branch tip as the authority for the next
+  checkpoint: durable `remote_created` -> AWVP remote-asset persistence plus
+  restart-safe processing/readiness reconciliation, still without a production
+  upload entry point.
