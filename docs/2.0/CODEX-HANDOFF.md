@@ -1358,10 +1358,11 @@ are reviewed against this state machine, with no automatic replay from
 ## R43 resumable-upload execution checkpoint
 
 R43 is based on exact R42 feature tree `3c0ee7e142ac48349bda4b72545dfbd76425bac5`.
-The R42 feature commit reported by the maintainer is
-`b1c500252ddb6632388fbbb08aee4015fc9e3636`; its feature CI was reported green.
-The exact Forgejo run number remains to be confirmed before R42 qualification
-closure evidence is recorded.
+The R42 feature commit is `b1c500252ddb6632388fbbb08aee4015fc9e3636`.
+Forgejo CI run 100 passed that exact feature state in 16 seconds. R42 crossed no
+PeerTube media-mutation boundary, so its qualification remained source/local/CI
+only; it intentionally had no standalone Docker media-mutation gate. This exact
+R42 commit/tree is the qualified R43 branch baseline.
 
 This checkpoint adds the concrete PeerTube resumable-upload transport and an
 explicit service around the existing durable operation journal. The only reviewed
@@ -1397,3 +1398,50 @@ asset row committed, ingest/processing capabilities still false, no automatic
 remote retry, and no WordPress/PHP diagnostic. This is isolated mock-PeerTube
 development-checkpoint evidence; it is not live-PeerTube/TLS or release-artifact
 qualification.
+
+### R43 qualification evidence
+
+The exact qualified R43 feature state is commit
+`4d38158335ec6cd8c7528a4dbb29b065a7ba7ec9`, tree
+`772308d60722002769c712717628261993b63299`, on
+`feature/2.0-peertube-staged-upload`. Forgejo CI run 101 passed that exact
+feature state in 11 seconds.
+
+The successful isolated Docker report is
+`peertube-r43-smoke-20260903T004335Z-1367351.log` with SHA-256
+`68f25862862784862343aec197a184fd36588f945f3143a8d7f6c9ded0e37c0d`.
+The harness classified the run as `DEVELOPMENT_CHECKPOINT_NOT_RELEASE_GATE`,
+exported the exact clean source commit, mounted the runtime source read-only, and
+passed both supported cases:
+
+- WordPress 6.4.2 / PHP 8.1.34 / MariaDB 10.6.27;
+- WordPress 7.1 / PHP 8.3.33 / MariaDB 10.11.18.
+
+Both cases reproduced the established administrator authorization,
+identity/destination, and backend-activation prerequisites before executing the
+private R43 resumable-upload service fixture. Each case observed exactly one
+OAuth-client GET and one password-grant token POST for setup, zero revoke POSTs,
+then exactly one `/api/v1/videos/upload-resumable` initialization POST and one
+byte-bearing PUT. The successful happy path required zero zero-byte offset probes.
+Both cases independently proved no automatic remote retry, no plaintext
+credential canaries, encrypted credential persistence, no gated `WP_DEBUG`
+diagnostics, clean resource teardown, and the mutation classification
+`RESUMABLE_PRIVATE_STAGED_UPLOAD_ONLY`.
+
+The final state assertion remained at the reviewed pre-publication boundary:
+PeerTube creation was positively observed and journaled as `remote_created`; the
+managed staged source remained present and byte-identical; no AWVP remote-asset
+row was committed; and `ingest.awvp_staging`, `ingest.server_push`, and
+`processing.video` remained false. The matrix ended with
+`PEERTUBE_STAGED_UPLOAD_MATRIX_ASSERTIONS=PASS`, `RESOURCE_CLEANUP=PASS`, and
+`PEERTUBE_STAGED_UPLOAD_SMOKE=PASS`.
+
+This closes R43 source, local, exact-feature CI, and isolated two-case Docker
+development-checkpoint qualification. It does **not** authorize a production
+WordPress/admin/REST/AJAX/CLI/cron/worker upload entry point, automatic upload,
+publication, transcoding-policy control, cleanup, retention, remote deletion,
+live-PeerTube/TLS operation, release ZIP qualification, or release publication.
+Before any production entry point is enabled, the next checkpoint must durably
+commit the positively created PeerTube identity into AWVP remote-asset
+persistence and define restart-safe processing/readiness reconciliation without
+weakening the existing no-replay rule for uncertain media mutation.
