@@ -179,6 +179,43 @@ $exhausted = $repo->reschedule(3, (string) $final_claim['lock_token'], 1040, 're
 $assert(Task_Repository::EXHAUSTED === $exhausted && 'failed' === ($repo->find(3)['status'] ?? ''), 'Attempt exhaustion did not fail closed.');
 
 
+// Generic tasks must support the same bounded attempt scale as the staged
+// upload state machine; a 1 MiB-per-step upload must not be capped at 100 MiB.
+$key_limit = hash('sha256', 'awvp-task:v1:test_attempt_limit:1');
+$at_limit = $repo->enqueue(
+    'test_attempt_limit',
+    null,
+    null,
+    null,
+    $key_limit,
+    array('version'=>1),
+    1050,
+    1040,
+    100,
+    Task_Repository::MAX_ATTEMPTS
+);
+$assert(
+    Task_Repository::APPLIED === $at_limit['status'],
+    'Repository rejected its documented maximum attempt count.'
+);
+
+$over_limit = $repo->enqueue(
+    'test_attempt_limit',
+    null,
+    null,
+    null,
+    hash('sha256', 'awvp-task:v1:test_attempt_limit:2'),
+    array('version'=>1),
+    1050,
+    1040,
+    100,
+    Task_Repository::MAX_ATTEMPTS + 1
+);
+$assert(
+    Task_Repository::CONFLICT === $over_limit['status'],
+    'Repository accepted an attempt count above its bounded maximum.'
+);
+
 $root = dirname(__DIR__);
 foreach (array('includes/Plugin.php','includes/Admin.php','includes/CLI_Command.php','includes/Worker.php','includes/Worker_Launcher.php') as $relative) {
     $source = (string) file_get_contents($root . '/' . $relative);

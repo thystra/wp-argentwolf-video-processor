@@ -34,6 +34,8 @@ final class Task_Repository
     public const INDETERMINATE = 'indeterminate';
     public const EXHAUSTED = 'exhausted';
 
+    public const MAX_ATTEMPTS = 65535;
+
     private const MAX_PAYLOAD_BYTES = 16384;
     private const MAX_ERROR_BYTES = 8000;
     private const MAX_RECOVERY_BATCH = 100;
@@ -71,7 +73,7 @@ final class Task_Repository
             || $priority < 0
             || $priority > 65535
             || $max_attempts < 1
-            || $max_attempts > 100
+            || $max_attempts > self::MAX_ATTEMPTS
         ) {
             return self::enqueue_result(self::CONFLICT);
         }
