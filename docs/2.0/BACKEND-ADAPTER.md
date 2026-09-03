@@ -606,3 +606,15 @@ already authorized by the R41 connection/lifecycle tranche; staged ingest and
 processing remain false. A later checkpoint must explicitly connect a reviewed
 administrator/worker execution policy to this service before any capability bit may
 change.
+
+
+## R44 remote reconciliation still does not grant backend capability
+
+The R44 relational repository and read-only remote reconciliation service are
+class-loaded for qualification but are not constructed by `Plugin`,
+`PeerTube_Connection_Admin`, the common backend adapter, or a task/worker path.
+`PeerTube_Backend_Adapter` therefore still does not advertise
+`ingest.awvp_staging`, `ingest.server_push`, or `processing.video`. The R44 service
+can only persist an already-positive R43 `remote_created` identity and observe its
+private/non-live PeerTube processing/readiness state; it cannot originate upload,
+publication, cleanup, retention, or delete operations.

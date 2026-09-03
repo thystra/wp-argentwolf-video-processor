@@ -1039,3 +1039,42 @@ An indeterminate byte-bearing PUT remains non-replayable until an explicit zero-
 remote offset probe supplies positive evidence. The probe itself carries no source
 bytes. R43 still does not create or delete staged files, commit remote-asset rows,
 observe processing completion, or open cleanup.
+
+
+### R44 remote-asset commit and reconciliation semantics
+
+R44 consumes only an exact staged-upload record already in `remote_created`.
+`Remote_Asset_Repository::commit_created()` first re-reads the unique
+`(backend_id, remote_id)` authority and either proves the exact existing row or
+inserts one secondary/private `argent_video_remote_assets` row. The row preserves
+AWVP Video ID, backend ID, selected channel, and the positively observed PeerTube
+UUID. It starts in local `processing` state with `remote_processing_state=created`;
+R44 does not promote it to `primary` or change editor/rendering authority.
+
+The relational insert and option-journal transition are deliberately separate.
+If execution stops after the row exists but before `commit_remote_asset` advances
+the operation, the next explicit call observes the unique exact row and attaches
+its positive primary key without inserting a duplicate. Conflicting immutable
+video/backend/channel/remote identity fails closed. Processing/ready/missing/failure
+observations use the same independently re-read row and an update guarded by its
+prior mutable row evidence (including state, observed processing/privacy/embed/error
+fields and timestamps), so second-resolution `updated_at` reuse cannot let a stale
+writer overwrite a concurrent observation. A later explicit call can recover a
+crash after a row update but before the corresponding journal transition.
+
+After `remote_committed`, R44 may perform only a read-only observation of the exact
+remote UUID. A positive private, local, non-live processing state journals a
+bounded processing recheck wait. A positive published/ready observation writes
+`state=ready`, `actual_privacy=private`, the canonical processing state and embed
+URL, records `last_verified_at`, and advances the operation to `ready_verified`.
+Positive 404 and reviewed processing-failure states are terminal `missing`/`failed`
+outcomes. HTTP 429 and transient read failures create bounded durable read waits;
+they are retried only by a later explicit caller because GET is non-mutating.
+Authentication failures are handed back to the explicit token lifecycle rather
+than reclassified as media failure.
+
+R44 still has no pruning, source cleanup, publication, role promotion, retention,
+remote deletion, automatic polling, task/worker execution, or production
+administrator/REST/AJAX/WP-CLI entry point. The staged source must remain confined
+and byte-identical during reconciliation. `ready_verified` is only the positive
+persistence/readiness boundary for a later cleanup/publication tranche.

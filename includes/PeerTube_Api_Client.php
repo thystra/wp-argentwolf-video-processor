@@ -14,7 +14,7 @@ namespace ArgentVideo;
  * ephemeral caller-owned values. This class performs no option writes and
  * never returns an unreviewed raw response object.
  */
-final class PeerTube_Api_Client implements PeerTube_Password_Grant_Api, PeerTube_Identity_Destination_Api, PeerTube_Token_Lifecycle_Api, PeerTube_Staged_Upload_Api
+final class PeerTube_Api_Client implements PeerTube_Password_Grant_Api, PeerTube_Identity_Destination_Api, PeerTube_Token_Lifecycle_Api, PeerTube_Staged_Upload_Api, PeerTube_Remote_Reconciliation_Api
 {
     private const CONFIG_PATH = '/api/v1/config';
     private const MAX_VERSION_BYTES = 64;
@@ -355,6 +355,53 @@ final class PeerTube_Api_Client implements PeerTube_Password_Grant_Api, PeerTube
         );
     }
 
+    /** @return array{ok:bool,data:array<string,mixed>|null,error:array<string,mixed>|null} */
+    public function video_status(string $access_token, string $video_uuid): array
+    {
+        $access_token = self::opaque_secret($access_token, self::MAX_SECRET_BYTES);
+        $video_uuid = strtolower($video_uuid);
+        if ('' === $access_token || 1 !== preg_match('/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/D', $video_uuid)) {
+            return self::failure(PeerTube_Api_Error::invalid_response('remote_video_input_invalid'));
+        }
+
+        $decoded = self::success_object(
+            $this->http->get_video_status($access_token, $video_uuid),
+            200,
+            'remote_video'
+        );
+        if (! $decoded['ok']) {
+            return $decoded;
+        }
+
+        $data = $decoded['data'];
+        $state = self::object($data['state'] ?? null);
+        $privacy = self::object($data['privacy'] ?? null);
+        $channel = self::object($data['channel'] ?? null);
+        $id = self::canonical_decimal_id($data['id'] ?? null);
+        $uuid = is_string($data['uuid'] ?? null) ? strtolower($data['uuid']) : '';
+        $state_id = self::bounded_positive_integer($state['id'] ?? null, 9);
+        $privacy_id = self::bounded_positive_integer($privacy['id'] ?? null, 255);
+        $channel_id = self::canonical_decimal_id($channel['id'] ?? null);
+        $embed_path = self::embed_path($data['embedPath'] ?? null);
+        $is_live = $data['isLive'] ?? null;
+        $is_local = $data['isLocal'] ?? null;
+
+        if ('' === $id || ! hash_equals($video_uuid, $uuid) || $state_id < 1 || $privacy_id < 1
+            || '' === $channel_id || '' === $embed_path || false !== $is_live || true !== $is_local) {
+            return self::failure(PeerTube_Api_Error::invalid_response('remote_video_shape_invalid', 200));
+        }
+
+        return self::success(array(
+            'id'          => $id,
+            'uuid'        => $uuid,
+            'state_id'    => $state_id,
+            'privacy_id'  => $privacy_id,
+            'channel_id'  => $channel_id,
+            'embed_path'  => $embed_path,
+            'is_live'     => false,
+        ));
+    }
+
     /**
      * Verify and minimally project the authenticated PeerTube identity.
      *
@@ -669,6 +716,23 @@ final class PeerTube_Api_Client implements PeerTube_Password_Grant_Api, PeerTube
     private static function valid_upload_session_id(string $value): bool
     {
         return 1 === preg_match('/^[A-Za-z0-9._~-]{1,191}$/D', $value);
+    }
+
+    private static function bounded_positive_integer(mixed $value, int $maximum): int
+    {
+        if (! is_int($value) || $value < 1 || $value > $maximum) {
+            return 0;
+        }
+        return $value;
+    }
+
+    private static function embed_path(mixed $value): string
+    {
+        if (! is_string($value) || strlen($value) > 255
+            || 1 !== preg_match('#^/videos/embed/[A-Za-z0-9_-]{1,191}$#D', $value)) {
+            return '';
+        }
+        return $value;
     }
 
     private static function valid_upload_filename(string $value): bool

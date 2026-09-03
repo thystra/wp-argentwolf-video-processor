@@ -39,6 +39,13 @@
   automatically replays an uncertain byte-bearing request. No WordPress/admin/REST/
   AJAX/CLI/cron entry point invokes the service yet, and the legacy multipart upload
   endpoint remains outside the reviewed surface.
+- Add the R44 post-create persistence/reconciliation boundary: idempotently commit
+  a positively observed PeerTube identity into `argent_video_remote_assets`, then
+  use bounded bearer-authenticated `GET /api/v1/videos/{uuid}` observations to
+  journal processing waits, positive private/non-live readiness, missing videos,
+  and terminal processing failures. Relational-row/journal crash windows are
+  restart-safe; no production upload/reconcile entry point, automatic polling,
+  source cleanup, publication, retention, or remote delete authority is enabled.
 - Expand focused PeerTube security/state tests and isolated real-WordPress Docker
   development matrices through the R39 identity/destination checkpoint, with an
   R40 activation continuation that proves activation performs no additional

@@ -176,6 +176,7 @@ namespace ArgentVideo {
     require_once dirname(__DIR__) . '/includes/PeerTube_Identity_Destination_Api.php';
     require_once dirname(__DIR__) . '/includes/PeerTube_Token_Lifecycle_Api.php';
     require_once dirname(__DIR__) . '/includes/PeerTube_Staged_Upload_Api.php';
+    require_once dirname(__DIR__) . '/includes/PeerTube_Remote_Reconciliation_Api.php';
     require_once dirname(__DIR__) . '/includes/PeerTube_Staged_Upload_State_Machine.php';
     require_once dirname(__DIR__) . '/includes/PeerTube_Api_Client.php';
 
@@ -1523,6 +1524,104 @@ namespace ArgentVideo {
         ! str_contains(serialize($rate_limited_init), 'upload-secret-sentinel')
         && ! str_contains(serialize($rate_limited_init), $upload_access),
         'R43 upload error normalization retained raw response or bearer data.'
+    );
+
+    // R44: read-only exact remote-video reconciliation projection.
+    $remote_uuid = '12345678-1234-4abc-9def-1234567890ab';
+    $remote_access = 'remote-video-access-canary-r44';
+    $queue(
+        $response(
+            200,
+            json_encode(
+                array(
+                    'id' => 901,
+                    'uuid' => strtoupper($remote_uuid),
+                    'state' => array('id' => 2, 'label' => 'To transcode', 'canary' => 'must-not-escape'),
+                    'privacy' => array('id' => 3, 'label' => 'Private'),
+                    'channel' => array('id' => 41, 'name' => 'primary-channel'),
+                    'embedPath' => '/videos/embed/' . $remote_uuid,
+                    'isLive' => false,
+                    'isLocal' => true,
+                    'description' => 'must-not-escape',
+                ),
+                JSON_THROW_ON_ERROR
+            ),
+            array('Content-Type' => 'application/json')
+        )
+    );
+    $before_remote_video = count($GLOBALS['awvp_http_requests']);
+    $remote_video = $api->video_status($remote_access, strtoupper($remote_uuid));
+    $assert(
+        true === $remote_video['ok']
+        && array(
+            'id' => '901',
+            'uuid' => $remote_uuid,
+            'state_id' => 2,
+            'privacy_id' => 3,
+            'channel_id' => '41',
+            'embed_path' => '/videos/embed/' . $remote_uuid,
+            'is_live' => false,
+        ) === $remote_video['data'],
+        'R44 remote-video observation was not minimally projected.'
+    );
+    $assert(
+        ! str_contains(serialize($remote_video), 'must-not-escape')
+        && ! str_contains(serialize($remote_video), $remote_access),
+        'R44 remote-video projection retained raw response or bearer data.'
+    );
+    $assert($before_remote_video + 1 === count($GLOBALS['awvp_http_requests']), 'R44 remote-video observation performed an extra request.');
+    $remote_request = $GLOBALS['awvp_http_requests'][array_key_last($GLOBALS['awvp_http_requests'])];
+    $assert(
+        'https://video.example.org/api/v1/videos/' . $remote_uuid === $remote_request['url']
+        && 'GET' === $remote_request['args']['method']
+        && 'Bearer ' . $remote_access === ($remote_request['args']['headers']['Authorization'] ?? '')
+        && ! array_key_exists('body', $remote_request['args']),
+        'R44 remote-video GET escaped its exact read-only HTTP boundary.'
+    );
+
+    $before_invalid_remote = count($GLOBALS['awvp_http_requests']);
+    $invalid_remote = $api->video_status($remote_access, '../video');
+    $assert(
+        false === $invalid_remote['ok']
+        && 'remote_video_input_invalid' === ($invalid_remote['error']['code'] ?? ''),
+        'R44 unsafe remote-video identifier was accepted.'
+    );
+    $assert($before_invalid_remote === count($GLOBALS['awvp_http_requests']), 'Rejected R44 remote-video input performed HTTP.');
+
+    $queue(
+        $response(
+            200,
+            json_encode(
+                array(
+                    'id' => 901,
+                    'uuid' => 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+                    'state' => array('id' => 1),
+                    'privacy' => array('id' => 3),
+                    'channel' => array('id' => 41),
+                    'embedPath' => '/videos/embed/' . $remote_uuid,
+                    'isLive' => false,
+                    'isLocal' => true,
+                ),
+                JSON_THROW_ON_ERROR
+            ),
+            array('Content-Type' => 'application/json')
+        )
+    );
+    $mismatch_remote = $api->video_status($remote_access, $remote_uuid);
+    $assert(
+        false === $mismatch_remote['ok']
+        && 'remote_video_shape_invalid' === ($mismatch_remote['error']['code'] ?? ''),
+        'R44 mismatched remote-video UUID was accepted.'
+    );
+
+    $queue($response(404, '{"type":"not-found-canary"}', array('Content-Type' => 'application/problem+json')));
+    $missing_remote = $api->video_status($remote_access, $remote_uuid);
+    $assert(
+        false === $missing_remote['ok']
+        && 'not_found' === ($missing_remote['error']['status'] ?? '')
+        && 404 === ($missing_remote['error']['http_status'] ?? 0)
+        && ! str_contains(serialize($missing_remote), 'not-found-canary'),
+        'R44 remote-video 404 did not normalize to a bounded not-found result.'
     );
 
     $dev_http = new PeerTube_Http_Client('http://127.0.0.1:9000');

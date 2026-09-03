@@ -166,8 +166,14 @@
   `45b8faed47147f3052a557aa6511d84ad25dca9c` and second parent
   `55058b0ecfbb3cc00f220d000158799ea966d6d5`. Forgejo integration CI run 103
   passed in 16 seconds.
-- [ ] Commit the R42/R43 integration closure on `develop-2.0`, require exact-commit
-  Forgejo CI, and use the resulting clean branch tip as the authority for the next
-  checkpoint: durable `remote_created` -> AWVP remote-asset persistence plus
-  restart-safe processing/readiness reconciliation, still without a production
-  upload entry point.
+- [x] R42/R43 `develop-2.0` integration closure: exact commit
+  `bb98090900bd53540b60cfa1fe02e76e0e420334`, tree
+  `a65cf633bab608fc741639fe093f9f11f09b4e9a`, passed Forgejo CI run 104 (17s)
+  and is the clean R44 branch authority.
+- [ ] R44 remote-asset persistence/readiness checkpoint: idempotently bind
+  `remote_created` to one secondary/private `argent_video_remote_assets` row,
+  explicitly reconcile only the exact private non-live PeerTube video through a
+  bounded read-only GET, durably wait on processing/429/transient reads, and
+  positively record ready/missing/processing-failed outcomes. Keep production
+  upload/reconcile entry points, automatic polling, source cleanup, publication,
+  retention, and remote delete disabled until separately scoped and qualified.

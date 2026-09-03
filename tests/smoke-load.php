@@ -96,6 +96,12 @@ if (! interface_exists(ArgentVideo\PeerTube_Staged_Upload_Api::class, false)) {
     exit(1);
 }
 
+if (! interface_exists(ArgentVideo\PeerTube_Remote_Reconciliation_Api::class, false)
+    || ! interface_exists(ArgentVideo\PeerTube_Remote_Asset_Store::class, false)) {
+    fwrite(STDERR, "Plugin smoke load missed required R44 remote reconciliation interfaces.\n");
+    exit(1);
+}
+
 foreach (
     array(
         ArgentVideo\Atomic_Option_Mutation_Plan::class,
@@ -114,6 +120,8 @@ foreach (
         ArgentVideo\PeerTube_Staged_Upload_Guard::class,
         ArgentVideo\PeerTube_Staged_Upload_Operation_Store::class,
         ArgentVideo\PeerTube_Staged_Upload_Service::class,
+        ArgentVideo\Remote_Asset_Repository::class,
+        ArgentVideo\PeerTube_Remote_Asset_Reconciliation_Service::class,
     ) as $required_class
 ) {
     if (! class_exists($required_class, false)) {

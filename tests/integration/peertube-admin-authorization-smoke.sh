@@ -613,22 +613,27 @@ run_case() {
         fail "The isolated administrator request sequence differed for $CURRENT_CASE."
     fi
     echo "ISOLATED_ADMIN_AUTHORIZATION_REQUEST_SEQUENCE=$CURRENT_CASE:PASS"
-    local oauth_get_count token_post_count revoke_post_count upload_init_count upload_chunk_count upload_probe_count
+    local oauth_get_count token_post_count revoke_post_count upload_init_count upload_chunk_count upload_probe_count remote_video_get_count
     oauth_get_count="$(grep -c '^GET /api/v1/oauth-clients/local ' "$REQUEST_LOG" || true)"
     token_post_count="$(grep -c '^POST /api/v1/users/token ' "$REQUEST_LOG" || true)"
     revoke_post_count="$(grep -c '^POST /api/v1/users/revoke-token ' "$REQUEST_LOG" || true)"
     upload_init_count="$(grep -c '^POST /api/v1/videos/upload-resumable ' "$REQUEST_LOG" || true)"
     upload_chunk_count="$(grep -c '^PUT /api/v1/videos/upload-resumable .* range=bytes=[0-9]' "$REQUEST_LOG" || true)"
     upload_probe_count="$(grep -c '^PUT /api/v1/videos/upload-resumable .* range=bytes=\*/' "$REQUEST_LOG" || true)"
+    remote_video_get_count="$(grep -c '^GET /api/v1/videos/[0-9a-f-]\+ ' "$REQUEST_LOG" || true)"
     echo "ADMIN_AUTHORIZATION_OAUTH_GET_COUNT=$CURRENT_CASE:$oauth_get_count"
     echo "ADMIN_AUTHORIZATION_TOKEN_POST_COUNT=$CURRENT_CASE:$token_post_count"
     echo "ADMIN_AUTHORIZATION_REVOKE_POST_COUNT=$CURRENT_CASE:$revoke_post_count"
-    if [[ "$SMOKE_CLASS" == 'r43' ]]; then
+    if [[ "$SMOKE_CLASS" == 'r43' || "$SMOKE_CLASS" == 'r44' ]]; then
         [[ "$upload_init_count" == '1' && "$upload_chunk_count" == '1' && "$upload_probe_count" == '0' ]] \
-            || fail "The R43 upload mutation count differed for $CURRENT_CASE."
+            || fail "The R43/R44 upload mutation count differed for $CURRENT_CASE."
         echo "STAGED_UPLOAD_INIT_POST_COUNT=$CURRENT_CASE:$upload_init_count"
         echo "STAGED_UPLOAD_BYTE_PUT_COUNT=$CURRENT_CASE:$upload_chunk_count"
         echo "STAGED_UPLOAD_ZERO_BYTE_PROBE_COUNT=$CURRENT_CASE:$upload_probe_count"
+    fi
+    if [[ "$SMOKE_CLASS" == 'r44' ]]; then
+        [[ "$remote_video_get_count" == '2' ]] || fail "The R44 remote-video GET count differed for $CURRENT_CASE."
+        echo "REMOTE_VIDEO_GET_COUNT=$CURRENT_CASE:$remote_video_get_count"
     fi
     echo "ADMIN_AUTHORIZATION_AUTOMATIC_REMOTE_RETRY=$CURRENT_CASE:NONE"
 
@@ -662,7 +667,7 @@ run_case() {
     else
         echo "ADMIN_AUTHORIZATION_ENCRYPTED_SECRET_PERSISTENCE=$CURRENT_CASE:PASS"
     fi
-    if [[ "$SMOKE_CLASS" == 'r43' ]]; then
+    if [[ "$SMOKE_CLASS" == 'r43' || "$SMOKE_CLASS" == 'r44' ]]; then
         echo "ADMIN_AUTHORIZATION_UPLOAD_MUTATIONS=$CURRENT_CASE:RESUMABLE_PRIVATE_STAGED_UPLOAD_ONLY"
     else
         echo "ADMIN_AUTHORIZATION_UPLOAD_MUTATIONS=$CURRENT_CASE:NONE"
