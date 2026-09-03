@@ -3,8 +3,9 @@
 Status: tranche 2.0-3 design contract; R34 authenticated API primitives, R35
 local persistence foundation, R36 local-only pre-grant coordination, R37
 password-grant/encrypted-token persistence, R38 explicit administrator
-authorization, R39 authenticated identity/owned-destination selection, and R40 local backend activation
-implemented through that checkpoint
+authorization, R39 authenticated identity/owned-destination selection, R40 local
+backend activation, and R41 token refresh/revoke/disconnect implemented through
+that checkpoint
 Reviewed runtime baselines: PeerTube 8.1.8 and 8.2.4, 2026-08-22
 Applies to: configured/manageable PeerTube backends
 
@@ -1401,3 +1402,31 @@ cron, AJAX, REST, and WP-CLI own none of the lifecycle mutations.
 R41 does not upload media, create or alter PeerTube videos, process local media,
 publish, manage remote libraries, retain/delete media, or add background token
 refresh. The PeerTube adapter continues to claim only `delivery.embed`.
+
+### R42 tranche 2.0-4 pre-upload boundary
+
+R42 begins the next tranche without extending the connection API or granting
+media-mutation authority. The connection/credential contracts above remain the
+authority for the active backend. A staged-upload operation additionally freezes
+the current canonical origin and selected destination alongside an immutable
+managed-source commitment. Before a later uploader may use an active credential,
+it must re-prove that local binding; a descriptor that was retired, repointed to
+another origin, or given another destination is not interchangeable with the
+recorded upload intent.
+
+R42 also reserves a durable `upload_in_flight` claim and an
+`upload_indeterminate` outcome specifically so the later media-creation POST is
+not treated like an ordinary retryable read. This checkpoint supplies no media
+POST implementation, no upload administrator action, and no background worker
+for PeerTube transfer. The nine R38-R41 authenticated connection/lifecycle
+`admin_post` actions therefore remain the complete PeerTube mutation surface.
+
+### R43 upload executor remains outside the connection-admin surface
+
+Connection and credential management still own only the nine R38-R41 authenticated
+`admin_post` actions. R43 adds no upload action. The resumable executor consumes an
+already-active backend and its managed secret only when called directly by reviewed
+internal code/tests; it cannot be reached from the settings page, REST, AJAX, WP-CLI,
+cron, or a worker in this checkpoint. Near-expiry access/refresh credentials stop the
+executor before it claims or transmits an upload request, leaving token refresh to the
+existing explicit R41 lifecycle.

@@ -567,6 +567,42 @@ Never change a stored backend ID/UUID and assume the bytes moved.
 - safe retries/idempotence;
 - storage cleanup gates.
 
+R42 is the first deliberately non-mutating checkpoint inside this tranche. It
+establishes the state and persistence contracts before the first upload POST:
+
+- a staged source is identified only by `wordpress_staging`, a relative path
+  inside AWVP-managed uploads storage, exact byte length, and SHA-256;
+- the operation immutably binds AWVP Video ID, backend ID, canonical PeerTube
+  origin, selected destination, and source commitment into one intent hash;
+- upload execution must first persist a unique attempt commitment in
+  `upload_in_flight` and must re-prove both the current active descriptor and
+  the source bytes against that operation;
+- a future uploader may classify only a positively non-mutating outcome as
+  retry-safe, returning to explicit retry readiness or bounded
+  `retry_wait`, but an uncertain request enters `upload_indeterminate` and has
+  no transition that silently starts another upload;
+- reconciliation may move an indeterminate operation forward only when an exact
+  remote video identity is positively found;
+- remote API identity and the durable `argent_video_remote_assets` row are
+  separate states (`remote_created` then `remote_committed`), so an operation
+  journal is never treated as the sole durable remote-asset record;
+- source cleanup cannot be planned until a committed remote asset has been
+  positively verified ready; the later cleanup service may emit
+  `confirm_source_cleanup` only after re-proving confinement and actual source
+  absence.
+
+The future staging producer must finalize a staged identity path atomically and
+must never modify that path in place after it becomes upload authority. R42's
+size/hash/inode checks are an integrity/reconciliation fence, not a substitute
+for a cooperative immutable staging contract under an arbitrary concurrent
+writer.
+
+R42 itself creates no staged files, schedules no transfer task, exposes no new
+administrator mutation endpoint, and contains no PeerTube media-upload API call.
+The existing PeerTube adapter therefore continues to report staged ingest,
+server push, and processing as unsupported until the subsequent execution/API
+checkpoint is implemented and qualified.
+
 ### Tranche 2.0-5 — profiles and retention policies
 
 - global confirmed default profile;
@@ -679,3 +715,14 @@ The merge preserves both sides of the intentional divergence:
 
 This synchronization does not itself bump the runtime version to 2.0.0 and is
 not a 2.0 release.
+
+### R43 executable resumable boundary
+
+R43 turns the R42 state model into a narrowly executable internal boundary without
+yet making it a production feature. The HTTP/API layer understands only resumable
+initialization, bounded chunk PUT, and zero-byte offset probe. The service performs
+claim-before-I/O, re-proves local fences after the claim, reads source bytes only for
+the exact claimed chunk, and converts uncertain outcomes into a non-replayable state.
+A chunk can become retryable only after a later explicit probe proves the server's
+confirmed offset; an uncertain init remains indeterminate. No caller is wired from
+WordPress runtime entry points and no ingest/processing capability is enabled.

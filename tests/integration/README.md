@@ -376,3 +376,38 @@ To preserve the report outside the checkout:
 AWVP_ADMIN_REPORT_DIR=/absolute/report/path \
     bash tests/integration/peertube-token-lifecycle-smoke.sh
 ```
+
+## PeerTube staged-upload execution checkpoint
+
+After the R43 source checkpoint is committed, run the first executable upload
+matrix from a clean feature checkout:
+
+```bash
+AWVP_ADMIN_REPORT_DIR=/absolute/report/path \
+  bash tests/integration/peertube-staged-upload-smoke.sh
+```
+
+The wrapper runs the established two-case WordPress matrix (WordPress 6.4/PHP 8.1
+with MariaDB 10.6, and WordPress 7.1/PHP 8.3 with MariaDB 10.11) on an internal
+Docker network with no published host ports. It reproduces the reviewed connection,
+identity/destination, and activation sequence before invoking the otherwise-unwired
+R43 staged-upload service from a fresh WP-CLI process.
+
+The isolated mock accepts only the reviewed resumable contract. R43 adds exactly:
+
+```text
+POST /api/v1/videos/upload-resumable auth=bearer privacy=private bytes=16 body=metadata
+PUT /api/v1/videos/upload-resumable upload_id=r43fixture0001 auth=bearer range=bytes=0-15/16 bytes=16 body_sha256=9945ffa5f7037a4a5de4c330f9773720e5880ab4de9b6ed6a72ac19b47fc2867
+```
+
+The fixture never records the bearer token or source contents. The final WP-CLI
+state gate requires upload phase `remote_created`, revision 5, confirmed length 16,
+exact projected PeerTube id/UUID, the staged source still present and byte-identical,
+no new `argent_video_remote_assets` row, encrypted credential persistence, staged
+and processing capability bits still false, no automatic retry/probe, and no
+`WP_DEBUG` diagnostics. The generic runner also requires exactly one init POST, one
+byte-bearing PUT, and zero zero-byte probes for this happy-path case.
+
+This is development-checkpoint evidence against an isolated PeerTube-shaped mock,
+not a live-PeerTube/TLS, exact-ZIP, release, upgrade, Plugin Check, publication,
+processing-completion, remote-asset-commit, cleanup, or retention gate.

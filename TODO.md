@@ -134,6 +134,26 @@
 - [x] Integrate the exact qualified R41 feature history into `develop-2.0` and
   qualify merge `dfc5c2b6e2521f0ecbba6806dc398608d0968b0e` with Forgejo CI run
   98.
-- [ ] Commit the R41 integration closure on `develop-2.0`, require exact-commit
-  Forgejo CI, and use that resulting clean branch tip as the authority for the
-  first tranche 2.0-4 staged source transfer/upload and remote-state checkpoint.
+- [x] Commit the R41 integration closure on `develop-2.0`. Exact closure
+  `45b8faed47147f3052a557aa6511d84ad25dca9c`, tree
+  `581d4f98ee24146309788bf6e8ad59794161d27e`, passed Forgejo CI run 99 and is
+  the clean authority for tranche 2.0-4.
+- [x] R42 staged-upload foundation authority: exact feature commit
+  `b1c500252ddb6632388fbbb08aee4015fc9e3636`, tree
+  `3c0ee7e142ac48349bda4b72545dfbd76425bac5`, passed Forgejo CI run 100
+  (16s) and is the qualified R43 branch baseline. R42 crossed no PeerTube media
+  mutation boundary and therefore required no standalone Docker media-mutation
+  matrix.
+- [x] R43 executable resumable-upload transport/service boundary: exact feature
+  commit `4d38158335ec6cd8c7528a4dbb29b065a7ba7ec9`, tree
+  `772308d60722002769c712717628261993b63299`, passed Forgejo CI run 101
+  (11s). The isolated `peertube-staged-upload-smoke.sh` matrix passed both
+  supported WordPress/PHP/MariaDB cases with exactly one resumable-init POST and
+  one byte-bearing PUT per case, zero offset probes on the happy path, no
+  automatic retry, no plaintext canaries, source bytes preserved, no remote
+  asset row committed, all ingest/processing capability bits still false, and no
+  gated `WP_DEBUG` diagnostics. The successful report is
+  `peertube-r43-smoke-20260903T004335Z-1367351.log`, SHA-256
+  `68f25862862784862343aec197a184fd36588f945f3143a8d7f6c9ded0e37c0d`.
+  R43 remains a development checkpoint: its executor is not reachable from a
+  production WordPress/admin/REST/AJAX/CLI/cron/worker entry point.

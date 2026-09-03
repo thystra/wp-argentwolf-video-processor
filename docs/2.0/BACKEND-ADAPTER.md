@@ -569,6 +569,22 @@ R41 does not expand the PeerTube capability set. The adapter still exposes only
 `delivery.embed`; all ingest/upload, processing, managed-library, publication,
 retention, and remote-delete capabilities remain false.
 
+
+## R42 staged-upload state foundation does not grant capability
+
+R42 adds local source identity, upload-operation state, exact-CAS persistence,
+and a read-only source/descriptor guard only. These are prerequisites for a
+later operational interface; they are not evidence that the adapter can ingest
+or process media. Consequently `ingest.awvp_staging`, `ingest.server_push`, and
+`processing.video` remain false, `Backend_Adapter` gains no upload method, and
+`Backend_Registry::eligible()` cannot route media to PeerTube through this
+checkpoint.
+
+The later execution checkpoint must separately define the uploader interface,
+verify the concrete PeerTube upload protocol, re-prove R42 source/destination
+fences immediately before remote mutation, and qualify uncertain-response
+reconciliation before any capability bit may become true.
+
 For an active descriptor with a valid managed credential, health is derived from
 the current encrypted token metadata rather than persisted as registry truth. A
 usable access token is `peertube.auth.operational`. An access token at or inside
@@ -581,3 +597,12 @@ Refresh/revoke/disconnect are administrator lifecycle operations, not backend
 capabilities. They are not invoked by `eligible()`, page GET, cron, routing, or
 media processing. Registry retirement uses an exact active-to-retired CAS that
 preserves unrelated descriptors and fails closed on competing state.
+
+## R43 transport existence still does not grant backend capability
+
+The R43 resumable-upload API/service is intentionally not consulted by
+`PeerTube_Backend_Adapter`. The adapter continues to advertise only the capabilities
+already authorized by the R41 connection/lifecycle tranche; staged ingest and
+processing remain false. A later checkpoint must explicitly connect a reviewed
+administrator/worker execution policy to this service before any capability bit may
+change.

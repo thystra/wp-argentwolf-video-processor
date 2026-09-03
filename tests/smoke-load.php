@@ -91,6 +91,11 @@ if (! interface_exists(ArgentVideo\PeerTube_Token_Lifecycle_Api::class, false)) 
     exit(1);
 }
 
+if (! interface_exists(ArgentVideo\PeerTube_Staged_Upload_Api::class, false)) {
+    fwrite(STDERR, "Plugin smoke load missed required R43 interface " . ArgentVideo\PeerTube_Staged_Upload_Api::class . ".\n");
+    exit(1);
+}
+
 foreach (
     array(
         ArgentVideo\Atomic_Option_Mutation_Plan::class,
@@ -104,6 +109,11 @@ foreach (
         ArgentVideo\PeerTube_Backend_Activation_Service::class,
         ArgentVideo\PeerTube_Token_Lifecycle_Store::class,
         ArgentVideo\PeerTube_Token_Lifecycle_Service::class,
+        ArgentVideo\PeerTube_Staged_Source_Identity::class,
+        ArgentVideo\PeerTube_Staged_Upload_State_Machine::class,
+        ArgentVideo\PeerTube_Staged_Upload_Guard::class,
+        ArgentVideo\PeerTube_Staged_Upload_Operation_Store::class,
+        ArgentVideo\PeerTube_Staged_Upload_Service::class,
     ) as $required_class
 ) {
     if (! class_exists($required_class, false)) {

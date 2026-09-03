@@ -543,6 +543,55 @@ revoke, full operation closure, upload/media mutation, schema changes, and
 plugin/release version changes remain outside this in-development persistence
 slice.
 
+### R42 staged-upload operation journal
+
+R42 adds the non-autoloaded option
+`argentwolf_video_processor_peertube_upload_operations` as a bounded local
+pre-mutation journal for staged PeerTube upload intent. Version 1 holds at most
+128 exact state-machine records and refuses a serialized journal larger than
+1 MiB. All mutations use the same raw exact compare-and-swap primitive as the
+reviewed connection/lifecycle journals.
+
+Each record persists only canonical local authority and bounded evidence: AWVP
+Video ID, backend ID, canonical origin, destination ID, a managed relative
+staging path plus exact byte/SHA-256 commitment, a domain-separated intent
+commitment, state/revision/timestamps, a hash commitment to the current
+request-local upload attempt capability, bounded status evidence, and (only
+after it is known) canonical remote video identity and the separately persisted
+remote-asset row ID. Absolute host paths, bearer/refresh tokens, client secrets,
+passwords, cookies, nonces, OTPs, authorization values, and raw HTTP bodies are
+not valid journal fields.
+
+The immutable intent commitment is retained even for `complete` records in R42,
+so creating a different operation ID cannot bypass the duplicate-creation fence.
+There is deliberately no pruning/removal API in this checkpoint. The 128-record
+limit is therefore a development-boundary constraint, not the final production
+retention policy; a later execution tranche must define bounded archival/pruning
+without weakening idempotency before this journal can become ordinary upload
+authority. `failed` and `upload_indeterminate` records remain visible as open
+operations.
+
+The state machine separates remote API acknowledgement from durable application
+identity. `remote_created` contains the positively observed PeerTube video
+ID/UUID only. `remote_committed` additionally requires the positive primary key
+of a separately persisted `argent_video_remote_assets` row; the option journal
+therefore never becomes the sole durable remote-asset authority. Cleanup cannot
+be planned before a committed asset is positively `ready_verified`.
+
+R42 supplies no operation service, staging-file creator, asynchronous task,
+administrator action, cron/worker execution path, PeerTube media endpoint, or
+filesystem deletion. It cannot itself create a journal record through ordinary
+product UI/runtime flow. The later staging producer must atomically finalize a
+managed source identity path and never modify that path in place once it becomes
+upload authority. The later execution checkpoint must re-prove the exact active
+descriptor, origin, destination, source bytes, credential/health, and the
+reviewed remote protocol immediately before any consequential POST. An
+`upload_indeterminate` record has no state-machine transition that silently
+starts another upload; only positive reconciliation of an exact remote identity
+can advance it in R42. The later cleanup service may emit
+`confirm_source_cleanup` only after exact confinement and source-absence proof;
+the pure state-machine event performs no filesystem operation itself.
+
 ### Managed backend assets versus unmanaged external references
 
 The backend registry and `argent_video_remote_assets` table model assets tied to
@@ -974,3 +1023,19 @@ The following are intentionally not guessed in Tranche 2.0-1:
 
 Those decisions require their corresponding implementation-time API and
 WordPress review.
+
+### R43 execution semantics for the staged-upload journal
+
+R43 begins consuming the R42 journal but does not weaken its persistence boundaries.
+Each init/chunk attempt first increments the record revision into
+`upload_in_flight`, storing only a SHA-256 commitment to an ephemeral attempt
+capability plus request kind/start/byte count. A positive init records only the
+reviewed upload-session identifier. A positive 308 records only the exact confirmed
+byte count. Final success records only the reviewed PeerTube id/UUID and remains
+`remote_created` until a later subsystem durably commits the corresponding remote
+asset row. Raw access/refresh tokens and source bytes are never journal fields.
+
+An indeterminate byte-bearing PUT remains non-replayable until an explicit zero-byte
+remote offset probe supplies positive evidence. The probe itself carries no source
+bytes. R43 still does not create or delete staged files, commit remote-asset rows,
+observe processing completion, or open cleanup.
