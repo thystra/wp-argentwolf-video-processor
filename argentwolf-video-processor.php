@@ -69,6 +69,7 @@ require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Connection_Admin_Actions.php'
 require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Connection_Admin_Service.php';
 require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Connection_Admin.php';
 require_once ARGENT_VIDEO_DIR . 'includes/Model_Activator.php';
+require_once ARGENT_VIDEO_DIR . 'includes/Task_Repository.php';
 require_once ARGENT_VIDEO_DIR . 'includes/Video_Post_Type.php';
 require_once ARGENT_VIDEO_DIR . 'includes/Video_Meta.php';
 require_once ARGENT_VIDEO_DIR . 'includes/Activator.php';

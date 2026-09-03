@@ -121,6 +121,7 @@ foreach (
         ArgentVideo\PeerTube_Staged_Upload_Operation_Store::class,
         ArgentVideo\PeerTube_Staged_Upload_Service::class,
         ArgentVideo\Remote_Asset_Repository::class,
+        ArgentVideo\Task_Repository::class,
         ArgentVideo\PeerTube_Remote_Asset_Reconciliation_Service::class,
     ) as $required_class
 ) {
