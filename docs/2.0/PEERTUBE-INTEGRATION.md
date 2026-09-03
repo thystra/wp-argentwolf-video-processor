@@ -190,6 +190,42 @@ external references.
 No longer an initial-release milestone. Direct browser -> PeerTube is a later
 optimization after staged server-push is proven.
 
+## 11.1 R42 pre-mutation staged-upload state foundation
+
+The first tranche 2.0-4 checkpoint intentionally stops before the first remote
+video creation request. R42 introduces four runtime contracts that later upload
+execution must use:
+
+1. `PeerTube_Staged_Source_Identity` captures only a plugin-managed relative
+   staging path, byte count, and SHA-256, and can re-prove that exact source
+   before a consequential transfer;
+2. `PeerTube_Staged_Upload_State_Machine` immutably binds the AWVP Video,
+   backend, canonical origin, destination, and source into a durable intent and
+   requires a committed attempt fence before any future upload request;
+3. `PeerTube_Staged_Upload_Operation_Store` persists those records in a bounded,
+   non-autoloaded, whole-option exact-CAS journal and rejects duplicate intent
+   commitments;
+4. `PeerTube_Staged_Upload_Guard` read-only re-proves that the configured
+   descriptor is still active with the exact origin/destination and that the
+   staged bytes still match the operation.
+
+The state machine distinguishes `upload_in_flight`, explicitly classified retry-safe outcomes,
+`retry_wait`, `upload_indeterminate`, `remote_created`, `remote_committed`,
+processing, positive ready verification, and cleanup. There is deliberately no
+"remote not found -> retry" transition from an indeterminate upload in R42.
+Until a later checkpoint proves a reliable backend reconciliation/idempotency
+mechanism, an uncertain creation request cannot be silently replayed.
+
+A successful future upload response first records the exact PeerTube video ID
+and UUID as `remote_created`. Only a separately persisted remote-asset row may
+advance the operation to `remote_committed`. Source cleanup is still forbidden
+until that committed asset is positively verified ready.
+
+R42 performs no PeerTube upload request, creates no staging file, changes no
+remote asset, launches no worker/task, and exposes no browser/admin transfer
+authority. `ingest.awvp_staging`, `ingest.server_push`, and `processing.video`
+remain false in the PeerTube adapter.
+
 ## 12. Security boundary
 
 Persistent PeerTube management credentials stay on the AWVP server. Editor

@@ -569,6 +569,22 @@ R41 does not expand the PeerTube capability set. The adapter still exposes only
 `delivery.embed`; all ingest/upload, processing, managed-library, publication,
 retention, and remote-delete capabilities remain false.
 
+
+## R42 staged-upload state foundation does not grant capability
+
+R42 adds local source identity, upload-operation state, exact-CAS persistence,
+and a read-only source/descriptor guard only. These are prerequisites for a
+later operational interface; they are not evidence that the adapter can ingest
+or process media. Consequently `ingest.awvp_staging`, `ingest.server_push`, and
+`processing.video` remain false, `Backend_Adapter` gains no upload method, and
+`Backend_Registry::eligible()` cannot route media to PeerTube through this
+checkpoint.
+
+The later execution checkpoint must separately define the uploader interface,
+verify the concrete PeerTube upload protocol, re-prove R42 source/destination
+fences immediately before remote mutation, and qualify uncertain-response
+reconciliation before any capability bit may become true.
+
 For an active descriptor with a valid managed credential, health is derived from
 the current encrypted token metadata rather than persisted as registry truth. A
 usable access token is `peertube.auth.operational`. An access token at or inside

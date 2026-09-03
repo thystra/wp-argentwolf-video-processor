@@ -134,6 +134,13 @@
 - [x] Integrate the exact qualified R41 feature history into `develop-2.0` and
   qualify merge `dfc5c2b6e2521f0ecbba6806dc398608d0968b0e` with Forgejo CI run
   98.
-- [ ] Commit the R41 integration closure on `develop-2.0`, require exact-commit
-  Forgejo CI, and use that resulting clean branch tip as the authority for the
-  first tranche 2.0-4 staged source transfer/upload and remote-state checkpoint.
+- [x] Commit the R41 integration closure on `develop-2.0`. Exact closure
+  `45b8faed47147f3052a557aa6511d84ad25dca9c`, tree
+  `581d4f98ee24146309788bf6e8ad59794161d27e`, passed Forgejo CI run 99 and is
+  the clean authority for tranche 2.0-4.
+- [ ] R42: qualify the first tranche 2.0-4 staged-upload mutation-state
+  foundation. This checkpoint fixes immutable staged-source/backend/destination
+  identity, exact-CAS operation journaling, explicit in-flight/indeterminate
+  reconciliation, remote-identity/remote-asset separation, and cleanup gates;
+  it must keep `ingest.awvp_staging`, `ingest.server_push`, and
+  `processing.video` false and must not add a PeerTube media-upload POST.

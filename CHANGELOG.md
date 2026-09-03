@@ -26,6 +26,12 @@
   refresh/revoke outcomes are never automatically replayed, and media upload,
   processing, publication, library, retention, and remote-media mutation remain
   outside this checkpoint.
+- Add the first tranche 2.0-4/R42 staged-upload state foundation without yet
+  enabling a PeerTube media POST: immutable managed-source commitments, exact
+  backend/origin/destination binding, a bounded non-autoloaded exact-CAS upload
+  journal, durable in-flight/indeterminate/reconciliation states, separate remote
+  identity versus remote-asset commit, and a cleanup gate that cannot open before
+  positive remote-ready verification.
 - Expand focused PeerTube security/state tests and isolated real-WordPress Docker
   development matrices through the R39 identity/destination checkpoint, with an
   R40 activation continuation that proves activation performs no additional

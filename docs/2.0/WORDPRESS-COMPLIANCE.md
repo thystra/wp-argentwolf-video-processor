@@ -249,6 +249,22 @@ never retried automatically. R41 adds no `nopriv`, AJAX, REST, WP-CLI, cron,
 background retry, upload, processing, publication, library, retention, or
 remote-media-mutation path.
 
+R42 begins staged-upload design without adding another external-service request
+or browser mutation surface. Its source-identity helper reads only an
+AWVP-managed file after confinement checks and persists only the managed relative
+path, exact byte length, and SHA-256 commitment. Its bounded non-autoloaded upload
+operation journal accepts no credential/authentication fields or absolute host
+paths and uses exact compare-and-swap revisions. A read-only guard re-proves the
+active backend's exact origin/destination and the exact staged bytes.
+
+R42 registers no tenth PeerTube `admin_post` action, no `nopriv`, AJAX, REST,
+WP-CLI, cron, worker/task, activation, or media-upload endpoint. The PeerTube
+adapter still reports staged ingest, server push, and processing unsupported. A
+later tranche may add the first media POST only after reviewing the concrete
+PeerTube request/response and reconciliation contract; a response may be called
+retry-safe only when that reviewed contract proves no remote video was created.
+An uncertain creation result must remain non-replayable.
+
 Before a grant, the administrator must explicitly authorize sending the entered
 credentials to the displayed exact external service. An allowlisted
 development-only HTTP origin requires a second acknowledgement that the
@@ -312,6 +328,17 @@ Use WordPress APIs to discover upload locations.
 
 Plugin-generated/staging data lives only beneath the centralized AWVP-managed
 uploads root.
+
+R42's staged-source commitment is read-only: it resolves the path through the
+centralized AWVP managed-storage boundary, rejects links and non-regular files,
+opens the file for reading, and compares device/inode/mode/size/timestamps before
+and after SHA-256 streaming. A later staging producer must atomically finalize
+that managed identity path and never mutate it in place once it becomes upload
+authority. A later uploader must repeat the source commitment check immediately
+before claiming/executing remote mutation. The R42 checkpoint does not create,
+move, overwrite, or delete the source, and its pure cleanup-confirmation event
+must not be emitted by a future service until exact confinement and absence are
+independently proved.
 
 Before every mutation:
 

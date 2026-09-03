@@ -104,6 +104,10 @@ foreach (
         ArgentVideo\PeerTube_Backend_Activation_Service::class,
         ArgentVideo\PeerTube_Token_Lifecycle_Store::class,
         ArgentVideo\PeerTube_Token_Lifecycle_Service::class,
+        ArgentVideo\PeerTube_Staged_Source_Identity::class,
+        ArgentVideo\PeerTube_Staged_Upload_State_Machine::class,
+        ArgentVideo\PeerTube_Staged_Upload_Guard::class,
+        ArgentVideo\PeerTube_Staged_Upload_Operation_Store::class,
     ) as $required_class
 ) {
     if (! class_exists($required_class, false)) {

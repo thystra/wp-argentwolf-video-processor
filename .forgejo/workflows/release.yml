@@ -142,6 +142,12 @@ jobs:
           AWVP_ATOMIC_MODERN_AUTOLOAD=1 php tests/peertube-backend-activation-service.php
           php tests/peertube-token-lifecycle-service.php
           AWVP_ATOMIC_MODERN_AUTOLOAD=1 php tests/peertube-token-lifecycle-service.php
+          php tests/peertube-staged-source-identity.php
+          php tests/peertube-staged-upload-state-machine.php
+          php tests/peertube-staged-upload-guard.php
+          php tests/peertube-staged-upload-boundary.php
+          php tests/peertube-staged-upload-operation-store.php
+          AWVP_ATOMIC_MODERN_AUTOLOAD=1 php tests/peertube-staged-upload-operation-store.php
           php tests/peertube-connection-admin.php
           bash -n tests/integration/peertube-http-smoke.sh
           bash -n tests/integration/peertube-auth-api-smoke.sh

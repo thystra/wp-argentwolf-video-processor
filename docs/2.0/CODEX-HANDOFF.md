@@ -1328,3 +1328,29 @@ upload authority implicitly.
    qualified;
 5. require exact-feature Forgejo CI and isolated real-WordPress integration
    qualification before merging the next checkpoint into `develop-2.0`.
+
+## R41 final closure authority and R42 start
+
+The documentation-only R41 `develop-2.0` integration closure is exact commit
+`45b8faed47147f3052a557aa6511d84ad25dca9c`, tree
+`581d4f98ee24146309788bf6e8ad59794161d27e`. Forgejo CI run 99 passed that
+exact closure. It is therefore the clean branch authority for the first tranche
+2.0-4 checkpoint; earlier R41 feature/merge commits remain qualification
+evidence but are not the R42 branch tip.
+
+R42 starts on `feature/2.0-peertube-staged-upload` from that exact authority. Its
+first checkpoint deliberately establishes only the pre-mutation staged-upload
+contract: managed relative source identity plus byte/SHA-256 commitment, immutable
+video/backend/origin/destination intent, a bounded non-autoloaded exact-CAS
+operation journal, durable upload-attempt fencing, no-replay indeterminate state,
+positive remote-identity reconciliation, separate remote-asset commit, and
+post-verification cleanup gating. A read-only guard re-proves the active backend
+origin/destination and exact source bytes.
+
+Do not interpret these classes as upload authority. The R42 foundation adds no
+PeerTube media endpoint, upload task, cron/worker execution path, administrator
+upload action, or capability bit. `ingest.awvp_staging`, `ingest.server_push`,
+and `processing.video` stay false. The next checkpoint may add the first media
+POST only after the exact PeerTube upload protocol and reconciliation behavior
+are reviewed against this state machine, with no automatic replay from
+`upload_indeterminate`.
