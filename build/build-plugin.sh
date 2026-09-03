@@ -120,14 +120,17 @@ if [[ "${TOP_LEVEL_COUNT}" -ne 1 ||
     exit 1
 fi
 
+ZIP_MANIFEST="$(mktemp)"
+unzip -Z1 "${DIST_DIR}/${ZIP_NAME}" > "${ZIP_MANIFEST}"
+
 for required in \
     hls.min.js \
     hls.LICENSE
 do
-    if ! unzip -Z1 "${DIST_DIR}/${ZIP_NAME}" |
-        grep -qx "${SLUG}/assets/vendor/${required}"; then
+    if ! grep -qx "${SLUG}/assets/vendor/${required}" "${ZIP_MANIFEST}"; then
         if [[ "${ARGENT_VIDEO_ALLOW_MISSING_HLS_JS:-0}" != '1' ]]; then
             echo "Release ZIP is missing assets/vendor/${required}." >&2
+            rm -f "${ZIP_MANIFEST}"
             exit 1
         fi
     fi
@@ -137,12 +140,14 @@ for forbidden_vendor_metadata in \
     hls.VERSION \
     hls.SHA256
 do
-    if unzip -Z1 "${DIST_DIR}/${ZIP_NAME}" |
-        grep -qx "${SLUG}/assets/vendor/${forbidden_vendor_metadata}"; then
+    if grep -qx "${SLUG}/assets/vendor/${forbidden_vendor_metadata}" "${ZIP_MANIFEST}"; then
         echo "Release ZIP contains build-only assets/vendor/${forbidden_vendor_metadata}." >&2
+        rm -f "${ZIP_MANIFEST}"
         exit 1
     fi
 done
+
+rm -f "${ZIP_MANIFEST}"
 
 (
     cd "${DIST_DIR}"
