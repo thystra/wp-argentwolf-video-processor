@@ -170,10 +170,23 @@
   `bb98090900bd53540b60cfa1fe02e76e0e420334`, tree
   `a65cf633bab608fc741639fe093f9f11f09b4e9a`, passed Forgejo CI run 104 (17s)
   and is the clean R44 branch authority.
-- [ ] R44 remote-asset persistence/readiness checkpoint: idempotently bind
-  `remote_created` to one secondary/private `argent_video_remote_assets` row,
-  explicitly reconcile only the exact private non-live PeerTube video through a
-  bounded read-only GET, durably wait on processing/429/transient reads, and
-  positively record ready/missing/processing-failed outcomes. Keep production
-  upload/reconcile entry points, automatic polling, source cleanup, publication,
-  retention, and remote delete disabled until separately scoped and qualified.
+- [x] R44 remote-asset persistence/readiness checkpoint: exact feature commit
+  `0845a7ab70386fc8b4d7f56eecef13eb131a54b8`, tree
+  `74c8a4cf6be5273fc549d70a2beb763437137eee`, passed Forgejo push CI run 105
+  and the isolated two-case
+  `peertube-remote-asset-reconciliation-smoke.sh` matrix. The successful report
+  is `peertube-r44-smoke-20260903T013651Z-1386010.log`, SHA-256
+  `6b6432ee3da0bbcc51835bc792aa18f47cec7242fd755976031b46454c8e714a`.
+  Both supported cases passed the R44 browser/state reconciliation boundary,
+  exact isolated remote-read/upload request-count assertions, encrypted-secret
+  persistence, no automatic remote retry, no plaintext canaries, no gated
+  `WP_DEBUG` diagnostics, and cleanup. R44 remains a development checkpoint and
+  exposes no production upload/reconcile entry point, automatic polling, source
+  cleanup, publication, retention, or remote delete.
+- [x] R44 qualification/integration closure: correctly based PR #2 into
+  `develop-2.0` passed Forgejo pull-request CI run 107. It was merged as
+  `911f97edab6b2bc395851307d82e683a2b8b746a`, tree
+  `74c8a4cf6be5273fc549d70a2beb763437137eee`, with first parent
+  `bb98090900bd53540b60cfa1fe02e76e0e420334` and second parent
+  `0845a7ab70386fc8b4d7f56eecef13eb131a54b8`. Forgejo integration CI run 108
+  passed. The integration tree exactly matches the qualified R44 feature tree.

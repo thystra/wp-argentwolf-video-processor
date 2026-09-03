@@ -1520,5 +1520,71 @@ add upload POST/PUT authority beyond R43, source cleanup, publication/privacy
 mutation, remote deletion, retention, role promotion, administrator/REST/AJAX/
 WP-CLI/cron/worker production wiring, or backend ingest/processing capability.
 The isolated R44 Docker gate is `tests/integration/peertube-remote-asset-reconciliation-smoke.sh`.
-Exact feature commit/tree, Forgejo CI, and Docker report evidence remain pending
-until the user applies and qualifies this source checkpoint.
+### R44 qualification evidence
+
+The exact qualified R44 feature state is commit
+`0845a7ab70386fc8b4d7f56eecef13eb131a54b8`, tree
+`74c8a4cf6be5273fc549d70a2beb763437137eee`, formerly on
+`feature/2.0-peertube-remote-asset-reconciliation`. Forgejo push CI run 105
+passed that exact feature state.
+
+The successful isolated Docker report is
+`peertube-r44-smoke-20260903T013651Z-1386010.log` with SHA-256
+`6b6432ee3da0bbcc51835bc792aa18f47cec7242fd755976031b46454c8e714a`.
+The harness classified the run as `DEVELOPMENT_CHECKPOINT_NOT_RELEASE_GATE`,
+exported the exact clean source commit, mounted the runtime source read-only,
+and passed both supported cases:
+
+- WordPress 6.4.2 / PHP 8.1.34 / MariaDB 10.6.27;
+- WordPress 7.1 / PHP 8.3.33 / MariaDB 10.11.18.
+
+Both cases reproduced the established administrator authorization,
+identity/destination, backend-activation, staged-upload prerequisite, and R44
+remote-asset reconciliation browser/state boundaries. Each case observed
+exactly one OAuth-client GET, one password-grant token POST, zero revoke POSTs,
+one resumable-upload initialization POST, one byte-bearing PUT, zero zero-byte
+offset probes, and two remote-video GETs.
+
+Both cases independently proved no automatic remote retry, no plaintext
+credential canaries, encrypted-secret persistence, no gated `WP_DEBUG`
+diagnostics, passing case assertions, and clean resource teardown. The matrix
+ended with `PEERTUBE_REMOTE_ASSET_RECONCILIATION_MATRIX_ASSERTIONS=PASS`,
+`RESOURCE_CLEANUP=PASS`, and
+`PEERTUBE_REMOTE_ASSET_RECONCILIATION_SMOKE=PASS`.
+
+This closes R44 source, exact-feature CI, and isolated two-case Docker
+development-checkpoint qualification. It does **not** authorize a production
+WordPress/admin/REST/AJAX/WP-CLI/cron/worker upload or reconciliation entry
+point, automatic polling, source cleanup, publication/privacy mutation,
+retention, remote deletion, live-PeerTube/TLS operation, release ZIP
+qualification, or release publication.
+
+### R44 `develop-2.0` integration closure
+
+The correctly based PR #2 from
+`feature/2.0-peertube-remote-asset-reconciliation` into `develop-2.0` passed
+Forgejo pull-request CI run 107. R44 was then integrated without rewriting
+either parent:
+
+- merge commit: `911f97edab6b2bc395851307d82e683a2b8b746a`;
+- merge tree: `74c8a4cf6be5273fc549d70a2beb763437137eee`;
+- first parent / prior `develop-2.0` authority:
+  `bb98090900bd53540b60cfa1fe02e76e0e420334`;
+- second parent / qualified R44 feature state:
+  `0845a7ab70386fc8b4d7f56eecef13eb131a54b8`.
+
+Forgejo integration CI run 108 passed the exact merge. The merge tree exactly
+matches the qualified feature tree, so integration introduced no product or
+runtime-content change relative to the R44 Docker-qualified state. `main`,
+tags, releases, and publication surfaces remain untouched.
+
+Merge `911f97edab6b2bc395851307d82e683a2b8b746a` is therefore the exact
+integrated R44 product-state authority. This documentation-only integration
+closure must itself pass Forgejo CI on `develop-2.0`; after that gate, the
+resulting clean `develop-2.0` tip becomes the authority from which the next
+2.0 checkpoint is scoped and branched.
+
+R44 does not implicitly grant the next checkpoint upload, polling, cleanup,
+publication, retention, or remote-delete authority. Any such production
+execution/capability boundary must be separately defined, implemented, and
+qualified.
