@@ -292,6 +292,22 @@ final class PeerTube_Http_Client
     }
 
     /** @return array<string, mixed> */
+    public function get_video_status(string $access_token, string $video_uuid): array
+    {
+        if (! self::safe_bearer_token($access_token) || ! self::safe_video_uuid($video_uuid)) {
+            throw new InvalidArgumentException('PeerTube video-state request is outside the reviewed bound.');
+        }
+
+        return $this->request(
+            'GET',
+            '/api/v1/videos/' . rawurlencode(strtolower($video_uuid)),
+            self::MAX_METADATA_RESPONSE_BYTES,
+            'bearer',
+            array('Authorization' => 'Bearer ' . $access_token)
+        );
+    }
+
+    /** @return array<string, mixed> */
     public function get_account_channels(string $account_name, int $start, int $count): array
     {
         if (
@@ -615,6 +631,11 @@ final class PeerTube_Http_Client
     private static function safe_upload_session_id(string $value): bool
     {
         return 1 === preg_match('/^[A-Za-z0-9._~-]{1,191}$/D', $value);
+    }
+
+    private static function safe_video_uuid(string $value): bool
+    {
+        return 1 === preg_match('/^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}$/D', $value);
     }
 
     private static function user_agent(): string

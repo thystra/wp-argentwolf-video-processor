@@ -268,3 +268,25 @@ transport/result state is durably fenced as `upload_indeterminate`. No ordinary
 advance path can replay an uncertain request. Only an explicit zero-byte probe may
 reconcile an uncertain chunk; an uncertain initialization has no automatic retry or
 probe-based escape in this checkpoint.
+
+
+## R44 post-create remote-state checkpoint
+
+R44 begins only after R43 has positively journaled `remote_created`. Its first
+explicit step commits that exact PeerTube UUID into AWVP's relational remote-asset
+authority. A later explicit step may issue bearer-authenticated
+`GET /api/v1/videos/{uuid}` to the configured origin and projects only the numeric
+video ID, UUID, state ID, privacy ID, channel ID, embed path, and non-live flag.
+Raw PeerTube response fields do not enter the operation journal.
+
+The observation must still prove the exact uploaded identity, selected channel,
+private privacy, local/non-live shape, active backend/origin/destination, staged
+source commitment, and usable managed credential generation. Processing states
+are durable waits, not background polling. Published/ready is a positive readiness
+observation; 404 and reviewed transcoding/storage failures are terminally recorded.
+Transient GET failures are safe to retry only on a later explicit invocation.
+
+This checkpoint does not publish a video, change PeerTube privacy, request
+transcoding, delete or retain remote media, remove staging bytes, or expose a
+production upload/reconciliation action. PeerTube ingest/processing capability
+advertisement therefore remains unchanged and false.

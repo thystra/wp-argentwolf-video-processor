@@ -51,8 +51,10 @@ final class PeerTube_Staged_Upload_State_Machine
     public const EVENT_RECONCILE_REMOTE_FOUND = 'reconcile_remote_found';
     public const EVENT_COMMIT_REMOTE_ASSET = 'commit_remote_asset';
     public const EVENT_PROCESSING_OBSERVED = 'processing_observed';
+    public const EVENT_RECONCILE_WAIT = 'reconcile_wait';
     public const EVENT_READY_VERIFIED = 'ready_verified';
     public const EVENT_REMOTE_FAILED = 'remote_failed';
+    public const EVENT_REMOTE_MISSING = 'remote_missing';
     public const EVENT_PLAN_SOURCE_CLEANUP = 'plan_source_cleanup';
     public const EVENT_CONFIRM_SOURCE_CLEANUP = 'confirm_source_cleanup';
 
@@ -258,8 +260,21 @@ final class PeerTube_Staged_Upload_State_Machine
             $next['phase'] = self::PHASE_REMOTE_COMMITTED;
             $next['remote_asset_id'] = $remote_asset_id;
         } elseif (self::EVENT_PROCESSING_OBSERVED === $event) {
-            if (self::PHASE_REMOTE_COMMITTED !== $phase || [] !== $payload) return null;
+            $retry_after = self::positive_int($payload['retry_after'] ?? null);
+            if (! in_array($phase, array(self::PHASE_REMOTE_COMMITTED, self::PHASE_PROCESSING), true)
+                || ! self::has_exact_keys($payload, array('retry_after'))
+                || $retry_after < 1 || $retry_after > 86400) return null;
             $next['phase'] = self::PHASE_PROCESSING;
+            $next['last_error'] = self::error('peertube.remote.processing_wait', 0, $retry_after);
+        } elseif (self::EVENT_RECONCILE_WAIT === $event) {
+            $retry_after = self::positive_int($payload['retry_after'] ?? null);
+            if (! in_array($phase, array(self::PHASE_REMOTE_COMMITTED, self::PHASE_PROCESSING), true)
+                || ! self::has_exact_keys($payload, array('code', 'http_status', 'retry_after'))
+                || 'peertube.remote.reconcile_wait' !== ($payload['code'] ?? null)
+                || ! is_int($payload['http_status'] ?? null)
+                || ! in_array($payload['http_status'], array(0, 429, 500, 502, 503, 504), true)
+                || $retry_after < 1 || $retry_after > 86400) return null;
+            $next['last_error'] = self::error($payload['code'], $payload['http_status'], $retry_after);
         } elseif (self::EVENT_READY_VERIFIED === $event) {
             if (! in_array($phase, array(self::PHASE_REMOTE_COMMITTED, self::PHASE_PROCESSING), true) || [] !== $payload) return null;
             $next['phase'] = self::PHASE_READY_VERIFIED;
@@ -271,6 +286,12 @@ final class PeerTube_Staged_Upload_State_Machine
                 || ! self::valid_remote_failure($payload['code'], $payload['http_status'])) return null;
             $next['phase'] = self::PHASE_FAILED;
             $next['last_error'] = self::error($payload['code'], $payload['http_status'], 0);
+        } elseif (self::EVENT_REMOTE_MISSING === $event) {
+            if (! in_array($phase, array(self::PHASE_REMOTE_COMMITTED, self::PHASE_PROCESSING), true)
+                || ! self::has_exact_keys($payload, array('http_status'))
+                || 404 !== ($payload['http_status'] ?? null)) return null;
+            $next['phase'] = self::PHASE_FAILED;
+            $next['last_error'] = self::error('peertube.remote.missing', 404, 0);
         } elseif (self::EVENT_PLAN_SOURCE_CLEANUP === $event) {
             if (self::PHASE_READY_VERIFIED !== $phase || [] !== $payload) return null;
             $next['phase'] = self::PHASE_CLEANUP_PENDING;
@@ -388,8 +409,18 @@ final class PeerTube_Staged_Upload_State_Machine
 
         if (self::PHASE_REMOTE_CREATED === $phase) return 0 === $record['remote_asset_id'] && 0 === $record['verified_at'] && 0 === $record['cleanup_requested_at'] && $no_error;
         if ($record['remote_asset_id'] < 1) return false;
-        if (in_array($phase, array(self::PHASE_REMOTE_COMMITTED,self::PHASE_PROCESSING), true)) return 0 === $record['verified_at'] && 0 === $record['cleanup_requested_at'] && $no_error;
-        if (self::PHASE_FAILED === $phase) return 0 === $record['verified_at'] && 0 === $record['cleanup_requested_at'] && 'peertube.upload.remote_failed' === $record['last_error']['code'];
+        if (self::PHASE_REMOTE_COMMITTED === $phase) {
+            return 0 === $record['verified_at'] && 0 === $record['cleanup_requested_at']
+                && ($no_error || self::valid_remote_wait_record_error($record['last_error'], false));
+        }
+        if (self::PHASE_PROCESSING === $phase) {
+            return 0 === $record['verified_at'] && 0 === $record['cleanup_requested_at']
+                && ($no_error || self::valid_remote_wait_record_error($record['last_error'], true));
+        }
+        if (self::PHASE_FAILED === $phase) {
+            return 0 === $record['verified_at'] && 0 === $record['cleanup_requested_at']
+                && in_array($record['last_error']['code'], array('peertube.upload.remote_failed','peertube.remote.processing_failed','peertube.remote.missing'), true);
+        }
         if ($record['verified_at'] < $record['accepted_at']) return false;
         if (self::PHASE_READY_VERIFIED === $phase) return 0 === $record['cleanup_requested_at'] && $no_error;
         if (in_array($phase, array(self::PHASE_CLEANUP_PENDING,self::PHASE_COMPLETE), true)) return $record['cleanup_requested_at'] >= $record['verified_at'] && $no_error;
@@ -452,7 +483,7 @@ final class PeerTube_Staged_Upload_State_Machine
             || ! is_string($error['code'] ?? null) || ! is_int($error['http_status'] ?? null) || ! is_int($error['retry_after'] ?? null)
             || $error['http_status'] < 0 || $error['http_status'] > 599 || $error['retry_after'] < 0 || $error['retry_after'] > 86400) return false;
         if (self::empty_error() === $error) return true;
-        return in_array($error['code'], array('peertube.upload.request_not_sent','peertube.upload.rate_limited','peertube.upload.source_changed','peertube.upload.backend_unavailable','peertube.upload.refresh_required','peertube.upload.indeterminate','peertube.upload.remote_failed'), true);
+        return in_array($error['code'], array('peertube.upload.request_not_sent','peertube.upload.rate_limited','peertube.upload.source_changed','peertube.upload.backend_unavailable','peertube.upload.refresh_required','peertube.upload.indeterminate','peertube.upload.remote_failed','peertube.remote.processing_wait','peertube.remote.reconcile_wait','peertube.remote.processing_failed','peertube.remote.missing'), true);
     }
 
     private static function valid_safe_retry_error(mixed $code, mixed $http_status, mixed $retry_after, string $request_kind): bool
@@ -476,8 +507,19 @@ final class PeerTube_Staged_Upload_State_Machine
             && in_array($error['code'], array('peertube.upload.request_not_sent','peertube.upload.source_changed','peertube.upload.backend_unavailable'), true);
     }
 
+    /** @param array{code:string,http_status:int,retry_after:int} $error */
+    private static function valid_remote_wait_record_error(array $error, bool $allow_processing): bool
+    {
+        if (! self::valid_error($error) || $error['retry_after'] < 1) return false;
+        if ($allow_processing && 'peertube.remote.processing_wait' === $error['code']) {
+            return 0 === $error['http_status'];
+        }
+        return 'peertube.remote.reconcile_wait' === $error['code']
+            && in_array($error['http_status'], array(0,429,500,502,503,504), true);
+    }
+
     private static function valid_indeterminate_error(mixed $code, mixed $http_status): bool { return 'peertube.upload.indeterminate' === $code && is_int($http_status) && $http_status >= 0 && $http_status <= 599; }
-    private static function valid_remote_failure(mixed $code, mixed $http_status): bool { return 'peertube.upload.remote_failed' === $code && is_int($http_status) && $http_status >= 0 && $http_status <= 599; }
+    private static function valid_remote_failure(mixed $code, mixed $http_status): bool { return in_array($code, array('peertube.upload.remote_failed','peertube.remote.processing_failed'), true) && is_int($http_status) && $http_status >= 0 && $http_status <= 599; }
 
     /** @return array{id:string,uuid:string} */
     private static function empty_remote_identity(): array { return array('id'=>'','uuid'=>''); }

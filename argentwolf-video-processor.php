@@ -41,6 +41,7 @@ require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Password_Grant_Api.php';
 require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Identity_Destination_Api.php';
 require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Token_Lifecycle_Api.php';
 require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Staged_Upload_Api.php';
+require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Remote_Reconciliation_Api.php';
 require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Api_Client.php';
 require_once ARGENT_VIDEO_DIR . 'includes/Backend_Secret_Store.php';
 require_once ARGENT_VIDEO_DIR . 'includes/Backend_Secret_Crypto.php';
@@ -61,6 +62,9 @@ require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Staged_Upload_State_Machine.p
 require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Staged_Upload_Guard.php';
 require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Staged_Upload_Operation_Store.php';
 require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Staged_Upload_Service.php';
+require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Remote_Asset_Store.php';
+require_once ARGENT_VIDEO_DIR . 'includes/Remote_Asset_Repository.php';
+require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Remote_Asset_Reconciliation_Service.php';
 require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Connection_Admin_Actions.php';
 require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Connection_Admin_Service.php';
 require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Connection_Admin.php';

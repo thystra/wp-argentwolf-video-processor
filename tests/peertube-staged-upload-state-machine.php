@@ -47,6 +47,24 @@ $retry=Machine::apply($recovered,Machine::EVENT_CLAIM_UPLOAD,array('attempt_capa
 $created=Machine::apply($retry,Machine::EVENT_REMOTE_CREATED,array('attempt_capability'=>str_repeat('4',64),'remote_identity'=>$remote),1009);
 $assert(is_array($created)&&Machine::PHASE_REMOTE_CREATED===$created['phase']&&$source['bytes']===$created['confirmed_bytes'],'Final remote identity commit failed.');
 
+// R44 post-create lifecycle is separately journaled: relational remote-asset
+// commit, read-only processing observations with durable waits, readiness, and
+// positive terminal missing/failure outcomes.
+$committed=Machine::apply($created,Machine::EVENT_COMMIT_REMOTE_ASSET,array('remote_asset_id'=>17),1010);
+$assert(is_array($committed)&&Machine::PHASE_REMOTE_COMMITTED===$committed['phase']&&17===$committed['remote_asset_id'],'Remote-asset commit state failed.');
+$processing=Machine::apply($committed,Machine::EVENT_PROCESSING_OBSERVED,array('retry_after'=>30),1011);
+$assert(is_array($processing)&&Machine::PHASE_PROCESSING===$processing['phase']&&30===($processing['last_error']['retry_after']??0),'Processing observation did not establish durable recheck wait.');
+$assert(null===Machine::apply($committed,Machine::EVENT_PROCESSING_OBSERVED,array(),1011),'Processing observation accepted an unbounded/implicit retry.');
+$reconcile_wait=Machine::apply($committed,Machine::EVENT_RECONCILE_WAIT,array('code'=>'peertube.remote.reconcile_wait','http_status'=>429,'retry_after'=>45),1012);
+$assert(is_array($reconcile_wait)&&Machine::PHASE_REMOTE_COMMITTED===$reconcile_wait['phase']&&45===($reconcile_wait['last_error']['retry_after']??0),'Read-only reconciliation wait did not persist.');
+$ready=Machine::apply($processing,Machine::EVENT_READY_VERIFIED,array(),1042);
+$assert(is_array($ready)&&Machine::PHASE_READY_VERIFIED===$ready['phase']&&1042===$ready['verified_at']&&''===($ready['last_error']['code']??'x'),'Ready verification did not clear processing wait.');
+$missing=Machine::apply($committed,Machine::EVENT_REMOTE_MISSING,array('http_status'=>404),1013);
+$assert(is_array($missing)&&Machine::PHASE_FAILED===$missing['phase']&&'peertube.remote.missing'===($missing['last_error']['code']??''),'Positive missing observation was not terminally fenced.');
+$failed=Machine::apply($committed,Machine::EVENT_REMOTE_FAILED,array('code'=>'peertube.remote.processing_failed','http_status'=>0),1014);
+$assert(is_array($failed)&&Machine::PHASE_FAILED===$failed['phase']&&'peertube.remote.processing_failed'===($failed['last_error']['code']??''),'Remote processing failure was not terminally fenced.');
+$assert(null===Machine::apply($ready,Machine::EVENT_PROCESSING_OBSERVED,array('retry_after'=>30),1043),'Verified remote asset regressed to processing.');
+
 // If reconciliation instead returns the final identity, no chunk replay is needed.
 $final2=Machine::apply($accepted,Machine::EVENT_CLAIM_UPLOAD,array('attempt_capability'=>$cap3,'request_kind'=>'chunk','request_start'=>Machine::MAX_CHUNK_BYTES,'request_bytes'=>$remaining),1010);
 $final2=Machine::apply($final2,Machine::EVENT_UPLOAD_INDETERMINATE,array('attempt_capability'=>$cap3,'code'=>'peertube.upload.indeterminate','http_status'=>0),1011);

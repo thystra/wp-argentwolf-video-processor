@@ -1495,3 +1495,30 @@ reconciliation before exposing any production upload entry point.
    scoped and qualified;
 6. require exact-feature Forgejo CI and isolated real-WordPress/mock-PeerTube
    qualification for the next consequential remote-state checkpoint.
+
+
+## R44 branch authority and source checkpoint
+
+R42/R43 integration was closed on `develop-2.0` by exact commit
+`bb98090900bd53540b60cfa1fe02e76e0e420334`, tree
+`a65cf633bab608fc741639fe093f9f11f09b4e9a`; Forgejo CI run 104 passed that
+exact documentation-only closure in 17 seconds. Branch
+`feature/2.0-peertube-remote-asset-reconciliation` was created directly from that
+clean authority.
+
+R44 adds the post-`remote_created` boundary without exposing a production entry
+point. It introduces an exactly-once/restart-safe relational remote-asset commit,
+origin-bound read-only PeerTube video-status projection, and explicit processing,
+ready, missing, failed, rate-limited, and transient-read reconciliation. The
+relational row and staged-upload journal remain separate authorities: a crash
+between them is recovered by independently proving the exact unique row before
+advancing the journal. Read-only GET retries require later explicit invocations;
+there is no scheduler/poller.
+
+R44 retains the R43 no-replay rule for consequential media mutation and does not
+add upload POST/PUT authority beyond R43, source cleanup, publication/privacy
+mutation, remote deletion, retention, role promotion, administrator/REST/AJAX/
+WP-CLI/cron/worker production wiring, or backend ingest/processing capability.
+The isolated R44 Docker gate is `tests/integration/peertube-remote-asset-reconciliation-smoke.sh`.
+Exact feature commit/tree, Forgejo CI, and Docker report evidence remain pending
+until the user applies and qualifies this source checkpoint.

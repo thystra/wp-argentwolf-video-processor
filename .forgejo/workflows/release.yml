@@ -150,8 +150,10 @@ jobs:
           AWVP_ATOMIC_MODERN_AUTOLOAD=1 php tests/peertube-staged-upload-operation-store.php
           php tests/peertube-staged-upload-service.php
           AWVP_ATOMIC_MODERN_AUTOLOAD=1 php tests/peertube-staged-upload-service.php
-          php tests/peertube-staged-upload-service.php
-          AWVP_ATOMIC_MODERN_AUTOLOAD=1 php tests/peertube-staged-upload-service.php
+          php tests/peertube-remote-asset-repository.php
+          php tests/peertube-remote-asset-reconciliation-service.php
+          AWVP_ATOMIC_MODERN_AUTOLOAD=1 php tests/peertube-remote-asset-reconciliation-service.php
+          php tests/peertube-remote-reconciliation-boundary.php
           php tests/peertube-connection-admin.php
           bash -n tests/integration/peertube-http-smoke.sh
           bash -n tests/integration/peertube-auth-api-smoke.sh
@@ -163,6 +165,7 @@ jobs:
           bash -n tests/integration/peertube-backend-activation-smoke.sh
           bash -n tests/integration/peertube-token-lifecycle-smoke.sh
           bash -n tests/integration/peertube-staged-upload-smoke.sh
+          bash -n tests/integration/peertube-remote-asset-reconciliation-smoke.sh
           php tests/run.php
           php tests/storage-boundary.php
           php -d open_basedir="${FORGEJO_WORKSPACE}:/tmp" tests/open-basedir.php

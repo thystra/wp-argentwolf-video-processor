@@ -633,3 +633,19 @@ worker is added. The existing capability map remains false for AWVP-staged inges
 server-push ingest, and PeerTube processing. Therefore this checkpoint contains
 executable protocol primitives but does not yet grant a production WordPress path
 authority to transmit media.
+
+
+### R44 persistence/read reconciliation remains unreachable from production request surfaces
+
+R44 adds a concrete relational `argent_video_remote_assets` repository and a
+bounded read-only PeerTube video-status client/service, but no tenth PeerTube
+`admin_post` action, nopriv action, AJAX callback, REST route, WP-CLI command,
+cron schedule, task worker, or media hook invokes it. The only R44 remote request
+is an origin-bound bearer GET for the exact already-created video UUID. No R44
+code performs a new media POST/PUT, privacy/publication mutation, remote delete,
+or staging-file deletion.
+
+The isolated integration fixture may invoke the class directly from a fresh
+WP-CLI process solely to qualify persistence/restart boundaries. Product
+capabilities remain false for staged ingest, server push, and PeerTube processing
+until a later tranche explicitly wires, discloses, and qualifies those surfaces.

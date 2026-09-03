@@ -411,3 +411,28 @@ byte-bearing PUT, and zero zero-byte probes for this happy-path case.
 This is development-checkpoint evidence against an isolated PeerTube-shaped mock,
 not a live-PeerTube/TLS, exact-ZIP, release, upgrade, Plugin Check, publication,
 processing-completion, remote-asset-commit, cleanup, or retention gate.
+
+
+## PeerTube remote-asset persistence/readiness checkpoint
+
+After the R44 source checkpoint is committed, run:
+
+```bash
+AWVP_ADMIN_REPORT_DIR=/absolute/report/path \
+  bash tests/integration/peertube-remote-asset-reconciliation-smoke.sh
+```
+
+The wrapper reproduces the R43 private staged upload, then invokes the otherwise
+unwired R44 reconciliation service from WP-CLI. In addition to the exact R43
+request transcript, the mock permits exactly two bearer-authenticated read-only
+video observations of UUID `12345678-1234-4abc-9def-1234567890ab`: first
+processing, then ready. The durable processing wait is exercised between those
+GETs and must suppress an early read.
+
+The final state gate requires exactly one secondary/private remote-asset row,
+operation phase `ready_verified`, the exact channel/UUID/embed authority, source
+bytes still present and identical, two video GETs, no automatic retry, no
+plaintext credential/raw-response canaries, all staged-ingest/server-push/
+processing capability bits false, and no gated `WP_DEBUG` diagnostics. This is a
+development-checkpoint mock gate, not live-PeerTube/TLS, production upload wiring,
+publication, source cleanup, retention, remote deletion, or release qualification.
