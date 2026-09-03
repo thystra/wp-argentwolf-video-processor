@@ -175,6 +175,8 @@ namespace ArgentVideo {
     require_once dirname(__DIR__) . '/includes/PeerTube_Password_Grant_Api.php';
     require_once dirname(__DIR__) . '/includes/PeerTube_Identity_Destination_Api.php';
     require_once dirname(__DIR__) . '/includes/PeerTube_Token_Lifecycle_Api.php';
+    require_once dirname(__DIR__) . '/includes/PeerTube_Staged_Upload_Api.php';
+    require_once dirname(__DIR__) . '/includes/PeerTube_Staged_Upload_State_Machine.php';
     require_once dirname(__DIR__) . '/includes/PeerTube_Api_Client.php';
 
     $assert = static function (bool $condition, string $message): void {
@@ -1291,6 +1293,237 @@ namespace ArgentVideo {
     $assert('POST' === $revoke_request['args']['method'], 'R41 revoke must use POST.');
     $assert('Bearer access-refresh-r41' === ($revoke_request['args']['headers']['Authorization'] ?? ''), 'R41 revoke bearer mismatch.');
     $assert('' === ($revoke_request['args']['body'] ?? null), 'R41 revoke must send an empty body.');
+
+    // R43 resumable staged-upload wire contract. These primitives perform
+    // exactly one reviewed request per call and project only durable identity
+    // or offset data; bearer credentials and raw server fields never escape.
+    $upload_access = 'r43-upload-access-token';
+    $upload_session = '0123456789abcdef0123456789abcdef';
+    $upload_uuid = '12345678-1234-4abc-9def-1234567890ab';
+
+    $before_upload_init = count($GLOBALS['awvp_http_requests']);
+    $queue(
+        $response(
+            201,
+            '',
+            array('Location' => '/api/v1/videos/upload-resumable?upload_id=' . $upload_session)
+        )
+    );
+    $upload_init = $api->begin_resumable_upload(
+        $upload_access,
+        '41',
+        'R43 staged source',
+        'r43-source.mp4',
+        'video/mp4',
+        10
+    );
+    $assert(true === $upload_init['ok'], 'Valid R43 resumable-upload initialization failed.');
+    $assert(
+        array('session_id' => $upload_session) === $upload_init['data'],
+        'R43 resumable-upload initialization exposed unexpected data.'
+    );
+    $assert(
+        $before_upload_init + 1 === count($GLOBALS['awvp_http_requests']),
+        'R43 resumable-upload initialization performed an extra request.'
+    );
+    $init_request = $GLOBALS['awvp_http_requests'][array_key_last($GLOBALS['awvp_http_requests'])];
+    $assert(
+        'https://video.example.org/api/v1/videos/upload-resumable' === $init_request['url'],
+        'R43 resumable-upload initialization URL mismatch.'
+    );
+    $assert('POST' === $init_request['args']['method'], 'R43 resumable-upload initialization must use POST.');
+    $assert(
+        'Bearer ' . $upload_access === ($init_request['args']['headers']['Authorization'] ?? ''),
+        'R43 resumable-upload initialization bearer mismatch.'
+    );
+    $assert(
+        'application/json' === ($init_request['args']['headers']['Content-Type'] ?? '')
+        && '10' === ($init_request['args']['headers']['X-Upload-Content-Length'] ?? '')
+        && 'video/mp4' === ($init_request['args']['headers']['X-Upload-Content-Type'] ?? ''),
+        'R43 resumable-upload initialization headers drifted.'
+    );
+    $init_body = json_decode((string) $init_request['args']['body'], true, 8, JSON_THROW_ON_ERROR);
+    $assert(
+        array(
+            'channelId' => 41,
+            'name'      => 'R43 staged source',
+            'privacy'   => 3,
+            'filename'  => 'r43-source.mp4',
+        ) === $init_body,
+        'R43 resumable-upload initialization body drifted from the reviewed private-upload contract.'
+    );
+    $assert(
+        ! str_contains(serialize($upload_init), $upload_access),
+        'R43 resumable-upload initialization result retained bearer authority.'
+    );
+
+    $before_bad_location = count($GLOBALS['awvp_http_requests']);
+    $queue(
+        $response(
+            201,
+            '',
+            array('Location' => 'https://attacker.example/api/v1/videos/upload-resumable?upload_id=' . $upload_session)
+        )
+    );
+    $bad_location = $api->begin_resumable_upload(
+        $upload_access,
+        '41',
+        'R43 staged source',
+        'r43-source.mp4',
+        'video/mp4',
+        10
+    );
+    $assert(false === $bad_location['ok'], 'Cross-origin resumable-upload Location was accepted.');
+    $assert(
+        'upload_init_location_invalid' === ($bad_location['error']['code'] ?? ''),
+        'Cross-origin resumable-upload Location did not fail with the reviewed local code.'
+    );
+    $assert(
+        $before_bad_location + 1 === count($GLOBALS['awvp_http_requests']),
+        'Cross-origin Location validation performed an extra request.'
+    );
+
+    $chunk_bytes = "abcde";
+    $before_chunk = count($GLOBALS['awvp_http_requests']);
+    $queue($response(308, '', array('Range' => 'bytes=0-4')));
+    $chunk_progress = $api->upload_resumable_chunk(
+        $upload_access,
+        $upload_session,
+        0,
+        10,
+        'video/mp4',
+        $chunk_bytes
+    );
+    $assert(
+        true === $chunk_progress['ok']
+        && array('state' => 'incomplete', 'confirmed_bytes' => 5) === $chunk_progress['data'],
+        'R43 resumable-upload 308 progress projection drifted.'
+    );
+    $assert($before_chunk + 1 === count($GLOBALS['awvp_http_requests']), 'R43 chunk PUT performed an extra request.');
+    $chunk_request = $GLOBALS['awvp_http_requests'][array_key_last($GLOBALS['awvp_http_requests'])];
+    $assert(
+        'https://video.example.org/api/v1/videos/upload-resumable?upload_id=' . $upload_session === $chunk_request['url'],
+        'R43 chunk PUT URL mismatch.'
+    );
+    $assert('PUT' === $chunk_request['args']['method'], 'R43 chunk request must use PUT.');
+    $assert(
+        'bytes 0-4/10' === ($chunk_request['args']['headers']['Content-Range'] ?? '')
+        && '5' === ($chunk_request['args']['headers']['Content-Length'] ?? '')
+        && 'video/mp4' === ($chunk_request['args']['headers']['Content-Type'] ?? '')
+        && $chunk_bytes === ($chunk_request['args']['body'] ?? null),
+        'R43 chunk PUT headers/body drifted from the exact claimed byte range.'
+    );
+
+    $queue(
+        $response(
+            200,
+            json_encode(
+                array(
+                    'video' => array(
+                        'id' => 901,
+                        'uuid' => strtoupper($upload_uuid),
+                        'name' => 'must-not-escape',
+                    ),
+                    'unreviewed' => 'must-not-escape',
+                ),
+                JSON_THROW_ON_ERROR
+            ),
+            array('Content-Type' => 'application/json')
+        )
+    );
+    $created = $api->upload_resumable_chunk(
+        $upload_access,
+        $upload_session,
+        5,
+        10,
+        'video/mp4',
+        'fghij'
+    );
+    $assert(
+        true === $created['ok']
+        && array(
+            'state' => 'created',
+            'remote_identity' => array('id' => '901', 'uuid' => $upload_uuid),
+        ) === $created['data'],
+        'R43 final resumable-upload response was not minimally projected.'
+    );
+    $assert(
+        ! str_contains(serialize($created), 'must-not-escape')
+        && ! str_contains(serialize($created), $upload_access),
+        'R43 final upload projection retained raw response or bearer data.'
+    );
+
+    $before_probe = count($GLOBALS['awvp_http_requests']);
+    $queue($response(308, '', array('Range' => 'bytes=0-4')));
+    $probe = $api->probe_resumable_upload($upload_access, $upload_session, 10);
+    $assert(
+        true === $probe['ok']
+        && array('state' => 'incomplete', 'confirmed_bytes' => 5) === $probe['data'],
+        'R43 zero-byte resumable probe projection drifted.'
+    );
+    $assert($before_probe + 1 === count($GLOBALS['awvp_http_requests']), 'R43 zero-byte probe performed an extra request.');
+    $probe_request = $GLOBALS['awvp_http_requests'][array_key_last($GLOBALS['awvp_http_requests'])];
+    $assert(
+        'PUT' === $probe_request['args']['method']
+        && 'bytes */10' === ($probe_request['args']['headers']['Content-Range'] ?? '')
+        && '0' === ($probe_request['args']['headers']['Content-Length'] ?? '')
+        && 'application/octet-stream' === ($probe_request['args']['headers']['Content-Type'] ?? '')
+        && '' === ($probe_request['args']['body'] ?? null),
+        'R43 zero-byte probe transmitted unexpected content.'
+    );
+
+    $before_invalid_upload = count($GLOBALS['awvp_http_requests']);
+    $invalid_upload = $api->begin_resumable_upload(
+        $upload_access,
+        '41',
+        'R43 staged source',
+        '../r43-source.mp4',
+        'video/mp4',
+        10
+    );
+    $assert(
+        false === $invalid_upload['ok']
+        && 'upload_init_input_invalid' === ($invalid_upload['error']['code'] ?? ''),
+        'Unsafe R43 upload filename was accepted.'
+    );
+    $invalid_session = $api->probe_resumable_upload($upload_access, 'bad/session', 10);
+    $assert(
+        false === $invalid_session['ok']
+        && 'upload_probe_input_invalid' === ($invalid_session['error']['code'] ?? ''),
+        'Unsafe R43 upload session ID was accepted.'
+    );
+    $assert(
+        $before_invalid_upload === count($GLOBALS['awvp_http_requests']),
+        'Rejected R43 upload inputs performed HTTP requests.'
+    );
+
+    $queue(
+        $response(
+            429,
+            '{"type":"upload-secret-sentinel"}',
+            array('Content-Type' => 'application/problem+json', 'Retry-After' => '17')
+        )
+    );
+    $rate_limited_init = $api->begin_resumable_upload(
+        $upload_access,
+        '41',
+        'R43 staged source',
+        'r43-source.mp4',
+        'video/mp4',
+        10
+    );
+    $assert(
+        false === $rate_limited_init['ok']
+        && 'rate_limited' === ($rate_limited_init['error']['status'] ?? '')
+        && 429 === ($rate_limited_init['error']['http_status'] ?? 0)
+        && 17 === ($rate_limited_init['error']['retry_after'] ?? 0),
+        'R43 initialization 429 did not preserve the bounded retry signal.'
+    );
+    $assert(
+        ! str_contains(serialize($rate_limited_init), 'upload-secret-sentinel')
+        && ! str_contains(serialize($rate_limited_init), $upload_access),
+        'R43 upload error normalization retained raw response or bearer data.'
+    );
 
     $dev_http = new PeerTube_Http_Client('http://127.0.0.1:9000');
     $dev_api = new PeerTube_Api_Client($dev_http);

@@ -138,9 +138,20 @@
   `45b8faed47147f3052a557aa6511d84ad25dca9c`, tree
   `581d4f98ee24146309788bf6e8ad59794161d27e`, passed Forgejo CI run 99 and is
   the clean authority for tranche 2.0-4.
-- [ ] R42: qualify the first tranche 2.0-4 staged-upload mutation-state
-  foundation. This checkpoint fixes immutable staged-source/backend/destination
-  identity, exact-CAS operation journaling, explicit in-flight/indeterminate
-  reconciliation, remote-identity/remote-asset separation, and cleanup gates;
-  it must keep `ingest.awvp_staging`, `ingest.server_push`, and
-  `processing.video` false and must not add a PeerTube media-upload POST.
+- [x] R42 staged-upload foundation authority: exact feature commit
+  `b1c500252ddb6632388fbbb08aee4015fc9e3636`, tree
+  `3c0ee7e142ac48349bda4b72545dfbd76425bac5`, was reported green and is the
+  accepted R43 branch baseline. The maintainer reported the run as `CI 99`, but
+  that numeric identifier collides with the already-recorded R41 closure run 99;
+  preserve the green result without treating the duplicate number as unique
+  historical evidence.
+- [ ] R43: qualify the executable resumable-upload transport/service boundary.
+  This checkpoint may implement only `/api/v1/videos/upload-resumable` init,
+  bounded byte-bearing PUT, and zero-byte offset reconciliation behind the R42
+  journal. It must keep all ingest/processing capability bits false and expose no
+  WordPress/admin/REST/AJAX/CLI/cron execution entry point. An uncertain init or
+  byte-bearing PUT must never be automatically replayed; a chunk may become
+  retryable only after a later explicit zero-byte probe positively establishes the
+  exact confirmed offset. Require exact-feature Forgejo CI plus
+  `tests/integration/peertube-staged-upload-smoke.sh` on both supported
+  WordPress/PHP/MariaDB cases before this checkpoint is considered qualified.

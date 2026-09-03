@@ -14,7 +14,7 @@ namespace ArgentVideo;
  * ephemeral caller-owned values. This class performs no option writes and
  * never returns an unreviewed raw response object.
  */
-final class PeerTube_Api_Client implements PeerTube_Password_Grant_Api, PeerTube_Identity_Destination_Api, PeerTube_Token_Lifecycle_Api
+final class PeerTube_Api_Client implements PeerTube_Password_Grant_Api, PeerTube_Identity_Destination_Api, PeerTube_Token_Lifecycle_Api, PeerTube_Staged_Upload_Api
 {
     private const CONFIG_PATH = '/api/v1/config';
     private const MAX_VERSION_BYTES = 64;
@@ -262,6 +262,99 @@ final class PeerTube_Api_Client implements PeerTube_Password_Grant_Api, PeerTube
         return self::success(array('revoked' => true));
     }
 
+    /** @return array{ok:bool,data:array<string,mixed>|null,error:array<string,mixed>|null} */
+    public function begin_resumable_upload(
+        string $access_token,
+        string $destination_id,
+        string $name,
+        string $filename,
+        string $content_type,
+        int $total_bytes
+    ): array {
+        $access_token = self::opaque_secret($access_token, self::MAX_SECRET_BYTES);
+        $destination_id = self::canonical_decimal_id($destination_id);
+        $channel_id = '' === $destination_id ? false : filter_var(
+            $destination_id,
+            FILTER_VALIDATE_INT,
+            array('options' => array('min_range' => 1))
+        );
+        if ('' === $access_token || false === $channel_id || ! self::valid_upload_name($name)
+            || ! self::valid_upload_filename($filename) || 'video/mp4' !== $content_type || $total_bytes < 1) {
+            return self::failure(PeerTube_Api_Error::invalid_response('upload_init_input_invalid'));
+        }
+
+        $response = $this->http->post_resumable_upload_init(
+            $access_token,
+            array(
+                'channelId' => (int) $channel_id,
+                'name'      => $name,
+                'privacy'   => PeerTube_Staged_Upload_State_Machine::PRIVATE_PRIVACY,
+                'filename'  => $filename,
+            ),
+            $total_bytes,
+            $content_type
+        );
+        if (! ($response['ok'] ?? false)) {
+            return self::failure(is_array($response['error'] ?? null) ? $response['error'] : null);
+        }
+        $status = is_int($response['http_status'] ?? null) ? $response['http_status'] : 0;
+        if (! in_array($status, array(200, 201), true)) {
+            return self::failure(PeerTube_Api_Error::invalid_response('upload_init_status_invalid', $status));
+        }
+        $headers = is_array($response['headers'] ?? null) ? $response['headers'] : array();
+        $session_id = self::upload_session_id_from_location($headers['location'] ?? '', $this->origin());
+        if ('' === $session_id) {
+            return self::failure(PeerTube_Api_Error::invalid_response('upload_init_location_invalid', $status));
+        }
+        return self::success(array('session_id' => $session_id));
+    }
+
+    /** @return array{ok:bool,data:array<string,mixed>|null,error:array<string,mixed>|null} */
+    public function upload_resumable_chunk(
+        string $access_token,
+        string $session_id,
+        int $start,
+        int $total_bytes,
+        string $content_type,
+        string $chunk
+    ): array {
+        $access_token = self::opaque_secret($access_token, self::MAX_SECRET_BYTES);
+        if ('' === $access_token || ! self::valid_upload_session_id($session_id)
+            || $start < 0 || $total_bytes < 1 || $start >= $total_bytes
+            || '' === $chunk || strlen($chunk) > PeerTube_Http_Client::MAX_UPLOAD_REQUEST_BYTES
+            || $start > PHP_INT_MAX - strlen($chunk) || $start + strlen($chunk) > $total_bytes
+            || 'video/mp4' !== $content_type) {
+            return self::failure(PeerTube_Api_Error::invalid_response('upload_chunk_input_invalid'));
+        }
+
+        return self::upload_progress_projection(
+            $this->http->put_resumable_upload_chunk(
+                $access_token,
+                $session_id,
+                $start,
+                $total_bytes,
+                $content_type,
+                $chunk
+            ),
+            $total_bytes,
+            'upload_chunk'
+        );
+    }
+
+    /** @return array{ok:bool,data:array<string,mixed>|null,error:array<string,mixed>|null} */
+    public function probe_resumable_upload(string $access_token, string $session_id, int $total_bytes): array
+    {
+        $access_token = self::opaque_secret($access_token, self::MAX_SECRET_BYTES);
+        if ('' === $access_token || ! self::valid_upload_session_id($session_id) || $total_bytes < 1) {
+            return self::failure(PeerTube_Api_Error::invalid_response('upload_probe_input_invalid'));
+        }
+        return self::upload_progress_projection(
+            $this->http->put_resumable_upload_probe($access_token, $session_id, $total_bytes),
+            $total_bytes,
+            'upload_probe'
+        );
+    }
+
     /**
      * Verify and minimally project the authenticated PeerTube identity.
      *
@@ -493,6 +586,100 @@ final class PeerTube_Api_Client implements PeerTube_Password_Grant_Api, PeerTube
 
         $parts = explode(';', strtolower($value), 2);
         return 'application/json' === trim($parts[0]);
+    }
+
+    /** @param array<string,mixed> $response @return array{ok:bool,data:array<string,mixed>|null,error:array<string,mixed>|null} */
+    private static function upload_progress_projection(array $response, int $total_bytes, string $prefix): array
+    {
+        if (! ($response['ok'] ?? false)) {
+            return self::failure(is_array($response['error'] ?? null) ? $response['error'] : null);
+        }
+        $status = is_int($response['http_status'] ?? null) ? $response['http_status'] : 0;
+        if (308 === $status) {
+            $headers = is_array($response['headers'] ?? null) ? $response['headers'] : array();
+            $confirmed = self::confirmed_bytes_from_range($headers['range'] ?? '', $total_bytes);
+            if (null === $confirmed) {
+                return self::failure(PeerTube_Api_Error::invalid_response('upload_range_invalid', 308));
+            }
+            return self::success(array('state' => 'incomplete', 'confirmed_bytes' => $confirmed));
+        }
+        if (200 !== $status) {
+            return self::failure(PeerTube_Api_Error::invalid_response($prefix . '_status_invalid', $status));
+        }
+        $decoded = self::success_object($response, 200, 'upload_response');
+        if (! $decoded['ok']) {
+            return $decoded;
+        }
+        $video = self::object($decoded['data']['video'] ?? null);
+        $id = self::canonical_decimal_id($video['id'] ?? null);
+        $uuid = is_string($video['uuid'] ?? null) ? strtolower($video['uuid']) : '';
+        if ('' === $id || 1 !== preg_match('/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/D', $uuid)) {
+            return self::failure(PeerTube_Api_Error::invalid_response('upload_response_shape_invalid', 200));
+        }
+        return self::success(array(
+            'state' => 'created',
+            'remote_identity' => array('id' => $id, 'uuid' => $uuid),
+        ));
+    }
+
+    private static function upload_session_id_from_location(mixed $location, string $origin): string
+    {
+        if (! is_string($location) || '' === $location || strlen($location) > 1024) {
+            return '';
+        }
+        $absolute = str_starts_with($location, '/') ? $origin . $location : $location;
+        $parts = function_exists('wp_parse_url') ? wp_parse_url($absolute) : parse_url($absolute);
+        if (! is_array($parts) || isset($parts['user']) || isset($parts['pass']) || isset($parts['fragment'])) {
+            return '';
+        }
+        $scheme = strtolower((string) ($parts['scheme'] ?? ''));
+        $host = strtolower((string) ($parts['host'] ?? ''));
+        $host_output = false !== filter_var(trim($host, '[]'), FILTER_VALIDATE_IP, FILTER_FLAG_IPV6)
+            ? '[' . trim($host, '[]') . ']'
+            : $host;
+        $port = $parts['port'] ?? null;
+        $candidate_origin = $scheme . '://' . $host_output . (is_int($port) ? ':' . $port : '');
+        if (! hash_equals($origin, $candidate_origin) || '/api/v1/videos/upload-resumable' !== ($parts['path'] ?? '')) {
+            return '';
+        }
+        $query = array();
+        parse_str((string) ($parts['query'] ?? ''), $query);
+        if (array('upload_id') !== array_keys($query) || ! is_string($query['upload_id'])) {
+            return '';
+        }
+        return self::valid_upload_session_id($query['upload_id']) ? $query['upload_id'] : '';
+    }
+
+    private static function confirmed_bytes_from_range(mixed $range, int $total_bytes): ?int
+    {
+        if ('' === $range) {
+            return 0;
+        }
+        if (! is_string($range) || strlen($range) > 128
+            || 1 !== preg_match('/^bytes=0-([0-9]+)$/D', trim($range), $matches)) {
+            return null;
+        }
+        $end = filter_var($matches[1], FILTER_VALIDATE_INT, array('options' => array('min_range' => 0)));
+        if (false === $end || $end >= $total_bytes || $end === PHP_INT_MAX) {
+            return null;
+        }
+        return (int) $end + 1;
+    }
+
+    private static function valid_upload_session_id(string $value): bool
+    {
+        return 1 === preg_match('/^[A-Za-z0-9._~-]{1,191}$/D', $value);
+    }
+
+    private static function valid_upload_filename(string $value): bool
+    {
+        return '' !== $value && strlen($value) <= 255 && basename($value) === $value
+            && ! str_contains($value, '/') && ! str_contains($value, '\\') && 1 !== preg_match('/[\x00-\x1F\x7F]/', $value);
+    }
+
+    private static function valid_upload_name(string $value): bool
+    {
+        return '' !== self::strict_text($value, 120);
     }
 
     private static function server_version(mixed $value): string

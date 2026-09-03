@@ -622,3 +622,14 @@ change:
 
 This document is a project contract, not an immutable substitute for the
 current official documentation.
+
+### R43 executable code remains unreachable from WordPress request surfaces
+
+R43 class-loads the resumable transport/service so dependency-free and later Docker
+fixtures can exercise it, but `Plugin` and `PeerTube_Connection_Admin` do not
+construct or invoke the service. No tenth PeerTube `admin_post` handler, nopriv hook,
+AJAX action, REST route, WP-CLI command, cron event, queue consumer, or background
+worker is added. The existing capability map remains false for AWVP-staged ingest,
+server-push ingest, and PeerTube processing. Therefore this checkpoint contains
+executable protocol primitives but does not yet grant a production WordPress path
+authority to transmit media.

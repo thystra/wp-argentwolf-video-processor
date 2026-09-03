@@ -597,3 +597,12 @@ Refresh/revoke/disconnect are administrator lifecycle operations, not backend
 capabilities. They are not invoked by `eligible()`, page GET, cron, routing, or
 media processing. Registry retirement uses an exact active-to-retired CAS that
 preserves unrelated descriptors and fails closed on competing state.
+
+## R43 transport existence still does not grant backend capability
+
+The R43 resumable-upload API/service is intentionally not consulted by
+`PeerTube_Backend_Adapter`. The adapter continues to advertise only the capabilities
+already authorized by the R41 connection/lifecycle tranche; staged ingest and
+processing remain false. A later checkpoint must explicitly connect a reviewed
+administrator/worker execution policy to this service before any capability bit may
+change.

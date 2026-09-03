@@ -249,3 +249,22 @@ must use appropriate URL/SSRF validation and output escaping when implemented.
 11. staging cleanup, source retention, and delivery verification are separate
     lifecycle gates;
 12. local AWVP processing remains independent and regression-tested.
+
+## 11.2 R43 bounded resumable-upload transport
+
+R43 implements only PeerTube's resumable upload protocol at
+`/api/v1/videos/upload-resumable`. Initialization is a bounded JSON POST carrying the
+selected channel, private privacy value, name, and filename plus exact content length
+metadata. Source bytes are sent only by bounded PUT requests with an exact
+`Content-Range`; an offset probe is a zero-byte PUT using `Content-Range: bytes */N`.
+The API projection retains only a reviewed upload-session identifier, confirmed byte
+offset, or final remote video id/UUID. Bearer tokens and response bodies are not
+persisted in upload-operation state.
+
+The staged-upload service always journals the exact request kind/range and a one-use
+capability commitment before remote I/O, then re-proves the active backend, selected
+destination, exact immutable staged source, and usable managed credential. Unknown
+transport/result state is durably fenced as `upload_indeterminate`. No ordinary
+advance path can replay an uncertain request. Only an explicit zero-byte probe may
+reconcile an uncertain chunk; an uncertain initialization has no automatic retry or
+probe-based escape in this checkpoint.

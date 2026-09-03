@@ -1354,3 +1354,46 @@ and `processing.video` stay false. The next checkpoint may add the first media
 POST only after the exact PeerTube upload protocol and reconciliation behavior
 are reviewed against this state machine, with no automatic replay from
 `upload_indeterminate`.
+
+## R43 resumable-upload execution checkpoint
+
+R43 is based on exact R42 feature tree `3c0ee7e142ac48349bda4b72545dfbd76425bac5`.
+The R42 feature commit reported by the maintainer is
+`b1c500252ddb6632388fbbb08aee4015fc9e3636`; its feature CI was reported green.
+The exact Forgejo run number remains to be confirmed before R42 qualification
+closure evidence is recorded.
+
+This checkpoint adds the concrete PeerTube resumable-upload transport and an
+explicit service around the existing durable operation journal. The only reviewed
+media endpoint is `/api/v1/videos/upload-resumable`: JSON initialization, bounded
+byte-range PUTs, and zero-byte offset probes. Every consequential request is preceded
+by a durable `upload_in_flight` claim and a second local source/backend/credential
+re-proof. Transport ambiguity after a claim becomes `upload_indeterminate`; ordinary
+`advance()` cannot replay it. For chunk requests, a later explicit `reconcile()` may
+issue only a zero-byte probe and may return to `ready` only from a positively observed
+remote offset, or advance directly to `remote_created` if PeerTube proves creation.
+
+The executor is class-loaded for dependency-free testing but deliberately has no
+WordPress action, administrator button, REST route, AJAX action, WP-CLI command, cron,
+worker, queue, or capability-driven call path. `ingest.awvp_staging`,
+`ingest.server_push`, and `processing.video` remain false. The legacy multipart
+`/api/v1/videos/upload` endpoint remains outside the reviewed implementation.
+
+
+R43 qualification adds focused source tests for the exact wire contract and service
+executor in both atomic-option autoload models. The isolated real-WordPress gate is:
+
+```bash
+AWVP_ADMIN_REPORT_DIR=/absolute/report/path \
+  bash tests/integration/peertube-staged-upload-smoke.sh
+```
+
+That matrix must reproduce the complete R38-R40 activation sequence and then add
+exactly one private resumable-init POST plus one exact byte-bearing PUT for a
+16-byte managed staged source. The redacted fixture transcript contains no token or
+source contents. The final state must be `remote_created` at revision 5 with the
+exact PeerTube id/UUID, the source file still present and byte-identical, no remote
+asset row committed, ingest/processing capabilities still false, no automatic
+remote retry, and no WordPress/PHP diagnostic. This is isolated mock-PeerTube
+development-checkpoint evidence; it is not live-PeerTube/TLS or release-artifact
+qualification.

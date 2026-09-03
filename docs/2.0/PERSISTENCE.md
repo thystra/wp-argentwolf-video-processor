@@ -1023,3 +1023,19 @@ The following are intentionally not guessed in Tranche 2.0-1:
 
 Those decisions require their corresponding implementation-time API and
 WordPress review.
+
+### R43 execution semantics for the staged-upload journal
+
+R43 begins consuming the R42 journal but does not weaken its persistence boundaries.
+Each init/chunk attempt first increments the record revision into
+`upload_in_flight`, storing only a SHA-256 commitment to an ephemeral attempt
+capability plus request kind/start/byte count. A positive init records only the
+reviewed upload-session identifier. A positive 308 records only the exact confirmed
+byte count. Final success records only the reviewed PeerTube id/UUID and remains
+`remote_created` until a later subsystem durably commits the corresponding remote
+asset row. Raw access/refresh tokens and source bytes are never journal fields.
+
+An indeterminate byte-bearing PUT remains non-replayable until an explicit zero-byte
+remote offset probe supplies positive evidence. The probe itself carries no source
+bytes. R43 still does not create or delete staged files, commit remote-asset rows,
+observe processing completion, or open cleanup.

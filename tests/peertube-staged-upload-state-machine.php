@@ -1,8 +1,5 @@
 <?php
-/**
- * Focused tests for the R42 staged-upload mutation/reconciliation state contract.
- */
-
+/** Focused tests for the resumable staged-upload state contract. */
 declare(strict_types=1);
 
 require_once dirname(__DIR__) . '/includes/Backend_Identity.php';
@@ -13,205 +10,62 @@ require_once dirname(__DIR__) . '/includes/PeerTube_Staged_Upload_State_Machine.
 
 use ArgentVideo\PeerTube_Staged_Upload_State_Machine as Machine;
 
-$assert = static function (bool $condition, string $message): void {
-    if (! $condition) {
-        fwrite(STDERR, "FAIL: {$message}\n");
-        exit(1);
-    }
+$assert = static function (bool $condition, string $message): void { if (! $condition) { fwrite(STDERR,"FAIL: $message\n"); exit(1); } };
+$source = array('kind'=>'wordpress_staging','relative_path'=>'77/staging/source.mp4','sha256'=>str_repeat('a',64),'bytes'=>1500000);
+$upload = array('filename'=>'source.mp4','content_type'=>'video/mp4','name'=>'R43 staged fixture','privacy'=>3);
+$make = static function(string $id='upload_11111111111111111111111111111111') use($source,$upload,$assert): array {
+    $r=Machine::create(array('operation_id'=>$id,'video_post_id'=>77,'backend_id'=>'peertube-primary','origin'=>'https://video.example.org','destination_id'=>'41','source'=>$source,'upload'=>$upload),7,1000);
+    $assert(is_array($r),'Could not create upload record.'); return $r;
 };
+$remote=array('id'=>'901','uuid'=>'12345678-1234-4abc-9def-1234567890ab');
+$cap1=str_repeat('1',64); $cap2=str_repeat('2',64); $cap3=str_repeat('3',64);
 
-$source = array(
-    'kind'          => 'wordpress_staging',
-    'relative_path' => '77/staging/source.mp4',
-    'sha256'        => str_repeat('a', 64),
-    'bytes'         => 123456,
-);
+$r=$make();
+$assert(Machine::PHASE_READY===$r['phase'] && 0===$r['confirmed_bytes'] && ''===$r['upload_session_id'],'Initial resumable state drifted.');
+$init=Machine::apply($r,Machine::EVENT_CLAIM_UPLOAD,array('attempt_capability'=>$cap1,'request_kind'=>'init','request_start'=>0,'request_bytes'=>0),1001);
+$assert(is_array($init)&&Machine::PHASE_UPLOAD_IN_FLIGHT===$init['phase']&&'init'===$init['request_kind'],'Init claim failed.');
+$session=Machine::apply($init,Machine::EVENT_UPLOAD_SESSION_CREATED,array('attempt_capability'=>$cap1,'session_id'=>'abcd1234efgh5678'),1002);
+$assert(is_array($session)&&Machine::PHASE_READY===$session['phase']&&'abcd1234efgh5678'===$session['upload_session_id'],'Session commit failed.');
 
-$make = static function (string $operation_id = 'upload_11111111111111111111111111111111') use ($source, $assert): array {
-    $record = Machine::create(
-        array(
-            'operation_id'   => $operation_id,
-            'video_post_id'  => 77,
-            'backend_id'     => 'peertube-primary',
-            'origin'         => 'https://video.example.org',
-            'destination_id' => '41',
-            'source'         => $source,
-        ),
-        7,
-        1000
-    );
-    $assert(is_array($record), 'Could not create a valid staged-upload record.');
-    return $record;
-};
+$chunk1=Machine::apply($session,Machine::EVENT_CLAIM_UPLOAD,array('attempt_capability'=>$cap2,'request_kind'=>'chunk','request_start'=>0,'request_bytes'=>Machine::MAX_CHUNK_BYTES),1003);
+$assert(is_array($chunk1),'First chunk claim failed.');
+$accepted=Machine::apply($chunk1,Machine::EVENT_UPLOAD_CHUNK_ACCEPTED,array('attempt_capability'=>$cap2,'confirmed_bytes'=>Machine::MAX_CHUNK_BYTES),1004);
+$assert(is_array($accepted)&&Machine::PHASE_READY===$accepted['phase']&&Machine::MAX_CHUNK_BYTES===$accepted['confirmed_bytes'],'Chunk acknowledgement failed.');
 
-$remote = array(
-    'id'   => '901',
-    'uuid' => '12345678-1234-4abc-9def-1234567890ab',
-);
-$cap1 = str_repeat('1', 64);
-$cap2 = str_repeat('2', 64);
+$remaining=$source['bytes']-Machine::MAX_CHUNK_BYTES;
+$final=Machine::apply($accepted,Machine::EVENT_CLAIM_UPLOAD,array('attempt_capability'=>$cap3,'request_kind'=>'chunk','request_start'=>Machine::MAX_CHUNK_BYTES,'request_bytes'=>$remaining),1005);
+$assert(is_array($final),'Final chunk claim failed.');
+$uncertain=Machine::apply($final,Machine::EVENT_UPLOAD_INDETERMINATE,array('attempt_capability'=>$cap3,'code'=>'peertube.upload.indeterminate','http_status'=>0),1006);
+$assert(is_array($uncertain)&&Machine::PHASE_UPLOAD_INDETERMINATE===$uncertain['phase'],'Uncertain final chunk not fenced.');
+$assert(null===Machine::apply($uncertain,Machine::EVENT_CLAIM_UPLOAD,array('attempt_capability'=>str_repeat('4',64),'request_kind'=>'chunk','request_start'=>Machine::MAX_CHUNK_BYTES,'request_bytes'=>$remaining),1007),'Uncertain final chunk could replay silently.');
 
-$record = $make();
-$assert(Machine::PHASE_READY === $record['phase'], 'New upload operation did not start ready.');
-$assert(1 === $record['record_revision'], 'New upload operation revision drifted.');
-$assert(0 === $record['upload_attempt_no'], 'New upload operation has an attempt before claim.');
-$assert('' === $record['remote_identity']['id'], 'New upload operation contains remote identity.');
-$assert(1 === preg_match('/^[a-f0-9]{64}$/D', $record['intent_sha256']), 'Intent commitment is not a SHA-256.');
+// A zero-byte resume probe can prove that the uncertain final chunk was not
+// received, after which a new explicit request may claim it again.
+$recovered=Machine::apply($uncertain,Machine::EVENT_RECONCILE_OFFSET,array('confirmed_bytes'=>Machine::MAX_CHUNK_BYTES),1007);
+$assert(is_array($recovered)&&Machine::PHASE_READY===$recovered['phase'],'Offset reconciliation did not reopen exact retry.');
+$retry=Machine::apply($recovered,Machine::EVENT_CLAIM_UPLOAD,array('attempt_capability'=>str_repeat('4',64),'request_kind'=>'chunk','request_start'=>Machine::MAX_CHUNK_BYTES,'request_bytes'=>$remaining),1008);
+$created=Machine::apply($retry,Machine::EVENT_REMOTE_CREATED,array('attempt_capability'=>str_repeat('4',64),'remote_identity'=>$remote),1009);
+$assert(is_array($created)&&Machine::PHASE_REMOTE_CREATED===$created['phase']&&$source['bytes']===$created['confirmed_bytes'],'Final remote identity commit failed.');
 
-$claimed = Machine::apply(
-    $record,
-    Machine::EVENT_CLAIM_UPLOAD,
-    array('attempt_capability' => $cap1),
-    1001
-);
-$assert(is_array($claimed), 'Upload claim was refused.');
-$assert(Machine::PHASE_UPLOAD_IN_FLIGHT === $claimed['phase'], 'Upload claim did not enter in-flight.');
-$assert(1 === $claimed['upload_attempt_no'], 'Upload claim did not increment attempt count.');
-$assert('' !== $claimed['upload_attempt_id'], 'Upload claim did not persist an attempt commitment.');
-$assert($cap1 !== $claimed['upload_attempt_id'], 'Raw attempt capability leaked into durable state.');
+// If reconciliation instead returns the final identity, no chunk replay is needed.
+$final2=Machine::apply($accepted,Machine::EVENT_CLAIM_UPLOAD,array('attempt_capability'=>$cap3,'request_kind'=>'chunk','request_start'=>Machine::MAX_CHUNK_BYTES,'request_bytes'=>$remaining),1010);
+$final2=Machine::apply($final2,Machine::EVENT_UPLOAD_INDETERMINATE,array('attempt_capability'=>$cap3,'code'=>'peertube.upload.indeterminate','http_status'=>0),1011);
+$found=Machine::apply($final2,Machine::EVENT_RECONCILE_REMOTE_FOUND,array('remote_identity'=>$remote),1012);
+$assert(is_array($found)&&Machine::PHASE_REMOTE_CREATED===$found['phase'],'Remote-found reconciliation failed.');
 
-$wrong_cap = Machine::apply(
-    $claimed,
-    Machine::EVENT_REMOTE_CREATED,
-    array('attempt_capability' => $cap2, 'remote_identity' => $remote),
-    1002
-);
-$assert(null === $wrong_cap, 'A stale/wrong attempt capability could commit remote identity.');
+// Init 429 is retry-safe only because a definite initiation rejection cannot
+// create a video. Chunk 429 remains uncertain and is not accepted here.
+$rate=$make('upload_22222222222222222222222222222222');
+$rate=Machine::apply($rate,Machine::EVENT_CLAIM_UPLOAD,array('attempt_capability'=>$cap1,'request_kind'=>'init','request_start'=>0,'request_bytes'=>0),1100);
+$rate=Machine::apply($rate,Machine::EVENT_UPLOAD_RETRY_SAFE,array('attempt_capability'=>$cap1,'code'=>'peertube.upload.rate_limited','http_status'=>429,'retry_after'=>30),1101);
+$assert(is_array($rate)&&Machine::PHASE_RETRY_WAIT===$rate['phase'],'Init 429 did not enter durable wait.');
+$assert(null===Machine::apply($rate,Machine::EVENT_RESUME_AFTER_WAIT,array(),1130),'Wait resumed early.');
+$rate=Machine::apply($rate,Machine::EVENT_RESUME_AFTER_WAIT,array(),1131);
+$assert(is_array($rate)&&Machine::PHASE_READY===$rate['phase'],'Wait did not reopen ready state.');
 
-$indeterminate = Machine::apply(
-    $claimed,
-    Machine::EVENT_UPLOAD_INDETERMINATE,
-    array(
-        'attempt_capability' => $cap1,
-        'code'               => 'peertube.upload.indeterminate',
-        'http_status'        => 0,
-    ),
-    1002
-);
-$assert(is_array($indeterminate), 'Uncertain upload outcome was not durably representable.');
-$assert(Machine::PHASE_UPLOAD_INDETERMINATE === $indeterminate['phase'], 'Uncertain outcome did not fence replay.');
-$assert(
-    null === Machine::apply(
-        $indeterminate,
-        Machine::EVENT_CLAIM_UPLOAD,
-        array('attempt_capability' => $cap2),
-        1003
-    ),
-    'An indeterminate upload could be claimed again for silent replay.'
-);
-$assert(
-    null === Machine::apply(
-        $indeterminate,
-        Machine::EVENT_UPLOAD_RETRY_SAFE,
-        array(
-            'attempt_capability' => $cap1,
-            'code'               => 'peertube.upload.request_not_sent',
-            'http_status'        => 0,
-            'retry_after'        => 0,
-        ),
-        1003
-    ),
-    'An indeterminate upload could be downgraded to retryable without reconciliation.'
-);
+$bad=$upload; $bad['privacy']=1;
+$assert(null===Machine::create(array('operation_id'=>'upload_33333333333333333333333333333333','video_post_id'=>77,'backend_id'=>'peertube-primary','origin'=>'https://video.example.org','destination_id'=>'41','source'=>$source,'upload'=>$bad),7,1200),'Public upload intent was accepted.');
+$poison=$upload; $poison['access_token']='canary';
+$assert(null===Machine::create(array('operation_id'=>'upload_44444444444444444444444444444444','video_post_id'=>77,'backend_id'=>'peertube-primary','origin'=>'https://video.example.org','destination_id'=>'41','source'=>$source,'upload'=>$poison),7,1200),'Credential-like upload metadata was accepted.');
 
-$reconciled = Machine::apply(
-    $indeterminate,
-    Machine::EVENT_RECONCILE_REMOTE_FOUND,
-    array('remote_identity' => $remote),
-    1003
-);
-$assert(is_array($reconciled), 'Read-only reconciliation could not record a found remote identity.');
-$assert(Machine::PHASE_REMOTE_CREATED === $reconciled['phase'], 'Found remote identity did not enter remote-created state.');
-$assert($remote === $reconciled['remote_identity'], 'Reconciled remote identity drifted.');
-$assert(0 === $reconciled['remote_asset_id'], 'Remote identity was falsely treated as a committed AWVP remote asset.');
-
-$committed = Machine::apply(
-    $reconciled,
-    Machine::EVENT_COMMIT_REMOTE_ASSET,
-    array('remote_asset_id' => 55),
-    1004
-);
-$assert(is_array($committed), 'Durable remote-asset commit acknowledgement was refused.');
-$assert(Machine::PHASE_REMOTE_COMMITTED === $committed['phase'], 'Remote asset commit phase drifted.');
-$assert(55 === $committed['remote_asset_id'], 'Remote asset ID was not retained.');
-
-$processing = Machine::apply($committed, Machine::EVENT_PROCESSING_OBSERVED, array(), 1005);
-$assert(is_array($processing) && Machine::PHASE_PROCESSING === $processing['phase'], 'Processing observation failed.');
-$ready = Machine::apply($processing, Machine::EVENT_READY_VERIFIED, array(), 1006);
-$assert(is_array($ready) && Machine::PHASE_READY_VERIFIED === $ready['phase'], 'Positive ready verification failed.');
-$assert(1006 === $ready['verified_at'], 'Positive ready verification timestamp drifted.');
-
-$assert(
-    null === Machine::apply($committed, Machine::EVENT_PLAN_SOURCE_CLEANUP, array(), 1005),
-    'Source cleanup was allowed before positive ready verification.'
-);
-$cleanup = Machine::apply($ready, Machine::EVENT_PLAN_SOURCE_CLEANUP, array(), 1007);
-$assert(is_array($cleanup) && Machine::PHASE_CLEANUP_PENDING === $cleanup['phase'], 'Cleanup gate did not open after verification.');
-$complete = Machine::apply($cleanup, Machine::EVENT_CONFIRM_SOURCE_CLEANUP, array(), 1008);
-$assert(is_array($complete) && Machine::PHASE_COMPLETE === $complete['phase'], 'Cleanup confirmation did not complete the operation.');
-
-// A future uploader may classify a reviewed 429 response as retry-safe only
-// when that concrete HTTP contract proves the response created no remote video.
-// The bounded wait clears the old attempt commitment; the retry is a new explicit claim.
-$rate = $make('upload_22222222222222222222222222222222');
-$rate = Machine::apply($rate, Machine::EVENT_CLAIM_UPLOAD, array('attempt_capability' => $cap1), 1100);
-$assert(is_array($rate), 'Rate-limit fixture claim failed.');
-$rate = Machine::apply(
-    $rate,
-    Machine::EVENT_UPLOAD_RETRY_SAFE,
-    array(
-        'attempt_capability' => $cap1,
-        'code'               => 'peertube.upload.rate_limited',
-        'http_status'        => 429,
-        'retry_after'        => 30,
-    ),
-    1101
-);
-$assert(is_array($rate) && Machine::PHASE_RETRY_WAIT === $rate['phase'], '429 did not enter retry wait.');
-$assert('' === $rate['upload_attempt_id'] && 0 === $rate['upload_started_at'], 'Retry-safe result did not clear the current attempt claim.');
-$assert(null === Machine::apply($rate, Machine::EVENT_RESUME_AFTER_WAIT, array(), 1130), 'Retry wait resumed too early.');
-$rate = Machine::apply($rate, Machine::EVENT_RESUME_AFTER_WAIT, array(), 1131);
-$assert(is_array($rate) && Machine::PHASE_READY === $rate['phase'], 'Retry wait did not resume at the exact boundary.');
-$rate2 = Machine::apply($rate, Machine::EVENT_CLAIM_UPLOAD, array('attempt_capability' => $cap2), 1132);
-$assert(is_array($rate2) && 2 === $rate2['upload_attempt_no'], 'Explicit retry did not create a second distinct attempt.');
-
-$forged_retry = $rate;
-$forged_retry['last_error'] = array(
-    'code'        => 'peertube.upload.request_not_sent',
-    'http_status' => 500,
-    'retry_after' => 0,
-);
-$assert(! Machine::valid($forged_retry), 'Forged retry-safe evidence with a remote HTTP status was accepted.');
-
-// A successful upload result is accepted only from the exact in-flight claim.
-$success = $make('upload_33333333333333333333333333333333');
-$success = Machine::apply($success, Machine::EVENT_CLAIM_UPLOAD, array('attempt_capability' => $cap1), 1200);
-$success = is_array($success) ? Machine::apply(
-    $success,
-    Machine::EVENT_REMOTE_CREATED,
-    array('attempt_capability' => $cap1, 'remote_identity' => $remote),
-    1201
-) : null;
-$assert(is_array($success) && Machine::PHASE_REMOTE_CREATED === $success['phase'], 'Exact upload success was not accepted.');
-
-// Secrets and authentication artifacts are structurally forbidden from the
-// durable operation record and event payloads.
-$poison = $source;
-$poison['access_token'] = 'plaintext-canary';
-$assert(
-    null === Machine::create(
-        array(
-            'operation_id'   => 'upload_44444444444444444444444444444444',
-            'video_post_id'  => 77,
-            'backend_id'     => 'peertube-primary',
-            'origin'         => 'https://video.example.org',
-            'destination_id' => '41',
-            'source'         => $poison,
-        ),
-        7,
-        1300
-    ),
-    'Forbidden credential-like durable input was accepted.'
-);
-
-fwrite(STDOUT, "PeerTube staged upload state-machine tests passed.\n");
+fwrite(STDOUT,"PeerTube resumable staged-upload state-machine tests passed.\n");

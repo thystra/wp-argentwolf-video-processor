@@ -20,6 +20,7 @@ final class PeerTube_Http_Client
 {
     public const MAX_METADATA_RESPONSE_BYTES = 1048576;
     public const MAX_CHANNEL_RESPONSE_BYTES = 2097152;
+    public const MAX_UPLOAD_REQUEST_BYTES = 1048576;
 
     private const DEFAULT_TIMEOUT_SECONDS = 15;
     private const CONFIG_PATH = '/api/v1/config';
@@ -27,6 +28,7 @@ final class PeerTube_Http_Client
     private const TOKEN_PATH = '/api/v1/users/token';
     private const REVOKE_TOKEN_PATH = '/api/v1/users/revoke-token';
     private const CURRENT_USER_PATH = '/api/v1/users/me';
+    private const RESUMABLE_UPLOAD_PATH = '/api/v1/videos/upload-resumable';
 
     public function __construct(private readonly string $origin)
     {
@@ -167,6 +169,112 @@ final class PeerTube_Http_Client
         );
     }
 
+    /** @param array<string,mixed> $metadata @return array<string,mixed> */
+    public function post_resumable_upload_init(
+        string $access_token,
+        array $metadata,
+        int $total_bytes,
+        string $content_type
+    ): array {
+        if (! self::safe_bearer_token($access_token)
+            || array('channelId', 'name', 'privacy', 'filename') !== array_keys($metadata)
+            || ! is_int($metadata['channelId']) || $metadata['channelId'] < 1
+            || ! self::safe_request_value($metadata['name'] ?? null, 1024, true)
+            || 3 !== ($metadata['privacy'] ?? null)
+            || ! self::safe_filename($metadata['filename'] ?? null)
+            || 'video/mp4' !== $content_type
+            || $total_bytes < 1) {
+            throw new InvalidArgumentException('PeerTube resumable-upload initialization is outside the reviewed contract.');
+        }
+
+        try {
+            $body = json_encode($metadata, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES);
+        } catch (\JsonException) {
+            throw new InvalidArgumentException('PeerTube resumable-upload metadata could not be encoded.');
+        }
+
+        return $this->request(
+            'POST',
+            self::RESUMABLE_UPLOAD_PATH,
+            self::MAX_METADATA_RESPONSE_BYTES,
+            'bearer',
+            array(
+                'Authorization'           => 'Bearer ' . $access_token,
+                'Content-Type'            => 'application/json',
+                'X-Upload-Content-Length' => (string) $total_bytes,
+                'X-Upload-Content-Type'   => $content_type,
+            ),
+            $body,
+            array(200, 201)
+        );
+    }
+
+    /** @return array<string,mixed> */
+    public function put_resumable_upload_chunk(
+        string $access_token,
+        string $session_id,
+        int $start,
+        int $total_bytes,
+        string $content_type,
+        string $chunk
+    ): array {
+        $length = strlen($chunk);
+        if (! self::safe_bearer_token($access_token)
+            || ! self::safe_upload_session_id($session_id)
+            || $start < 0 || $total_bytes < 1 || $start >= $total_bytes
+            || $length < 1 || $length > self::MAX_UPLOAD_REQUEST_BYTES
+            || $start > PHP_INT_MAX - $length || $start + $length > $total_bytes
+            || 'video/mp4' !== $content_type) {
+            throw new InvalidArgumentException('PeerTube resumable-upload chunk is outside the reviewed contract.');
+        }
+
+        $end = $start + $length - 1;
+        $path = self::RESUMABLE_UPLOAD_PATH . '?upload_id=' . rawurlencode($session_id);
+        return $this->request(
+            'PUT',
+            $path,
+            self::MAX_METADATA_RESPONSE_BYTES,
+            'bearer',
+            array(
+                'Authorization' => 'Bearer ' . $access_token,
+                'Content-Type'  => $content_type,
+                'Content-Length'=> (string) $length,
+                'Content-Range' => 'bytes ' . $start . '-' . $end . '/' . $total_bytes,
+            ),
+            $chunk,
+            array(200, 308)
+        );
+    }
+
+    /** @return array<string,mixed> */
+    public function put_resumable_upload_probe(
+        string $access_token,
+        string $session_id,
+        int $total_bytes
+    ): array {
+        if (! self::safe_bearer_token($access_token)
+            || ! self::safe_upload_session_id($session_id)
+            || $total_bytes < 1) {
+            throw new InvalidArgumentException('PeerTube resumable-upload probe is outside the reviewed contract.');
+        }
+
+        $path = self::RESUMABLE_UPLOAD_PATH . '?upload_id=' . rawurlencode($session_id);
+        return $this->request(
+            'PUT',
+            $path,
+            self::MAX_METADATA_RESPONSE_BYTES,
+            'bearer',
+            array(
+                'Authorization' => 'Bearer ' . $access_token,
+                'Content-Type'  => 'application/octet-stream',
+                'Content-Length'=> '0',
+                'Content-Range' => 'bytes */' . $total_bytes,
+            ),
+            '',
+            array(200, 308)
+        );
+    }
+
     /** @return array<string, mixed> */
     public function get_current_user(string $access_token): array
     {
@@ -226,18 +334,25 @@ final class PeerTube_Http_Client
         int $response_limit,
         string $error_context = 'public',
         array $headers = array(),
-        ?string $body = null
+        ?string $body = null,
+        array $accepted_statuses = array()
     ): array {
         if ($response_limit < 1 || $response_limit > self::MAX_CHANNEL_RESPONSE_BYTES) {
             throw new InvalidArgumentException('PeerTube HTTP response limit is outside the reviewed bound.');
         }
 
-        if (! in_array($method, array('GET', 'POST'), true) || ! str_starts_with($path, '/api/v1/')) {
+        if (! in_array($method, array('GET', 'POST', 'PUT'), true) || ! str_starts_with($path, '/api/v1/')) {
             throw new InvalidArgumentException('PeerTube HTTP method/path is outside the reviewed endpoint set.');
         }
 
         if (! in_array($error_context, array('public', 'sensitive', 'token', 'bearer'), true)) {
             throw new InvalidArgumentException('PeerTube HTTP error context is outside the reviewed endpoint set.');
+        }
+
+        foreach ($accepted_statuses as $accepted_status) {
+            if (! is_int($accepted_status) || $accepted_status < 200 || $accepted_status > 399) {
+                throw new InvalidArgumentException('PeerTube HTTP accepted status is outside the reviewed bound.');
+            }
         }
 
         if (! function_exists('wp_safe_remote_request')) {
@@ -346,7 +461,10 @@ final class PeerTube_Http_Client
         $content_length = self::nonnegative_integer($headers['content-length'] ?? '');
         $response_was_truncated = $content_length > $response_limit || strlen($body) >= $response_limit;
 
-        if ($http_status < 200 || $http_status >= 300) {
+        $success_status = [] === $accepted_statuses
+            ? ($http_status >= 200 && $http_status < 300)
+            : in_array($http_status, $accepted_statuses, true);
+        if (! $success_status) {
             return self::failure(
                 PeerTube_Api_Error::normalize(
                     $http_status,
@@ -432,6 +550,8 @@ final class PeerTube_Http_Client
                 'x-ratelimit-remaining',
                 'x-ratelimit-reset',
                 'x-peertube-otp',
+                'location',
+                'range',
             ) as $name
         ) {
             $value = wp_remote_retrieve_header($response, $name);
@@ -481,6 +601,20 @@ final class PeerTube_Http_Client
     {
         return strlen($value) <= 50
             && 1 === preg_match('/^[a-z0-9_]+(?:[a-z0-9_.-]+[a-z0-9_]+)?$/D', $value);
+    }
+
+    private static function safe_filename(mixed $value): bool
+    {
+        return is_string($value)
+            && '' !== $value
+            && strlen($value) <= 255
+            && basename($value) === $value
+            && ! str_contains($value, '/') && ! str_contains($value, '\\') && 1 !== preg_match('/[\x00-\x1F\x7F]/', $value);
+    }
+
+    private static function safe_upload_session_id(string $value): bool
+    {
+        return 1 === preg_match('/^[A-Za-z0-9._~-]{1,191}$/D', $value);
     }
 
     private static function user_agent(): string

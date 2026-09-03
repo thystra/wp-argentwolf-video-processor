@@ -613,13 +613,23 @@ run_case() {
         fail "The isolated administrator request sequence differed for $CURRENT_CASE."
     fi
     echo "ISOLATED_ADMIN_AUTHORIZATION_REQUEST_SEQUENCE=$CURRENT_CASE:PASS"
-    local oauth_get_count token_post_count revoke_post_count
+    local oauth_get_count token_post_count revoke_post_count upload_init_count upload_chunk_count upload_probe_count
     oauth_get_count="$(grep -c '^GET /api/v1/oauth-clients/local ' "$REQUEST_LOG" || true)"
     token_post_count="$(grep -c '^POST /api/v1/users/token ' "$REQUEST_LOG" || true)"
     revoke_post_count="$(grep -c '^POST /api/v1/users/revoke-token ' "$REQUEST_LOG" || true)"
+    upload_init_count="$(grep -c '^POST /api/v1/videos/upload-resumable ' "$REQUEST_LOG" || true)"
+    upload_chunk_count="$(grep -c '^PUT /api/v1/videos/upload-resumable .* range=bytes=[0-9]' "$REQUEST_LOG" || true)"
+    upload_probe_count="$(grep -c '^PUT /api/v1/videos/upload-resumable .* range=bytes=\*/' "$REQUEST_LOG" || true)"
     echo "ADMIN_AUTHORIZATION_OAUTH_GET_COUNT=$CURRENT_CASE:$oauth_get_count"
     echo "ADMIN_AUTHORIZATION_TOKEN_POST_COUNT=$CURRENT_CASE:$token_post_count"
     echo "ADMIN_AUTHORIZATION_REVOKE_POST_COUNT=$CURRENT_CASE:$revoke_post_count"
+    if [[ "$SMOKE_CLASS" == 'r43' ]]; then
+        [[ "$upload_init_count" == '1' && "$upload_chunk_count" == '1' && "$upload_probe_count" == '0' ]] \
+            || fail "The R43 upload mutation count differed for $CURRENT_CASE."
+        echo "STAGED_UPLOAD_INIT_POST_COUNT=$CURRENT_CASE:$upload_init_count"
+        echo "STAGED_UPLOAD_BYTE_PUT_COUNT=$CURRENT_CASE:$upload_chunk_count"
+        echo "STAGED_UPLOAD_ZERO_BYTE_PROBE_COUNT=$CURRENT_CASE:$upload_probe_count"
+    fi
     echo "ADMIN_AUTHORIZATION_AUTOMATIC_REMOTE_RETRY=$CURRENT_CASE:NONE"
 
     for forbidden_value in \
@@ -652,7 +662,11 @@ run_case() {
     else
         echo "ADMIN_AUTHORIZATION_ENCRYPTED_SECRET_PERSISTENCE=$CURRENT_CASE:PASS"
     fi
-    echo "ADMIN_AUTHORIZATION_UPLOAD_MUTATIONS=$CURRENT_CASE:NONE"
+    if [[ "$SMOKE_CLASS" == 'r43' ]]; then
+        echo "ADMIN_AUTHORIZATION_UPLOAD_MUTATIONS=$CURRENT_CASE:RESUMABLE_PRIVATE_STAGED_UPLOAD_ONLY"
+    else
+        echo "ADMIN_AUTHORIZATION_UPLOAD_MUTATIONS=$CURRENT_CASE:NONE"
+    fi
 
     if docker exec "$WORDPRESS_NAME" \
         sh -c 'test -f /var/www/html/wp-content/debug.log && grep -E "PHP (Fatal error|Parse error|Warning|Notice|Deprecated)|WordPress database error|was called incorrectly" /var/www/html/wp-content/debug.log' \

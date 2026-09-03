@@ -291,6 +291,18 @@ final class PeerTube_Api_Error
             'token_json_invalid',
             'token_shape_invalid',
             'token_status_invalid',
+            'upload_chunk_input_invalid',
+            'upload_chunk_status_invalid',
+            'upload_init_input_invalid',
+            'upload_init_location_invalid',
+            'upload_init_status_invalid',
+            'upload_probe_input_invalid',
+            'upload_probe_status_invalid',
+            'upload_range_invalid',
+            'upload_response_content_type_invalid',
+            'upload_response_json_invalid',
+            'upload_response_shape_invalid',
+            'upload_response_status_invalid',
             'wordpress_http_response_invalid',
         );
 

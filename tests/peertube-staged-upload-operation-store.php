@@ -255,6 +255,12 @@ $intent = static function (string $backend_id = 'peertube-primary', string $digi
         'origin'         => 'https://video.example.org',
         'destination_id' => '41',
         'source'         => $source($digit),
+        'upload'         => array(
+            'filename'     => 'source-' . $digit . '.mp4',
+            'content_type' => 'video/mp4',
+            'name'         => 'Staged upload ' . strtoupper($digit),
+            'privacy'      => Machine::PRIVATE_PRIVACY,
+        ),
     );
 };
 
@@ -288,7 +294,7 @@ $claim = $store->apply_event(
     $record['operation_id'],
     1,
     Machine::EVENT_CLAIM_UPLOAD,
-    array('attempt_capability' => str_repeat('2', 64)),
+    array('attempt_capability' => str_repeat('2', 64), 'request_kind'=>'init', 'request_start'=>0, 'request_bytes'=>0),
     1001
 );
 $assert(Atomic_Option_Result::APPLIED === $claim->status(), 'Exact revision upload claim did not apply.');
@@ -328,7 +334,7 @@ $assert(
         $record['operation_id'],
         3,
         Machine::EVENT_CLAIM_UPLOAD,
-        array('attempt_capability' => str_repeat('3', 64)),
+        array('attempt_capability' => str_repeat('3', 64), 'request_kind'=>'init', 'request_start'=>0, 'request_bytes'=>0),
         1003
     )->status(),
     'Indeterminate journal record permitted silent upload replay.'

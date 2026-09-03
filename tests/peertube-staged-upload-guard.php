@@ -64,6 +64,7 @@ $record = Machine::create(
         'origin'         => 'https://video.example.org',
         'destination_id' => '41',
         'source'         => $source,
+        'upload'         => array('filename'=>'source.mp4','content_type'=>'video/mp4','name'=>'Guard fixture','privacy'=>3),
     ),
     7,
     1000

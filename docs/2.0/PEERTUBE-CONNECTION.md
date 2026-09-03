@@ -1420,3 +1420,13 @@ not treated like an ordinary retryable read. This checkpoint supplies no media
 POST implementation, no upload administrator action, and no background worker
 for PeerTube transfer. The nine R38-R41 authenticated connection/lifecycle
 `admin_post` actions therefore remain the complete PeerTube mutation surface.
+
+### R43 upload executor remains outside the connection-admin surface
+
+Connection and credential management still own only the nine R38-R41 authenticated
+`admin_post` actions. R43 adds no upload action. The resumable executor consumes an
+already-active backend and its managed secret only when called directly by reviewed
+internal code/tests; it cannot be reached from the settings page, REST, AJAX, WP-CLI,
+cron, or a worker in this checkpoint. Near-expiry access/refresh credentials stop the
+executor before it claims or transmits an upload request, leaving token refresh to the
+existing explicit R41 lifecycle.

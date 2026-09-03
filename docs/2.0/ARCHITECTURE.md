@@ -715,3 +715,14 @@ The merge preserves both sides of the intentional divergence:
 
 This synchronization does not itself bump the runtime version to 2.0.0 and is
 not a 2.0 release.
+
+### R43 executable resumable boundary
+
+R43 turns the R42 state model into a narrowly executable internal boundary without
+yet making it a production feature. The HTTP/API layer understands only resumable
+initialization, bounded chunk PUT, and zero-byte offset probe. The service performs
+claim-before-I/O, re-proves local fences after the claim, reads source bytes only for
+the exact claimed chunk, and converts uncertain outcomes into a non-replayable state.
+A chunk can become retryable only after a later explicit probe proves the server's
+confirmed offset; an uncertain init remains indeterminate. No caller is wired from
+WordPress runtime entry points and no ingest/processing capability is enabled.

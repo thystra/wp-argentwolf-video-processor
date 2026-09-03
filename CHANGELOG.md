@@ -32,6 +32,13 @@
   journal, durable in-flight/indeterminate/reconciliation states, separate remote
   identity versus remote-asset commit, and a cleanup gate that cannot open before
   positive remote-ready verification.
+- Add the R43 executable resumable-upload boundary behind the still-disabled
+  staged-ingest capability: bounded PeerTube resumable initialization/chunk/offset
+  probe primitives, durable claim-before-I/O service execution, byte-range
+  reconciliation after uncertain chunk PUTs, and fail-closed handling that never
+  automatically replays an uncertain byte-bearing request. No WordPress/admin/REST/
+  AJAX/CLI/cron entry point invokes the service yet, and the legacy multipart upload
+  endpoint remains outside the reviewed surface.
 - Expand focused PeerTube security/state tests and isolated real-WordPress Docker
   development matrices through the R39 identity/destination checkpoint, with an
   R40 activation continuation that proves activation performs no additional

@@ -19,7 +19,7 @@ use Throwable;
 final class PeerTube_Staged_Upload_Operation_Store
 {
     public const OPTION = 'argentwolf_video_processor_peertube_upload_operations';
-    public const VERSION = 1;
+    public const VERSION = 2;
     public const MAX_OPERATIONS = 128;
 
     public const PROBE_PRESENT = 'present';
@@ -38,7 +38,7 @@ final class PeerTube_Staged_Upload_Operation_Store
     {
         if (! self::has_exact_keys(
             $intent,
-            array('video_post_id', 'backend_id', 'origin', 'destination_id', 'source')
+            array('video_post_id', 'backend_id', 'origin', 'destination_id', 'source', 'upload')
         )) {
             return self::begin_result(null, Atomic_Option_Result::refused());
         }
@@ -52,6 +52,7 @@ final class PeerTube_Staged_Upload_Operation_Store
                     'origin'         => $intent['origin'],
                     'destination_id' => $intent['destination_id'],
                     'source'         => $intent['source'],
+                    'upload'         => $intent['upload'],
                 ),
                 $actor_id,
                 $now
