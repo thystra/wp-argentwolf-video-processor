@@ -18,6 +18,11 @@ MOCK_RELATIVE="${AWVP_ADMIN_MOCK_RELATIVE:-tests/fixtures/peertube-password-gran
 MOCK_ROOT="$REPOSITORY_ROOT/$MOCK_RELATIVE"
 BROWSER_SUPPORT_RELATIVE="${AWVP_ADMIN_BROWSER_SUPPORT_RELATIVE:-$FIXTURE_RELATIVE}"
 BROWSER_SUPPORT_ROOT="$REPOSITORY_ROOT/$BROWSER_SUPPORT_RELATIVE"
+AFTER_BROWSER_RELATIVE="${AWVP_ADMIN_AFTER_BROWSER_RELATIVE:-}"
+AFTER_BROWSER_ROOT=''
+if [[ -n "$AFTER_BROWSER_RELATIVE" ]]; then
+    AFTER_BROWSER_ROOT="$REPOSITORY_ROOT/$AFTER_BROWSER_RELATIVE"
+fi
 
 if [[ ! "$SMOKE_CLASS" =~ ^[a-z][a-z0-9-]{0,15}$ ]]; then
     echo 'The administrator smoke class is invalid.' >&2
@@ -33,6 +38,10 @@ for relative_path in "$FIXTURE_RELATIVE" "$MOCK_RELATIVE" "$BROWSER_SUPPORT_RELA
         exit 2
     fi
 done
+if [[ -n "$AFTER_BROWSER_RELATIVE" ]] && [[ ! "$AFTER_BROWSER_RELATIVE" =~ ^tests/fixtures/[a-z0-9-]+/[a-z0-9-]+\.sh$ ]]; then
+    echo 'The administrator smoke after-browser hook path is invalid.' >&2
+    exit 2
+fi
 FIXTURE_NAME="${FIXTURE_RELATIVE##*/}"
 
 WP64_IMAGE='wordpress:6.4.2-php8.1-apache@sha256:edb987c81a75daa2cde1520b307ef7b8490864301468b564cdb61b58f920dc1c'
@@ -52,6 +61,7 @@ EXPORTED_FIXTURES_ROOT=''
 EXPORTED_FIXTURE_ROOT=''
 EXPORTED_MOCK_ROOT=''
 EXPORTED_BROWSER_SUPPORT_ROOT=''
+EXPORTED_AFTER_BROWSER=''
 CURRENT_CASE=''
 CASE_STATE_DIRECTORY=''
 REQUEST_LOG=''
@@ -596,6 +606,15 @@ run_case() {
         "/awvp-fixtures/$FIXTURE_NAME/assert-browser.php"
     echo "${SMOKE_MARKER}_BROWSER=$CURRENT_CASE:PASS"
 
+    if [[ -n "$EXPORTED_AFTER_BROWSER" ]]; then
+        # The hook is committed test code sourced from the exact read-only Git
+        # export. It may call the local wp_cli()/fail() harness functions, but
+        # it receives no production runtime authority.
+        # shellcheck disable=SC1090
+        source "$EXPORTED_AFTER_BROWSER"
+        echo "${SMOKE_MARKER}_AFTER_BROWSER=$CURRENT_CASE:PASS"
+    fi
+
     wp_cli --context=cli eval-file \
         "/var/www/html/wp-content/plugins/argentwolf-video-processor/$FIXTURE_RELATIVE/assert-state.php" \
         --use-include
@@ -624,14 +643,14 @@ run_case() {
     echo "ADMIN_AUTHORIZATION_OAUTH_GET_COUNT=$CURRENT_CASE:$oauth_get_count"
     echo "ADMIN_AUTHORIZATION_TOKEN_POST_COUNT=$CURRENT_CASE:$token_post_count"
     echo "ADMIN_AUTHORIZATION_REVOKE_POST_COUNT=$CURRENT_CASE:$revoke_post_count"
-    if [[ "$SMOKE_CLASS" == 'r43' || "$SMOKE_CLASS" == 'r44' ]]; then
+    if [[ "$SMOKE_CLASS" == 'r43' || "$SMOKE_CLASS" == 'r44' || "$SMOKE_CLASS" == 'r45cli' ]]; then
         [[ "$upload_init_count" == '1' && "$upload_chunk_count" == '1' && "$upload_probe_count" == '0' ]] \
             || fail "The R43/R44 upload mutation count differed for $CURRENT_CASE."
         echo "STAGED_UPLOAD_INIT_POST_COUNT=$CURRENT_CASE:$upload_init_count"
         echo "STAGED_UPLOAD_BYTE_PUT_COUNT=$CURRENT_CASE:$upload_chunk_count"
         echo "STAGED_UPLOAD_ZERO_BYTE_PROBE_COUNT=$CURRENT_CASE:$upload_probe_count"
     fi
-    if [[ "$SMOKE_CLASS" == 'r44' ]]; then
+    if [[ "$SMOKE_CLASS" == 'r44' || "$SMOKE_CLASS" == 'r45cli' ]]; then
         [[ "$remote_video_get_count" == '2' ]] || fail "The R44 remote-video GET count differed for $CURRENT_CASE."
         echo "REMOTE_VIDEO_GET_COUNT=$CURRENT_CASE:$remote_video_get_count"
     fi
@@ -667,7 +686,7 @@ run_case() {
     else
         echo "ADMIN_AUTHORIZATION_ENCRYPTED_SECRET_PERSISTENCE=$CURRENT_CASE:PASS"
     fi
-    if [[ "$SMOKE_CLASS" == 'r43' || "$SMOKE_CLASS" == 'r44' ]]; then
+    if [[ "$SMOKE_CLASS" == 'r43' || "$SMOKE_CLASS" == 'r44' || "$SMOKE_CLASS" == 'r45cli' ]]; then
         echo "ADMIN_AUTHORIZATION_UPLOAD_MUTATIONS=$CURRENT_CASE:RESUMABLE_PRIVATE_STAGED_UPLOAD_ONLY"
     else
         echo "ADMIN_AUTHORIZATION_UPLOAD_MUTATIONS=$CURRENT_CASE:NONE"
@@ -700,6 +719,9 @@ done
 [[ -f "$MOCK_ROOT/mock-router.php" ]] || fail 'The reusable password-grant mock is missing.'
 [[ -f "$BROWSER_SUPPORT_ROOT/assert-browser.php" ]] \
     || fail 'The administrator browser support fixture is missing.'
+if [[ -n "$AFTER_BROWSER_ROOT" ]]; then
+    [[ -f "$AFTER_BROWSER_ROOT" ]] || fail 'The administrator after-browser hook is missing.'
+fi
 [[ -f "$REPOSITORY_ROOT/argentwolf-video-processor.php" ]] || fail 'The plugin bootstrap is missing.'
 
 docker info >/dev/null 2>&1 || fail 'Docker is unavailable to the current account.'
@@ -727,6 +749,9 @@ EXPORTED_FIXTURES_ROOT="$SOURCE_EXPORT/tests/fixtures"
 EXPORTED_FIXTURE_ROOT="$SOURCE_EXPORT/$FIXTURE_RELATIVE"
 EXPORTED_MOCK_ROOT="$SOURCE_EXPORT/$MOCK_RELATIVE"
 EXPORTED_BROWSER_SUPPORT_ROOT="$SOURCE_EXPORT/$BROWSER_SUPPORT_RELATIVE"
+if [[ -n "$AFTER_BROWSER_RELATIVE" ]]; then
+    EXPORTED_AFTER_BROWSER="$SOURCE_EXPORT/$AFTER_BROWSER_RELATIVE"
+fi
 mkdir -p -- "$SOURCE_EXPORT"
 git -C "$REPOSITORY_ROOT" archive --format=tar --output="$WORK_DIRECTORY/source.tar" HEAD
 tar -xf "$WORK_DIRECTORY/source.tar" -C "$SOURCE_EXPORT"
@@ -739,6 +764,9 @@ chmod -R a+rX "$SOURCE_EXPORT"
 [[ -f "$EXPORTED_MOCK_ROOT/mock-router.php" ]] || fail 'The committed reusable mock was not exported.'
 [[ -f "$EXPORTED_BROWSER_SUPPORT_ROOT/assert-browser.php" ]] \
     || fail 'The committed browser support fixture was not exported.'
+if [[ -n "$EXPORTED_AFTER_BROWSER" ]]; then
+    [[ -f "$EXPORTED_AFTER_BROWSER" ]] || fail 'The committed after-browser hook was not exported.'
+fi
 echo 'SOURCE_EXPORT_FROM_COMMIT=PASS'
 echo 'SOURCE_EXPORT_RUNTIME_MOUNT=READ_ONLY'
 

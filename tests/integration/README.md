@@ -436,3 +436,37 @@ plaintext credential/raw-response canaries, all staged-ingest/server-push/
 processing capability bits false, and no gated `WP_DEBUG` diagnostics. This is a
 development-checkpoint mock gate, not live-PeerTube/TLS, production upload wiring,
 publication, source cleanup, retention, remote deletion, or release qualification.
+
+## PeerTube one-shot task-worker CLI checkpoint
+
+After the R45 one-shot WP-CLI execution boundary is committed, run its exact
+clean-source matrix on the disposable Docker host:
+
+```bash
+bash tests/integration/peertube-task-cli-smoke.sh
+```
+
+The runner reuses the qualified administrator setup only to establish an exact
+active PeerTube backend and managed encrypted credential. It then seeds one
+local staged-upload operation and `peertube_upload_advance` task without remote
+HTTP. Every `wp argent-video peertube-task-worker --once` call runs in a fresh
+WP-CLI container/process. The sequence proves separate bounded init, byte PUT,
+remote-asset commit, processing observation, durable wait, ready observation,
+and terminal idle boundaries. An immediate invocation during the journaled
+processing wait must be idle and must make no additional PeerTube request.
+
+The exact committed tree is exported once and mounted read-only. Both supported
+matrix edges are exercised: WordPress 6.4.2/PHP 8.1/MariaDB 10.6.27 and
+WordPress 7.1/PHP 8.3/MariaDB 10.11.18. The isolated mock request transcript is
+compared exactly, the staged source must remain present, task payload/error
+storage must contain no managed-token canaries, the final remote asset must be
+ready/private, and the PeerTube ingest/processing capability bits must remain
+disabled. This is development-checkpoint evidence, not a release gate or a
+real-PeerTube/TLS test.
+
+To preserve its report outside the checkout:
+
+```bash
+AWVP_R45_REPORT_DIR=/absolute/report/path \
+    bash tests/integration/peertube-task-cli-smoke.sh
+```
