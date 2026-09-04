@@ -293,6 +293,57 @@ final class Task_Repository
         return null;
     }
 
+    /**
+     * Probe for immediately runnable or stale work owned by the given task types.
+     *
+     * This is advisory only. Claiming remains the atomic authority boundary and
+     * callers must tolerate a later worker finding no task after a positive
+     * probe.
+     *
+     * @param list<string> $task_types
+     */
+    public function has_work_of_types(array $task_types, int $now, int $stale_before): bool
+    {
+        $types = self::normalized_task_types($task_types);
+        if (
+            null === $types
+            || array() === $types
+            || $now < 1
+            || $stale_before < 1
+            || $stale_before > $now
+        ) {
+            return false;
+        }
+
+        global $wpdb;
+        $type_sql = implode(',', array_fill(0, count($types), '%s'));
+        $args = array(
+            $this->table,
+            gmdate('Y-m-d H:i:s', $now),
+            gmdate('Y-m-d H:i:s', $stale_before),
+            ...$types,
+        );
+
+        try {
+            $task_id = (int) $wpdb->get_var(
+                $wpdb->prepare(
+                    "SELECT id FROM %i
+                     WHERE (
+                         (status = 'queued' AND run_after <= %s AND attempts < max_attempts)
+                         OR (status = 'processing' AND locked_at IS NOT NULL AND locked_at < %s)
+                     )
+                     AND task_type IN ({$type_sql})
+                     ORDER BY id ASC LIMIT 1",
+                    ...$args
+                )
+            );
+        } catch (Throwable) {
+            return false;
+        }
+
+        return $task_id > 0;
+    }
+
     public function complete(int $task_id, string $lock_token, int $now): string
     {
         if ($task_id < 1 || ! self::valid_lock_token($lock_token) || $now < 1) {

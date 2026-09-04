@@ -52,6 +52,25 @@ final class Awvp_R45_Task_Wpdb
         if (! is_array($prepared)) return null;
         $q = (string) ($prepared['query'] ?? '');
         $a = $prepared['args'] ?? array();
+        if (str_contains($q, "(status = 'queued' AND run_after <= %s AND attempts < max_attempts)")) {
+            $now = (string) ($a[1] ?? '');
+            $stale_before = (string) ($a[2] ?? '');
+            $types = array_values(array_map('strval', array_slice($a, 3)));
+            $eligible = array_filter(
+                $this->rows,
+                static fn(array $row): bool => in_array((string) ($row['task_type'] ?? ''), $types, true)
+                    && (
+                        ('queued' === ($row['status'] ?? '')
+                            && (string) ($row['run_after'] ?? '') <= $now
+                            && (int) ($row['attempts'] ?? 0) < (int) ($row['max_attempts'] ?? 0))
+                        || ('processing' === ($row['status'] ?? '')
+                            && is_string($row['locked_at'] ?? null)
+                            && (string) $row['locked_at'] < $stale_before)
+                    )
+            );
+            usort($eligible, static fn(array $left, array $right): int => (int) $left['id'] <=> (int) $right['id']);
+            return $eligible[0]['id'] ?? null;
+        }
         if (! str_contains($q, "WHERE status = 'queued' AND run_after <= %s")) return null;
         $cutoff = (string) ($a[1] ?? '');
         $types = str_contains($q, 'task_type IN (')
@@ -327,6 +346,62 @@ $assert(
         && null === $repo->claim_next_of_types(array('NOT VALID'), 1210)
         && 0 === $repo->recover_stale_of_types(array('NOT VALID'), 1200, 1210),
     'Invalid task-type ownership filters did not fail closed.'
+);
+
+// Detached-launch probing is advisory but must respect task ownership,
+// run_after, attempt exhaustion, and stale-lock recovery boundaries.
+$probe_other = $repo->enqueue(
+    'probe_other',
+    null,
+    null,
+    null,
+    hash('sha256', 'awvp-task:v1:probe_other:1'),
+    array('version'=>1),
+    1300,
+    1290,
+    100,
+    5
+);
+$probe_owned = $repo->enqueue(
+    'probe_owned',
+    null,
+    null,
+    null,
+    hash('sha256', 'awvp-task:v1:probe_owned:1'),
+    array('version'=>1),
+    1310,
+    1290,
+    100,
+    5
+);
+$assert(
+    Task_Repository::APPLIED === $probe_other['status'] && Task_Repository::APPLIED === $probe_owned['status'],
+    'Work-probe fixtures did not enqueue.'
+);
+$assert(
+    ! $repo->has_work_of_types(array('probe_owned'), 1300, 1290),
+    'Owned work probe ignored run_after or saw unrelated work.'
+);
+$assert(
+    $repo->has_work_of_types(array('probe_owned'), 1310, 1300),
+    'Owned work probe did not see an eligible queued task.'
+);
+$probe_claim = $repo->claim_next_of_types(array('probe_owned'), 1310);
+$assert(is_array($probe_claim), 'Work-probe stale fixture could not be claimed.');
+$assert(
+    ! $repo->has_work_of_types(array('probe_owned'), 1311, 1310),
+    'Fresh processing lock was incorrectly considered stale work.'
+);
+$assert(
+    $repo->has_work_of_types(array('probe_owned'), 1320, 1311),
+    'Stale owned processing task was not visible to the work probe.'
+);
+$assert(
+    ! $repo->has_work_of_types(array(), 1320, 1311)
+        && ! $repo->has_work_of_types(array('NOT VALID'), 1320, 1311)
+        && ! $repo->has_work_of_types(array('probe_owned'), 0, 0)
+        && ! $repo->has_work_of_types(array('probe_owned'), 1320, 1321),
+    'Invalid work-probe input did not fail closed.'
 );
 
 $root = dirname(__DIR__);
