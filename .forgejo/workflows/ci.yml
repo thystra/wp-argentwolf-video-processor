@@ -51,6 +51,7 @@ jobs:
           php tests/task-repository.php
           php tests/peertube-upload-task-coordinator.php
           php tests/peertube-task-worker.php
+          php tests/peertube-task-cli.php
           php tests/backend-local.php
           php tests/peertube-connection-foundation.php
           php tests/peertube-http-api.php

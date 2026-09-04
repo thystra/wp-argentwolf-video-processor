@@ -13,11 +13,11 @@ use Throwable;
 /**
  * Explicit post-upload reconciliation for a positively created PeerTube video.
  *
- * This checkpoint performs no media mutation. It first durably commits the
+ * This service performs no media mutation. It first durably commits the
  * already-known PeerTube identity into argent_video_remote_assets and only on
- * a later explicit call performs a read-only GET of the exact private video.
- * Read failures are retryable only through later explicit calls and are
- * durably rate/backoff fenced in the staged-upload operation journal.
+ * a later bounded invocation performs a read-only GET of the exact private
+ * video. R45 may schedule that later one-shot invocation, but only at the
+ * durable rate/backoff boundary in the staged-upload operation journal.
  */
 final class PeerTube_Remote_Asset_Reconciliation_Service
 {

@@ -145,9 +145,9 @@ namespace {
     $assert(PeerTube_Task_Worker::STATUS_INDETERMINATE === $uncertain['status'], 'Unexpected coordinator failure was not preserved as indeterminate.');
     $assert(1 === count($coordinator->calls), 'Coordinator failure caused an automatic replay.');
 
-    // This checkpoint is still class-loadable execution logic only: no
-    // scheduler, browser surface, detached process, source cleanup, or network
-    // implementation belongs in the worker itself.
+    // R45.3b exposes this worker through one explicit WP-CLI command only. The
+    // worker itself still owns no scheduler, browser surface, detached process,
+    // source cleanup, network implementation, or offset-reconciliation grant.
     $root = dirname(__DIR__);
     $source = (string) file_get_contents($root.'/includes/PeerTube_Task_Worker.php');
     foreach (array(
@@ -157,10 +157,23 @@ namespace {
     ) as $needle) {
         $assert(! str_contains($source, $needle), 'PeerTube task worker acquired forbidden authority: '.$needle);
     }
-    foreach (array('includes/Plugin.php','includes/Admin.php','includes/CLI_Command.php','includes/Worker.php','includes/Worker_Launcher.php') as $relative) {
+    foreach (array('includes/Admin.php','includes/Worker.php','includes/Worker_Launcher.php') as $relative) {
         $surface = (string) file_get_contents($root.'/'.$relative);
-        $assert(! str_contains($surface, 'PeerTube_Task_Worker'), 'R45.3a task worker was prematurely wired into production surface '.$relative);
+        $assert(! str_contains($surface, 'PeerTube_Task_Worker'), 'PeerTube task worker leaked into unreviewed production surface '.$relative);
     }
+    $plugin = (string) file_get_contents($root.'/includes/Plugin.php');
+    $cli = (string) file_get_contents($root.'/includes/CLI_Command.php');
+    $wp_cli_guard = strpos($plugin, "if (defined('WP_CLI') && WP_CLI)");
+    $worker_build = strpos($plugin, '$peertube_task_worker = new PeerTube_Task_Worker(');
+    $assert(
+        false !== $wp_cli_guard && false !== $worker_build && $worker_build > $wp_cli_guard,
+        'PeerTube task worker is not composed strictly behind the WP_CLI runtime guard.'
+    );
+    $assert(
+        str_contains($cli, 'private readonly PeerTube_Task_Worker $peertube_task_worker')
+            && str_contains($cli, 'public function peertube_task_worker('),
+        'R45.3b CLI does not expose the reviewed one-shot PeerTube worker boundary.'
+    );
 
     fwrite(STDOUT, "PeerTube task worker tests passed.\n");
 }

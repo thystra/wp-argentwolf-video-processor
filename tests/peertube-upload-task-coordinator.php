@@ -420,18 +420,24 @@ namespace {
     $tampered = $f['coordinator']->advance_claimed($claimed, 4000);
     $assert(Coordinator::STATUS_FAILED === $tampered['status'] && 0 === $f['state']->upload_calls && 0 === $f['state']->reconcile_calls, 'Tampered task payload reached a service boundary.');
 
-    // R45 checkpoint 2 is class-loadable coordination only, not a production execution surface.
+    // R45.3b permits CLI-only composition, but the coordinator itself remains a
+    // bounded orchestration object with no scheduler/browser/process authority.
     $root = dirname(__DIR__);
     $source = (string) file_get_contents($root.'/includes/PeerTube_Upload_Task_Coordinator.php');
     foreach (array('wp_schedule','wp_cron','register_rest_route','wp_ajax','unlink(','wp_delete','PeerTube_Api_Client','PeerTube_Http_Client','claim_next(') as $needle) {
         $assert(! str_contains($source, $needle), 'R45 coordinator acquired forbidden runtime/scheduler/API authority: '.$needle);
     }
     $assert(! str_contains($source, '->reconcile_offset('), 'R45 coordinator automatically invokes zero-byte upload reconciliation.');
-    foreach (array('includes/Plugin.php','includes/Admin.php','includes/CLI_Command.php','includes/Worker.php','includes/Worker_Launcher.php') as $relative) {
+    foreach (array('includes/Admin.php','includes/CLI_Command.php','includes/Worker.php','includes/Worker_Launcher.php') as $relative) {
         $assert(is_file($root.'/'.$relative), 'Expected production surface is missing: '.$relative);
         $surface = (string) file_get_contents($root.'/'.$relative);
-        $assert(! str_contains($surface, 'PeerTube_Upload_Task_Coordinator'), 'R45 coordinator was prematurely wired into production surface '.$relative);
+        $assert(! str_contains($surface, 'PeerTube_Upload_Task_Coordinator'), 'R45 coordinator leaked past Plugin CLI composition into '.$relative);
     }
+    $plugin = (string) file_get_contents($root.'/includes/Plugin.php');
+    $assert(
+        str_contains($plugin, '$peertube_task_coordinator = new PeerTube_Upload_Task_Coordinator('),
+        'R45.3b Plugin CLI composition is missing the reviewed PeerTube coordinator.'
+    );
 
     fwrite(STDOUT, "PeerTube upload task coordinator tests passed.\n");
 }

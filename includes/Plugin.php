@@ -150,7 +150,46 @@ final class Plugin
         }
 
         if (defined('WP_CLI') && WP_CLI) {
-            \WP_CLI::add_command('argent-video', new CLI_Command($jobs, $queue, $bulk, $worker, $diagnostics, $worker_logs));
+            $peertube_upload_operations = new PeerTube_Staged_Upload_Operation_Store();
+            $peertube_tasks = new Task_Repository();
+            $peertube_api_factory = static fn (string $origin): PeerTube_Api_Client =>
+                new PeerTube_Api_Client(new PeerTube_Http_Client($origin));
+            $peertube_upload = new PeerTube_Staged_Upload_Service(
+                $peertube_upload_operations,
+                $this->backend_registry,
+                $peertube_secrets,
+                $peertube_api_factory
+            );
+            $peertube_reconciliation = new PeerTube_Remote_Asset_Reconciliation_Service(
+                $peertube_upload_operations,
+                new Remote_Asset_Repository(),
+                $this->backend_registry,
+                $peertube_secrets,
+                $peertube_api_factory
+            );
+            $peertube_task_coordinator = new PeerTube_Upload_Task_Coordinator(
+                $peertube_tasks,
+                array($peertube_upload_operations, 'get'),
+                array($peertube_upload, 'advance'),
+                array($peertube_reconciliation, 'advance')
+            );
+            $peertube_task_worker = new PeerTube_Task_Worker(
+                $peertube_tasks,
+                $peertube_task_coordinator
+            );
+
+            \WP_CLI::add_command(
+                'argent-video',
+                new CLI_Command(
+                    $jobs,
+                    $queue,
+                    $bulk,
+                    $worker,
+                    $diagnostics,
+                    $worker_logs,
+                    $peertube_task_worker
+                )
+            );
         }
     }
 

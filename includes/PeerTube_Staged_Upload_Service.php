@@ -12,7 +12,8 @@ use Throwable;
 
 /**
  * Explicit, restart-safe executor for the first PeerTube resumable-upload
- * mutation boundary. No background worker or automatic retry calls this API.
+ * mutation boundary. R45 may call advance() through its bounded one-shot task
+ * worker; indeterminate byte-bearing work remains forbidden from auto-replay.
  */
 final class PeerTube_Staged_Upload_Service
 {

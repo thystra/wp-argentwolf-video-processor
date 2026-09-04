@@ -7,9 +7,19 @@ declare(strict_types=1);
 
 define('ABSPATH', '/tmp/wordpress/');
 define('MINUTE_IN_SECONDS', 60);
+define('WP_CLI', true);
 $GLOBALS['wpdb'] = (object) array('prefix' => 'wp_');
 $GLOBALS['awvp_smoke_actions'] = array();
 $GLOBALS['awvp_smoke_filters'] = array();
+$GLOBALS['awvp_smoke_cli_commands'] = array();
+
+final class WP_CLI
+{
+    public static function add_command(string $name, object $command): void
+    {
+        $GLOBALS['awvp_smoke_cli_commands'][] = array($name, $command);
+    }
+}
 
 function plugin_dir_path(string $file): string
 {
@@ -131,6 +141,15 @@ foreach (
         fwrite(STDERR, "Plugin smoke load missed required connection/activation class {$required_class}.\n");
         exit(1);
     }
+}
+
+if (
+    1 !== count($GLOBALS['awvp_smoke_cli_commands'])
+    || 'argent-video' !== ($GLOBALS['awvp_smoke_cli_commands'][0][0] ?? null)
+    || ! (($GLOBALS['awvp_smoke_cli_commands'][0][1] ?? null) instanceof ArgentVideo\CLI_Command)
+) {
+    fwrite(STDERR, "Plugin smoke load missed or duplicated the composed Argent Video WP-CLI command.\n");
+    exit(1);
 }
 
 $registered_actions = array_column($GLOBALS['awvp_smoke_actions'], 0);

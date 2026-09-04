@@ -330,9 +330,14 @@ $assert(
 );
 
 $root = dirname(__DIR__);
-foreach (array('includes/Plugin.php','includes/Admin.php','includes/CLI_Command.php','includes/Worker.php','includes/Worker_Launcher.php') as $relative) {
+foreach (array('includes/Admin.php','includes/CLI_Command.php','includes/Worker.php','includes/Worker_Launcher.php') as $relative) {
     $source = (string) file_get_contents($root . '/' . $relative);
-    $assert(! str_contains($source, 'Task_Repository'), "R45 checkpoint 1 prematurely wired Task_Repository into {$relative}.");
+    $assert(! str_contains($source, 'Task_Repository'), "R45 task repository leaked past CLI-only composition into {$relative}.");
 }
+$plugin = (string) file_get_contents($root . '/includes/Plugin.php');
+$assert(
+    str_contains($plugin, '$peertube_tasks = new Task_Repository();'),
+    'R45.3b CLI-only PeerTube task composition is missing its durable repository.'
+);
 
 fwrite(STDOUT, "Task repository tests passed.\n");

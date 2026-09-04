@@ -20,7 +20,8 @@ final class CLI_Command
         private readonly Bulk_Queue $bulk,
         private readonly Worker $worker,
         private readonly Diagnostics $diagnostics,
-        private readonly Worker_Log_Repository $worker_logs
+        private readonly Worker_Log_Repository $worker_logs,
+        private readonly PeerTube_Task_Worker $peertube_task_worker
     ) {
     }
 
@@ -82,6 +83,69 @@ final class CLI_Command
             }
             WP_CLI::error($error->getMessage());
         }
+    }
+
+    /**
+     * Advance exactly one queued PeerTube asynchronous task.
+     *
+     * This command is intentionally one-shot. R45 does not grant this command
+     * a polling loop, detached-launch policy, or scheduler ownership.
+     *
+     * ## OPTIONS
+     *
+     * --once
+     * : Required safety flag. Advance at most one eligible PeerTube task.
+     */
+    public function peertube_task_worker(array $args, array $assoc_args): void
+    {
+        unset($args);
+
+        if (! isset($assoc_args['once'])) {
+            WP_CLI::error('PeerTube task worker requires --once.');
+            return;
+        }
+
+        $unexpected = array_diff(array_keys($assoc_args), array('once'));
+        if ([] !== $unexpected) {
+            WP_CLI::error('PeerTube task worker only supports --once.');
+            return;
+        }
+
+        try {
+            $result = $this->peertube_task_worker->run_once(time());
+        } catch (Throwable $error) {
+            WP_CLI::error('PeerTube task worker failed before a bounded result: ' . $this->error_summary($error->getMessage()));
+            return;
+        }
+
+        $status = is_string($result['status'] ?? null) ? $result['status'] : '';
+        $recovered = max(0, (int) ($result['recovered'] ?? 0));
+
+        if (PeerTube_Task_Worker::STATUS_IDLE === $status) {
+            WP_CLI::success(sprintf(
+                'PeerTube task worker idle; %d stale recovered.',
+                $recovered
+            ));
+            return;
+        }
+
+        if (PeerTube_Task_Worker::STATUS_ADVANCED === $status) {
+            WP_CLI::success(sprintf(
+                'PeerTube task worker advanced task %d (%s): %s; %d stale recovered.',
+                max(0, (int) ($result['task_id'] ?? 0)),
+                (string) ($result['task_type'] ?? ''),
+                (string) ($result['coordinator_status'] ?? ''),
+                $recovered
+            ));
+            return;
+        }
+
+        WP_CLI::error(sprintf(
+            'PeerTube task worker ended indeterminate after task %d (%s); %d stale recovered.',
+            max(0, (int) ($result['task_id'] ?? 0)),
+            (string) ($result['task_type'] ?? ''),
+            $recovered
+        ));
     }
 
     /** Display configuration and executable checks. */
