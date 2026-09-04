@@ -54,11 +54,15 @@ final class Awvp_R45_Task_Wpdb
         $a = $prepared['args'] ?? array();
         if (! str_contains($q, "WHERE status = 'queued' AND run_after <= %s")) return null;
         $cutoff = (string) ($a[1] ?? '');
+        $types = str_contains($q, 'task_type IN (')
+            ? array_values(array_map('strval', array_slice($a, 2)))
+            : null;
         $eligible = array_filter(
             $this->rows,
             static fn(array $row): bool => 'queued' === ($row['status'] ?? '')
                 && (string) ($row['run_after'] ?? '') <= $cutoff
                 && (int) ($row['attempts'] ?? 0) < (int) ($row['max_attempts'] ?? 0)
+                && (null === $types || in_array((string) ($row['task_type'] ?? ''), $types, true))
         );
         usort($eligible, static function (array $a, array $b): int {
             return array($a['run_after'], (int) $a['priority'], (int) $a['id'])
@@ -76,12 +80,17 @@ final class Awvp_R45_Task_Wpdb
         $a = $prepared['args'] ?? array();
         if (! str_contains($q, "WHERE status = 'processing' AND locked_at < %s")) return array();
         $cutoff = (string) ($a[1] ?? '');
-        $limit = (int) ($a[2] ?? 100);
+        $typed = str_contains($q, 'task_type IN (');
+        $limit = (int) ($typed ? ($a[count($a) - 1] ?? 100) : ($a[2] ?? 100));
+        $types = $typed
+            ? array_values(array_map('strval', array_slice($a, 2, -1)))
+            : null;
         $rows = array_values(array_filter(
             $this->rows,
             static fn(array $row): bool => 'processing' === ($row['status'] ?? '')
                 && is_string($row['locked_at'] ?? null)
                 && (string) $row['locked_at'] < $cutoff
+                && (null === $types || in_array((string) ($row['task_type'] ?? ''), $types, true))
         ));
         usort($rows, static fn(array $a, array $b): int => array($a['locked_at'], $a['id']) <=> array($b['locked_at'], $b['id']));
         return array_slice($rows, 0, $limit);
@@ -214,6 +223,110 @@ $over_limit = $repo->enqueue(
 $assert(
     Task_Repository::CONFLICT === $over_limit['status'],
     'Repository accepted an attempt count above its bounded maximum.'
+);
+
+// Worker ownership must be enforced by the repository itself. A PeerTube
+// consumer may not claim or stale-recover an unrelated future task type.
+$future = $repo->enqueue(
+    'future_cleanup',
+    null,
+    null,
+    null,
+    hash('sha256', 'awvp-task:v1:future_cleanup:1'),
+    array('version'=>1),
+    1200,
+    1190,
+    100,
+    5
+);
+$peer = $repo->enqueue(
+    'peertube_upload_advance',
+    79,
+    null,
+    'peertube-primary',
+    hash('sha256', 'awvp-task:v1:peertube_upload_advance:typed-claim'),
+    array('version'=>1,'operation_id'=>'upload_cccccccccccccccccccccccccccccccc'),
+    1200,
+    1190,
+    100,
+    5
+);
+$assert(
+    Task_Repository::APPLIED === $future['status'] && Task_Repository::APPLIED === $peer['status'],
+    'Typed-claim fixtures did not enqueue.'
+);
+
+$peer_claim = $repo->claim_next_of_types(
+    array('peertube_remote_reconcile','peertube_upload_advance'),
+    1200
+);
+$assert(
+    is_array($peer_claim)
+        && (int) $peer['task_id'] === (int) $peer_claim['id']
+        && 'peertube_upload_advance' === ($peer_claim['task_type'] ?? ''),
+    'Type-restricted claim selected an unrelated task.'
+);
+$assert(
+    'queued' === ($repo->find((int) $future['task_id'])['status'] ?? ''),
+    'Type-restricted claim mutated an unrelated queued task.'
+);
+$assert(
+    Task_Repository::APPLIED === $repo->complete(
+        (int) $peer_claim['id'],
+        (string) $peer_claim['lock_token'],
+        1201
+    ),
+    'Typed PeerTube claim could not complete.'
+);
+
+$future_claim = $repo->claim_next_of_types(array('future_cleanup'), 1201);
+$assert(
+    is_array($future_claim)
+        && (int) $future['task_id'] === (int) $future_claim['id']
+        && 'future_cleanup' === ($future_claim['task_type'] ?? ''),
+    'Type-owned future worker could not claim its stale-recovery fixture.'
+);
+
+$peer_stale = $repo->enqueue(
+    'peertube_remote_reconcile',
+    79,
+    null,
+    'peertube-primary',
+    hash('sha256', 'awvp-task:v1:peertube_remote_reconcile:typed-recovery'),
+    array('version'=>1,'operation_id'=>'upload_cccccccccccccccccccccccccccccccc'),
+    1201,
+    1190,
+    100,
+    5
+);
+$peer_stale_claim = $repo->claim_next_of_types(
+    array('peertube_upload_advance','peertube_remote_reconcile'),
+    1201
+);
+$assert(
+    is_array($peer_stale_claim) && (int) $peer_stale['task_id'] === (int) $peer_stale_claim['id'],
+    'Typed stale-recovery fixture did not claim.'
+);
+
+$recovered_owned = $repo->recover_stale_of_types(
+    array('peertube_upload_advance','peertube_remote_reconcile'),
+    1202,
+    1210
+);
+$assert(1 === $recovered_owned, 'Typed stale recovery did not recover exactly one owned task.');
+$assert(
+    'processing' === ($repo->find((int) $future['task_id'])['status'] ?? ''),
+    'Typed stale recovery stole an unrelated processing task.'
+);
+$assert(
+    'queued' === ($repo->find((int) $peer_stale['task_id'])['status'] ?? ''),
+    'Typed stale recovery did not requeue the owned PeerTube task.'
+);
+$assert(
+    null === $repo->claim_next_of_types(array(), 1210)
+        && null === $repo->claim_next_of_types(array('NOT VALID'), 1210)
+        && 0 === $repo->recover_stale_of_types(array('NOT VALID'), 1200, 1210),
+    'Invalid task-type ownership filters did not fail closed.'
 );
 
 $root = dirname(__DIR__);

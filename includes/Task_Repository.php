@@ -39,6 +39,7 @@ final class Task_Repository
     private const MAX_PAYLOAD_BYTES = 16384;
     private const MAX_ERROR_BYTES = 8000;
     private const MAX_RECOVERY_BATCH = 100;
+    private const MAX_CLAIM_TYPES = 32;
 
     private string $table;
 
@@ -176,21 +177,52 @@ final class Task_Repository
     /** @return array<string,mixed>|null */
     public function claim_next(int $now): ?array
     {
+        return $this->claim_next_internal(null, $now);
+    }
+
+    /**
+     * Claim only one of the explicitly owned task types.
+     *
+     * @param list<string> $task_types
+     * @return array<string,mixed>|null
+     */
+    public function claim_next_of_types(array $task_types, int $now): ?array
+    {
+        $types = self::normalized_task_types($task_types);
+        if (null === $types || array() === $types) {
+            return null;
+        }
+
+        return $this->claim_next_internal($types, $now);
+    }
+
+    /**
+     * @param list<string>|null $task_types Null means the legacy/generic queue view.
+     * @return array<string,mixed>|null
+     */
+    private function claim_next_internal(?array $task_types, int $now): ?array
+    {
         if ($now < 1) {
             return null;
         }
 
         global $wpdb;
         $timestamp = gmdate('Y-m-d H:i:s', $now);
+        $type_sql = '';
+        $select_args = array($this->table, $timestamp);
+        if (is_array($task_types)) {
+            $type_sql = ' AND task_type IN (' . implode(',', array_fill(0, count($task_types), '%s')) . ')';
+            array_push($select_args, ...$task_types);
+        }
+
         for ($attempt = 0; $attempt < 5; $attempt++) {
             try {
                 $task_id = (int) $wpdb->get_var(
                     $wpdb->prepare(
                         "SELECT id FROM %i
-                         WHERE status = 'queued' AND run_after <= %s AND attempts < max_attempts
+                         WHERE status = 'queued' AND run_after <= %s AND attempts < max_attempts{$type_sql}
                          ORDER BY run_after ASC, priority ASC, id ASC LIMIT 1",
-                        $this->table,
-                        $timestamp
+                        ...$select_args
                     )
                 );
             } catch (Throwable) {
@@ -203,6 +235,9 @@ final class Task_Repository
 
             $current = $this->find($task_id);
             if (! is_array($current) || self::STATUS_QUEUED !== ($current['status'] ?? null)) {
+                continue;
+            }
+            if (is_array($task_types) && ! in_array((string) ($current['task_type'] ?? ''), $task_types, true)) {
                 continue;
             }
 
@@ -230,11 +265,12 @@ final class Task_Repository
                     ),
                     array(
                         'id' => $task_id,
+                        'task_type' => (string) ($current['task_type'] ?? ''),
                         'status' => self::STATUS_QUEUED,
                         'lock_token' => null,
                     ),
                     array('%s','%s','%s','%s','%d','%s','%s'),
-                    array('%d','%s','%s')
+                    array('%d','%s','%s','%s')
                 );
             } catch (Throwable) {
                 return null;
@@ -246,6 +282,7 @@ final class Task_Repository
                     is_array($claimed)
                     && self::STATUS_PROCESSING === ($claimed['status'] ?? null)
                     && hash_equals($token, (string) ($claimed['lock_token'] ?? ''))
+                    && (! is_array($task_types) || in_array((string) ($claimed['task_type'] ?? ''), $task_types, true))
                 ) {
                     return $claimed;
                 }
@@ -349,21 +386,56 @@ final class Task_Repository
 
     public function recover_stale(int $stale_before, int $now, int $limit = self::MAX_RECOVERY_BATCH): int
     {
+        return $this->recover_stale_internal(null, $stale_before, $now, $limit);
+    }
+
+    /**
+     * Recover stale locks only for explicitly owned task types.
+     *
+     * @param list<string> $task_types
+     */
+    public function recover_stale_of_types(
+        array $task_types,
+        int $stale_before,
+        int $now,
+        int $limit = self::MAX_RECOVERY_BATCH
+    ): int {
+        $types = self::normalized_task_types($task_types);
+        if (null === $types || array() === $types) {
+            return 0;
+        }
+
+        return $this->recover_stale_internal($types, $stale_before, $now, $limit);
+    }
+
+    /** @param list<string>|null $task_types */
+    private function recover_stale_internal(
+        ?array $task_types,
+        int $stale_before,
+        int $now,
+        int $limit
+    ): int {
         if ($stale_before < 1 || $now < 1 || $stale_before > $now) {
             return 0;
         }
 
         global $wpdb;
         $limit = max(1, min(self::MAX_RECOVERY_BATCH, $limit));
+        $type_sql = '';
+        $select_args = array($this->table, gmdate('Y-m-d H:i:s', $stale_before));
+        if (is_array($task_types)) {
+            $type_sql = ' AND task_type IN (' . implode(',', array_fill(0, count($task_types), '%s')) . ')';
+            array_push($select_args, ...$task_types);
+        }
+        $select_args[] = $limit;
+
         try {
             $rows = $wpdb->get_results(
                 $wpdb->prepare(
                     "SELECT * FROM %i
-                     WHERE status = 'processing' AND locked_at < %s
+                     WHERE status = 'processing' AND locked_at < %s{$type_sql}
                      ORDER BY locked_at ASC, id ASC LIMIT %d",
-                    $this->table,
-                    gmdate('Y-m-d H:i:s', $stale_before),
-                    $limit
+                    ...$select_args
                 ),
                 ARRAY_A
             );
@@ -379,7 +451,12 @@ final class Task_Repository
         foreach ($rows as $row) {
             $task_id = (int) ($row['id'] ?? 0);
             $token = (string) ($row['lock_token'] ?? '');
-            if ($task_id < 1 || ! self::valid_lock_token($token)) {
+            $task_type = (string) ($row['task_type'] ?? '');
+            if (
+                $task_id < 1
+                || ! self::valid_lock_token($token)
+                || (is_array($task_types) && ! in_array($task_type, $task_types, true))
+            ) {
                 continue;
             }
 
@@ -473,6 +550,29 @@ final class Task_Repository
             return self::INDETERMINATE;
         }
         return self::CONFLICT;
+    }
+
+    /**
+     * @param array<int,mixed> $task_types
+     * @return list<string>|null
+     */
+    private static function normalized_task_types(array $task_types): ?array
+    {
+        if (count($task_types) < 1 || count($task_types) > self::MAX_CLAIM_TYPES) {
+            return null;
+        }
+
+        $types = array();
+        foreach ($task_types as $task_type) {
+            if (! is_string($task_type) || ! self::valid_task_type($task_type)) {
+                return null;
+            }
+            $types[$task_type] = true;
+        }
+
+        $normalized = array_keys($types);
+        sort($normalized, SORT_STRING);
+        return $normalized;
     }
 
     private static function valid_task_type(string $task_type): bool
