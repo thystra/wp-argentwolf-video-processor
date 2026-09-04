@@ -249,10 +249,24 @@ if ('PUT' === $method && 1 === preg_match('#^/api/v1/videos/upload-resumable\?up
         $reject('upload-chunk-contract');
         return;
     }
-    if (! $append_log(
-        'PUT /api/v1/videos/upload-resumable upload_id=r43fixture0001 auth=bearer range=bytes=0-15/16 bytes=16 body_sha256=' . hash('sha256', $body)
-    )) {
+    $drop_upload_chunk = is_file('/awvp-state/drop-upload-chunk');
+    $chunk_log = 'PUT /api/v1/videos/upload-resumable upload_id=r43fixture0001 auth=bearer range=bytes=0-15/16 bytes=16 body_sha256=' . hash('sha256', $body);
+    if ($drop_upload_chunk) {
+        $chunk_log .= ' outcome=transport-drop';
+    }
+    if (! $append_log($chunk_log)) {
         $problem(500);
+        return;
+    }
+    if ($drop_upload_chunk) {
+        // The consequential request marker is durable before transport loss.
+        // This simulates the exact uncertain byte-bearing outcome: WordPress
+        // cannot know whether PeerTube accepted the bytes before the response
+        // path disappeared.
+        $pid = getmypid();
+        if (! is_int($pid) || $pid < 2 || ! posix_kill($pid, 9)) {
+            $problem(500);
+        }
         return;
     }
     $json(

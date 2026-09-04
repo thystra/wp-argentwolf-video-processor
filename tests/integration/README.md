@@ -470,3 +470,36 @@ To preserve its report outside the checkout:
 AWVP_R45_REPORT_DIR=/absolute/report/path \
     bash tests/integration/peertube-task-cli-smoke.sh
 ```
+
+
+## PeerTube one-shot task-worker indeterminate-chunk checkpoint
+
+After the happy/wait R45 CLI matrix passes, run the uncertainty gate:
+
+```bash
+bash tests/integration/peertube-task-cli-indeterminate-smoke.sh
+```
+
+This matrix starts from the same exact active-backend and staged-source
+prerequisites, establishes one resumable session in a fresh WP-CLI process, and
+then arms the isolated mock to durably record the first byte-bearing PUT before
+terminating its own HTTP process without a response. The worker must persist
+`upload_indeterminate`, fail/hold the upload task after exactly two claims, and
+leave the staged source intact. A later fresh `peertube-task-worker --once`
+invocation must be idle while the mock remains offline, proving that the task
+worker does not automatically issue a zero-byte offset probe, replay the chunk,
+or create a replacement resumable session.
+
+The exact request transcript requires one resumable-init POST, one byte-bearing
+PUT with the fixture's transport-drop marker, zero zero-byte probes, zero remote
+video GETs, and no replacement upload initialization. No remote-asset row or
+reconciliation task may exist, and the PeerTube ingest/processing capability
+bits remain disabled. This remains development-checkpoint evidence, not an
+authorization for automatic offset reconciliation or a release gate.
+
+To preserve its report outside the checkout:
+
+```bash
+AWVP_R45_REPORT_DIR=/absolute/report/path \
+    bash tests/integration/peertube-task-cli-indeterminate-smoke.sh
+```

@@ -643,7 +643,7 @@ run_case() {
     echo "ADMIN_AUTHORIZATION_OAUTH_GET_COUNT=$CURRENT_CASE:$oauth_get_count"
     echo "ADMIN_AUTHORIZATION_TOKEN_POST_COUNT=$CURRENT_CASE:$token_post_count"
     echo "ADMIN_AUTHORIZATION_REVOKE_POST_COUNT=$CURRENT_CASE:$revoke_post_count"
-    if [[ "$SMOKE_CLASS" == 'r43' || "$SMOKE_CLASS" == 'r44' || "$SMOKE_CLASS" == 'r45cli' ]]; then
+    if [[ "$SMOKE_CLASS" == 'r43' || "$SMOKE_CLASS" == 'r44' || "$SMOKE_CLASS" == 'r45cli' || "$SMOKE_CLASS" == 'r45chunk' ]]; then
         [[ "$upload_init_count" == '1' && "$upload_chunk_count" == '1' && "$upload_probe_count" == '0' ]] \
             || fail "The R43/R44 upload mutation count differed for $CURRENT_CASE."
         echo "STAGED_UPLOAD_INIT_POST_COUNT=$CURRENT_CASE:$upload_init_count"
@@ -686,7 +686,7 @@ run_case() {
     else
         echo "ADMIN_AUTHORIZATION_ENCRYPTED_SECRET_PERSISTENCE=$CURRENT_CASE:PASS"
     fi
-    if [[ "$SMOKE_CLASS" == 'r43' || "$SMOKE_CLASS" == 'r44' || "$SMOKE_CLASS" == 'r45cli' ]]; then
+    if [[ "$SMOKE_CLASS" == 'r43' || "$SMOKE_CLASS" == 'r44' || "$SMOKE_CLASS" == 'r45cli' || "$SMOKE_CLASS" == 'r45chunk' ]]; then
         echo "ADMIN_AUTHORIZATION_UPLOAD_MUTATIONS=$CURRENT_CASE:RESUMABLE_PRIVATE_STAGED_UPLOAD_ONLY"
     else
         echo "ADMIN_AUTHORIZATION_UPLOAD_MUTATIONS=$CURRENT_CASE:NONE"

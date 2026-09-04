@@ -97,6 +97,7 @@ jobs:
           bash -n tests/integration/peertube-staged-upload-smoke.sh
           bash -n tests/integration/peertube-remote-asset-reconciliation-smoke.sh
           bash -n tests/integration/peertube-task-cli-smoke.sh
+          bash -n tests/integration/peertube-task-cli-indeterminate-smoke.sh
           php tests/run.php
           php tests/storage-boundary.php
           php -d open_basedir="${GITHUB_WORKSPACE}:/tmp" tests/open-basedir.php
