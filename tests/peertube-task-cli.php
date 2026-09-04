@@ -195,6 +195,14 @@ namespace {
     );
 
     $source = (string) file_get_contents(dirname(__DIR__) . '/includes/CLI_Command.php');
+    $assert(
+        str_contains($source, '@subcommand peertube-task-worker'),
+        'PeerTube CLI worker lost its public hyphenated subcommand registration.'
+    );
+    $assert(
+        str_contains($source, '* [--once]'),
+        'PeerTube CLI worker lost its WP-CLI-compatible --once synopsis.'
+    );
     $method_start = strpos($source, 'public function peertube_task_worker');
     $method_end = false === $method_start ? false : strpos($source, '/** Display configuration', $method_start);
     $method = false === $method_start || false === $method_end ? '' : substr($source, $method_start, $method_end - $method_start);

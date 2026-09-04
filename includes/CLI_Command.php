@@ -93,8 +93,10 @@ final class CLI_Command
      *
      * ## OPTIONS
      *
-     * --once
+     * [--once]
      * : Required safety flag. Advance at most one eligible PeerTube task.
+     *
+     * @subcommand peertube-task-worker
      */
     public function peertube_task_worker(array $args, array $assoc_args): void
     {
