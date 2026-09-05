@@ -331,14 +331,16 @@ boundary; if the required cURL streaming primitives are unavailable the request
 fails closed. The existing safe-HTTP URL/origin validation remains in force.
 
 The authenticated PeerTube settings page may save the segment policy for an
-active backend, but that action transfers no media. The detached task-launcher
-foundation remains unwired from cron/admin. R45.4b3 changes only detached/CLI
-worker execution semantics: one minute is budgeted per 128 MiB of authoritative
-source/segment size, with a one-hour floor and six-hour ceiling. The process
-checks its deadline only between durable request boundaries; a byte-bearing PUT
-is never interrupted by the worker. The streamed HTTP timeout uses the same
-size-derived bound. The adapter still does not advertise staged ingest/server
-push/processing capability, and recurring wake-up remains a later checkpoint.
+active backend, but that action transfers no media. R45.5 wires the reviewed
+detached task launcher to the existing five-minute AWVP dispatch event; cron
+performs only due/stale task detection plus detached `--drain` launch and never
+executes PeerTube media HTTP inline. R45.4b3's execution semantics remain
+unchanged: one minute is budgeted per 128 MiB of authoritative source/segment
+size, with a one-hour floor and six-hour ceiling. The process checks its deadline
+only between durable request boundaries; a byte-bearing PUT is never interrupted
+by the worker. The streamed HTTP timeout uses the same size-derived bound. The
+adapter still does not advertise staged ingest/server push/processing capability;
+that remains a separate R45.6 decision.
 
 
 ### R45.4b4 durable failed-upload notification boundary
@@ -372,6 +374,26 @@ recipients fail only the notification task.
 Ordinary upload/reconciliation waits, stale-lock recovery, and safe runtime-budget
 yields do not enqueue failure mail. Transport failures are reduced to controlled
 classifications such as timeout, DNS, connection-refused/reset, or TLS failure.
+ R45.4b4 is qualified at exact commit
+`96fe661682accaa63e2860dc236cb9c1f4733950`, tree
+`7f938a05c446e000b0d45db76e03e703432a10dc`, Forgejo CI run 123, with retained
+real-WordPress notification/no-replay, drain, one-shot, and R44 matrices.
+
+### R45.5 recurring detached wake-up
+
+R45.5 reuses the already-existing `argent_video_processor_dispatch` five-minute
+WP-Cron event instead of creating a second PeerTube-specific schedule. `Plugin`
+registers `PeerTube_Task_Worker_Launcher::launch()` as a second callback on that
+event beside the legacy FFmpeg dispatcher. The launcher checks only due queued
+or stale processing rows for the three reviewed PeerTube task types and returns
+idle when no work is eligible. A positive probe can only start the detached
+`wp argent-video peertube-task-worker --drain --quiet` process; atomic claims in
+that process remain authoritative.
+
+The cron callback does not construct the R43 upload service, R44 reconciliation
+service, task coordinator, or task worker. Those remain behind the `WP_CLI`
+guard. No admin/AJAX/REST upload-launch action is introduced, and capability
+advertisement remains unchanged pending R45.6.
 For example a cURL timeout retains `curl_28`, the bounded last-request size, and
 a controlled timeout summary rather than the raw cURL diagnostic. The message
 may therefore point toward a stalled or insufficient-throughput network path and

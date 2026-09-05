@@ -1445,10 +1445,12 @@ or transfer media. The settings page therefore remains a connection/lifecycle an
 operational-configuration surface, not an upload trigger. The current R45 media
 execution boundary is the separate explicit WP-CLI task worker. `--once` retains
 the one-task boundary, while R45.4b3 adds bounded `--drain` execution for one
-logical operation. The detached launcher uses `--drain` but is not yet wired to
-cron/admin. Safe-boundary process and streamed-request guards scale from one hour
-to six hours according to source/segment size; saving this settings form never
-launches transfer work.
+logical operation. The detached launcher uses `--drain`; R45.5 wires it to the existing
+five-minute AWVP dispatch event only. The WP-Cron callback performs the due/stale
+task probe and detached process launch but never upload/reconciliation HTTP
+inline, and no administrator transfer-launch action is added. Safe-boundary
+process and streamed-request guards scale from one hour to six hours according
+to source/segment size; saving this settings form never launches transfer work.
 
 R45.4b4 does not add another connection-form or credential action. Failure mail
 is queued only from the already-claimed media task boundary and delivered later

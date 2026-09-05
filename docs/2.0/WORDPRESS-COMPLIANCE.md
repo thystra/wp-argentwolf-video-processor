@@ -659,10 +659,13 @@ owns no browser/admin/AJAX/REST hook. `--drain` may make multiple lock-token-gua
 claims, but only for one logical operation's exact immediately-runnable task and
 deterministic handoff (plus R45.4b4 notification delivery); it never wanders into
 unrelated upload work.
-The existing WordPress recurring event still belongs to the legacy FFmpeg worker;
-R45.4b3 makes the detached launcher target `--drain` but still does not register
-the PeerTube detached launcher with cron or add an
-administrator transfer-launch action.
+R45.5 reuses the existing WordPress five-minute recurring event rather than
+creating a second scheduler. The legacy FFmpeg dispatcher remains one callback,
+and `PeerTube_Task_Worker_Launcher::launch()` is registered as a second callback.
+That PeerTube callback performs only due/stale task detection and detached
+`--drain --quiet` launch; the R43 upload service, R44 reconciliation service,
+coordinator, and worker remain WP-CLI-only. No administrator transfer-launch
+action is added.
 
 The PeerTube Connection settings page does gain one `manage_options` + nonce
 protected POST for non-secret upload-segment policy. It accepts only the exact

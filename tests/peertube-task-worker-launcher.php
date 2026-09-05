@@ -169,8 +169,9 @@ namespace {
     $assert(! $failed['ok'] && PeerTube_Task_Worker_Launcher::STATUS_FAILED === $failed['status'], 'Failed detached exec did not fail closed.');
     $assert(1 === count($GLOBALS['awvp_r45_launcher_deleted']), 'Failed detached exec did not release the launch lock.');
 
-    // R45.4a remains unwired. It owns no scheduler/browser/network/persistence
-    // mutation beyond its advisory task probe and detached CLI process boundary.
+    // R45.5 wires this already-reviewed launcher only from Plugin's existing
+    // recurring dispatch hook. The launcher class itself still owns no scheduler,
+    // browser surface, media implementation, cleanup, or offset-reconciliation grant.
     $root = dirname(__DIR__);
     $source = (string) file_get_contents($root.'/includes/PeerTube_Task_Worker_Launcher.php');
     foreach (array(
@@ -180,9 +181,15 @@ namespace {
     ) as $needle) {
         $assert(! str_contains($source, $needle), 'Detached launcher acquired forbidden authority: '.$needle);
     }
-    foreach (array('includes/Plugin.php','includes/Admin.php','includes/CLI_Command.php','includes/Worker.php','includes/Worker_Launcher.php') as $relative) {
+    $plugin = (string) file_get_contents($root.'/includes/Plugin.php');
+    $assert(
+        str_contains($plugin, '$peertube_task_launcher = new PeerTube_Task_Worker_Launcher($peertube_tasks);')
+            && str_contains($plugin, "add_action(Activator::CRON_HOOK, array(\$peertube_task_launcher, 'launch'));"),
+        'R45.5 Plugin wiring does not use the reviewed detached PeerTube launcher.'
+    );
+    foreach (array('includes/Admin.php','includes/CLI_Command.php','includes/Worker.php','includes/Worker_Launcher.php') as $relative) {
         $surface = (string) file_get_contents($root.'/'.$relative);
-        $assert(! str_contains($surface, 'PeerTube_Task_Worker_Launcher'), 'R45.4a launcher was prematurely wired into '.$relative);
+        $assert(! str_contains($surface, 'PeerTube_Task_Worker_Launcher'), 'PeerTube task launcher leaked into unreviewed surface '.$relative);
     }
 
     fwrite(STDOUT, "PeerTube task worker launcher tests passed.\n");

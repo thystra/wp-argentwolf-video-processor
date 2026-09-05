@@ -50,6 +50,7 @@ jobs:
           php tests/peertube-task-worker.php
           php tests/peertube-task-worker-drain.php
           php tests/peertube-task-worker-launcher.php
+          php tests/peertube-task-cron-wiring.php
           php tests/peertube-upload-policy.php
           php tests/peertube-upload-runtime-budget.php
           php tests/peertube-task-cli.php
@@ -106,6 +107,7 @@ jobs:
           bash -n tests/integration/peertube-task-cli-smoke.sh
           bash -n tests/integration/peertube-task-cli-drain-smoke.sh
           bash -n tests/integration/peertube-task-cli-indeterminate-smoke.sh
+          bash -n tests/integration/peertube-task-cron-wiring-smoke.sh
           php tests/run.php
           php tests/storage-boundary.php
           php -d open_basedir="${GITHUB_WORKSPACE}:/tmp" tests/open-basedir.php

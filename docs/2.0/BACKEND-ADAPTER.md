@@ -636,13 +636,18 @@ bytes in one streamed resumable segment. Updating that policy must not rewrite
 backend identity, origin, destination, secret generation, capability, or health
 state and must not start a transfer.
 
-A separate detached PeerTube task-launcher foundation also exists. R45.4b3 makes
-it invoke the bounded `--drain` worker mode, but it is still not registered with
-cron or exposed as an administrator transfer launch. Drain follows only one
-logical operation across immediate durable boundaries and uses size-derived
-one-hour-to-six-hour process/request guards.
+A separate detached PeerTube task launcher also exists. R45.4b3 makes it invoke
+the bounded `--drain` worker mode, and R45.5 registers that launcher on the
+existing five-minute AWVP dispatch event. The cron callback performs only the
+due/stale task probe and detached launch; it does not call the backend adapter or
+PeerTube media APIs inline and is not exposed as an administrator transfer
+launch. Drain follows only one logical operation across immediate durable
+boundaries and uses size-derived one-hour-to-six-hour process/request guards.
 The drain path is qualified at exact commit
 `33bdd109da2f452afb2058ce0d044d10a729c669` / tree
 `a89963f3e9def2ba65bd43589c87e13a3f4a9b57` with Forgejo CI run 122 and its
-retained Docker matrices. Capability advertisement remains unchanged until the
-later production scheduling path is separately reviewed and qualified.
+retained Docker matrices. R45.4b4 failure notification is qualified at
+`96fe661682accaa63e2860dc236cb9c1f4733950` / tree
+`7f938a05c446e000b0d45db76e03e703432a10dc` with CI run 123. Capability
+advertisement remains unchanged until R45.6 is separately reviewed and
+qualified.

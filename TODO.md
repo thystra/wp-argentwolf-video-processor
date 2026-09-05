@@ -242,21 +242,22 @@
   reconciliation Docker matrices. `--drain` follows only one logical operation,
   never sleeps/polls future work, and yields only at a durable boundary under the
   one-minute-per-128-MiB, one-hour-to-six-hour guard; `--once` remains unchanged.
-- [ ] R45.4b4: qualify the implemented durable failed-upload notification task.
+- [x] R45.4b4: durable failed-upload notification is qualified at exact commit
+  `96fe661682accaa63e2860dc236cb9c1f4733950`, tree
+  `7f938a05c446e000b0d45db76e03e703432a10dc`, with Forgejo CI run 123 plus the
+  exact-source notification/no-replay, drain, one-shot, and R44 Docker matrices.
   `peertube_upload_failure_notify` is idempotent per upload-operation record
   revision, resolves the initiating WordPress user with post-author fallback,
-  sends only from detached drain execution, and retries rejected `wp_mail()`
-  delivery without replaying upload work. The email contains sanitized
-  failure/held state, backend, post/video identity, progress/last-request size,
-  transport/API code, HTTP status/retry detail when available, and an AWVP admin
-  link; credentials,
-  raw response bodies, secret references, and filesystem paths remain forbidden.
-  Ordinary waits, stale recovery, and safe-boundary yields do not notify. Require
-  focused tests plus exact-source real-WordPress enqueue/delivery/no-replay smoke
-  before marking this checkpoint complete.
-- [ ] R45.5: wire a recurring wake-up only after the detached drain path has a
-  real-process qualification gate. WP-Cron must launch detached work, never
-  transmit PeerTube media inline.
+  sends only from detached drain execution, retries rejected `wp_mail()` without
+  replaying upload work, and excludes credentials, raw response bodies, secret
+  references, and filesystem paths.
+- [ ] R45.5: recurring production wake-up is implemented in the current tree by
+  registering the reviewed `PeerTube_Task_Worker_Launcher` on the existing
+  five-minute `argent_video_processor_dispatch` event. The callback performs only
+  the due/stale owned-task probe and detached `--drain` launch; it adds no second
+  scheduler, browser/admin launch surface, or inline PeerTube HTTP. Require
+  focused wiring tests, retained exact-source Docker regressions, feature-branch
+  CI, then merge qualification before marking complete.
 - [ ] R45.6: consider enabling PeerTube ingest/processing capability bits only
   after the production-reachable execution/scheduling path is separately
   reviewed and qualified.

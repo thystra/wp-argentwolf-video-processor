@@ -383,3 +383,12 @@ and include only bounded sanitized diagnostics. AWVP R45.4b4 uses the initiating
 WordPress user with post-author fallback and may report controlled timeout/DNS/
 connection/TLS classifications, HTTP status, retry-after, and progress; never
 copy credentials, filesystem paths, secret references, or raw response bodies.
+
+When adding a recurring wake-up for an already-detached worker, prefer reusing an
+existing plugin-owned WP-Cron event when cadence and lifecycle match rather than
+creating another schedule. Keep the cron callback advisory and cheap: check only
+whether owned work is due/stale, launch the detached worker, and return. Do not
+perform consequential network I/O in the cron callback, and do not let future
+`run_after` rows spawn idle workers. AWVP R45.5 applies this pattern by adding the
+PeerTube launcher as a second callback on `argent_video_processor_dispatch`; the
+actual upload/reconciliation/mail services remain behind the WP-CLI guard.

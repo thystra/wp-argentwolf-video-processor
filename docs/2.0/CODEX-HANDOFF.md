@@ -1652,7 +1652,7 @@ remote request reaches a durable boundary. Exact commit
 `33bdd109da2f452afb2058ce0d044d10a729c669`, tree
 `a89963f3e9def2ba65bd43589c87e13a3f4a9b57`, passed Forgejo CI run 122 plus
 exact-source drain, one-shot, indeterminate/no-replay, and R44 regression Docker
-matrices. The detached launcher now targets `--drain` but remains not cron-wired.
+matrices. At that R45.4b3 checkpoint the detached launcher targeted `--drain` but remained not cron-wired.
 
 R45.4b4 adds the separate `peertube_upload_failure_notify` task. Human-attention
 upload failures/holds enqueue a deterministic notification keyed by operation ID
@@ -1661,7 +1661,15 @@ and failure record revision; `--drain` resolves the initiating WordPress user
 last-request size, transport/API code/classification, HTTP/retry detail when
 available, and the AWVP admin link. Timeout mail may suggest a smaller segment
 only after the uncertain upload state is safely reconciled. Rejected mail is
-durably retried without touching upload state.
-Ordinary waits and safe budget yields do not notify. Secrets, filesystem paths,
-and raw remote bodies must never be included. This checkpoint still requires its
-own exact-source real-WordPress enqueue/delivery qualification before R45.5.
+durably retried without touching upload state. Ordinary waits and safe budget
+yields do not notify. Secrets, filesystem paths, and raw remote bodies must never
+be included. Exact commit `96fe661682accaa63e2860dc236cb9c1f4733950`, tree
+`7f938a05c446e000b0d45db76e03e703432a10dc`, passed Forgejo CI run 123 plus the
+exact-source notification/no-replay, drain, one-shot, and R44 Docker matrices.
+
+R45.5 then wires only the already-reviewed detached launcher to the existing
+five-minute `argent_video_processor_dispatch` event. It deliberately creates no
+second scheduler and no browser/admin launch surface. The callback performs the
+due/stale owned-task probe and detached `--drain --quiet` launch only; R43/R44
+services and the task coordinator/worker remain constructed strictly behind the
+`WP_CLI` guard. Capability bits remain false pending R45.6.

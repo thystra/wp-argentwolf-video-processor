@@ -70,15 +70,23 @@
   handoff), never sleeps or polls future work, and yields only at a durable request
   boundary. Runtime/request guards scale at one minute per 128 MiB with a one-hour
   floor and six-hour ceiling; `--once` remains available unchanged.
-- Add the R45.4b4 durable failed-upload notification boundary. Upload failures
-  or holds that require human attention enqueue the dedicated
+- Add and qualify the R45.4b4 durable failed-upload notification boundary.
+  Upload failures or holds that require human attention enqueue the dedicated
   `peertube_upload_failure_notify` task before the failing task is released; drain
   execution resolves the initiating WordPress user (falling back to post author)
   and sends a sanitized `wp_mail()` message with post/backend/state/progress,
   last-request size, transport/API classification, HTTP status/retry detail when
-  available, and an
-  AWVP admin link. Mail rejection is retried durably without replaying the upload;
-  credentials, filesystem paths, and raw remote bodies are excluded.
+  available, and an AWVP admin link. Mail rejection is retried durably without
+  replaying the upload; credentials, filesystem paths, and raw remote bodies are
+  excluded. Exact commit `96fe661682accaa63e2860dc236cb9c1f4733950`, tree
+  `7f938a05c446e000b0d45db76e03e703432a10dc`, passed Forgejo CI run 123 and the
+  retained exact-source notification/no-replay, drain, one-shot, and R44 matrices.
+- Wire the R45.5 production wake-up through the existing five-minute
+  `argent_video_processor_dispatch` event. The callback only probes for due queued
+  or stale owned PeerTube tasks and invokes the already-reviewed detached
+  `peertube-task-worker --drain --quiet` launcher; it performs no PeerTube HTTP
+  inline, adds no second scheduler, and adds no administrator transfer-launch
+  surface.
 - Expand focused PeerTube security/state tests and isolated real-WordPress Docker
   development matrices through the R39 identity/destination checkpoint, with an
   R40 activation continuation that proves activation performs no additional

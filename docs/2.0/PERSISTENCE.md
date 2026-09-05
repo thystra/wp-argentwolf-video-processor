@@ -1172,3 +1172,10 @@ is not claimed as a cross-row transactional exactly-once guarantee. Likewise,
 process loss after WordPress accepts the message but before the task completion
 commits can cause at-least-once redelivery. The message therefore includes the
 stable upload operation ID so duplicate diagnostic mail remains recognizable.
+
+R45.5 adds no new task status, table, or scheduler state. It reuses the existing
+five-minute AWVP recurring event as a wake-up for the detached PeerTube launcher.
+The launcher's repository probe considers only due queued rows or stale processing
+rows of the reviewed PeerTube task types; future `run_after` rows therefore do
+not cause useless worker processes. The probe remains advisory and the detached
+worker's lock-token claim/recovery remains authoritative.

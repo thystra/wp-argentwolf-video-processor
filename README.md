@@ -121,11 +121,16 @@ continues one logical upload/reconciliation operation only across immediately
 runnable durable boundaries; it never sleeps through a future `run_after`. The
 drain process uses a size-derived one-hour-to-six-hour safe-boundary budget and
 streamed segment requests use the same size-derived timeout. The detached
-launcher uses `--drain`, but the current R45 development line still does not
-register a recurring PeerTube task scheduler or administrator transfer-launch
-action. The bounded drain checkpoint is qualified at commit
+launcher uses `--drain`. R45.5 wires that reviewed launcher to the plugin's
+existing five-minute `argent_video_processor_dispatch` event: the cron callback
+performs only the due/stale task probe and detached WP-CLI launch, never PeerTube
+media HTTP inline. No administrator transfer-launch action is added. The bounded
+drain checkpoint is qualified at commit
 `33bdd109da2f452afb2058ce0d044d10a729c669` (Forgejo CI 122 plus its retained
-real-WordPress matrices).
+real-WordPress matrices), and durable failure notification is qualified at
+`96fe661682accaa63e2860dc236cb9c1f4733950` / tree
+`7f938a05c446e000b0d45db76e03e703432a10dc` with Forgejo CI 123 and the retained
+notification/no-replay, drain, one-shot, and R44 matrices.
 
 ## Privacy
 

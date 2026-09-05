@@ -755,13 +755,18 @@ not require a correspondingly large PHP request-body string. The final
 remote-created response receives the stronger full-source post-transfer proof.
 
 The PeerTube settings page may save this non-secret per-backend segment policy,
-but that POST performs no media transfer. The detached PeerTube launcher now
-targets bounded `--drain` execution but remains unregistered with cron or an
-administrator launch action. Drain/process and streamed-request guards scale at
-one minute per 128 MiB with a one-hour floor and six-hour ceiling; the worker
-observes its deadline only at safe durable request boundaries. PeerTube
-staged-ingest/server-push/processing capability advertisement remains false until
-a later production scheduling checkpoint is qualified.
+but that POST performs no media transfer. R45.5 registers the already-reviewed
+PeerTube detached launcher on the plugin's existing five-minute
+`argent_video_processor_dispatch` event. That cron callback only probes the
+generic task table for due queued or stale owned PeerTube work and, when needed,
+starts `wp argent-video peertube-task-worker --drain --quiet`; all upload,
+reconciliation, and mail execution remains inside the detached WP-CLI process.
+No second scheduler or administrator transfer-launch action is added.
+Drain/process and streamed-request guards scale at one minute per 128 MiB with a
+one-hour floor and six-hour ceiling; the worker observes its deadline only at
+safe durable request boundaries. PeerTube staged-ingest/server-push/processing
+capability advertisement remains false until R45.6 is separately reviewed and
+qualified.
 
 R45.4b4 adds a separate durable notification branch without expanding media
 transport authority. Human-attention upload failures enqueue
