@@ -636,7 +636,10 @@ bytes in one streamed resumable segment. Updating that policy must not rewrite
 backend identity, origin, destination, secret generation, capability, or health
 state and must not start a transfer.
 
-A separate detached PeerTube task-launcher foundation also exists, but R45.4a/
-R45.4b2 do not register it with cron or expose an administrator transfer launch.
+A separate detached PeerTube task-launcher foundation also exists. R45.4b3 makes
+it invoke the bounded `--drain` worker mode, but it is still not registered with
+cron or exposed as an administrator transfer launch. Drain follows only one
+logical operation across immediate durable boundaries and uses size-derived
+one-hour-to-six-hour process/request guards.
 Capability advertisement remains unchanged until the later scheduling/drain path
 is separately reviewed and qualified.

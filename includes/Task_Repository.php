@@ -196,6 +196,27 @@ final class Task_Repository
         return $this->claim_next_internal($types, $now);
     }
 
+
+    /**
+     * Atomically reclaim one exact queued task when it is due and still owned.
+     *
+     * This is used by bounded drain execution so one logical upload can continue
+     * across immediately-runnable durable boundaries without claiming unrelated
+     * queue work between segments.
+     *
+     * @param list<string> $task_types
+     * @return array<string,mixed>|null
+     */
+    public function claim_task_of_types(int $task_id, array $task_types, int $now): ?array
+    {
+        $types = self::normalized_task_types($task_types);
+        if ($task_id < 1 || null === $types || array() === $types || $now < 1) {
+            return null;
+        }
+
+        return $this->claim_task_internal($task_id, $types, $now);
+    }
+
     /**
      * @param list<string>|null $task_types Null means the legacy/generic queue view.
      * @return array<string,mixed>|null
@@ -233,64 +254,81 @@ final class Task_Repository
                 return null;
             }
 
-            $current = $this->find($task_id);
-            if (! is_array($current) || self::STATUS_QUEUED !== ($current['status'] ?? null)) {
-                continue;
-            }
-            if (is_array($task_types) && ! in_array((string) ($current['task_type'] ?? ''), $task_types, true)) {
-                continue;
-            }
-
-            $token = wp_generate_uuid4();
-            if (! self::valid_lock_token($token)) {
-                return null;
-            }
-
-            $started_at = self::nullable_string($current['started_at'] ?? null);
-            if (null === $started_at) {
-                $started_at = $timestamp;
-            }
-
-            try {
-                $updated = $wpdb->update(
-                    $this->table,
-                    array(
-                        'status' => self::STATUS_PROCESSING,
-                        'lock_token' => $token,
-                        'locked_at' => $timestamp,
-                        'started_at' => $started_at,
-                        'attempts' => ((int) ($current['attempts'] ?? 0)) + 1,
-                        'error_message' => null,
-                        'updated_at' => $timestamp,
-                    ),
-                    array(
-                        'id' => $task_id,
-                        'task_type' => (string) ($current['task_type'] ?? ''),
-                        'status' => self::STATUS_QUEUED,
-                        'lock_token' => null,
-                    ),
-                    array('%s','%s','%s','%s','%d','%s','%s'),
-                    array('%d','%s','%s','%s')
-                );
-            } catch (Throwable) {
-                return null;
-            }
-
-            if (1 === $updated) {
-                $claimed = $this->find($task_id);
-                if (
-                    is_array($claimed)
-                    && self::STATUS_PROCESSING === ($claimed['status'] ?? null)
-                    && hash_equals($token, (string) ($claimed['lock_token'] ?? ''))
-                    && (! is_array($task_types) || in_array((string) ($claimed['task_type'] ?? ''), $task_types, true))
-                ) {
-                    return $claimed;
-                }
-                return null;
+            $claimed = $this->claim_task_internal($task_id, $task_types, $now);
+            if (is_array($claimed)) {
+                return $claimed;
             }
         }
 
         return null;
+    }
+
+    /** @param list<string>|null $task_types @return array<string,mixed>|null */
+    private function claim_task_internal(int $task_id, ?array $task_types, int $now): ?array
+    {
+        if ($task_id < 1 || $now < 1) {
+            return null;
+        }
+
+        $current = $this->find($task_id);
+        $timestamp = gmdate('Y-m-d H:i:s', $now);
+        if (
+            ! is_array($current)
+            || self::STATUS_QUEUED !== ($current['status'] ?? null)
+            || (string) ($current['run_after'] ?? '') > $timestamp
+            || (int) ($current['attempts'] ?? 0) >= (int) ($current['max_attempts'] ?? 0)
+            || (is_array($task_types) && ! in_array((string) ($current['task_type'] ?? ''), $task_types, true))
+        ) {
+            return null;
+        }
+
+        $token = wp_generate_uuid4();
+        if (! self::valid_lock_token($token)) {
+            return null;
+        }
+
+        $started_at = self::nullable_string($current['started_at'] ?? null) ?? $timestamp;
+        global $wpdb;
+        try {
+            $updated = $wpdb->update(
+                $this->table,
+                array(
+                    'status' => self::STATUS_PROCESSING,
+                    'lock_token' => $token,
+                    'locked_at' => $timestamp,
+                    'started_at' => $started_at,
+                    'attempts' => ((int) ($current['attempts'] ?? 0)) + 1,
+                    'error_message' => null,
+                    'updated_at' => $timestamp,
+                ),
+                array(
+                    'id' => $task_id,
+                    'task_type' => (string) ($current['task_type'] ?? ''),
+                    'status' => self::STATUS_QUEUED,
+                    'lock_token' => null,
+                ),
+                array('%s','%s','%s','%s','%d','%s','%s'),
+                array('%d','%s','%s','%s')
+            );
+        } catch (Throwable) {
+            return null;
+        }
+
+        if (1 !== $updated) {
+            return null;
+        }
+
+        $claimed = $this->find($task_id);
+        if (
+            ! is_array($claimed)
+            || self::STATUS_PROCESSING !== ($claimed['status'] ?? null)
+            || ! hash_equals($token, (string) ($claimed['lock_token'] ?? ''))
+            || (is_array($task_types) && ! in_array((string) ($claimed['task_type'] ?? ''), $task_types, true))
+        ) {
+            return null;
+        }
+
+        return $claimed;
     }
 
     /**

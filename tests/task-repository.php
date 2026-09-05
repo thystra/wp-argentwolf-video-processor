@@ -348,6 +348,26 @@ $assert(
     'Invalid task-type ownership filters did not fail closed.'
 );
 
+// Bounded drain execution may reclaim only one exact due task after an
+// immediate durable reschedule; it must not fall back to unrelated queue work.
+$exact = $repo->claim_task_of_types(
+    (int) $peer_stale['task_id'],
+    array('peertube_upload_advance','peertube_remote_reconcile'),
+    1210
+);
+$assert(
+    is_array($exact) && (int) $peer_stale['task_id'] === (int) $exact['id'],
+    'Exact type-owned task reclaim did not claim the requested due task.'
+);
+$assert(
+    null === $repo->claim_task_of_types((int) $future['task_id'], array('peertube_upload_advance'), 1210),
+    'Exact type-owned task reclaim crossed task ownership.'
+);
+$assert(
+    Task_Repository::APPLIED === $repo->complete((int) $exact['id'], (string) $exact['lock_token'], 1211),
+    'Exact type-owned reclaimed task could not complete.'
+);
+
 // Detached-launch probing is advisory but must respect task ownership,
 // run_after, attempt exhaustion, and stale-lock recovery boundaries.
 $probe_other = $repo->enqueue(

@@ -182,7 +182,8 @@ final class Plugin
             );
             $peertube_task_worker = new PeerTube_Task_Worker(
                 $peertube_tasks,
-                $peertube_task_coordinator
+                $peertube_task_coordinator,
+                array($peertube_upload_operations, 'get')
             );
 
             \WP_CLI::add_command(

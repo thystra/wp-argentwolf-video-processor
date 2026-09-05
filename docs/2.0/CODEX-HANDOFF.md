@@ -1631,23 +1631,30 @@ Qualified progression:
   `ab74815`, Forgejo CI run 120. Policy default is 128 MiB, valid range 0–8192
   MiB, with `0` meaning all remaining bytes in one resumable segment.
 
-Current R45.4b2 scope is intentionally narrower than automatic scheduling. It
-streams the policy-sized staged-file slice through the existing origin-bound
-WordPress safe-HTTP path without building a 128 MiB/1 GiB PHP body string, adds
-the authenticated per-backend admin tuning control, and keeps all R43
-claim-before-I/O/no-replay fences. `PeerTube_Upload_Slice` binds the exact
-managed file descriptor, source identity, selected-slice hash, and bytes actually
-handed to cURL. The production staged-upload service resolves the backend policy
-at each chunk step. `0` does not select the legacy multipart endpoint; it streams
-all remaining bytes through the same resumable PUT protocol.
+R45.4b2 is exact commit `ca1194235e8a6f7f0c16e8087906816a9ceb50eb`, tree
+`6facc70f9c48f2abb8ebf11e3c6ae4215e4d7b5f`. It streams policy-sized staged-file
+slices through the existing origin-bound WordPress safe-HTTP path without
+building a 128 MiB/1 GiB PHP body string, adds the authenticated per-backend
+admin tuning control, and keeps all R43 claim-before-I/O/no-replay fences. The
+exact clean source passed the retained happy/wait R45 matrix
+`peertube-r45cli-smoke-20260905T003723Z-370943.log`, indeterminate/no-replay
+matrix `peertube-r45chunk-smoke-20260905T005703Z-382876.log`, and R44 regression
+`peertube-r44-smoke-20260905T005804Z-391056.log`. `0` still means all remaining
+bytes through the resumable PUT protocol, not the legacy multipart endpoint.
 
-Do **not** interpret R45.4b2 as automatic PeerTube service. The current one-shot
-CLI still advances one task step per invocation. The detached launcher
-foundation is not cron-wired, the settings page does not launch transfer work,
-and staged-ingest/server-push/processing capability bits remain false. The next
-planned checkpoint is R45.4b3: drain immediately runnable upload segments inside
-the already-detached worker without sleeps or remote polling, stopping on
-completion, durable wait, refresh requirement, conflict/failure,
-`upload_indeterminate`, or no due work. Only after a real detached-process gate
-should R45.5 add a recurring wake-up; WP-Cron may launch detached work but must
-never upload media inline.
+R45.4b3 adds a second CLI execution mode while preserving `--once`. `--drain`
+continues only one logical operation: it may reclaim the exact same immediately
+runnable task and then that operation's deterministic reconciliation handoff,
+never unrelated queue work. It never sleeps or polls a future `run_after`. Both
+process budget and streamed-request timeout use one minute per 128 MiB with a
+one-hour floor and six-hour ceiling; process deadline is checked only after a
+remote request reaches a durable boundary. The detached launcher now targets
+`--drain` but remains not cron-wired. This checkpoint must receive focused and
+real-process qualification before R45.5 adds recurring wake-up.
+
+R45.4b4 is the next separate failure-notification boundary: a terminal/held
+upload requiring human attention must enqueue durable email to the initiating
+WordPress user (fallback post author), including sanitized state, backend,
+transport/API error code, HTTP status/retry information when available, and an
+AWVP admin link. Ordinary waits and safe budget yields do not notify. Secrets,
+filesystem paths, and raw remote bodies must never be included.

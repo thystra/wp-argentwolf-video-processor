@@ -444,6 +444,7 @@ clean-source matrix on the disposable Docker host:
 
 ```bash
 bash tests/integration/peertube-task-cli-smoke.sh
+bash tests/integration/peertube-task-cli-drain-smoke.sh
 ```
 
 The runner reuses the qualified administrator setup only to establish an exact
@@ -503,3 +504,7 @@ To preserve its report outside the checkout:
 AWVP_R45_REPORT_DIR=/absolute/report/path \
     bash tests/integration/peertube-task-cli-indeterminate-smoke.sh
 ```
+
+### R45.4b3 bounded-drain smoke
+
+`peertube-task-cli-drain-smoke.sh` reuses the qualified isolated WordPress/mock-PeerTube fixture but invokes `wp argent-video peertube-task-worker --drain`. One fresh process must cross the immediately runnable upload initialization, byte-bearing upload, deterministic reconciliation handoff, and immediate reconciliation transition, then stop at the durable processing wait without sleeping or polling. After the wait expires, one later drain invocation completes readiness. The same state/assertion and no-replay evidence remain authoritative.

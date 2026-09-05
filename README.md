@@ -108,16 +108,22 @@ wp argent-video worker --limit=3
 
 The `argent-video` command name is retained for compatibility.
 
-The unreleased 2.0 development line also has a deliberately one-shot PeerTube
-task execution boundary:
+The unreleased 2.0 development line also has an explicit PeerTube task worker
+boundary:
 
 ```bash
 wp argent-video peertube-task-worker --once
+wp argent-video peertube-task-worker --drain
 ```
 
-That command advances at most one already-queued PeerTube task and exits. The
-current R45 development line does not yet register a recurring PeerTube task
-scheduler or administrator transfer-launch action.
+`--once` preserves the qualified one-task diagnostic/safety boundary. `--drain`
+continues one logical upload/reconciliation operation only across immediately
+runnable durable boundaries; it never sleeps through a future `run_after`. The
+drain process uses a size-derived one-hour-to-six-hour safe-boundary budget and
+streamed segment requests use the same size-derived timeout. The detached
+launcher uses `--drain`, but the current R45 development line still does not
+register a recurring PeerTube task scheduler or administrator transfer-launch
+action.
 
 ## Privacy
 

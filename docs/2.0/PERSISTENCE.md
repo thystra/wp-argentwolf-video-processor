@@ -1105,8 +1105,12 @@ source, remote identity, retry/uncertainty state, and credential/backend binding
 Task payloads do not duplicate those values and never contain access/refresh
 tokens or other long-lived credentials. Type-owned claim/recovery queries prevent
 a PeerTube worker from stealing a future task type owned by another subsystem.
-The one-shot CLI consumer advances at most one task per invocation; the detached
-launcher foundation is not yet cron-wired.
+The `--once` CLI mode advances at most one task per invocation. R45.4b3 adds a
+separate bounded `--drain` mode: after the first global type-owned claim, it may
+reclaim only that exact immediately-runnable task, or the deterministic
+`peertube_remote_reconcile` handoff task for the same operation. It never selects
+unrelated queue work between segments, never sleeps through a future `run_after`,
+and the detached launcher foundation remains not yet cron-wired.
 
 R45 upload segmentation is persisted separately from backend identity as one
 non-secret, non-autoloaded option per backend:
@@ -1131,3 +1135,20 @@ remaining immutable staged source. Consequential state still advances only from
 positively classified upload evidence; a byte-bearing uncertain result remains
 `upload_indeterminate` and is not automatically replayed or probed by the R45
 task worker.
+
+
+R45.4b3 does not add a new persistent worker-loop status. Process yielding is an
+execution decision made only after the just-finished remote request has committed
+its durable queue/journal transition. An immediately requeued row remains
+`queued`; a future wait remains `queued` with future `run_after`. The process
+budget is derived from authoritative staged-source bytes at one minute per
+128 MiB, with a 3600-second floor and 21600-second ceiling. Reclaiming the exact
+row still increments normal durable `attempts` and obtains a new lock token.
+
+R45.4b4 will use the generic task table for a durable upload-failure notification
+rather than sending email inline from the upload coordinator. The notification
+payload must remain credential-free and bind deterministically to the upload
+operation. User/post/backend/error details are re-derived from authoritative
+WordPress and staged-upload state when the notification executes; only a bounded
+sanitized failure snapshot may be duplicated when needed to preserve the reason
+that caused the task transition.

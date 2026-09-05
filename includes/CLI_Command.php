@@ -86,35 +86,40 @@ final class CLI_Command
     }
 
     /**
-     * Advance exactly one queued PeerTube asynchronous task.
+     * Run the reviewed PeerTube asynchronous task worker.
      *
-     * This command is intentionally one-shot. R45 does not grant this command
-     * a polling loop, detached-launch policy, or scheduler ownership.
+     * --once preserves the qualified one-task boundary. --drain allows the
+     * worker abstraction (not the CLI method) to continue one logical operation
+     * across immediately-runnable durable boundaries until it reaches a wait,
+     * terminal/intervention state, or safe-boundary runtime yield.
+     *
+     * @subcommand peertube-task-worker
      *
      * ## OPTIONS
      *
      * [--once]
-     * : Required safety flag. Advance at most one eligible PeerTube task.
+     * : Advance at most one eligible PeerTube task.
      *
-     * @subcommand peertube-task-worker
+     * [--drain]
+     * : Drain one logical operation across immediately-runnable boundaries.
      */
     public function peertube_task_worker(array $args, array $assoc_args): void
     {
         unset($args);
 
-        if (! isset($assoc_args['once'])) {
-            WP_CLI::error('PeerTube task worker requires --once.');
+        $unexpected = array_diff(array_keys($assoc_args), array('once', 'drain'));
+        $once = isset($assoc_args['once']);
+        $drain = isset($assoc_args['drain']);
+        if ([] !== $unexpected || $once === $drain) {
+            WP_CLI::error('PeerTube task worker requires exactly one of --once or --drain.');
             return;
         }
 
-        $unexpected = array_diff(array_keys($assoc_args), array('once'));
-        if ([] !== $unexpected) {
-            WP_CLI::error('PeerTube task worker only supports --once.');
-            return;
-        }
-
+        $started_at = time();
         try {
-            $result = $this->peertube_task_worker->run_once(time());
+            $result = $drain
+                ? $this->peertube_task_worker->run_drain($started_at)
+                : $this->peertube_task_worker->run_once($started_at);
         } catch (Throwable $error) {
             WP_CLI::error('PeerTube task worker failed before a bounded result: ' . $this->error_summary($error->getMessage()));
             return;
@@ -131,7 +136,22 @@ final class CLI_Command
             return;
         }
 
-        if (PeerTube_Task_Worker::STATUS_ADVANCED === $status) {
+        if ($drain && in_array($status, array(PeerTube_Task_Worker::STATUS_ADVANCED, PeerTube_Task_Worker::STATUS_YIELDED), true)) {
+            WP_CLI::success(sprintf(
+                'PeerTube task worker %s after %d bounded step(s); last task %d (%s): %s; elapsed %ds of %ds budget; %d stale recovered.',
+                PeerTube_Task_Worker::STATUS_YIELDED === $status ? 'yielded safely' : 'stopped at a durable boundary',
+                max(0, (int) ($result['steps'] ?? 0)),
+                max(0, (int) ($result['task_id'] ?? 0)),
+                (string) ($result['task_type'] ?? ''),
+                (string) ($result['coordinator_status'] ?? ''),
+                max(0, (int) ($result['elapsed_seconds'] ?? 0)),
+                max(0, (int) ($result['budget_seconds'] ?? 0)),
+                $recovered
+            ));
+            return;
+        }
+
+        if (! $drain && PeerTube_Task_Worker::STATUS_ADVANCED === $status) {
             WP_CLI::success(sprintf(
                 'PeerTube task worker advanced task %d (%s): %s; %d stale recovered.',
                 max(0, (int) ($result['task_id'] ?? 0)),

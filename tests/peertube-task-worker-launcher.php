@@ -1,5 +1,5 @@
 <?php
-/** Focused dependency-free tests for the R45.4a detached PeerTube task launcher. */
+/** Focused dependency-free tests for the R45 detached PeerTube task launcher. */
 declare(strict_types=1);
 
 namespace ArgentVideo {
@@ -133,7 +133,7 @@ namespace {
     $assert($locked['ok'] && PeerTube_Task_Worker_Launcher::STATUS_LOCKED === $locked['status'], 'Launch lock did not suppress a duplicate launcher.');
     $assert(0 === count($GLOBALS['awvp_r45_launcher_exec_calls']), 'Launch-locked path still spawned a process.');
 
-    // Successful launch uses only the reviewed one-shot WP-CLI boundary.
+    // Successful launch uses only the reviewed bounded-drain WP-CLI boundary.
     $reset();
     $tasks = new Task_Repository();
     $tasks->has_work = true;
@@ -142,7 +142,7 @@ namespace {
     $assert($launched['ok'] && PeerTube_Task_Worker_Launcher::STATUS_LAUNCHED === $launched['status'] && 4242 === $launched['pid'], 'Detached launch result was not successful.');
     $assert(1 === count($GLOBALS['awvp_r45_launcher_exec_calls']), 'Detached launcher did not execute exactly one shell command.');
     $command = $GLOBALS['awvp_r45_launcher_exec_calls'][0];
-    foreach (array(' argent-video peertube-task-worker --once --quiet', "--path='/srv/wordpress'") as $needle) {
+    foreach (array(' argent-video peertube-task-worker --drain --quiet', "--path='/srv/wordpress'") as $needle) {
         $assert(str_contains($command, $needle), 'Detached command missed reviewed argument: '.$needle);
     }
     foreach (array("'worker'", '--worker-log-id=', 'ffmpeg', 'curl', 'sleep ') as $needle) {

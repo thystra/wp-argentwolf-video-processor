@@ -64,6 +64,16 @@
   control on the authenticated PeerTube settings page. Saving the setting does
   not itself start a transfer; automatic scheduling and ingest/processing
   capability advertisement remain disabled.
+- Add the R45.4b3 bounded-drain execution mode. The detached launcher now invokes
+  `wp argent-video peertube-task-worker --drain`; the worker reclaims only the
+  same immediately-runnable task (or that operation's deterministic reconciliation
+  handoff), never sleeps or polls future work, and yields only at a durable request
+  boundary. Runtime/request guards scale at one minute per 128 MiB with a one-hour
+  floor and six-hour ceiling; `--once` remains available unchanged.
+- Record the R45.4b4 requirement for durable failed-upload notification to the
+  initiating WordPress user (falling back to post author), including sanitized
+  operation state, transport/API error code, HTTP status/retry detail, and an AWVP
+  admin link without exposing credentials, filesystem paths, or raw remote bodies.
 - Expand focused PeerTube security/state tests and isolated real-WordPress Docker
   development matrices through the R39 identity/destination checkpoint, with an
   R40 activation continuation that proves activation performs no additional

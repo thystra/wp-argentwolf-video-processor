@@ -653,10 +653,12 @@ until a later tranche explicitly wires, discloses, and qualifies those surfaces.
 ### R45 WordPress runtime and streamed-HTTP boundary
 
 R45 introduces one explicit production runtime surface for staged PeerTube work:
-`wp argent-video peertube-task-worker --once`. The command is WP-CLI-only, owns no
+`wp argent-video peertube-task-worker`. `--once` retains the qualified one-task
+boundary and R45.4b3 adds a bounded `--drain` mode. The command is WP-CLI-only, owns no
 browser/admin/AJAX/REST hook, and advances at most one claimed task per invocation.
 The existing WordPress recurring event still belongs to the legacy FFmpeg worker;
-R45.4b2 does not register the PeerTube detached launcher with cron or add an
+R45.4b3 makes the detached launcher target `--drain` but still does not register
+the PeerTube detached launcher with cron or add an
 administrator transfer-launch action.
 
 The PeerTube Connection settings page does gain one `manage_options` + nonce
@@ -676,6 +678,12 @@ the upload fails closed instead of materializing a large PHP body or silently
 using a different transport contract.
 
 The staged source continues to live under the plugin-owned uploads boundary.
+R45.4b3's safe-boundary runtime budget is not a PHP execution-time override or
+an in-browser long request. The detached WP-CLI process computes a one-hour to
+six-hour budget from staged-source bytes and checks it only between durable
+remote-request transitions. Streamed PUT timeout uses the same size-derived
+bound; the worker never sleeps through a future `run_after`.
+
 R45 streaming is read-only with respect to that file; no source cleanup,
 publication/privacy mutation, remote delete, or retention action is gained here.
 PeerTube ingest/processing capabilities remain false pending later detached-drain

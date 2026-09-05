@@ -227,15 +227,27 @@
   128 MiB default, 0–8192 MiB accepted range, and `0` meaning one segment with
   all remaining bytes. Qualified commit prefix `ab74815`; Forgejo CI run 120
   passed.
-- [ ] R45.4b2: stream policy-sized staged-file slices through the reviewed
+- [x] R45.4b2: stream policy-sized staged-file slices through the reviewed
   resumable PUT boundary and expose the backend setting in the PeerTube admin
-  page. The implementation must keep the safe-HTTP/origin boundary, avoid large
-  PHP body materialization, preserve R43 no-replay semantics, leave the detached
-  launcher unwired, and update the current 2.0 documentation before
-  qualification.
-- [ ] R45.4b3: let the detached worker drain immediately runnable upload
-  segments without sleeping or remote polling, stopping on completion, durable
-  wait, refresh requirement, conflict/failure, uncertainty, or no due work.
+  page while preserving the safe-HTTP/origin and R43 no-replay boundaries.
+  Exact source `ca1194235e8a6f7f0c16e8087906816a9ceb50eb`, tree
+  `6facc70f9c48f2abb8ebf11e3c6ae4215e4d7b5f`, passed the retained R45
+  happy/wait, R45 indeterminate/no-replay, and R44 reconciliation Docker matrices
+  on those exact clean bytes; feature-branch CI qualification remains recorded
+  separately when available.
+- [ ] R45.4b3: qualify the bounded drain mode: detached execution uses `--drain`,
+  reclaims only the same immediately-runnable task or deterministic reconciliation
+  handoff for one operation, never sleeps/polls future work, and yields at a safe
+  request boundary once its size-derived process budget is reached. Guard formula:
+  one minute per 128 MiB, minimum one hour, maximum six hours; streamed request
+  timeout uses the same size-derived bound. Keep `--once` unchanged.
+- [ ] R45.4b4: enqueue a durable failed-upload notification for the initiating
+  WordPress user, falling back to the video post author if necessary. Email must
+  include sanitized failure/held state, PeerTube backend, post/video identity,
+  transport/API error code, HTTP status and retry detail when available, plus an
+  AWVP admin link; never include credentials, raw response bodies, or filesystem
+  paths. Notify only states requiring human attention, not ordinary waits or
+  safe-boundary yields.
 - [ ] R45.5: wire a recurring wake-up only after the detached drain path has a
   real-process qualification gate. WP-Cron must launch detached work, never
   transmit PeerTube media inline.

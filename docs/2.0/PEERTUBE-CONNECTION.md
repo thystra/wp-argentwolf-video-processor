@@ -1443,5 +1443,9 @@ and a canonical integer `chunk_mib` in the range 0–8192. The default is 128 Mi
 Saving this policy does not call PeerTube, create/claim a task, launch a worker,
 or transfer media. The settings page therefore remains a connection/lifecycle and
 operational-configuration surface, not an upload trigger. The current R45 media
-execution boundary is the separate explicit one-shot WP-CLI task worker; the
-detached launcher foundation is not yet wired to cron/admin.
+execution boundary is the separate explicit WP-CLI task worker. `--once` retains
+the one-task boundary, while R45.4b3 adds bounded `--drain` execution for one
+logical operation. The detached launcher uses `--drain` but is not yet wired to
+cron/admin. Safe-boundary process and streamed-request guards scale from one hour
+to six hours according to source/segment size; saving this settings form never
+launches transfer work.

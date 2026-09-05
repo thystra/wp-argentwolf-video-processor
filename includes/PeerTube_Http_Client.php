@@ -23,7 +23,6 @@ final class PeerTube_Http_Client
     public const MAX_UPLOAD_REQUEST_BYTES = 1048576;
 
     private const DEFAULT_TIMEOUT_SECONDS = 15;
-    private const STREAM_UPLOAD_TIMEOUT_SECONDS = 3600;
     private const CONFIG_PATH = '/api/v1/config';
     private const OAUTH_CLIENT_PATH = '/api/v1/oauth-clients/local';
     private const TOKEN_PATH = '/api/v1/users/token';
@@ -514,7 +513,7 @@ final class PeerTube_Http_Client
                     'method'              => $method,
                     'timeout'             => null === $upload_slice
                         ? self::DEFAULT_TIMEOUT_SECONDS
-                        : self::STREAM_UPLOAD_TIMEOUT_SECONDS,
+                        : PeerTube_Upload_Runtime_Budget::request_seconds($upload_slice->bytes()),
                     'blocking'            => true,
                     'redirection'         => 0,
                     'sslverify'           => true,

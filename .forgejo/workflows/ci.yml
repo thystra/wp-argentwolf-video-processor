@@ -51,8 +51,10 @@ jobs:
           php tests/task-repository.php
           php tests/peertube-upload-task-coordinator.php
           php tests/peertube-task-worker.php
+          php tests/peertube-task-worker-drain.php
           php tests/peertube-task-worker-launcher.php
           php tests/peertube-upload-policy.php
+          php tests/peertube-upload-runtime-budget.php
           php tests/peertube-task-cli.php
           php tests/backend-local.php
           php tests/peertube-connection-foundation.php
@@ -105,6 +107,7 @@ jobs:
           bash -n tests/integration/peertube-staged-upload-smoke.sh
           bash -n tests/integration/peertube-remote-asset-reconciliation-smoke.sh
           bash -n tests/integration/peertube-task-cli-smoke.sh
+          bash -n tests/integration/peertube-task-cli-drain-smoke.sh
           bash -n tests/integration/peertube-task-cli-indeterminate-smoke.sh
           php tests/run.php
           php tests/storage-boundary.php

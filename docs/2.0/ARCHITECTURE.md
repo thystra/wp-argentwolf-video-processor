@@ -733,10 +733,12 @@ capability was enabled.
 R45 adds a production-reachable **explicit WP-CLI-only** consumer without
 repurposing the attachment/FFmpeg queue. `argent_video_tasks` is consumed through
 lock-token-guarded, type-owned claims for exactly `peertube_upload_advance` and
-`peertube_remote_reconcile`; `wp argent-video peertube-task-worker --once`
-advances at most one claimed task and exits. Durable processing/rate waits do not
-become polling loops, and an `upload_indeterminate` operation remains a hard
-no-replay boundary.
+`peertube_remote_reconcile`. `wp argent-video peertube-task-worker --once`
+retains the one-task boundary; R45.4b3 also provides `--drain`, which follows one
+logical operation only across immediately-runnable durable transitions. It may
+reclaim the same task or that operation's deterministic reconciliation handoff,
+never unrelated queue work. Durable processing/rate waits do not become polling
+loops, and an `upload_indeterminate` operation remains a hard no-replay boundary.
 
 Upload segmentation is backend-scoped operational policy, not backend identity or
 credential authority. The default is 128 MiB, valid values are 0–8192 MiB, and
@@ -753,7 +755,11 @@ not require a correspondingly large PHP request-body string. The final
 remote-created response receives the stronger full-source post-transfer proof.
 
 The PeerTube settings page may save this non-secret per-backend segment policy,
-but that POST performs no media transfer. The detached PeerTube launcher
-foundation exists but is not yet registered with cron or an administrator launch
-action. PeerTube staged-ingest/server-push/processing capability advertisement
-remains false until a later production scheduling/drain checkpoint is qualified.
+but that POST performs no media transfer. The detached PeerTube launcher now
+targets bounded `--drain` execution but remains unregistered with cron or an
+administrator launch action. Drain/process and streamed-request guards scale at
+one minute per 128 MiB with a one-hour floor and six-hour ceiling; the worker
+observes its deadline only at safe durable request boundaries. PeerTube
+staged-ingest/server-push/processing capability advertisement remains false until
+a later production scheduling checkpoint is qualified. Durable user notification
+for upload failures is the separately reviewed R45.4b4 boundary.

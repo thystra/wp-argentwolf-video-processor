@@ -1,5 +1,5 @@
 <?php
-/** Focused dependency-free tests for the R45 one-shot PeerTube task worker. */
+/** Focused dependency-free tests for the R45 PeerTube task worker. */
 declare(strict_types=1);
 
 namespace ArgentVideo {
@@ -79,7 +79,7 @@ namespace {
     $tasks = new Task_Repository();
     $tasks->recover_result = 2;
     $coordinator = new Coordinator();
-    $worker = new PeerTube_Task_Worker($tasks, $coordinator);
+    $worker = new PeerTube_Task_Worker($tasks, $coordinator, static fn(string $operation_id): ?array => null);
     $idle = $worker->run_once(2000);
     $assert(PeerTube_Task_Worker::STATUS_IDLE === $idle['status'], 'Empty worker did not return idle.');
     $assert(2 === $idle['recovered'], 'Worker did not report bounded stale recovery.');
@@ -91,7 +91,7 @@ namespace {
     // Exactly one eligible task is advanced; a second queued task is untouched.
     $tasks = new Task_Repository();
     $coordinator = new Coordinator();
-    $worker = new PeerTube_Task_Worker($tasks, $coordinator);
+    $worker = new PeerTube_Task_Worker($tasks, $coordinator, static fn(string $operation_id): ?array => null);
     $tasks->claims[] = array(
         'id'=>41,
         'task_type'=>Coordinator::TASK_UPLOAD_ADVANCE,
@@ -118,7 +118,7 @@ namespace {
     // Repository ownership mismatch fails closed before coordinator invocation.
     $tasks = new Task_Repository();
     $coordinator = new Coordinator();
-    $worker = new PeerTube_Task_Worker($tasks, $coordinator);
+    $worker = new PeerTube_Task_Worker($tasks, $coordinator, static fn(string $operation_id): ?array => null);
     $tasks->claims[] = array(
         'id'=>50,
         'task_type'=>'future_cleanup',
@@ -134,7 +134,7 @@ namespace {
     $tasks = new Task_Repository();
     $coordinator = new Coordinator();
     $coordinator->throw = true;
-    $worker = new PeerTube_Task_Worker($tasks, $coordinator);
+    $worker = new PeerTube_Task_Worker($tasks, $coordinator, static fn(string $operation_id): ?array => null);
     $tasks->claims[] = array(
         'id'=>60,
         'task_type'=>Coordinator::TASK_REMOTE_RECONCILE,

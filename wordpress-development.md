@@ -357,3 +357,19 @@ commit was sufficient.
 WordPress.org SVN remains a distribution surface. `trunk/` and `tags/1.0.0/`
 were derived from the canonical plugin tree, while directory artwork belongs in
 top-level SVN `assets/`.
+
+
+## Long-running detached network transfers
+
+A detached WP-CLI network worker should not use an arbitrary small wall-clock
+limit that converts a slow but healthy transfer into failure. Derive a generous
+budget from the amount of data being sent, apply a finite ceiling, and observe
+that process budget only at durable request boundaries. If a safe boundary is
+reached after the process budget, persist/requeue and yield so a later process can
+resume. Do not sleep or poll a future retry time inside the worker.
+
+For AWVP PeerTube uploads the reviewed R45.4b3 guard is one minute per 128 MiB,
+with a one-hour floor and six-hour ceiling for both process budgeting and an
+individual streamed upload request. A user-selectable all-remaining (`0`) segment
+therefore trades fewer requests for a larger uncertainty/timeout unit and should
+be recommended only for fast, reliable links such as same-host transfers.

@@ -15,7 +15,7 @@ use Throwable;
  * This class is deliberately not registered with WP-Cron or any administrator,
  * REST, AJAX, or browser surface in R45.4a. It performs no PeerTube HTTP work
  * itself: after an advisory type-owned queue probe it can only launch the
- * already-qualified one-shot WP-CLI consumer in a detached process.
+ * reviewed bounded-drain WP-CLI consumer in a detached process.
  */
 final class PeerTube_Task_Worker_Launcher
 {
@@ -39,7 +39,7 @@ final class PeerTube_Task_Worker_Launcher
     }
 
     /**
-     * Launch at most one detached one-shot worker process when owned work is due.
+     * Launch at most one detached bounded-drain worker process when owned work is due.
      *
      * The pre-launch work probe is advisory. The detached worker's atomic claim
      * remains authoritative and may legitimately return idle after a race.
@@ -107,7 +107,7 @@ final class PeerTube_Task_Worker_Launcher
             $parts[] = '--path=' . escapeshellarg(untrailingslashit(ABSPATH));
             $parts[] = 'argent-video';
             $parts[] = 'peertube-task-worker';
-            $parts[] = '--once';
+            $parts[] = '--drain';
             $parts[] = '--quiet';
 
             $command = implode(' ', $parts) . ' > /dev/null 2>&1 < /dev/null & echo $!';

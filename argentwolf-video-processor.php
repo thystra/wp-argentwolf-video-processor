@@ -59,6 +59,7 @@ require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Token_Lifecycle_Store.php';
 require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Token_Lifecycle_Service.php';
 require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Staged_Source_Identity.php';
 require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Upload_Slice.php';
+require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Upload_Runtime_Budget.php';
 require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Upload_Policy.php';
 require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Upload_Policy_Store.php';
 require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Staged_Upload_State_Machine.php';

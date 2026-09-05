@@ -177,6 +177,7 @@ require_once dirname(__DIR__) . '/includes/PeerTube_Origin.php';
 require_once dirname(__DIR__) . '/includes/PeerTube_Api_Error.php';
 require_once dirname(__DIR__) . '/includes/PeerTube_Staged_Source_Identity.php';
 require_once dirname(__DIR__) . '/includes/PeerTube_Upload_Slice.php';
+require_once dirname(__DIR__) . '/includes/PeerTube_Upload_Runtime_Budget.php';
 require_once dirname(__DIR__) . '/includes/PeerTube_Http_Client.php';
 
 use ArgentVideo\PeerTube_Http_Client;

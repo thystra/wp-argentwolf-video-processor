@@ -49,12 +49,17 @@ namespace ArgentVideo {
     {
         public const STATUS_IDLE = 'idle';
         public const STATUS_ADVANCED = 'advanced';
+        public const STATUS_YIELDED = 'yielded';
         public const STATUS_INDETERMINATE = 'indeterminate';
 
         /** @var list<array<string,mixed>> */
         public array $results = array();
         /** @var list<int> */
         public array $calls = array();
+        /** @var list<array<string,mixed>> */
+        public array $drain_results = array();
+        /** @var list<int> */
+        public array $drain_calls = array();
 
         /** @return array<string,mixed> */
         public function run_once(int $now): array
@@ -66,6 +71,23 @@ namespace ArgentVideo {
                 'task_id'=>0,
                 'task_type'=>'',
                 'coordinator_status'=>'',
+            );
+        }
+
+
+        /** @return array<string,mixed> */
+        public function run_drain(int $now): array
+        {
+            $this->drain_calls[] = $now;
+            return array_shift($this->drain_results) ?? array(
+                'status'=>self::STATUS_IDLE,
+                'recovered'=>0,
+                'task_id'=>0,
+                'task_type'=>'',
+                'coordinator_status'=>'',
+                'steps'=>0,
+                'budget_seconds'=>3600,
+                'elapsed_seconds'=>0,
             );
         }
     }
@@ -101,7 +123,7 @@ namespace {
         $worker
     );
 
-    // --once is an explicit safety fence, not an optional alias.
+    // Exactly one reviewed execution mode is required.
     WP_CLI::reset();
     $thrown = false;
     try {
@@ -109,8 +131,8 @@ namespace {
     } catch (\RuntimeException $error) {
         $thrown = 'WP_CLI_ERROR' === $error->getMessage();
     }
-    $assert($thrown, 'PeerTube CLI worker accepted execution without --once.');
-    $assert(0 === count($worker->calls), 'PeerTube CLI worker ran before --once validation.');
+    $assert($thrown, 'PeerTube CLI worker accepted execution without --once/--drain.');
+    $assert(0 === count($worker->calls) && 0 === count($worker->drain_calls), 'PeerTube CLI worker ran before mode validation.');
 
     // Additional loop-ish/options surface is rejected at this checkpoint.
     WP_CLI::reset();
@@ -121,7 +143,16 @@ namespace {
         $thrown = 'WP_CLI_ERROR' === $error->getMessage();
     }
     $assert($thrown, 'PeerTube CLI worker accepted an unreviewed option alongside --once.');
-    $assert(0 === count($worker->calls), 'Rejected PeerTube CLI options still ran the worker.');
+    $assert(0 === count($worker->calls) && 0 === count($worker->drain_calls), 'Rejected PeerTube CLI options still ran the worker.');
+
+    WP_CLI::reset();
+    $thrown = false;
+    try {
+        $cli->peertube_task_worker(array(), array('once'=>true,'drain'=>true));
+    } catch (\RuntimeException $error) {
+        $thrown = 'WP_CLI_ERROR' === $error->getMessage();
+    }
+    $assert($thrown, 'PeerTube CLI worker accepted both mutually exclusive execution modes.');
 
     // Idle is a successful bounded invocation.
     WP_CLI::reset();
@@ -169,6 +200,29 @@ namespace {
         'Advanced PeerTube CLI result lost bounded task identity/status.'
     );
 
+    // Drain mode delegates the loop to the worker abstraction and reports a
+    // safe-boundary yield without looping in the CLI method itself.
+    WP_CLI::reset();
+    $worker->drain_results[] = array(
+        'status'=>PeerTube_Task_Worker::STATUS_YIELDED,
+        'recovered'=>0,
+        'task_id'=>51,
+        'task_type'=>'peertube_upload_advance',
+        'coordinator_status'=>'requeued',
+        'steps'=>3,
+        'budget_seconds'=>3600,
+        'elapsed_seconds'=>3600,
+    );
+    $cli->peertube_task_worker(array(), array('drain'=>true));
+    $assert(1 === count($worker->drain_calls), 'Drain CLI invocation did not delegate exactly once to run_drain().');
+    $assert(
+        1 === count(WP_CLI::$successes)
+            && str_contains(WP_CLI::$successes[0], 'yielded safely')
+            && str_contains(WP_CLI::$successes[0], '3 bounded step(s)')
+            && str_contains(WP_CLI::$successes[0], '3600s of 3600s budget'),
+        'Drain CLI result lost safe-boundary progress/budget evidence.'
+    );
+
     // Process-level uncertainty returns a CLI error/non-zero boundary.
     WP_CLI::reset();
     $worker->results = array(
@@ -195,14 +249,8 @@ namespace {
     );
 
     $source = (string) file_get_contents(dirname(__DIR__) . '/includes/CLI_Command.php');
-    $assert(
-        str_contains($source, '@subcommand peertube-task-worker'),
-        'PeerTube CLI worker lost its public hyphenated subcommand registration.'
-    );
-    $assert(
-        str_contains($source, '* [--once]'),
-        'PeerTube CLI worker lost its WP-CLI-compatible --once synopsis.'
-    );
+    $assert(str_contains($source, '@subcommand peertube-task-worker'), 'PeerTube CLI worker lost its public hyphenated subcommand name.');
+    $assert(str_contains($source, '* [--once]') && str_contains($source, '* [--drain]'), 'PeerTube CLI worker synopsis lost reviewed execution-mode flags.');
     $method_start = strpos($source, 'public function peertube_task_worker');
     $method_end = false === $method_start ? false : strpos($source, '/** Display configuration', $method_start);
     $method = false === $method_start || false === $method_end ? '' : substr($source, $method_start, $method_end - $method_start);

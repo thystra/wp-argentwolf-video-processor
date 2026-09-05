@@ -301,13 +301,16 @@ has a type-owned PeerTube worker and the explicit command:
 wp argent-video peertube-task-worker --once
 ```
 
-Each invocation claims at most one eligible PeerTube task and performs at most
-one coordinator advancement. Processing/rate-limit waits are persisted for a
-later invocation; no worker sleeps or polls the remote service. An
-`upload_indeterminate` state is terminal to this automatic path. The qualified
-transport-drop matrix proves that a fresh worker process does not replay the
-byte-bearing PUT, issue an automatic zero-byte probe, create a replacement upload
-session, or begin remote reconciliation.
+`--once` claims at most one eligible PeerTube task and performs at most one
+coordinator advancement. R45.4b3 adds `--drain`: after its first type-owned claim,
+the worker may reclaim only that exact immediately-runnable task and, after a
+successful upload handoff, the deterministic reconciliation task for the same
+operation. Processing/rate-limit waits are persisted for a later process; no
+worker sleeps or polls the remote service. An `upload_indeterminate` state is a
+hard stop to this automatic path. The qualified transport-drop matrix proves
+that a fresh worker process does not replay the byte-bearing PUT, issue an
+automatic zero-byte probe, create a replacement upload session, or begin remote
+reconciliation.
 
 R45.4 adds backend-scoped upload segmentation. The default is 128 MiB, valid
 values are 0–8192 MiB, and `0` means one segment containing the entire remaining
@@ -329,6 +332,25 @@ fails closed. The existing safe-HTTP URL/origin validation remains in force.
 
 The authenticated PeerTube settings page may save the segment policy for an
 active backend, but that action transfers no media. The detached task-launcher
-foundation remains unwired from cron/admin in R45.4b2, and the adapter still does
-not advertise staged ingest/server push/processing capability. Automatic drain
-and recurring wake-up are later checkpoints.
+foundation remains unwired from cron/admin. R45.4b3 changes only detached/CLI
+worker execution semantics: one minute is budgeted per 128 MiB of authoritative
+source/segment size, with a one-hour floor and six-hour ceiling. The process
+checks its deadline only between durable request boundaries; a byte-bearing PUT
+is never interrupted by the worker. The streamed HTTP timeout uses the same
+size-derived bound. The adapter still does not advertise staged ingest/server
+push/processing capability, and recurring wake-up remains a later checkpoint.
+
+
+### R45.4b4 failed-upload notification requirement
+
+A failed or held upload that requires human attention must enqueue a durable
+notification rather than call `wp_mail()` inline from the upload coordinator.
+The intended recipient is the WordPress user who initiated the staged operation,
+falling back to the video post author if that account/email is no longer usable.
+The message must identify the site, post/video, PeerTube backend, failed/held
+state and time, and include the sanitized transport/API error code, HTTP status,
+and retry information when available (including timeout/bandwidth-like transport
+failures), plus a link to the relevant AWVP administrator status surface. It must
+not include bearer/refresh tokens, secret references, filesystem paths, or raw
+remote response bodies. Ordinary retry waits, processing waits, stale-lock
+recovery, and safe runtime-budget yields do not send failure mail.
