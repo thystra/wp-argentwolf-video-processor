@@ -1430,3 +1430,18 @@ internal code/tests; it cannot be reached from the settings page, REST, AJAX, WP
 cron, or a worker in this checkpoint. Near-expiry access/refresh credentials stop the
 executor before it claims or transmits an upload request, leaving token refresh to the
 existing explicit R41 lifecycle.
+
+### R45 operational upload policy on the connection settings page
+
+The nine R38-R41 connection/lifecycle `admin_post` actions remain the complete
+credential/connection mutation surface. R45 adds a separate tenth authenticated
+settings action for **upload segmentation policy only**. It requires
+`manage_options`, a backend-scoped nonce, the exact active PeerTube backend ID,
+and a canonical integer `chunk_mib` in the range 0–8192. The default is 128 MiB;
+`0` means all remaining staged bytes in one streamed resumable segment.
+
+Saving this policy does not call PeerTube, create/claim a task, launch a worker,
+or transfer media. The settings page therefore remains a connection/lifecycle and
+operational-configuration surface, not an upload trigger. The current R45 media
+execution boundary is the separate explicit one-shot WP-CLI task worker; the
+detached launcher foundation is not yet wired to cron/admin.

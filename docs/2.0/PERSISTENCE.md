@@ -1078,3 +1078,56 @@ remote deletion, automatic polling, task/worker execution, or production
 administrator/REST/AJAX/WP-CLI entry point. The staged source must remain confined
 and byte-identical during reconciliation. `ready_verified` is only the positive
 persistence/readiness boundary for a later cleanup/publication tranche.
+
+### R45 task-runtime and upload-policy persistence
+
+R45 implements the generic task table without overloading `argent_video_jobs`.
+The current task statuses are `queued`, `processing`, `complete`, and `failed`;
+a durable wait is represented by `queued` plus a future UTC `run_after`. Claims
+increment `attempts`, set a UUID `lock_token`, and move the row to `processing`.
+Completion, failure, and reschedule are conditional on both task ID and the exact
+current lock token so a stale worker cannot finalize a row after another worker
+has recovered/reclaimed it.
+
+The PeerTube consumer owns only these task types:
+
+- `peertube_upload_advance`;
+- `peertube_remote_reconcile`.
+
+Their v1 payload is intentionally minimal:
+
+```json
+{"version":1,"operation_id":"upload_..."}
+```
+
+The staged-upload journal remains authority for origin, destination, staged
+source, remote identity, retry/uncertainty state, and credential/backend binding.
+Task payloads do not duplicate those values and never contain access/refresh
+tokens or other long-lived credentials. Type-owned claim/recovery queries prevent
+a PeerTube worker from stealing a future task type owned by another subsystem.
+The one-shot CLI consumer advances at most one task per invocation; the detached
+launcher foundation is not yet cron-wired.
+
+R45 upload segmentation is persisted separately from backend identity as one
+non-secret, non-autoloaded option per backend:
+
+`argent_video_processor_peertube_upload_policy_<backend_id>`
+
+Version 1 has the exact record shape:
+
+```json
+{"version":1,"chunk_mib":128}
+```
+
+`chunk_mib` accepts 0–8192. Absence resolves to the 128 MiB default without a
+write; `0` means the complete remaining source in one resumable segment. A
+malformed or future-version record is never silently overwritten. The policy is
+operational tuning only and must not become backend descriptor, credential,
+capability, remote identity, or publication authority.
+
+R45 streamed requests may therefore journal a positive `request_bytes` value
+larger than the historical 1 MiB buffered-helper bound, but never larger than the
+remaining immutable staged source. Consequential state still advances only from
+positively classified upload evidence; a byte-bearing uncertain result remains
+`upload_indeterminate` and is not automatically replayed or probed by the R45
+task worker.

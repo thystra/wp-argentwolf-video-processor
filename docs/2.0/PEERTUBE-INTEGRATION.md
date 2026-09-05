@@ -286,7 +286,49 @@ are durable waits, not background polling. Published/ready is a positive readine
 observation; 404 and reviewed transcoding/storage failures are terminally recorded.
 Transient GET failures are safe to retry only on a later explicit invocation.
 
-This checkpoint does not publish a video, change PeerTube privacy, request
+R44 itself does not publish a video, change PeerTube privacy, request
 transcoding, delete or retain remote media, remove staging bytes, or expose a
 production upload/reconciliation action. PeerTube ingest/processing capability
-advertisement therefore remains unchanged and false.
+advertisement therefore remained unchanged and false at that checkpoint.
+
+## R45 explicit task execution and configurable streamed segments
+
+R45 connects the previously reviewed R43/R44 services to a narrow operational
+consumer without turning them into browser or cron work. The generic task table
+has a type-owned PeerTube worker and the explicit command:
+
+```bash
+wp argent-video peertube-task-worker --once
+```
+
+Each invocation claims at most one eligible PeerTube task and performs at most
+one coordinator advancement. Processing/rate-limit waits are persisted for a
+later invocation; no worker sleeps or polls the remote service. An
+`upload_indeterminate` state is terminal to this automatic path. The qualified
+transport-drop matrix proves that a fresh worker process does not replay the
+byte-bearing PUT, issue an automatic zero-byte probe, create a replacement upload
+session, or begin remote reconciliation.
+
+R45.4 adds backend-scoped upload segmentation. The default is 128 MiB, valid
+values are 0–8192 MiB, and `0` means one segment containing the entire remaining
+source. This always uses `/api/v1/videos/upload-resumable`; the setting never
+selects PeerTube's non-resumable multipart endpoint. Suggested operator starting
+points are 32–128 MiB for Internet links, 128–512 MiB for reliable VPS/datacenter
+links, and `0` or 1024 MiB when WordPress and PeerTube are on the same host.
+Larger segments reduce request overhead but increase retransmission cost after a
+confirmed interruption.
+
+The byte-bearing path no longer materializes a policy-sized segment as a PHP
+string. `PeerTube_Upload_Slice` opens the exact confined staged source, proves the
+complete immutable source identity, hashes the selected slice, and retains the
+same descriptor while the WordPress HTTP cURL transport pulls bytes through a
+bounded read callback. `Content-Length` and `Content-Range` remain exact. The
+temporary cURL hook is scoped to the exact PUT and removed in a `finally`
+boundary; if the required cURL streaming primitives are unavailable the request
+fails closed. The existing safe-HTTP URL/origin validation remains in force.
+
+The authenticated PeerTube settings page may save the segment policy for an
+active backend, but that action transfers no media. The detached task-launcher
+foundation remains unwired from cron/admin in R45.4b2, and the adapter still does
+not advertise staged ingest/server push/processing capability. Automatic drain
+and recurring wake-up are later checkpoints.

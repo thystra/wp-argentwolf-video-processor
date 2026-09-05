@@ -1,7 +1,7 @@
 <?php
 /**
  * R43/R45 regression boundary: resumable-upload primitives are executable only
- * through the explicit one-shot PeerTube WP-CLI task worker. Browser/admin,
+ * through the explicit one-shot PeerTube WP-CLI task worker. Browser/admin media-transfer,
  * cron/REST/AJAX entry points and capability advertisement stay off.
  */
 
@@ -56,12 +56,14 @@ foreach (array($http, $api, $service, $plugin, $admin, $loader) as $runtime) {
 $assert(
     str_contains($http, 'post_resumable_upload_init')
     && str_contains($http, 'put_resumable_upload_chunk')
+    && str_contains($http, 'put_resumable_upload_slice')
     && str_contains($http, 'put_resumable_upload_probe'),
     'R43 bounded HTTP client is missing one reviewed resumable primitive.'
 );
 $assert(
     str_contains($api, 'begin_resumable_upload')
     && str_contains($api, 'upload_resumable_chunk')
+    && str_contains($api, 'upload_resumable_slice')
     && str_contains($api, 'probe_resumable_upload'),
     'R43 API projection is missing one reviewed resumable primitive.'
 );
@@ -70,6 +72,21 @@ $assert(
     && str_contains($service, 'PHASE_UPLOAD_INDETERMINATE')
     && str_contains($service, 'probe_resumable_upload'),
     'R43 executor lost its durable claim/uncertainty/reconciliation boundary.'
+);
+
+$assert(
+    str_contains($service, 'PeerTube_Upload_Slice::open')
+        && str_contains($service, 'upload_resumable_slice(')
+        && ! str_contains($service, '$chunk .=')
+        && ! str_contains($service, 'private static function read_chunk')
+        && ! str_contains($service, 'upload_resumable_chunk('),
+    'R45 streamed executor regressed to materializing a policy-sized upload segment in PHP memory.'
+);
+$assert(
+    str_contains($http, "add_action('http_api_curl'")
+        && str_contains($http, "remove_action('http_api_curl'")
+        && str_contains($http, 'CURLOPT_READFUNCTION'),
+    'R45 streamed HTTP boundary lost its temporary WordPress cURL streaming hook.'
 );
 
 // R45.3b adds one explicit CLI-only construction path. The service remains

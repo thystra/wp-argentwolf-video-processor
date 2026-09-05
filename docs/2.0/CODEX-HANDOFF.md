@@ -1588,3 +1588,66 @@ R44 does not implicitly grant the next checkpoint upload, polling, cleanup,
 publication, retention, or remote-delete authority. Any such production
 execution/capability boundary must be separately defined, implemented, and
 qualified.
+
+## R45 asynchronous PeerTube upload coordination — current continuation
+
+R45 was branched from the clean post-R44 `develop-2.0` authority after the
+pipefail-safe release-ZIP correction at
+`a87c6508673ecdfe7a0b753566f0442076da9b3e`. The active feature branch is
+`feature/2.0-peertube-upload-coordination`; Forgejo remains authoritative and any
+pull request from this branch must target `develop-2.0`, not the push-generated
+`main` compare target.
+
+Qualified progression:
+
+- R45.1 generic task repository: exact commit
+  `edf4fa86e521c960b03c725061f6aac36f629aa4`, tree
+  `52694449bfcd320671d6cbb559edbcecfad795c1`, Forgejo CI run 112; follow-up
+  attempt-ceiling correction prefix `11dfa57`, CI run 113.
+- R45.2 bounded upload/reconciliation task coordinator: commit prefix
+  `a4b6b8e`, CI run 114.
+- R45.3a type-owned one-shot PeerTube task worker: exact commit
+  `b28fe12c795d7d9348c97e8bcc8d43d498e98345`, tree
+  `298e1de6f1f2ced97f56599535c12f03f90ebb37`, CI run 115.
+- R45.3b explicit WP-CLI production boundary: exact commit
+  `4332407ceed7528ee577209ff05033d3f20dcda8`, tree
+  `391fe35dd67b8749bc642fb8740ce9fea5a0894a`, CI run 116. The public command
+  is `wp argent-video peertube-task-worker --once`.
+- R45.3c corrected public subcommand and real-WP/mock-PeerTube happy/wait
+  qualification reached exact commit
+  `ab3a036292dc144f91166b77376058c276021756`, tree
+  `8d6d97314adad395716288d9ae97be93298ccb44`, CI run 117.
+- R45.3d uncertainty/no-replay qualification: exact commit
+  `8cb8c21a59a47085b2231b97bfed7af001418251`, tree
+  `188d4b3fcd40eb573b0efde1aeb05ab130032dbf`, CI run 118. The retained
+  happy/wait report is
+  `peertube-r45cli-smoke-20260904T221708Z-282500.log`; the indeterminate report
+  is `peertube-r45chunk-smoke-20260904T223404Z-305089.log`; the same exact
+  source also passed the R44 regression report
+  `peertube-r44-smoke-20260904T221951Z-292292.log`.
+- R45.4a detached PeerTube launcher foundation: qualified commit prefix
+  `3084e348f0`, Forgejo CI run 119. It remains unwired from cron/admin.
+- R45.4b1 backend-scoped upload segmentation policy: qualified commit prefix
+  `ab74815`, Forgejo CI run 120. Policy default is 128 MiB, valid range 0–8192
+  MiB, with `0` meaning all remaining bytes in one resumable segment.
+
+Current R45.4b2 scope is intentionally narrower than automatic scheduling. It
+streams the policy-sized staged-file slice through the existing origin-bound
+WordPress safe-HTTP path without building a 128 MiB/1 GiB PHP body string, adds
+the authenticated per-backend admin tuning control, and keeps all R43
+claim-before-I/O/no-replay fences. `PeerTube_Upload_Slice` binds the exact
+managed file descriptor, source identity, selected-slice hash, and bytes actually
+handed to cURL. The production staged-upload service resolves the backend policy
+at each chunk step. `0` does not select the legacy multipart endpoint; it streams
+all remaining bytes through the same resumable PUT protocol.
+
+Do **not** interpret R45.4b2 as automatic PeerTube service. The current one-shot
+CLI still advances one task step per invocation. The detached launcher
+foundation is not cron-wired, the settings page does not launch transfer work,
+and staged-ingest/server-push/processing capability bits remain false. The next
+planned checkpoint is R45.4b3: drain immediately runnable upload segments inside
+the already-detached worker without sleeps or remote polling, stopping on
+completion, durable wait, refresh requirement, conflict/failure,
+`upload_indeterminate`, or no due work. Only after a real detached-process gate
+should R45.5 add a recurring wake-up; WP-Cron may launch detached work but must
+never upload media inline.

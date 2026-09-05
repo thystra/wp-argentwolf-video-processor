@@ -22,6 +22,8 @@ function wp_normalize_path(string $path): string
 require_once __DIR__ . '/peertube-backend-activation-service.php';
 require_once dirname(__DIR__) . '/includes/Storage.php';
 require_once dirname(__DIR__) . '/includes/PeerTube_Staged_Source_Identity.php';
+require_once dirname(__DIR__) . '/includes/PeerTube_Upload_Slice.php';
+require_once dirname(__DIR__) . '/includes/PeerTube_Upload_Policy.php';
 require_once dirname(__DIR__) . '/includes/PeerTube_Staged_Upload_Guard.php';
 require_once dirname(__DIR__) . '/includes/PeerTube_Staged_Upload_State_Machine.php';
 require_once dirname(__DIR__) . '/includes/PeerTube_Staged_Upload_Operation_Store.php';
@@ -31,6 +33,7 @@ require_once dirname(__DIR__) . '/includes/PeerTube_Staged_Upload_Service.php';
 use ArgentVideo\Backend_Registry;
 use ArgentVideo\Managed_Backend_Secret_Store;
 use ArgentVideo\PeerTube_Staged_Upload_Api;
+use ArgentVideo\PeerTube_Upload_Slice;
 use ArgentVideo\PeerTube_Staged_Upload_Operation_Store;
 use ArgentVideo\PeerTube_Staged_Upload_Service;
 use ArgentVideo\PeerTube_Staged_Upload_State_Machine as Machine;
@@ -135,6 +138,60 @@ final class Awvp_R43_Fake_Api implements PeerTube_Staged_Upload_Api
         );
     }
 
+    public function upload_resumable_slice(
+        string $access_token,
+        string $session_id,
+        int $start,
+        int $total_bytes,
+        string $content_type,
+        PeerTube_Upload_Slice $slice
+    ): array {
+        ++$this->chunk_puts;
+        $context = hash_init('sha256');
+        $chunk_bytes = 0;
+        while (true) {
+            $piece = $slice->read(65536);
+            if ('' === $piece) {
+                break;
+            }
+            $chunk_bytes += strlen($piece);
+            hash_update($context, $piece);
+        }
+        $chunk_sha256 = hash_final($context);
+        $this->calls[] = array(
+            'kind' => 'chunk',
+            'token_sha256' => hash('sha256', $access_token),
+            'session_id' => $session_id,
+            'start' => $start,
+            'total_bytes' => $total_bytes,
+            'content_type' => $content_type,
+            'chunk_bytes' => $chunk_bytes,
+            'chunk_sha256' => $chunk_sha256,
+        );
+        if ('chunk_throw' === $this->mode) {
+            throw new RuntimeException('Synthetic uncertain byte-bearing streamed upload PUT.');
+        }
+        $confirmed = $start + $chunk_bytes;
+        if ($confirmed < $total_bytes) {
+            return array(
+                'ok' => true,
+                'data' => array('state' => 'incomplete', 'confirmed_bytes' => $confirmed),
+                'error' => null,
+            );
+        }
+        return array(
+            'ok' => true,
+            'data' => array(
+                'state' => 'created',
+                'remote_identity' => array(
+                    'id' => '901',
+                    'uuid' => '12345678-1234-4abc-9def-1234567890ab',
+                ),
+            ),
+            'error' => null,
+        );
+    }
+
     public function probe_resumable_upload(string $access_token, string $session_id, int $total_bytes): array
     {
         ++$this->probes;
@@ -195,7 +252,7 @@ function awvp_r43_source(string $name, string $contents): string
 }
 
 /** @return array{service:PeerTube_Staged_Upload_Service,store:PeerTube_Staged_Upload_Operation_Store} */
-function awvp_r43_service(Awvp_R43_Fake_Api $api): array
+function awvp_r43_service(Awvp_R43_Fake_Api $api, int $chunk_mib = 1): array
 {
     $store = new PeerTube_Staged_Upload_Operation_Store();
     return array(
@@ -207,7 +264,8 @@ function awvp_r43_service(Awvp_R43_Fake_Api $api): array
             static function (string $origin) use ($api): PeerTube_Staged_Upload_Api {
                 awvp_coordinator_assert($origin === $api->origin(), 'R43 API factory received the wrong origin.');
                 return $api;
-            }
+            },
+            static fn (string $backend_id): int => $chunk_mib
         ),
     );
 }
@@ -245,6 +303,22 @@ foreach (array('access-token-canary-r39', 'refresh-token-canary-r39') as $canary
 foreach ($api->calls as $call) {
     awvp_coordinator_assert(! str_contains(serialize($call), 'access-token-canary-r39'), 'R43 test call transcript retained raw bearer authority.');
 }
+
+// R45 policy value 0 means one streamed segment containing the entire
+// remaining source, not PeerTube's separate multipart/non-resumable endpoint.
+$backend = awvp_r43_active_backend();
+$whole_bytes = str_repeat('W', Machine::MAX_CHUNK_BYTES) . 'whole-tail';
+$whole_path = awvp_r43_source('whole-remaining.mp4', $whole_bytes);
+$whole_api = new Awvp_R43_Fake_Api($backend['descriptor']['config']['origin']);
+$whole_bundle = awvp_r43_service($whole_api, 0);
+$whole_begun = $whole_bundle['service']->begin(77, $backend['backend_id'], $whole_path, 'R45 whole remaining', 7, 5500);
+$whole_id = $whole_begun['operation_id'];
+$whole_bundle['service']->advance($whole_id, 5501);
+$whole_created = $whole_bundle['service']->advance($whole_id, 5502);
+awvp_coordinator_assert(PeerTube_Staged_Upload_Service::STATUS_REMOTE_CREATED === $whole_created['status'], 'R45 zero policy did not complete the remaining source in one streamed segment.');
+awvp_coordinator_assert(1 === $whole_api->init_posts && 1 === $whole_api->chunk_puts, 'R45 zero policy performed more than one byte-bearing PUT.');
+$whole_call = $whole_api->calls[array_key_last($whole_api->calls)];
+awvp_coordinator_assert(strlen($whole_bytes) === ($whole_call['chunk_bytes'] ?? 0), 'R45 zero policy did not stream the complete remaining source.');
 
 // An uncertain byte-bearing PUT is fenced. Repeated advance calls never replay
 // it; only a later explicit zero-byte reconciliation can make retry possible.

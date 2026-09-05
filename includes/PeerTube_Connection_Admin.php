@@ -30,6 +30,7 @@ final class PeerTube_Connection_Admin
     public const ACTION_ACTIVATE = 'argentwolf_video_processor_peertube_connection_activate';
     public const ACTION_REFRESH = 'argentwolf_video_processor_peertube_token_refresh';
     public const ACTION_DISCONNECT = 'argentwolf_video_processor_peertube_disconnect';
+    public const ACTION_UPLOAD_POLICY = 'argentwolf_video_processor_peertube_upload_policy';
 
     public const NONCE_FIELD = 'argentwolf_video_processor_peertube_nonce';
 
@@ -43,6 +44,7 @@ final class PeerTube_Connection_Admin
     private const NONCE_ACTIVATE = 'argentwolf_video_processor_peertube_connection_activate:';
     private const NONCE_REFRESH = 'argentwolf_video_processor_peertube_token_refresh:';
     private const NONCE_DISCONNECT = 'argentwolf_video_processor_peertube_disconnect:';
+    private const NONCE_UPLOAD_POLICY = 'argentwolf_video_processor_peertube_upload_policy:';
 
     private const NOTICE_QUERY = 'argentwolf_peertube_notice';
     private const OPERATION_QUERY = 'argentwolf_peertube_operation';
@@ -373,6 +375,45 @@ final class PeerTube_Connection_Admin
         $this->lifecycle_action(self::ACTION_DISCONNECT, self::NONCE_DISCONNECT, 'disconnect_backend');
     }
 
+    public function upload_policy_action(): void
+    {
+        $this->require_post_administrator();
+        $backend_id = isset($_POST['backend_id']) && is_string($_POST['backend_id'])
+            ? Backend_Identity::sanitize(wp_unslash($_POST['backend_id']))
+            : '';
+        if ('' === $backend_id || Backend_Registry::LOCAL_ID === $backend_id) {
+            $this->reject_invalid_request();
+        }
+        $this->verify_nonce(self::NONCE_UPLOAD_POLICY . $backend_id);
+        $values = $this->post_fields(
+            array('action', self::NONCE_FIELD, 'backend_id', 'upload_chunk_mib')
+        );
+        $chunk_mib = null === $values
+            ? null
+            : PeerTube_Upload_Policy::chunk_mib($values['upload_chunk_mib']);
+        if (
+            null === $values
+            || self::ACTION_UPLOAD_POLICY !== $values['action']
+            || $backend_id !== $values['backend_id']
+            || null === $chunk_mib
+        ) {
+            $this->redirect_notice('invalid_request');
+        }
+
+        try {
+            $result = $this->actions->save_upload_policy($backend_id, $chunk_mib);
+        } catch (Throwable) {
+            $this->redirect_notice('state_may_have_changed');
+        }
+        $notice = match ($result['status'] ?? '') {
+            PeerTube_Upload_Policy_Store::APPLIED,
+            PeerTube_Upload_Policy_Store::PRESENT => 'upload_policy_saved',
+            PeerTube_Upload_Policy_Store::INDETERMINATE => 'state_may_have_changed',
+            default => 'request_refused',
+        };
+        $this->redirect_notice($notice);
+    }
+
     private function lifecycle_action(string $expected_action, string $nonce_prefix, string $method): void
     {
         $this->require_post_administrator();
@@ -420,7 +461,7 @@ final class PeerTube_Connection_Admin
         $class = match ($notice) {
             'connection_advanced', 'ready_for_credentials', 'credentials_stored',
             'identity_verified', 'destination_verified', 'backend_activated',
-            'token_refreshed', 'backend_disconnected' =>
+            'token_refreshed', 'backend_disconnected', 'upload_policy_saved' =>
                 'notice notice-success',
             'invalid_request', 'request_refused', 'connection_conflict' =>
                 'notice notice-error',
@@ -480,7 +521,7 @@ final class PeerTube_Connection_Admin
         ?>
         <div class="wrap">
             <h1><?php esc_html_e('PeerTube Connection — ArgentWolf Video Processor', 'argentwolf-video-processor'); ?></h1>
-            <div class="notice notice-warning inline"><p><?php esc_html_e('This unreleased development checkpoint can explicitly refresh a managed PeerTube token pair and disconnect a backend by revoking its current token, retiring its local descriptor, and deleting the managed credential. No media upload, processing, publication, library, retention, or remote-media mutation is implemented.', 'argentwolf-video-processor'); ?></p></div>
+            <div class="notice notice-warning inline"><p><?php esc_html_e('This unreleased 2.0 development branch now has an explicit one-shot WP-CLI path for private staged PeerTube upload and read-only remote readiness reconciliation. This administrator page does not start media transfers; the detached PeerTube launcher is not yet wired to cron. Publication, library management, retention, source cleanup, remote deletion, and PeerTube ingest/processing capability advertisement remain disabled.', 'argentwolf-video-processor'); ?></p></div>
 
             <h2><?php esc_html_e('Start a connection operation', 'argentwolf-video-processor'); ?></h2>
             <p><?php esc_html_e('Use an exact canonical HTTPS origin with no path, query, fragment, credentials, or trailing slash. A backend ID is a permanent lowercase identifier.', 'argentwolf-video-processor'); ?></p>
@@ -517,7 +558,7 @@ final class PeerTube_Connection_Admin
         }
         ?>
         <table class="widefat striped" style="max-width:1100px">
-            <thead><tr><th><?php esc_html_e('Label', 'argentwolf-video-processor'); ?></th><th><?php esc_html_e('Origin', 'argentwolf-video-processor'); ?></th><th><?php esc_html_e('State', 'argentwolf-video-processor'); ?></th><th><?php esc_html_e('Lifecycle', 'argentwolf-video-processor'); ?></th><th><?php esc_html_e('Explicit actions', 'argentwolf-video-processor'); ?></th></tr></thead>
+            <thead><tr><th><?php esc_html_e('Label', 'argentwolf-video-processor'); ?></th><th><?php esc_html_e('Origin', 'argentwolf-video-processor'); ?></th><th><?php esc_html_e('State', 'argentwolf-video-processor'); ?></th><th><?php esc_html_e('Upload segment', 'argentwolf-video-processor'); ?></th><th><?php esc_html_e('Lifecycle', 'argentwolf-video-processor'); ?></th><th><?php esc_html_e('Explicit actions', 'argentwolf-video-processor'); ?></th></tr></thead>
             <tbody>
             <?php foreach ($backends as $backend) : ?>
                 <?php
@@ -537,6 +578,13 @@ final class PeerTube_Connection_Admin
                     <td><?php echo esc_html((string) $backend['label']); ?><br><code><?php echo esc_html((string) $backend['backend_id']); ?></code></td>
                     <td><code><?php echo esc_html((string) $backend['origin']); ?></code></td>
                     <td><?php echo esc_html($state); ?></td>
+                    <td>
+                        <?php if ('active' === $state && ! $disconnect_pending) : ?>
+                            <?php $this->render_upload_policy_form((string) $backend['backend_id'], $backend['upload_chunk_mib'] ?? PeerTube_Upload_Policy::DEFAULT_CHUNK_MIB); ?>
+                        <?php else : ?>
+                            <?php echo esc_html((string) ($backend['upload_chunk_mib'] ?? PeerTube_Upload_Policy::DEFAULT_CHUNK_MIB)); ?> <?php esc_html_e('MiB', 'argentwolf-video-processor'); ?>
+                        <?php endif; ?>
+                    </td>
                     <td><code><?php echo esc_html($lifecycle_phase); ?></code></td>
                     <td>
                     <?php if ('active' === $state && ! $disconnect_pending) : ?>
@@ -554,7 +602,25 @@ final class PeerTube_Connection_Admin
             <?php endforeach; ?>
             </tbody>
         </table>
-        <p><?php esc_html_e('Refresh and disconnect are explicit administrator POST actions. Disconnect may retire local authority after an uncertain revoke, but AWVP never retries an uncertain revoke automatically.', 'argentwolf-video-processor'); ?></p>
+        <p><?php esc_html_e('Upload segment size is backend-specific transport tuning. The default is 128 MiB. Use 0 to stream all remaining bytes as one resumable segment. Suggested starting points: 32–128 MiB for Internet links, 128–512 MiB for reliable VPS/datacenter links, and 0 or 1024 MiB when WordPress and PeerTube are on the same host. Larger segments reduce request overhead but increase retransmission cost after an interruption.', 'argentwolf-video-processor'); ?></p>
+        <p><?php esc_html_e('Refresh, disconnect, and upload-policy changes are explicit administrator POST actions. Disconnect may retire local authority after an uncertain revoke, but AWVP never retries an uncertain revoke automatically.', 'argentwolf-video-processor'); ?></p>
+        <?php
+    }
+
+    private function render_upload_policy_form(string $backend_id, mixed $chunk_mib): void
+    {
+        $chunk_mib = PeerTube_Upload_Policy::chunk_mib($chunk_mib)
+            ?? PeerTube_Upload_Policy::DEFAULT_CHUNK_MIB;
+        ?>
+        <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" style="white-space:nowrap">
+            <input type="hidden" name="action" value="<?php echo esc_attr(self::ACTION_UPLOAD_POLICY); ?>">
+            <input type="hidden" name="backend_id" value="<?php echo esc_attr($backend_id); ?>">
+            <?php wp_nonce_field(self::NONCE_UPLOAD_POLICY . $backend_id, self::NONCE_FIELD, false); ?>
+            <label class="screen-reader-text" for="awvp-peertube-upload-chunk-<?php echo esc_attr($backend_id); ?>"><?php esc_html_e('Upload segment size in MiB', 'argentwolf-video-processor'); ?></label>
+            <input id="awvp-peertube-upload-chunk-<?php echo esc_attr($backend_id); ?>" name="upload_chunk_mib" type="number" min="0" max="<?php echo esc_attr((string) PeerTube_Upload_Policy::MAX_CHUNK_MIB); ?>" step="1" value="<?php echo esc_attr((string) $chunk_mib); ?>" style="width:7em" required>
+            <span><?php esc_html_e('MiB', 'argentwolf-video-processor'); ?></span>
+            <button class="button button-secondary" type="submit"><?php esc_html_e('Save', 'argentwolf-video-processor'); ?></button>
+        </form>
         <?php
     }
 
@@ -1860,10 +1926,11 @@ final class PeerTube_Connection_Admin
             'identity_verified' => __('The authenticated identity and at least one owned local channel were verified. Select a current destination explicitly.', 'argentwolf-video-processor'),
             'destination_verified' => __('The selected owned channel and authenticated identity were re-verified. The backend remains disabled until an explicit local activation request is completed.', 'argentwolf-video-processor'),
             'activation_advanced' => __('Backend activation advanced by one local persistence step. No PeerTube HTTP request or media mutation was performed.', 'argentwolf-video-processor'),
-            'backend_activated' => __('The verified PeerTube backend descriptor is active and eligible for the non-mutating R40 adapter surface. Media upload remains unavailable.', 'argentwolf-video-processor'),
+            'backend_activated' => __('The verified PeerTube backend descriptor is active. The unreleased R45 one-shot task path may use it for private staged upload, but automatic scheduling and PeerTube ingest/processing capability advertisement remain disabled.', 'argentwolf-video-processor'),
             'lifecycle_advanced' => __('The PeerTube credential lifecycle advanced one reviewed step. Continue explicitly if another step remains.', 'argentwolf-video-processor'),
             'token_refreshed' => __('The managed PeerTube token pair was refreshed and stored as a new encrypted generation.', 'argentwolf-video-processor'),
             'backend_disconnected' => __('The PeerTube backend is locally retired and its managed credential has been removed.', 'argentwolf-video-processor'),
+            'upload_policy_saved' => __('The PeerTube upload segment size was saved for this backend.', 'argentwolf-video-processor'),
             'refresh_rate_limited' => __('PeerTube requested a bounded delay before refresh may continue.', 'argentwolf-video-processor'),
             'reauthentication_required' => __('The PeerTube refresh credential is no longer usable. A new connection authorization is required.', 'argentwolf-video-processor'),
             'lifecycle_indeterminate' => __('A remote token operation has an uncertain outcome. AWVP will not replay that remote mutation automatically.', 'argentwolf-video-processor'),

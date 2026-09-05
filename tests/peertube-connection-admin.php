@@ -177,7 +177,10 @@ require_once dirname(__DIR__) . '/includes/PeerTube_Password_Grant_Api.php';
 require_once dirname(__DIR__) . '/includes/PeerTube_Password_Grant_Service.php';
 require_once dirname(__DIR__) . '/includes/PeerTube_Identity_Destination_Api.php';
 require_once dirname(__DIR__) . '/includes/PeerTube_Identity_Destination_Service.php';
+require_once dirname(__DIR__) . '/includes/Backend_Registry.php';
 require_once dirname(__DIR__) . '/includes/PeerTube_Backend_Activation_Service.php';
+require_once dirname(__DIR__) . '/includes/PeerTube_Upload_Policy.php';
+require_once dirname(__DIR__) . '/includes/PeerTube_Upload_Policy_Store.php';
 require_once dirname(__DIR__) . '/includes/PeerTube_Connection_Admin_Actions.php';
 require_once dirname(__DIR__) . '/includes/PeerTube_Connection_Admin.php';
 
@@ -228,6 +231,9 @@ final class Awvp_Admin_Fake_Actions implements PeerTube_Connection_Admin_Actions
 
     /** @var array<string, mixed> */
     public array $disconnect_result = array('status' => 'advanced');
+
+    /** @var array{status:string} */
+    public array $upload_policy_result = array('status' => 'applied');
 
     /** @var list<array<string,mixed>> */
     public array $backends = array();
@@ -327,6 +333,12 @@ final class Awvp_Admin_Fake_Actions implements PeerTube_Connection_Admin_Actions
     {
         $this->called('disconnect_backend', array($backend_id, $now));
         return $this->disconnect_result;
+    }
+
+    public function save_upload_policy(string $backend_id, mixed $chunk_mib): array
+    {
+        $this->called('save_upload_policy', array($backend_id, $chunk_mib));
+        return $this->upload_policy_result;
     }
 
     public function managed_backends(): array
@@ -1220,6 +1232,76 @@ awvp_admin_assert(str_contains($html, 'name="password" type="password"'), 'Passw
 awvp_admin_assert(! str_contains($html, 'name="password" type="password" value='), 'Password field was repopulated.');
 awvp_admin_assert(str_contains($html, 'No media, media metadata, or telemetry'), 'Required no-media disclosure is missing.');
 awvp_admin_assert(str_contains($html, 'dedicated least-privilege PeerTube account'), 'Dedicated-account guidance is missing.');
+
+// R45 backend upload segmentation is an explicit administrator-only settings
+// POST. Canonical integer input is preserved exactly; malformed forms never
+// reach the settings service.
+$policy_actions = new Awvp_Admin_Fake_Actions();
+$policy_actions->operations = array();
+$policy_actions->backends = array(
+    array(
+        'backend_id' => 'r45-policy',
+        'label' => 'R45 Upload Backend',
+        'origin' => 'https://video.example.org',
+        'state' => 'active',
+        'lifecycle_action' => '',
+        'lifecycle_phase' => '',
+        'lifecycle_revision' => 0,
+        'upload_chunk_mib' => 128,
+    )
+);
+$policy_controller = awvp_admin_controller($policy_actions);
+awvp_admin_reset_request();
+$_GET = array('page' => PeerTube_Connection_Admin::PAGE_SLUG);
+ob_start();
+$policy_controller->page();
+$policy_html = (string) ob_get_clean();
+awvp_admin_assert(
+    str_contains($policy_html, 'name="upload_chunk_mib"')
+        && str_contains($policy_html, 'value="128"')
+        && str_contains($policy_html, 'Use 0 to stream all remaining bytes')
+        && str_contains($policy_html, '0 or 1024 MiB when WordPress and PeerTube are on the same host'),
+    'R45 upload-policy tuning or operator guidance is missing from the active backend page.'
+);
+awvp_admin_assert(
+    str_contains($policy_html, 'one-shot WP-CLI path')
+        && str_contains($policy_html, 'does not start media transfers'),
+    'PeerTube administrator checkpoint disclosure is stale about R45 upload reachability.'
+);
+
+awvp_admin_reset_request();
+awvp_admin_post(
+    PeerTube_Connection_Admin::ACTION_UPLOAD_POLICY,
+    'argentwolf_video_processor_peertube_upload_policy:r45-policy',
+    array('backend_id' => 'r45-policy', 'upload_chunk_mib' => '1024')
+);
+$policy_result = awvp_admin_invoke(array($policy_controller, 'upload_policy_action'));
+awvp_admin_assert(
+    $policy_result instanceof Awvp_Admin_Redirect
+        && str_contains($policy_result->url, 'upload_policy_saved'),
+    'Valid upload-policy settings POST was not classified as saved.'
+);
+$policy_call = $policy_actions->calls[array_key_last($policy_actions->calls)];
+awvp_admin_assert(
+    'save_upload_policy' === $policy_call['method']
+        && array('r45-policy', 1024) === $policy_call['args'],
+    'Upload-policy settings POST transformed or misrouted the canonical value.'
+);
+
+$policy_calls_before = awvp_admin_call_count($policy_actions, 'save_upload_policy');
+awvp_admin_reset_request();
+awvp_admin_post(
+    PeerTube_Connection_Admin::ACTION_UPLOAD_POLICY,
+    'argentwolf_video_processor_peertube_upload_policy:r45-policy',
+    array('backend_id' => 'r45-policy', 'upload_chunk_mib' => '01024')
+);
+$invalid_policy = awvp_admin_invoke(array($policy_controller, 'upload_policy_action'));
+awvp_admin_assert(
+    $invalid_policy instanceof Awvp_Admin_Redirect
+        && str_contains($invalid_policy->url, 'invalid_request')
+        && $policy_calls_before === awvp_admin_call_count($policy_actions, 'save_upload_policy'),
+    'Noncanonical upload-policy input reached the settings service.'
+);
 
 // R41 disconnect remains explicitly continuable after the consequential local
 // registry retirement. The page must not strand a restart-safe lifecycle

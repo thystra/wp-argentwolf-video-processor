@@ -85,8 +85,12 @@ shared hosting.
 
 The unreleased 2.0 development line also adds a separate **Settings > PeerTube
 Connection** page. It is available only to authenticated administrators with
-`manage_options`; loading it is read-only, while its explicit POST actions are
-nonce-protected and advance at most one reviewed connection step.
+`manage_options`; loading it is read-only, while its explicit connection/lifecycle
+POST actions are nonce-protected and advance at most one reviewed step. Active
+PeerTube backends also expose an upload-segment tuning control: the default is
+128 MiB, `0` means one streamed resumable segment containing all remaining bytes,
+and the accepted range is 0–8192 MiB. Saving this policy does not itself start a
+transfer.
 
 ## WP-CLI
 
@@ -104,6 +108,17 @@ wp argent-video worker --limit=3
 
 The `argent-video` command name is retained for compatibility.
 
+The unreleased 2.0 development line also has a deliberately one-shot PeerTube
+task execution boundary:
+
+```bash
+wp argent-video peertube-task-worker --once
+```
+
+That command advances at most one already-queued PeerTube task and exits. The
+current R45 development line does not yet register a recurring PeerTube task
+scheduler or administrator transfer-launch action.
+
 ## Privacy
 
 Metadata removal applies to generated derivatives and adaptive renditions. The
@@ -115,12 +130,14 @@ connection. Public instance detection contacts only that configured origin and
 sends no credentials. An authenticated administrator with `manage_options` may
 explicitly start, advance, or reconcile a durable connection operation and may
 authorize one password-grant attempt per explicit submission from the separate
-PeerTube Connection page. Each action is POST-only and nonce-protected; loading
-the page is read-only, and there is no AJAX, REST, WP-CLI, cron, activation, or
-automatic connection invocation. Before credentials are sent, the administrator
-must explicitly authorize the displayed external service. An allowlisted
-development-only plaintext HTTP origin requires a second transport-risk
-acknowledgement.
+PeerTube Connection page. Each connection/lifecycle action is POST-only and
+nonce-protected; loading the page is read-only, and there is no AJAX, REST, cron,
+activation, or automatic
+connection invocation. The separate unreleased R45 media-task path is explicit
+WP-CLI-only and does not bootstrap or refresh credentials. Before credentials are
+sent, the administrator must explicitly authorize the displayed external
+service. An allowlisted development-only plaintext HTTP origin requires a second
+transport-risk acknowledgement.
 
 The explicit grant sends the entered PeerTube username and password plus an
 optional six-digit OTP only to that same exact origin. The instance-local OAuth
@@ -128,11 +145,14 @@ client is used transiently; the password, OTP, and OAuth client response are not
 retained or reflected into the page, redirect, or notice. Returned access and
 refresh tokens are authenticated-encrypted in a non-autoloaded server-side
 option before the operation can advance. No media, selected media metadata, or
-telemetry is sent by this connection bootstrap. The configured service can
-observe ordinary HTTP transport metadata, including the WordPress server's
-network address and the plugin product/version User-Agent. Its operator terms
-and privacy policy apply. Later upload work will separately disclose and send
-media and selected metadata only to the configured service.
+telemetry is sent by the connection bootstrap itself. The unreleased R45
+one-shot media-task path can send an
+explicitly staged source plus the selected private upload metadata only to the
+configured PeerTube origin. Source bytes are transferred through PeerTube's
+resumable protocol using the backend's configured segment policy; no telemetry
+is added. The configured service can observe ordinary HTTP transport metadata,
+including the WordPress server's network address and the plugin product/version
+User-Agent. Its operator terms and privacy policy apply.
 
 hls.js is fetched only during controlled release builds, verified, and served
 locally from the installed plugin. Build-time `hls.VERSION` and `hls.SHA256`

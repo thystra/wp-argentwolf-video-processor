@@ -27,6 +27,15 @@ $assert(is_array($init)&&Machine::PHASE_UPLOAD_IN_FLIGHT===$init['phase']&&'init
 $session=Machine::apply($init,Machine::EVENT_UPLOAD_SESSION_CREATED,array('attempt_capability'=>$cap1,'session_id'=>'abcd1234efgh5678'),1002);
 $assert(is_array($session)&&Machine::PHASE_READY===$session['phase']&&'abcd1234efgh5678'===$session['upload_session_id'],'Session commit failed.');
 
+// R45 policy-sized streamed claims are no longer restricted to the historical
+// 1 MiB buffered transport bound. The state machine journals the exact chosen
+// positive range; policy selection remains an executor responsibility.
+$wide=$make('upload_99999999999999999999999999999999');
+$wide=Machine::apply($wide,Machine::EVENT_CLAIM_UPLOAD,array('attempt_capability'=>$cap1,'request_kind'=>'init','request_start'=>0,'request_bytes'=>0),1001);
+$wide=Machine::apply($wide,Machine::EVENT_UPLOAD_SESSION_CREATED,array('attempt_capability'=>$cap1,'session_id'=>'wide1234efgh5678'),1002);
+$wide_claim=Machine::apply($wide,Machine::EVENT_CLAIM_UPLOAD,array('attempt_capability'=>$cap2,'request_kind'=>'chunk','request_start'=>0,'request_bytes'=>$source['bytes']),1003);
+$assert(is_array($wide_claim)&&$source['bytes']===($wide_claim['request_bytes']??0),'Policy-sized streamed claim above the legacy 1 MiB bound was rejected.');
+
 $chunk1=Machine::apply($session,Machine::EVENT_CLAIM_UPLOAD,array('attempt_capability'=>$cap2,'request_kind'=>'chunk','request_start'=>0,'request_bytes'=>Machine::MAX_CHUNK_BYTES),1003);
 $assert(is_array($chunk1),'First chunk claim failed.');
 $accepted=Machine::apply($chunk1,Machine::EVENT_UPLOAD_CHUNK_ACCEPTED,array('attempt_capability'=>$cap2,'confirmed_bytes'=>Machine::MAX_CHUNK_BYTES),1004);

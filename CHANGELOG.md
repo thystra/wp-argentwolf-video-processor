@@ -46,6 +46,24 @@
   and terminal processing failures. Relational-row/journal crash windows are
   restart-safe; no production upload/reconcile entry point, automatic polling,
   source cleanup, publication, retention, or remote delete authority is enabled.
+- Add the R45 asynchronous PeerTube execution boundary without touching the legacy
+  FFmpeg queue/worker: a generic lock-token-guarded `argent_video_tasks`
+  repository, type-owned PeerTube claims/recovery, a bounded upload/reconciliation
+  coordinator, a one-shot PeerTube task worker, and the explicit development
+  command `wp argent-video peertube-task-worker --once`. Durable waits require a
+  later invocation, and an uncertain byte-bearing upload remains non-replayable.
+- Qualify the R45 one-shot path in isolated WordPress 6.4/PHP 8.1 and WordPress
+  7.1/PHP 8.3 Docker matrices, including fresh-process happy/wait execution and a
+  transport-drop case proving one byte-bearing PUT, zero automatic replay, zero
+  offset probe, and durable `upload_indeterminate` fencing. Add a detached
+  PeerTube task-launcher foundation while leaving it unwired from cron/admin.
+- Add backend-scoped PeerTube upload segmentation policy with a 128 MiB default,
+  accepted 0–8192 MiB range, and `0` meaning all remaining bytes in one resumable
+  segment. Stream policy-sized file slices through WordPress safe HTTP/cURL rather
+  than materializing large upload bodies in PHP memory, and expose the tuning
+  control on the authenticated PeerTube settings page. Saving the setting does
+  not itself start a transfer; automatic scheduling and ingest/processing
+  capability advertisement remain disabled.
 - Expand focused PeerTube security/state tests and isolated real-WordPress Docker
   development matrices through the R39 identity/destination checkpoint, with an
   R40 activation continuation that proves activation performs no additional

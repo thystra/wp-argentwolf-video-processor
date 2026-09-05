@@ -724,5 +724,36 @@ initialization, bounded chunk PUT, and zero-byte offset probe. The service perfo
 claim-before-I/O, re-proves local fences after the claim, reads source bytes only for
 the exact claimed chunk, and converts uncertain outcomes into a non-replayable state.
 A chunk can become retryable only after a later explicit probe proves the server's
-confirmed offset; an uncertain init remains indeterminate. No caller is wired from
-WordPress runtime entry points and no ingest/processing capability is enabled.
+confirmed offset; an uncertain init remains indeterminate. At the R43 checkpoint no
+caller was wired from WordPress runtime entry points and no ingest/processing
+capability was enabled.
+
+### R45 asynchronous task and streamed-upload execution
+
+R45 adds a production-reachable **explicit WP-CLI-only** consumer without
+repurposing the attachment/FFmpeg queue. `argent_video_tasks` is consumed through
+lock-token-guarded, type-owned claims for exactly `peertube_upload_advance` and
+`peertube_remote_reconcile`; `wp argent-video peertube-task-worker --once`
+advances at most one claimed task and exits. Durable processing/rate waits do not
+become polling loops, and an `upload_indeterminate` operation remains a hard
+no-replay boundary.
+
+Upload segmentation is backend-scoped operational policy, not backend identity or
+credential authority. The default is 128 MiB, valid values are 0–8192 MiB, and
+`0` means one resumable segment containing all remaining source bytes. R45 keeps
+PeerTube's resumable endpoint in every case; `0` does not switch to the legacy
+multipart upload endpoint.
+
+Policy-sized source segments are streamed from an already-confined staged-file
+descriptor through the WordPress safe-HTTP/cURL boundary. The complete source is
+re-proved against the immutable staged identity when a slice opens, the selected
+slice is hashed, and the bytes handed to cURL are checked against that slice
+before a positive result can advance durable state. Large segments therefore do
+not require a correspondingly large PHP request-body string. The final
+remote-created response receives the stronger full-source post-transfer proof.
+
+The PeerTube settings page may save this non-secret per-backend segment policy,
+but that POST performs no media transfer. The detached PeerTube launcher
+foundation exists but is not yet registered with cron or an administrator launch
+action. PeerTube staged-ingest/server-push/processing capability advertisement
+remains false until a later production scheduling/drain checkpoint is qualified.

@@ -57,6 +57,7 @@ jobs:
           php tests/backend-local.php
           php tests/peertube-connection-foundation.php
           php tests/peertube-http-api.php
+          php tests/peertube-stream-upload-http.php
           php tests/atomic-option-cas.php
           AWVP_ATOMIC_MODERN_AUTOLOAD=1 php tests/atomic-option-cas.php
           php tests/atomic-option-planning.php
@@ -79,6 +80,7 @@ jobs:
           php tests/peertube-token-lifecycle-service.php
           AWVP_ATOMIC_MODERN_AUTOLOAD=1 php tests/peertube-token-lifecycle-service.php
           php tests/peertube-staged-source-identity.php
+          php tests/peertube-upload-slice.php
           php tests/peertube-staged-upload-state-machine.php
           php tests/peertube-staged-upload-guard.php
           php tests/peertube-staged-upload-boundary.php

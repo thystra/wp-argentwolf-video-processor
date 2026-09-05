@@ -610,11 +610,33 @@ change.
 
 ## R44 remote reconciliation still does not grant backend capability
 
-The R44 relational repository and read-only remote reconciliation service are
-class-loaded for qualification but are not constructed by `Plugin`,
-`PeerTube_Connection_Admin`, the common backend adapter, or a task/worker path.
+At the R44 checkpoint, the relational repository and read-only remote
+reconciliation service were class-loaded for qualification but were not constructed
+by `Plugin`, `PeerTube_Connection_Admin`, the common backend adapter, or a
+task/worker path.
 `PeerTube_Backend_Adapter` therefore still does not advertise
 `ingest.awvp_staging`, `ingest.server_push`, or `processing.video`. The R44 service
 can only persist an already-positive R43 `remote_created` identity and observe its
 private/non-live PeerTube processing/readiness state; it cannot originate upload,
 publication, cleanup, retention, or delete operations.
+
+## R45 task execution and upload policy still do not grant backend capability
+
+R45 now constructs the R43/R44 operational services only behind the explicit
+WP-CLI task-worker boundary. This does not add upload/create/update/delete methods
+to the common `Backend_Adapter` interface, and `PeerTube_Backend_Adapter` still
+advertises staged ingest, server push, and video processing as false. The task
+worker is an execution consumer for already-authorized staged operations, not
+backend eligibility evidence.
+
+The backend-scoped `PeerTube_Upload_Policy_Store` is deliberately separate from
+the backend descriptor. Its `chunk_mib` value tunes resumable transfer
+segmentation only: default 128 MiB; 0–8192 MiB accepted; `0` means all remaining
+bytes in one streamed resumable segment. Updating that policy must not rewrite
+backend identity, origin, destination, secret generation, capability, or health
+state and must not start a transfer.
+
+A separate detached PeerTube task-launcher foundation also exists, but R45.4a/
+R45.4b2 do not register it with cron or expose an administrator transfer launch.
+Capability advertisement remains unchanged until the later scheduling/drain path
+is separately reviewed and qualified.

@@ -342,6 +342,37 @@ final class PeerTube_Api_Client implements PeerTube_Password_Grant_Api, PeerTube
     }
 
     /** @return array{ok:bool,data:array<string,mixed>|null,error:array<string,mixed>|null} */
+    public function upload_resumable_slice(
+        string $access_token,
+        string $session_id,
+        int $start,
+        int $total_bytes,
+        string $content_type,
+        PeerTube_Upload_Slice $slice
+    ): array {
+        $access_token = self::opaque_secret($access_token, self::MAX_SECRET_BYTES);
+        if ('' === $access_token || ! self::valid_upload_session_id($session_id)
+            || $start < 0 || $total_bytes < 1 || $start >= $total_bytes
+            || $slice->start() !== $start || $slice->bytes() < 1
+            || $start > PHP_INT_MAX - $slice->bytes() || $start + $slice->bytes() > $total_bytes
+            || 'video/mp4' !== $content_type) {
+            return self::failure(PeerTube_Api_Error::invalid_response('upload_slice_input_invalid'));
+        }
+
+        return self::upload_progress_projection(
+            $this->http->put_resumable_upload_slice(
+                $access_token,
+                $session_id,
+                $total_bytes,
+                $content_type,
+                $slice
+            ),
+            $total_bytes,
+            'upload_slice'
+        );
+    }
+
+    /** @return array{ok:bool,data:array<string,mixed>|null,error:array<string,mixed>|null} */
     public function probe_resumable_upload(string $access_token, string $session_id, int $total_bytes): array
     {
         $access_token = self::opaque_secret($access_token, self::MAX_SECRET_BYTES);

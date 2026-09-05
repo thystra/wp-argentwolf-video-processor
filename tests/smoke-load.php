@@ -126,6 +126,7 @@ foreach (
         ArgentVideo\PeerTube_Token_Lifecycle_Store::class,
         ArgentVideo\PeerTube_Token_Lifecycle_Service::class,
         ArgentVideo\PeerTube_Staged_Source_Identity::class,
+        ArgentVideo\PeerTube_Upload_Slice::class,
         ArgentVideo\PeerTube_Upload_Policy::class,
         ArgentVideo\PeerTube_Upload_Policy_Store::class,
         ArgentVideo\PeerTube_Staged_Upload_State_Machine::class,

@@ -623,7 +623,7 @@ change:
 This document is a project contract, not an immutable substitute for the
 current official documentation.
 
-### R43 executable code remains unreachable from WordPress request surfaces
+### R43 checkpoint: executable code was unreachable from WordPress request surfaces
 
 R43 class-loads the resumable transport/service so dependency-free and later Docker
 fixtures can exercise it, but `Plugin` and `PeerTube_Connection_Admin` do not
@@ -635,7 +635,7 @@ executable protocol primitives but does not yet grant a production WordPress pat
 authority to transmit media.
 
 
-### R44 persistence/read reconciliation remains unreachable from production request surfaces
+### R44 checkpoint: persistence/read reconciliation was unreachable from production request surfaces
 
 R44 adds a concrete relational `argent_video_remote_assets` repository and a
 bounded read-only PeerTube video-status client/service, but no tenth PeerTube
@@ -649,3 +649,34 @@ The isolated integration fixture may invoke the class directly from a fresh
 WP-CLI process solely to qualify persistence/restart boundaries. Product
 capabilities remain false for staged ingest, server push, and PeerTube processing
 until a later tranche explicitly wires, discloses, and qualifies those surfaces.
+
+### R45 WordPress runtime and streamed-HTTP boundary
+
+R45 introduces one explicit production runtime surface for staged PeerTube work:
+`wp argent-video peertube-task-worker --once`. The command is WP-CLI-only, owns no
+browser/admin/AJAX/REST hook, and advances at most one claimed task per invocation.
+The existing WordPress recurring event still belongs to the legacy FFmpeg worker;
+R45.4b2 does not register the PeerTube detached launcher with cron or add an
+administrator transfer-launch action.
+
+The PeerTube Connection settings page does gain one `manage_options` + nonce
+protected POST for non-secret upload-segment policy. It accepts only the exact
+canonical backend ID and canonical integer 0–8192, updates only the active
+backend's non-autoloaded policy option, and performs no remote request or media
+transfer. Page GET remains read-only with respect to PeerTube/network state.
+
+Policy-sized upload bodies are streamed through the WordPress HTTP API rather
+than bypassing it with a standalone cURL request. `wp_safe_remote_request()`
+retains the project's URL/origin validation and response limits. For the exact
+resumable PUT only, a temporary `http_api_curl` callback configures cURL upload
+mode, exact input length, and a read callback backed by the already-confined
+`PeerTube_Upload_Slice`; the callback is always removed afterward. If WordPress
+cannot provide the cURL transport primitives required for this streamed request,
+the upload fails closed instead of materializing a large PHP body or silently
+using a different transport contract.
+
+The staged source continues to live under the plugin-owned uploads boundary.
+R45 streaming is read-only with respect to that file; no source cleanup,
+publication/privacy mutation, remote delete, or retention action is gained here.
+PeerTube ingest/processing capabilities remain false pending later detached-drain
+and scheduling qualification.

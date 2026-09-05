@@ -139,6 +139,16 @@ Use WordPress database and HTTP APIs rather than bypassing them without a
 reviewed technical reason. Parameterize database queries and keep SQL,
 filesystem, and shell boundaries explicit.
 
+For large outbound request bodies, do not assume the WordPress HTTP API requires
+materializing the complete body as a PHP string. When a reviewed transport needs
+streaming, keep `wp_safe_remote_request()` (or the appropriate WordPress HTTP
+entry point) as the URL/policy boundary and scope any lower-level transport hook
+to the exact request. A cURL read callback must read only from an already-proven
+plugin-owned descriptor, set an exact content length/range, be removed after the
+request on success or failure, and fail closed when the required transport is
+unavailable. Do not silently fall back from a reviewed streaming contract to a
+large in-memory body.
+
 For shell execution, prefer a small reviewed command builder. Keep executable
 selection constrained to administrator-authorized configuration, validate
 values before use, pass fixed arguments where possible, quote each shell

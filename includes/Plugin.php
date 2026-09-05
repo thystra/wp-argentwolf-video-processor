@@ -40,6 +40,7 @@ final class Plugin
         $diagnostics = new Diagnostics();
         $peertube_secrets = new Managed_Backend_Secret_Store();
         $this->backend_registry = new Backend_Registry();
+        $peertube_upload_policy = new PeerTube_Upload_Policy_Store($this->backend_registry);
         $this->backend_factory = new Backend_Adapter_Factory(
             new Local_Backend_Adapter($queue, $diagnostics),
             new PeerTube_Backend_Adapter($peertube_secrets)
@@ -94,7 +95,8 @@ final class Plugin
                     $peertube_grants,
                     $peertube_identity_destinations,
                     $peertube_activation,
-                    $peertube_lifecycle
+                    $peertube_lifecycle,
+                    $peertube_upload_policy
                 )
             );
 
@@ -145,6 +147,10 @@ final class Plugin
                 'admin_post_' . PeerTube_Connection_Admin::ACTION_DISCONNECT,
                 array($peertube_admin, 'disconnect_action')
             );
+            add_action(
+                'admin_post_' . PeerTube_Connection_Admin::ACTION_UPLOAD_POLICY,
+                array($peertube_admin, 'upload_policy_action')
+            );
             add_action('admin_notices', array($admin, 'notices'));
             add_action('admin_notices', array($peertube_admin, 'notices'));
         }
@@ -158,7 +164,8 @@ final class Plugin
                 $peertube_upload_operations,
                 $this->backend_registry,
                 $peertube_secrets,
-                $peertube_api_factory
+                $peertube_api_factory,
+                array($peertube_upload_policy, 'chunk_mib')
             );
             $peertube_reconciliation = new PeerTube_Remote_Asset_Reconciliation_Service(
                 $peertube_upload_operations,

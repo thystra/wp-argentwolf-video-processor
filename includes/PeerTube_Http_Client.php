@@ -23,6 +23,7 @@ final class PeerTube_Http_Client
     public const MAX_UPLOAD_REQUEST_BYTES = 1048576;
 
     private const DEFAULT_TIMEOUT_SECONDS = 15;
+    private const STREAM_UPLOAD_TIMEOUT_SECONDS = 3600;
     private const CONFIG_PATH = '/api/v1/config';
     private const OAUTH_CLIENT_PATH = '/api/v1/oauth-clients/local';
     private const TOKEN_PATH = '/api/v1/users/token';
@@ -247,6 +248,45 @@ final class PeerTube_Http_Client
     }
 
     /** @return array<string,mixed> */
+    public function put_resumable_upload_slice(
+        string $access_token,
+        string $session_id,
+        int $total_bytes,
+        string $content_type,
+        PeerTube_Upload_Slice $slice
+    ): array {
+        $start = $slice->start();
+        $length = $slice->bytes();
+        if (! self::safe_bearer_token($access_token)
+            || ! self::safe_upload_session_id($session_id)
+            || $start < 0 || $total_bytes < 1 || $start >= $total_bytes
+            || $length < 1
+            || $start > PHP_INT_MAX - $length || $start + $length > $total_bytes
+            || 'video/mp4' !== $content_type) {
+            throw new InvalidArgumentException('PeerTube resumable-upload slice is outside the reviewed contract.');
+        }
+
+        $end = $start + $length - 1;
+        $path = self::RESUMABLE_UPLOAD_PATH . '?upload_id=' . rawurlencode($session_id);
+        return $this->request(
+            'PUT',
+            $path,
+            self::MAX_METADATA_RESPONSE_BYTES,
+            'bearer',
+            array(
+                'Authorization' => 'Bearer ' . $access_token,
+                'Content-Type'  => $content_type,
+                'Content-Length'=> (string) $length,
+                'Content-Range' => 'bytes ' . $start . '-' . $end . '/' . $total_bytes,
+                'Expect'        => '',
+            ),
+            null,
+            array(200, 308),
+            $slice
+        );
+    }
+
+    /** @return array<string,mixed> */
     public function put_resumable_upload_probe(
         string $access_token,
         string $session_id,
@@ -351,7 +391,8 @@ final class PeerTube_Http_Client
         string $error_context = 'public',
         array $headers = array(),
         ?string $body = null,
-        array $accepted_statuses = array()
+        array $accepted_statuses = array(),
+        ?PeerTube_Upload_Slice $upload_slice = null
     ): array {
         if ($response_limit < 1 || $response_limit > self::MAX_CHANNEL_RESPONSE_BYTES) {
             throw new InvalidArgumentException('PeerTube HTTP response limit is outside the reviewed bound.');
@@ -371,13 +412,31 @@ final class PeerTube_Http_Client
             }
         }
 
+        if (null !== $upload_slice && ('PUT' !== $method || null !== $body)) {
+            throw new InvalidArgumentException('PeerTube streamed upload request shape is invalid.');
+        }
         if (! function_exists('wp_safe_remote_request')) {
             return self::failure(PeerTube_Api_Error::transport(null));
+        }
+        if (null !== $upload_slice && (
+            ! function_exists('curl_init')
+            || ! function_exists('curl_exec')
+            || ! function_exists('curl_setopt')
+            || ! function_exists('add_action')
+            || ! function_exists('remove_action')
+            || ! defined('CURLOPT_UPLOAD')
+            || ! defined('CURLOPT_CUSTOMREQUEST')
+            || ! defined('CURLOPT_READFUNCTION')
+            || (! defined('CURLOPT_INFILESIZE_LARGE') && ! defined('CURLOPT_INFILESIZE'))
+        )) {
+            return self::failure(PeerTube_Api_Error::invalid_response('stream_upload_curl_unavailable'));
         }
 
         $url = $this->origin . $path;
         $host_filter = null;
         $port_filter = null;
+        $curl_filter = null;
+        $curl_configured = false;
 
         try {
             if (PeerTube_Origin::is_development_origin($this->origin)) {
@@ -418,9 +477,44 @@ final class PeerTube_Http_Client
                 add_filter('http_allowed_safe_ports', $port_filter, 10, 3);
             }
 
+            if (null !== $upload_slice) {
+                $curl_filter = static function (mixed $handle, mixed $parsed_args, mixed $request_url) use (
+                    $upload_slice,
+                    $url,
+                    &$curl_configured
+                ): void {
+                    if (! is_string($request_url) || ! hash_equals($url, $request_url)
+                        || ! is_array($parsed_args) || 'PUT' !== ($parsed_args['method'] ?? null)) {
+                        return;
+                    }
+
+                    $read = static function (mixed $curl, mixed $stream, int $requested) use ($upload_slice): string {
+                        unset($curl, $stream);
+                        return $upload_slice->read($requested);
+                    };
+                    $size_option = defined('CURLOPT_INFILESIZE_LARGE')
+                        ? constant('CURLOPT_INFILESIZE_LARGE')
+                        : constant('CURLOPT_INFILESIZE');
+                    foreach (array(
+                        array(constant('CURLOPT_UPLOAD'), true),
+                        array(constant('CURLOPT_CUSTOMREQUEST'), 'PUT'),
+                        array($size_option, $upload_slice->bytes()),
+                        array(constant('CURLOPT_READFUNCTION'), $read),
+                    ) as [$option, $value]) {
+                        if (true !== curl_setopt($handle, $option, $value)) {
+                            throw new \RuntimeException('PeerTube streamed upload cURL setup failed before send.');
+                        }
+                    }
+                    $curl_configured = true;
+                };
+                add_action('http_api_curl', $curl_filter, 10, 3);
+            }
+
             $request = array(
                     'method'              => $method,
-                    'timeout'             => self::DEFAULT_TIMEOUT_SECONDS,
+                    'timeout'             => null === $upload_slice
+                        ? self::DEFAULT_TIMEOUT_SECONDS
+                        : self::STREAM_UPLOAD_TIMEOUT_SECONDS,
                     'blocking'            => true,
                     'redirection'         => 0,
                     'sslverify'           => true,
@@ -442,9 +536,16 @@ final class PeerTube_Http_Client
             }
 
             $response = wp_safe_remote_request($url, $request);
+            if (null !== $upload_slice && (! $curl_configured || ! $upload_slice->complete())) {
+                return self::failure(PeerTube_Api_Error::invalid_response('stream_upload_incomplete'));
+            }
         } catch (\Throwable $error) {
             return self::failure(PeerTube_Api_Error::transport($error));
         } finally {
+            if (null !== $curl_filter) {
+                remove_action('http_api_curl', $curl_filter, 10);
+            }
+
             if (null !== $port_filter) {
                 remove_filter('http_allowed_safe_ports', $port_filter, 10);
             }

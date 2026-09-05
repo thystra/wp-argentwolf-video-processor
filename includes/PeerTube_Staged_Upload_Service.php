@@ -31,14 +31,20 @@ final class PeerTube_Staged_Upload_Service
 
     /** @var Closure(string):PeerTube_Staged_Upload_Api */
     private Closure $api_factory;
+    /** @var Closure(string):int */
+    private Closure $chunk_mib_resolver;
 
     public function __construct(
         private readonly PeerTube_Staged_Upload_Operation_Store $operations,
         private readonly Backend_Registry $registry,
         private readonly Managed_Backend_Secret_Store $secrets,
-        callable $api_factory
+        callable $api_factory,
+        ?callable $chunk_mib_resolver = null
     ) {
         $this->api_factory = Closure::fromCallable($api_factory);
+        $this->chunk_mib_resolver = Closure::fromCallable(
+            $chunk_mib_resolver ?? static fn (string $backend_id): int => PeerTube_Upload_Policy::DEFAULT_CHUNK_MIB
+        );
     }
 
     /** @return array<string,mixed> */
@@ -138,7 +144,9 @@ final class PeerTube_Staged_Upload_Service
             return self::result(self::STATUS_REFUSED, $record);
         }
 
-        $preflight = $this->preflight($record, $now);
+        // Before the local claim, prove record/backend/credential authority without
+        // performing a full source hash. No remote mutation is possible yet.
+        $preflight = $this->preflight($record, $now, false);
         if ('ready' !== $preflight['status']) {
             return self::result($preflight['status'], $record);
         }
@@ -149,12 +157,24 @@ final class PeerTube_Staged_Upload_Service
             ? PeerTube_Staged_Upload_State_Machine::REQUEST_INIT
             : PeerTube_Staged_Upload_State_Machine::REQUEST_CHUNK;
         $start = PeerTube_Staged_Upload_State_Machine::REQUEST_INIT === $kind ? 0 : $record['confirmed_bytes'];
-        $bytes = PeerTube_Staged_Upload_State_Machine::REQUEST_INIT === $kind
-            ? 0
-            : min(
-                PeerTube_Staged_Upload_State_Machine::MAX_CHUNK_BYTES,
+        $bytes = 0;
+        if (PeerTube_Staged_Upload_State_Machine::REQUEST_CHUNK === $kind) {
+            try {
+                $chunk_mib = ($this->chunk_mib_resolver)($record['backend_id']);
+            } catch (Throwable) {
+                return self::result(self::STATUS_REFUSED, $record);
+            }
+            if (null === PeerTube_Upload_Policy::chunk_mib($chunk_mib)) {
+                return self::result(self::STATUS_REFUSED, $record);
+            }
+            $bytes = PeerTube_Upload_Policy::bytes_for_remaining(
+                $chunk_mib,
                 $record['source']['bytes'] - $record['confirmed_bytes']
             );
+            if ($bytes < 1) {
+                return self::result(self::STATUS_REFUSED, $record);
+            }
+        }
         try {
             $capability = bin2hex(random_bytes(32));
         } catch (Throwable) {
@@ -183,7 +203,14 @@ final class PeerTube_Staged_Upload_Service
 
         // Re-prove all local fences after the durable in-flight claim and
         // before transmitting any consequential bytes.
-        $second = $this->preflight($claimed, $now);
+        // Initialization has no upload slice to bind, so re-hash the complete
+        // source immediately before that remote mutation. Chunk requests bind
+        // and hash the exact open descriptor in PeerTube_Upload_Slice::open().
+        $second = $this->preflight(
+            $claimed,
+            $now,
+            PeerTube_Staged_Upload_State_Machine::REQUEST_INIT === $kind
+        );
         if ('ready' !== $second['status']
             || $second['secret']['generation'] !== $secret['generation']) {
             $code = 'refresh_required' === $second['status']
@@ -210,24 +237,32 @@ final class PeerTube_Staged_Upload_Service
                     $record['source']['bytes']
                 );
             } else {
-                $chunk = self::read_chunk($record, $start, $bytes);
-                if (null === $chunk) {
+                $slice = PeerTube_Upload_Slice::open($record['source'], $start, $bytes);
+                if (! $slice instanceof PeerTube_Upload_Slice) {
                     return $this->retry_safe_local($claimed, $capability, 'peertube.upload.source_changed', $now);
                 }
-                $response = $api->upload_resumable_chunk(
+                $response = $api->upload_resumable_slice(
                     $secret['access_token'],
                     $record['upload_session_id'],
                     $start,
                     $record['source']['bytes'],
                     $record['upload']['content_type'],
-                    $chunk
+                    $slice
                 );
-                unset($chunk);
+                $final_remote_created = is_array($response)
+                    && true === ($response['ok'] ?? null)
+                    && 'created' === ($response['data']['state'] ?? null);
+                if (! $slice->verify_unchanged($final_remote_created)) {
+                    return $this->mark_indeterminate($claimed, $capability, 0, $now);
+                }
             }
         } catch (Throwable) {
             return $this->mark_indeterminate($claimed, $capability, 0, $now);
         } finally {
-            unset($secret);
+            if (isset($slice) && $slice instanceof PeerTube_Upload_Slice) {
+                $slice->close();
+            }
+            unset($secret, $slice);
         }
 
         if (! is_array($response) || true !== ($response['ok'] ?? null)) {
@@ -375,21 +410,20 @@ final class PeerTube_Staged_Upload_Service
     }
 
     /** @param array<string,mixed> $record @return array{status:string,descriptor:array<string,mixed>,secret:array<string,mixed>} */
-    private function preflight(array $record, int $now): array
+    private function preflight(array $record, int $now, bool $verify_source = true): array
     {
+        if (! PeerTube_Staged_Upload_State_Machine::valid($record)) {
+            return array('status' => 'backend_unavailable', 'descriptor' => array(), 'secret' => array());
+        }
         $descriptor = $this->registry->get($record['backend_id']);
-        $guard = PeerTube_Staged_Upload_Guard::evaluate(
+        if (! PeerTube_Staged_Upload_Guard::descriptor_matches(
             $record,
             is_array($descriptor) ? $descriptor : null
-        );
-        if (PeerTube_Staged_Upload_Guard::READY !== $guard) {
-            return array(
-                'status'     => PeerTube_Staged_Upload_Guard::SOURCE_CHANGED === $guard
-                    ? 'source_changed'
-                    : 'backend_unavailable',
-                'descriptor' => array(),
-                'secret'     => array(),
-            );
+        )) {
+            return array('status' => 'backend_unavailable', 'descriptor' => array(), 'secret' => array());
+        }
+        if ($verify_source && ! PeerTube_Staged_Source_Identity::matches($record['source'])) {
+            return array('status' => 'source_changed', 'descriptor' => array(), 'secret' => array());
         }
         try {
             $secret = $this->secrets->read($descriptor['secret_ref'], $record['backend_id']);
@@ -432,43 +466,6 @@ final class PeerTube_Staged_Upload_Service
             && $descriptor['config']['origin'] === PeerTube_Origin::sanitize($descriptor['config']['origin']);
     }
 
-    /** @param array<string,mixed> $record */
-    private static function read_chunk(array $record, int $start, int $bytes): ?string
-    {
-        if ($bytes < 1 || $bytes > PeerTube_Staged_Upload_State_Machine::MAX_CHUNK_BYTES
-            || ! PeerTube_Staged_Source_Identity::matches($record['source'])) {
-            return null;
-        }
-        $path = PeerTube_Staged_Source_Identity::absolute_path($record['source']['relative_path']);
-        if ('' === $path) {
-            return null;
-        }
-        $handle = @fopen($path, 'rb');
-        if (! is_resource($handle)) {
-            return null;
-        }
-        try {
-            if (0 !== fseek($handle, $start, SEEK_SET)) return null;
-            $chunk = '';
-            while (strlen($chunk) < $bytes && ! feof($handle)) {
-                $piece = fread($handle, $bytes - strlen($chunk));
-                if (false === $piece || '' === $piece) break;
-                $chunk .= $piece;
-            }
-            if (strlen($chunk) !== $bytes) {
-                return null;
-            }
-
-            // Re-prove the complete immutable source after the exact bytes
-            // have been read. A changed staged file must never be transmitted
-            // merely because it matched immediately before fopen().
-            return PeerTube_Staged_Source_Identity::matches($record['source'])
-                ? $chunk
-                : null;
-        } finally {
-            fclose($handle);
-        }
-    }
 
     /** @param array<string,mixed> $claimed @return array<string,mixed> */
     private function retry_safe_local(array $claimed, string $capability, string $code, int $now, int $http_status = 0): array
