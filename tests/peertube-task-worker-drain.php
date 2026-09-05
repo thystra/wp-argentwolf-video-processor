@@ -52,6 +52,7 @@ namespace ArgentVideo {
     {
         public const TASK_UPLOAD_ADVANCE = 'peertube_upload_advance';
         public const TASK_REMOTE_RECONCILE = 'peertube_remote_reconcile';
+        public const TASK_FAILURE_NOTIFY = 'peertube_upload_failure_notify';
         public const PAYLOAD_VERSION = 1;
         public const STATUS_REQUEUED = 'requeued';
         public const STATUS_COMPLETE = 'complete';
@@ -162,6 +163,49 @@ namespace {
     $assert(PeerTube_Task_Worker::STATUS_YIELDED === $yielded['status'], 'Drain did not yield at the size-derived safe-boundary deadline.');
     $assert(1 === $yielded['steps'] && 4800 === $yielded['budget_seconds'], 'Yield result lost bounded progress/budget evidence.');
     $assert(array() === $tasks->exact_claim_ids, 'Drain claimed another segment after the safe-boundary deadline.');
+
+    // Drain mode also owns durable failure-notification delivery, but a
+    // notification is a terminal one-step branch: it must not fall through to
+    // unrelated global queue work or attempt an upload/reconciliation handoff.
+    $notification_payload = json_encode(array(
+        'version'=>1,
+        'operation_id'=>$operation_id,
+        'failure_revision'=>7,
+        'failure'=>array(
+            'state'=>'upload_indeterminate',
+            'failed_at'=>3000,
+            'confirmed_bytes'=>0,
+            'source_bytes'=>1024 * 1024 * 1024,
+            'request_kind'=>'chunk',
+            'request_start'=>0,
+            'request_bytes'=>128 * 1024 * 1024,
+            'awvp_error_code'=>'peertube.upload.indeterminate',
+            'http_status'=>0,
+            'retry_after'=>0,
+            'service_status'=>'indeterminate',
+            'error_status'=>'transport_timeout',
+            'service_error_code'=>'curl_28',
+            'detail'=>'The PeerTube request timed out before a definitive response was received; possible causes include a stalled or insufficient-throughput network path.',
+            'reason'=>'Upload service stopped at an explicit intervention boundary.',
+        ),
+    ), JSON_UNESCAPED_SLASHES);
+    $notification_task = $task(61, Coordinator::TASK_FAILURE_NOTIFY);
+    $notification_task['payload_json'] = $notification_payload;
+    $tasks = new Task_Repository();
+    $coordinator = new Coordinator();
+    $tasks->initial_claims[] = $notification_task;
+    $coordinator->results[] = array(
+        'status'=>'complete','task_id'=>61,'task_type'=>Coordinator::TASK_FAILURE_NOTIFY,
+        'repository_status'=>'applied','run_after'=>0,
+    );
+    $worker = new PeerTube_Task_Worker($tasks, $coordinator, static fn(string $id): ?array => $id === $operation_id ? $operation : null);
+    $notified = $worker->run_drain(3000, static fn(): int => 3000);
+    $assert(PeerTube_Task_Worker::STATUS_ADVANCED === $notified['status'], 'Drain did not complete the durable notification branch.');
+    $assert(1 === $notified['steps'], 'Failure notification should consume exactly one drain step when mail is accepted.');
+    $assert(array(61) === $coordinator->task_ids, 'Drain did not delegate exactly the claimed notification task.');
+    $assert(array() === $tasks->exact_claim_ids, 'Failure notification incorrectly attempted a same-task or handoff reclaim after completion.');
+    $assert(1 === $tasks->claim_next_calls, 'Failure notification drain wandered back into global queue selection.');
+    $assert(3600 === $notified['budget_seconds'], 'Notification drain lost the conservative one-hour process floor.');
 
     $source = (string) file_get_contents(dirname(__DIR__) . '/includes/PeerTube_Task_Worker.php');
     foreach (array('sleep(', 'usleep(', 'wp_schedule', 'exec(', 'proc_open', 'shell_exec') as $needle) {

@@ -572,7 +572,22 @@ namespace ArgentVideo {
     $tls = $api->detect_instance();
     $assert(false === $tls['ok'], 'Transport error must fail detection.');
     $assert('tls_error' === $tls['error']['status'], 'TLS transport error was not classified.');
-    $assert('' === $tls['error']['detail'], 'Transport error must not expose raw diagnostic text.');
+    $assert(
+        'TLS or certificate verification failed while contacting PeerTube.' === $tls['error']['detail'],
+        'TLS transport error did not expose only the controlled diagnostic summary.'
+    );
+
+
+    $timeout = PeerTube_Api_Error::transport(
+        new \WP_Error('http_request_failed', 'cURL error 28: Operation timed out after 60000 milliseconds with 0 bytes received')
+    );
+    $assert('transport_timeout' === $timeout['status'], 'Timeout transport error was not classified.');
+    $assert('curl_28' === $timeout['code'], 'Timeout cURL code was not reduced to its safe numeric classifier.');
+    $assert(
+        'The PeerTube request timed out before a definitive response was received; possible causes include a stalled or insufficient-throughput network path.' === $timeout['detail'],
+        'Timeout transport detail was not reduced to the controlled diagnostic summary.'
+    );
+    $assert(! str_contains(serialize($timeout), '60000'), 'Raw timeout diagnostic text escaped normalization.');
 
     $transport_secret_code = PeerTube_Api_Error::transport(
         new \WP_Error('access_token=transport-code-sentinel', 'Synthetic transport failure.')

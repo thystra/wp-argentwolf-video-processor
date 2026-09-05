@@ -81,22 +81,66 @@ final class PeerTube_Api_Error
             $message = $error->getMessage();
         }
 
-        $status = 1 === preg_match('/(?:certificate|ssl|tls|peer verification)/i', $message)
-            ? 'tls_error'
-            : 'transport_error';
+        if (1 === preg_match('/cURL error\s+([0-9]{1,3})\s*:/i', $message, $matches)) {
+            $curl_code = (int) ($matches[1] ?? 0);
+            if ($curl_code > 0 && $curl_code < 1000) {
+                $code = 'curl_' . $curl_code;
+            }
+        }
 
-        return self::local($status, self::safe_token($code, 191), 0);
+        $classification = self::transport_classification($message, $code);
+        return self::local($classification['status'], self::safe_token($code, 191), 0, $classification['detail']);
+    }
+
+    /** @return array{status:string,detail:string} */
+    private static function transport_classification(string $message, string $code): array
+    {
+        $lower = strtolower($message);
+        if ('curl_28' === $code || str_contains($lower, 'timed out') || str_contains($lower, 'timeout')) {
+            return array(
+                'status' => 'transport_timeout',
+                'detail' => 'The PeerTube request timed out before a definitive response was received; possible causes include a stalled or insufficient-throughput network path.',
+            );
+        }
+        if ('curl_6' === $code || str_contains($lower, 'could not resolve host') || str_contains($lower, 'name or service not known')) {
+            return array(
+                'status' => 'dns_error',
+                'detail' => 'The PeerTube host name could not be resolved.',
+            );
+        }
+        if ('curl_7' === $code || str_contains($lower, 'connection refused') || str_contains($lower, 'failed to connect')) {
+            return array(
+                'status' => 'connection_refused',
+                'detail' => 'The connection to PeerTube could not be established.',
+            );
+        }
+        if (str_contains($lower, 'connection reset') || str_contains($lower, 'reset by peer')) {
+            return array(
+                'status' => 'connection_reset',
+                'detail' => 'The connection to PeerTube was reset before a definitive response was received.',
+            );
+        }
+        if (1 === preg_match('/(?:certificate|ssl|tls|peer verification)/i', $message)) {
+            return array(
+                'status' => 'tls_error',
+                'detail' => 'TLS or certificate verification failed while contacting PeerTube.',
+            );
+        }
+        return array(
+            'status' => 'transport_error',
+            'detail' => 'The PeerTube request failed at the network transport boundary.',
+        );
     }
 
     /** @return array<string, mixed> */
-    private static function local(string $status, string $code, int $http_status): array
+    private static function local(string $status, string $code, int $http_status, string $detail = ''): array
     {
         return array(
             'status'         => $status,
             'http_status'    => $http_status,
             'type'           => '',
             'code'           => self::ascii_token($code, 191),
-            'detail'         => '',
+            'detail'         => self::safe_detail($detail),
             'retry_after'    => 0,
             'rate_limit'     => 0,
             'rate_remaining' => 0,

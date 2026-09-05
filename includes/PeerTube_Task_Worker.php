@@ -31,9 +31,16 @@ final class PeerTube_Task_Worker
     private const RECOVERY_LIMIT = 20;
 
     /** @var list<string> */
-    private const TASK_TYPES = array(
+    private const ONCE_TASK_TYPES = array(
         PeerTube_Upload_Task_Coordinator::TASK_UPLOAD_ADVANCE,
         PeerTube_Upload_Task_Coordinator::TASK_REMOTE_RECONCILE,
+    );
+
+    /** @var list<string> */
+    private const DRAIN_TASK_TYPES = array(
+        PeerTube_Upload_Task_Coordinator::TASK_UPLOAD_ADVANCE,
+        PeerTube_Upload_Task_Coordinator::TASK_REMOTE_RECONCILE,
+        PeerTube_Upload_Task_Coordinator::TASK_FAILURE_NOTIFY,
     );
 
     /** @var Closure(string):array<string,mixed>|null */
@@ -58,8 +65,8 @@ final class PeerTube_Task_Worker
             return self::result(self::STATUS_INDETERMINATE);
         }
 
-        $recovered = $this->recover($now);
-        $task = $this->tasks->claim_next_of_types(self::TASK_TYPES, $now);
+        $recovered = $this->recover($now, self::ONCE_TASK_TYPES);
+        $task = $this->tasks->claim_next_of_types(self::ONCE_TASK_TYPES, $now);
         if (! is_array($task)) {
             return self::result(self::STATUS_IDLE, $recovered);
         }
@@ -94,8 +101,8 @@ final class PeerTube_Task_Worker
             return self::drain_result(self::STATUS_INDETERMINATE);
         }
 
-        $recovered = $this->recover($now);
-        $task = $this->tasks->claim_next_of_types(self::TASK_TYPES, $now);
+        $recovered = $this->recover($now, self::DRAIN_TASK_TYPES);
+        $task = $this->tasks->claim_next_of_types(self::DRAIN_TASK_TYPES, $now);
         if (! is_array($task)) {
             return self::drain_result(self::STATUS_IDLE, $recovered);
         }
@@ -224,7 +231,7 @@ final class PeerTube_Task_Worker
                 );
             }
 
-            $task = $this->tasks->claim_task_of_types($next_task_id, self::TASK_TYPES, $boundary_now);
+            $task = $this->tasks->claim_task_of_types($next_task_id, self::DRAIN_TASK_TYPES, $boundary_now);
             if (! is_array($task)) {
                 // Another worker may have won a legitimate claim race. The
                 // durable queue remains authoritative, so stop rather than
@@ -252,7 +259,7 @@ final class PeerTube_Task_Worker
         $this->last_coordinator_result = null;
         $task_id = self::positive_int($task['id'] ?? null);
         $task_type = is_string($task['task_type'] ?? null) ? $task['task_type'] : '';
-        if ($task_id < 1 || ! in_array($task_type, self::TASK_TYPES, true)) {
+        if ($task_id < 1 || ! in_array($task_type, self::DRAIN_TASK_TYPES, true)) {
             return self::result(self::STATUS_INDETERMINATE, $recovered, $task_id, $task_type);
         }
 
@@ -275,10 +282,11 @@ final class PeerTube_Task_Worker
         return self::result(self::STATUS_ADVANCED, $recovered, $task_id, $task_type, $coordinator_status);
     }
 
-    private function recover(int $now): int
+    /** @param list<string> $task_types */
+    private function recover(int $now, array $task_types): int
     {
         return $this->tasks->recover_stale_of_types(
-            self::TASK_TYPES,
+            $task_types,
             max(1, $now - self::STALE_LOCK_SECONDS),
             $now,
             self::RECOVERY_LIMIT

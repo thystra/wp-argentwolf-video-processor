@@ -60,6 +60,7 @@ namespace ArgentVideo {
     {
         public const TASK_UPLOAD_ADVANCE = 'peertube_upload_advance';
         public const TASK_REMOTE_RECONCILE = 'peertube_remote_reconcile';
+        public const TASK_FAILURE_NOTIFY = 'peertube_upload_failure_notify';
     }
 
     final class PeerTube_Task_Worker
@@ -119,8 +120,8 @@ namespace {
     $assert(0 === count($GLOBALS['awvp_r45_launcher_exec_calls']), 'Idle launcher spawned a process.');
     $assert(1 === count($tasks->calls) && 4100 === $tasks->calls[0]['stale_before'], 'Launcher work probe did not use the reviewed stale-lock boundary.');
     $assert(
-        array('peertube_upload_advance','peertube_remote_reconcile') === $tasks->calls[0]['types'],
-        'Launcher work probe was not restricted to the two reviewed PeerTube task types.'
+        array('peertube_upload_advance','peertube_remote_reconcile','peertube_upload_failure_notify') === $tasks->calls[0]['types'],
+        'Launcher work probe was not restricted to the reviewed PeerTube task types.'
     );
 
     // Existing launch lock suppresses duplicate detached launches.

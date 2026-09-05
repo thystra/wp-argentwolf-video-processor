@@ -1145,10 +1145,30 @@ budget is derived from authoritative staged-source bytes at one minute per
 128 MiB, with a 3600-second floor and 21600-second ceiling. Reclaiming the exact
 row still increments normal durable `attempts` and obtains a new lock token.
 
-R45.4b4 will use the generic task table for a durable upload-failure notification
-rather than sending email inline from the upload coordinator. The notification
-payload must remain credential-free and bind deterministically to the upload
-operation. User/post/backend/error details are re-derived from authoritative
-WordPress and staged-upload state when the notification executes; only a bounded
-sanitized failure snapshot may be duplicated when needed to preserve the reason
-that caused the task transition.
+R45.4b4 uses the generic task table for durable upload-failure notification
+rather than sending email inline from the upload coordinator. The exact task type
+is `peertube_upload_failure_notify`; version 1 binds `operation_id`,
+`failure_revision`, and a bounded credential-free `failure` snapshot. Its
+idempotency key includes the operation ID plus authoritative operation
+`record_revision`, so repeated enqueue attempts for the same failure revision
+resolve to one logical task while a later distinct failure revision may notify
+again.
+
+The notification row has a five-attempt delivery ceiling. A rejected `wp_mail()`
+reschedules the same row with 5-minute, 15-minute, 1-hour, then 3-hour delays;
+exhaustion fails the notification row only and never replays upload bytes. The
+recipient, post title, current backend/operation identity, and administrator URL
+are re-derived at execution time. The duplicated snapshot is limited to
+failed/held phase and time, progress bytes, last request kind/start/size, safe
+AWVP/service/transport codes, HTTP status/retry-after, and bounded controlled
+reason/detail. Credentials,
+secret references, filesystem paths, and raw response bodies are forbidden.
+
+The upload coordinator attempts notification enqueue before finalizing a claimed
+human-attention failure so a normal durable transition leaves notification work
+behind. Task-table/database indeterminacy is still treated as indeterminacy; this
+is not claimed as a cross-row transactional exactly-once guarantee. Likewise,
+`wp_mail()` acceptance and task-row completion cannot be one transaction: a
+process loss after WordPress accepts the message but before the task completion
+commits can cause at-least-once redelivery. The message therefore includes the
+stable upload operation ID so duplicate diagnostic mail remains recognizable.

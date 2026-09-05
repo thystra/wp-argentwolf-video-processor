@@ -174,11 +174,16 @@ final class Plugin
                 $peertube_secrets,
                 $peertube_api_factory
             );
+            $peertube_failure_notification = new PeerTube_Upload_Failure_Notification(
+                $peertube_tasks,
+                array($peertube_upload_operations, 'get')
+            );
             $peertube_task_coordinator = new PeerTube_Upload_Task_Coordinator(
                 $peertube_tasks,
                 array($peertube_upload_operations, 'get'),
                 array($peertube_upload, 'advance'),
-                array($peertube_reconciliation, 'advance')
+                array($peertube_reconciliation, 'advance'),
+                $peertube_failure_notification
             );
             $peertube_task_worker = new PeerTube_Task_Worker(
                 $peertube_tasks,

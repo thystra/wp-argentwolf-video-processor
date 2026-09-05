@@ -186,6 +186,36 @@ namespace ArgentVideo {
         public const STATUS_REFUSED = 'refused';
     }
 
+
+    final class PeerTube_Upload_Failure_Notification
+    {
+        public const TASK_TYPE = 'peertube_upload_failure_notify';
+        /** @var list<array<string,mixed>> */
+        public array $enqueues = array();
+        public int $advance_calls = 0;
+
+        public function __construct(...$unused) { unset($unused); }
+
+        public function enqueue(array $operation, string $reason, string $service_status, array $service_error, int $now): array
+        {
+            $this->enqueues[] = compact('operation','reason','service_status','service_error','now');
+            return array('status'=>Task_Repository::APPLIED,'task_id'=>99);
+        }
+
+        public function advance_claimed(array $task, int $now): array
+        {
+            $this->advance_calls++;
+            return array(
+                'status'=>'complete',
+                'task_id'=>(int)($task['id']??0),
+                'task_type'=>self::TASK_TYPE,
+                'service_status'=>'notification',
+                'repository_status'=>Task_Repository::APPLIED,
+                'run_after'=>0,
+            );
+        }
+    }
+
     final class PeerTube_Remote_Asset_Reconciliation_Service
     {
         public const STATUS_REMOTE_COMMITTED = 'remote_committed';
@@ -206,6 +236,7 @@ namespace {
 
     use ArgentVideo\PeerTube_Remote_Asset_Reconciliation_Service as Reconcile_Service;
     use ArgentVideo\PeerTube_Staged_Upload_Service as Upload_Service;
+    use ArgentVideo\PeerTube_Upload_Failure_Notification as Failure_Notification;
     use ArgentVideo\PeerTube_Staged_Upload_State_Machine as Machine;
     use ArgentVideo\PeerTube_Upload_Task_Coordinator as Coordinator;
     use ArgentVideo\Task_Repository;
@@ -230,7 +261,11 @@ namespace {
     };
 
     /** @return array{tasks:Task_Repository,state:object,coordinator:Coordinator} */
-    $fixture = static function (string $phase = Machine::PHASE_READY, int $now = 1000) use ($operation, $empty_error): array {
+    $fixture = static function (
+        string $phase = Machine::PHASE_READY,
+        int $now = 1000,
+        ?Failure_Notification $failure_notification = null
+    ) use ($operation, $empty_error): array {
         $id = 'upload_' . str_repeat('a', 32);
         $tasks = new Task_Repository();
         $state = (object) array(
@@ -306,7 +341,7 @@ namespace {
         return array(
             'tasks'=>$tasks,
             'state'=>$state,
-            'coordinator'=>new Coordinator($tasks, $reader, $upload, $reconcile),
+            'coordinator'=>new Coordinator($tasks, $reader, $upload, $reconcile, $failure_notification),
         );
     };
 
@@ -358,6 +393,21 @@ namespace {
     $claimed = $f['tasks']->claim_next(1000);
     $uncertain = $f['coordinator']->advance_claimed($claimed, 1000);
     $assert(Coordinator::STATUS_FAILED === $uncertain['status'] && 0 === $f['state']->upload_calls, 'R45 automatically advanced/reconciled an indeterminate upload.');
+
+    // R45.4b4 durably queues one failure notification before holding the upload task.
+    $notification = new Failure_Notification();
+    $f = $fixture(Machine::PHASE_UPLOAD_INDETERMINATE, 1000, $notification);
+    $operation_id = array_key_first($f['state']->operations);
+    $f['state']->operations[$operation_id]['last_error'] = array('code'=>'peertube.upload.indeterminate','http_status'=>0,'retry_after'=>0);
+    $f['coordinator']->enqueue_upload($operation_id, 1000);
+    $claimed = $f['tasks']->claim_next(1000);
+    $held = $f['coordinator']->advance_claimed($claimed, 1000);
+    $assert(Coordinator::STATUS_FAILED === $held['status'], 'Failure-notification enqueue changed the held upload outcome.');
+    $assert(1 === count($notification->enqueues), 'Held upload did not queue exactly one durable failure notification.');
+    $assert(
+        'Upload outcome is indeterminate; explicit zero-byte reconciliation is required before any retry.' === $notification->enqueues[0]['reason'],
+        'Failure notification did not preserve the controlled held-state reason.'
+    );
 
     // Remote-created handoff enqueues the deterministic R44 task before completing the upload task.
     $f = $fixture();
@@ -419,6 +469,20 @@ namespace {
     $claimed = $f['tasks']->claim_next(4000);
     $tampered = $f['coordinator']->advance_claimed($claimed, 4000);
     $assert(Coordinator::STATUS_FAILED === $tampered['status'] && 0 === $f['state']->upload_calls && 0 === $f['state']->reconcile_calls, 'Tampered task payload reached a service boundary.');
+
+    // Dedicated notification tasks are delegated to the notification service and never reach R43/R44.
+    $notification = new Failure_Notification();
+    $f = $fixture(Machine::PHASE_READY, 5000, $notification);
+    $notification_task = array(
+        'id'=>55,
+        'task_type'=>Coordinator::TASK_FAILURE_NOTIFY,
+        'status'=>Task_Repository::STATUS_PROCESSING,
+        'lock_token'=>'00000000-0000-4000-8000-000000000055',
+        'payload_json'=>'{}',
+    );
+    $notification_result = $f['coordinator']->advance_claimed($notification_task, 5000);
+    $assert(Coordinator::STATUS_COMPLETE === $notification_result['status'] && 1 === $notification->advance_calls, 'Notification task was not delegated exactly once.');
+    $assert(0 === $f['state']->upload_calls && 0 === $f['state']->reconcile_calls, 'Notification task crossed an upload/reconciliation service boundary.');
 
     // R45.3b permits CLI-only composition, but the coordinator itself remains a
     // bounded orchestration object with no scheduler/browser/process authority.

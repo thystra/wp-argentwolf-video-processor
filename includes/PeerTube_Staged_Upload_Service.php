@@ -256,8 +256,14 @@ final class PeerTube_Staged_Upload_Service
                     return $this->mark_indeterminate($claimed, $capability, 0, $now);
                 }
             }
-        } catch (Throwable) {
-            return $this->mark_indeterminate($claimed, $capability, 0, $now);
+        } catch (Throwable $error) {
+            return $this->mark_indeterminate(
+                $claimed,
+                $capability,
+                0,
+                $now,
+                PeerTube_Api_Error::transport($error)
+            );
         } finally {
             if (isset($slice) && $slice instanceof PeerTube_Upload_Slice) {
                 $slice->close();
@@ -270,7 +276,14 @@ final class PeerTube_Staged_Upload_Service
             $machine_status = is_string($error['status'] ?? null) ? $error['status'] : '';
             $http_status = is_int($error['http_status'] ?? null) ? $error['http_status'] : 0;
             if ('authentication_required' === $machine_status && in_array($http_status, array(401, 403), true)) {
-                return $this->retry_safe_local($claimed, $capability, 'peertube.upload.refresh_required', $now, $http_status);
+                return $this->retry_safe_local(
+                    $claimed,
+                    $capability,
+                    'peertube.upload.refresh_required',
+                    $now,
+                    $http_status,
+                    $error
+                );
             }
             if (PeerTube_Staged_Upload_State_Machine::REQUEST_INIT === $kind
                 && 'rate_limited' === $machine_status && 429 === $http_status
@@ -291,7 +304,7 @@ final class PeerTube_Staged_Upload_Service
                     ? self::result(self::STATUS_WAIT, $this->operations->get($operation_id))
                     : $this->atomic_failure($applied, $claimed);
             }
-            return $this->mark_indeterminate($claimed, $capability, $http_status, $now);
+            return $this->mark_indeterminate($claimed, $capability, $http_status, $now, $error);
         }
 
         $data = is_array($response['data'] ?? null) ? $response['data'] : array();
@@ -468,8 +481,14 @@ final class PeerTube_Staged_Upload_Service
 
 
     /** @param array<string,mixed> $claimed @return array<string,mixed> */
-    private function retry_safe_local(array $claimed, string $capability, string $code, int $now, int $http_status = 0): array
-    {
+    private function retry_safe_local(
+        array $claimed,
+        string $capability,
+        string $code,
+        int $now,
+        int $http_status = 0,
+        array $service_error = array()
+    ): array {
         $applied = $this->operations->apply_event(
             $claimed['operation_id'],
             $claimed['record_revision'],
@@ -482,16 +501,23 @@ final class PeerTube_Staged_Upload_Service
         }
         return self::result(
             'peertube.upload.refresh_required' === $code ? self::STATUS_REFRESH_REQUIRED : self::STATUS_ADVANCED,
-            $this->operations->get($claimed['operation_id'])
+            $this->operations->get($claimed['operation_id']),
+            $service_error
         );
     }
 
-    /** @param array<string,mixed> $claimed @return array<string,mixed> */
-    private function mark_indeterminate(array $claimed, string $capability, int $http_status, int $now): array
+    /** @param array<string,mixed> $claimed @param array<string,mixed> $service_error @return array<string,mixed> */
+    private function mark_indeterminate(
+        array $claimed,
+        string $capability,
+        int $http_status,
+        int $now,
+        array $service_error = array()
+    ): array
     {
         $current = $this->operations->get($claimed['operation_id']);
         if (is_array($current) && PeerTube_Staged_Upload_State_Machine::PHASE_UPLOAD_INDETERMINATE === $current['phase']) {
-            return self::result(self::STATUS_INDETERMINATE, $current);
+            return self::result(self::STATUS_INDETERMINATE, $current, $service_error);
         }
         $revision = is_array($current) ? $current['record_revision'] : $claimed['record_revision'];
         $applied = $this->operations->apply_event(
@@ -502,8 +528,8 @@ final class PeerTube_Staged_Upload_Service
             $now
         );
         return Atomic_Option_Result::APPLIED === $applied->status()
-            ? self::result(self::STATUS_INDETERMINATE, $this->operations->get($claimed['operation_id']))
-            : self::result(self::STATUS_INDETERMINATE, $current ?? $claimed);
+            ? self::result(self::STATUS_INDETERMINATE, $this->operations->get($claimed['operation_id']), $service_error)
+            : self::result(self::STATUS_INDETERMINATE, $current ?? $claimed, $service_error);
     }
 
     /** @return array<string,mixed> */
@@ -524,8 +550,8 @@ final class PeerTube_Staged_Upload_Service
         };
     }
 
-    /** @param array<string,mixed>|null $record @return array<string,mixed> */
-    private static function result(string $status, ?array $record = null): array
+    /** @param array<string,mixed>|null $record @param array<string,mixed> $error @return array<string,mixed> */
+    private static function result(string $status, ?array $record = null, array $error = array()): array
     {
         return array(
             'status'          => $status,
@@ -534,6 +560,7 @@ final class PeerTube_Staged_Upload_Service
             'record_revision' => is_array($record) && is_int($record['record_revision'] ?? null) ? $record['record_revision'] : 0,
             'confirmed_bytes' => is_array($record) && is_int($record['confirmed_bytes'] ?? null) ? $record['confirmed_bytes'] : 0,
             'remote_identity' => is_array($record) && is_array($record['remote_identity'] ?? null) ? $record['remote_identity'] : array('id'=>'','uuid'=>''),
+            'error'           => $error,
         );
     }
 }

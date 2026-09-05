@@ -64,6 +64,26 @@ AWVP_R45_INDETERMINATE_REQUESTS_AFTER_IDLE="$(grep -c '^' "$REQUEST_LOG")"
 [[ "$AWVP_R45_INDETERMINATE_REQUESTS_AFTER_IDLE" == "$AWVP_R45_INDETERMINATE_REQUESTS_AFTER_DROP" ]] \
     || fail "A post-indeterminate worker changed the remote request transcript for $CURRENT_CASE."
 
+# Install a disposable pre_wp_mail capture in the WordPress data volume, then
+# let --drain consume only the durable notification task. The PeerTube mock is
+# still dead, so successful delivery also proves notification execution performs
+# no remote upload/reconciliation request.
+AWVP_R45_MAIL_CAPTURE="/var/www/html/wp-content/plugins/argentwolf-video-processor/tests/fixtures/peertube-task-cli-indeterminate-smoke/install-mail-capture.php"
+wp_cli --context=cli eval-file "$AWVP_R45_MAIL_CAPTURE" --use-include
+AWVP_R45_NOTIFICATION_OUTPUT=''
+if ! AWVP_R45_NOTIFICATION_OUTPUT="$(wp_cli --context=cli --no-color argent-video peertube-task-worker --drain 2>&1)"; then
+    echo "$AWVP_R45_NOTIFICATION_OUTPUT" >&2
+    fail "The durable PeerTube failure-notification drain failed for $CURRENT_CASE."
+fi
+[[ "$AWVP_R45_NOTIFICATION_OUTPUT" == *'PeerTube task worker stopped at a durable boundary after 1 bounded step(s);'* ]] \
+    || fail "The notification drain did not stop after exactly one bounded step for $CURRENT_CASE."
+[[ "$AWVP_R45_NOTIFICATION_OUTPUT" == *'(peertube_upload_failure_notify): complete;'* ]] \
+    || fail "The durable failure-notification task did not complete for $CURRENT_CASE."
+AWVP_R45_REQUESTS_AFTER_NOTIFICATION="$(grep -c '^' "$REQUEST_LOG")"
+[[ "$AWVP_R45_REQUESTS_AFTER_NOTIFICATION" == "$AWVP_R45_INDETERMINATE_REQUESTS_AFTER_DROP" ]] \
+    || fail "Failure-notification delivery attempted PeerTube HTTP for $CURRENT_CASE."
+echo "PEERTUBE_TASK_CLI_FAILURE_NOTIFICATION_DELIVERY=$CURRENT_CASE:PASS"
+
 AWVP_R45_INDETERMINATE_INIT_COUNT="$(grep -c '^POST /api/v1/videos/upload-resumable ' "$REQUEST_LOG" || true)"
 AWVP_R45_INDETERMINATE_BYTE_PUT_COUNT="$(grep -c '^PUT /api/v1/videos/upload-resumable .* range=bytes=[0-9]' "$REQUEST_LOG" || true)"
 AWVP_R45_INDETERMINATE_PROBE_COUNT="$(grep -c '^PUT /api/v1/videos/upload-resumable .* range=bytes=\*/' "$REQUEST_LOG" || true)"
@@ -80,5 +100,6 @@ echo "PEERTUBE_TASK_CLI_INDETERMINATE_REMOTE_GET_COUNT=$CURRENT_CASE:$AWVP_R45_I
 echo "PEERTUBE_TASK_CLI_INDETERMINATE_NO_REPLAY=$CURRENT_CASE:PASS"
 unset AWVP_R45_INDETERMINATE_SETUP AWVP_R45_INDETERMINATE_REQUESTS_BEFORE
 unset AWVP_R45_INDETERMINATE_REQUESTS_AFTER_DROP AWVP_R45_INDETERMINATE_REQUESTS_AFTER_IDLE AWVP_R45_MOCK_STOPPED
+unset AWVP_R45_MAIL_CAPTURE AWVP_R45_NOTIFICATION_OUTPUT AWVP_R45_REQUESTS_AFTER_NOTIFICATION
 unset AWVP_R45_INDETERMINATE_INIT_COUNT AWVP_R45_INDETERMINATE_BYTE_PUT_COUNT AWVP_R45_INDETERMINATE_PROBE_COUNT AWVP_R45_INDETERMINATE_REMOTE_GET_COUNT
 unset -f awvp_r45_indeterminate_worker

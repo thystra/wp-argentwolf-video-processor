@@ -32,6 +32,7 @@ final class PeerTube_Task_Worker_Launcher
     private const TASK_TYPES = array(
         PeerTube_Upload_Task_Coordinator::TASK_UPLOAD_ADVANCE,
         PeerTube_Upload_Task_Coordinator::TASK_REMOTE_RECONCILE,
+        PeerTube_Upload_Task_Coordinator::TASK_FAILURE_NOTIFY,
     );
 
     public function __construct(private readonly Task_Repository $tasks)

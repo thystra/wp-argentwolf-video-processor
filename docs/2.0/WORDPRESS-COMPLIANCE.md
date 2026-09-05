@@ -654,8 +654,11 @@ until a later tranche explicitly wires, discloses, and qualifies those surfaces.
 
 R45 introduces one explicit production runtime surface for staged PeerTube work:
 `wp argent-video peertube-task-worker`. `--once` retains the qualified one-task
-boundary and R45.4b3 adds a bounded `--drain` mode. The command is WP-CLI-only, owns no
-browser/admin/AJAX/REST hook, and advances at most one claimed task per invocation.
+boundary and R45.4b3 adds a bounded `--drain` mode. The command is WP-CLI-only and
+owns no browser/admin/AJAX/REST hook. `--drain` may make multiple lock-token-guarded
+claims, but only for one logical operation's exact immediately-runnable task and
+deterministic handoff (plus R45.4b4 notification delivery); it never wanders into
+unrelated upload work.
 The existing WordPress recurring event still belongs to the legacy FFmpeg worker;
 R45.4b3 makes the detached launcher target `--drain` but still does not register
 the PeerTube detached launcher with cron or add an
@@ -686,5 +689,11 @@ bound; the worker never sleeps through a future `run_after`.
 
 R45 streaming is read-only with respect to that file; no source cleanup,
 publication/privacy mutation, remote delete, or retention action is gained here.
-PeerTube ingest/processing capabilities remain false pending later detached-drain
-and scheduling qualification.
+R45.4b4 calls WordPress `wp_mail()` only from its separately claimed durable
+notification task, never inline with browser/admin handling or the consequential
+upload request. Failed mail submission reschedules notification delivery only.
+Recipient resolution uses WordPress users, and the persisted/message diagnostic
+surface is bounded and sanitized; credential values, secret references,
+filesystem paths, and raw remote bodies are not copied into mail. PeerTube
+network I/O is not performed by notification delivery. PeerTube ingest/processing
+capabilities remain false pending later production scheduling qualification.

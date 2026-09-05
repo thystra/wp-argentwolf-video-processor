@@ -70,10 +70,15 @@
   handoff), never sleeps or polls future work, and yields only at a durable request
   boundary. Runtime/request guards scale at one minute per 128 MiB with a one-hour
   floor and six-hour ceiling; `--once` remains available unchanged.
-- Record the R45.4b4 requirement for durable failed-upload notification to the
-  initiating WordPress user (falling back to post author), including sanitized
-  operation state, transport/API error code, HTTP status/retry detail, and an AWVP
-  admin link without exposing credentials, filesystem paths, or raw remote bodies.
+- Add the R45.4b4 durable failed-upload notification boundary. Upload failures
+  or holds that require human attention enqueue the dedicated
+  `peertube_upload_failure_notify` task before the failing task is released; drain
+  execution resolves the initiating WordPress user (falling back to post author)
+  and sends a sanitized `wp_mail()` message with post/backend/state/progress,
+  last-request size, transport/API classification, HTTP status/retry detail when
+  available, and an
+  AWVP admin link. Mail rejection is retried durably without replaying the upload;
+  credentials, filesystem paths, and raw remote bodies are excluded.
 - Expand focused PeerTube security/state tests and isolated real-WordPress Docker
   development matrices through the R39 identity/destination checkpoint, with an
   R40 activation continuation that proves activation performs no additional

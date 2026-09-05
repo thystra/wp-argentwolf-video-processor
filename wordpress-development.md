@@ -373,3 +373,13 @@ with a one-hour floor and six-hour ceiling for both process budgeting and an
 individual streamed upload request. A user-selectable all-remaining (`0`) segment
 therefore trades fewer requests for a larger uncertainty/timeout unit and should
 be recommended only for fast, reliable links such as same-host transfers.
+
+
+For long-running detached jobs, user-facing failure notification should be its
+own durable task rather than an inline side effect of the consequential network
+request. Bind notification idempotency to authoritative failure state, re-derive
+recipient/object identity at delivery time, retry mail delivery independently,
+and include only bounded sanitized diagnostics. AWVP R45.4b4 uses the initiating
+WordPress user with post-author fallback and may report controlled timeout/DNS/
+connection/TLS classifications, HTTP status, retry-after, and progress; never
+copy credentials, filesystem paths, secret references, or raw response bodies.

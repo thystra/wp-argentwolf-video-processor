@@ -36,6 +36,7 @@ namespace ArgentVideo {
     {
         public const TASK_UPLOAD_ADVANCE = 'peertube_upload_advance';
         public const TASK_REMOTE_RECONCILE = 'peertube_remote_reconcile';
+        public const TASK_FAILURE_NOTIFY = 'peertube_upload_failure_notify';
 
         /** @var list<array{task:array<string,mixed>,now:int}> */
         public array $calls = array();

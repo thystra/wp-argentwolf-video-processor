@@ -641,5 +641,8 @@ it invoke the bounded `--drain` worker mode, but it is still not registered with
 cron or exposed as an administrator transfer launch. Drain follows only one
 logical operation across immediate durable boundaries and uses size-derived
 one-hour-to-six-hour process/request guards.
-Capability advertisement remains unchanged until the later scheduling/drain path
-is separately reviewed and qualified.
+The drain path is qualified at exact commit
+`33bdd109da2f452afb2058ce0d044d10a729c669` / tree
+`a89963f3e9def2ba65bd43589c87e13a3f4a9b57` with Forgejo CI run 122 and its
+retained Docker matrices. Capability advertisement remains unchanged until the
+later production scheduling path is separately reviewed and qualified.

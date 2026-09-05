@@ -486,17 +486,27 @@ prerequisites, establishes one resumable session in a fresh WP-CLI process, and
 then arms the isolated mock to durably record the first byte-bearing PUT before
 terminating its own HTTP process without a response. The worker must persist
 `upload_indeterminate`, fail/hold the upload task after exactly two claims, and
-leave the staged source intact. A later fresh `peertube-task-worker --once`
-invocation must be idle while the mock remains offline, proving that the task
-worker does not automatically issue a zero-byte offset probe, replay the chunk,
-or create a replacement resumable session.
+leave the staged source intact. R45.4b4 also requires exactly one durable
+`peertube_upload_failure_notify` task. A later fresh `peertube-task-worker --once`
+invocation must still be idle while the mock remains offline, proving that the
+qualified one-shot worker does not automatically issue a zero-byte offset probe,
+replay the chunk, create a replacement resumable session, or consume notification
+work.
 
-The exact request transcript requires one resumable-init POST, one byte-bearing
-PUT with the fixture's transport-drop marker, zero zero-byte probes, zero remote
-video GETs, and no replacement upload initialization. No remote-asset row or
-reconciliation task may exist, and the PeerTube ingest/processing capability
-bits remain disabled. This remains development-checkpoint evidence, not an
-authorization for automatic offset reconciliation or a release gate.
+The fixture then installs a disposable `pre_wp_mail` capture in the isolated
+WordPress volume and runs one `--drain` process. That process must complete only
+the durable notification task, deliver one sanitized message to the initiating
+WordPress user, and perform **zero** additional PeerTube HTTP requests while the
+mock remains stopped. The captured message must identify post/backend/state/error
+and controlled network diagnostics while containing no managed-token canaries or
+filesystem paths.
+
+The exact PeerTube request transcript still requires one resumable-init POST, one
+byte-bearing PUT with the fixture's transport-drop marker, zero zero-byte probes,
+zero remote video GETs, and no replacement upload initialization. No remote-asset
+row or reconciliation task may exist, and the PeerTube ingest/processing
+capability bits remain disabled. This remains development-checkpoint evidence,
+not an authorization for automatic offset reconciliation or a release gate.
 
 To preserve its report outside the checkout:
 
@@ -507,4 +517,4 @@ AWVP_R45_REPORT_DIR=/absolute/report/path \
 
 ### R45.4b3 bounded-drain smoke
 
-`peertube-task-cli-drain-smoke.sh` reuses the qualified isolated WordPress/mock-PeerTube fixture but invokes `wp argent-video peertube-task-worker --drain`. One fresh process must cross the immediately runnable upload initialization, byte-bearing upload, deterministic reconciliation handoff, and immediate reconciliation transition, then stop at the durable processing wait without sleeping or polling. After the wait expires, one later drain invocation completes readiness. The same state/assertion and no-replay evidence remain authoritative.
+`peertube-task-cli-drain-smoke.sh` reuses the qualified isolated WordPress/mock-PeerTube fixture but invokes `wp argent-video peertube-task-worker --drain`. One fresh process must cross the immediately runnable upload initialization, byte-bearing upload, deterministic reconciliation handoff, and immediate reconciliation transition, then stop at the durable processing wait without sleeping or polling. After the wait expires, one later drain invocation completes readiness. Exact commit `33bdd109da2f452afb2058ce0d044d10a729c669`, tree `a89963f3e9def2ba65bd43589c87e13a3f4a9b57`, passed this matrix plus the one-shot, indeterminate/no-replay, and R44 regression matrices and Forgejo CI run 122.

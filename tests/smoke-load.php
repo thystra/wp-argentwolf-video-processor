@@ -137,6 +137,7 @@ foreach (
         ArgentVideo\Remote_Asset_Repository::class,
         ArgentVideo\Task_Repository::class,
         ArgentVideo\PeerTube_Upload_Task_Coordinator::class,
+        ArgentVideo\PeerTube_Upload_Failure_Notification::class,
         ArgentVideo\PeerTube_Task_Worker::class,
         ArgentVideo\PeerTube_Task_Worker_Launcher::class,
         ArgentVideo\PeerTube_Remote_Asset_Reconciliation_Service::class,

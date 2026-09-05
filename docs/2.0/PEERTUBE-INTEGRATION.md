@@ -341,16 +341,40 @@ size-derived bound. The adapter still does not advertise staged ingest/server
 push/processing capability, and recurring wake-up remains a later checkpoint.
 
 
-### R45.4b4 failed-upload notification requirement
+### R45.4b4 durable failed-upload notification boundary
 
-A failed or held upload that requires human attention must enqueue a durable
-notification rather than call `wp_mail()` inline from the upload coordinator.
-The intended recipient is the WordPress user who initiated the staged operation,
-falling back to the video post author if that account/email is no longer usable.
-The message must identify the site, post/video, PeerTube backend, failed/held
-state and time, and include the sanitized transport/API error code, HTTP status,
-and retry information when available (including timeout/bandwidth-like transport
-failures), plus a link to the relevant AWVP administrator status surface. It must
-not include bearer/refresh tokens, secret references, filesystem paths, or raw
-remote response bodies. Ordinary retry waits, processing waits, stale-lock
-recovery, and safe runtime-budget yields do not send failure mail.
+R45.4b4 adds a third generic PeerTube task type,
+`peertube_upload_failure_notify`. A terminal/held upload transition that requires
+human attention attempts to enqueue this notification **before** releasing the
+claimed upload/reconciliation task. Its deterministic idempotency domain is:
+
+```text
+sha256("awvp-task:v1:peertube_upload_failure_notify:" + operation_id + ":" + record_revision)
+```
+
+The version-1 payload binds the operation ID and failing operation record revision
+and duplicates only a bounded sanitized failure snapshot: phase/time, confirmed
+and source bytes, last request kind/start/size, AWVP/service status, safe
+transport/API code/classification, HTTP status/retry-after when available, and a
+controlled reason/detail. Access or
+refresh tokens, secret references, filesystem paths, and raw remote response
+bodies are forbidden.
+
+The notification task is owned by `--drain`, not the qualified diagnostic
+`--once` path. Delivery re-reads authoritative upload/post/user state, resolves
+the staged-operation `created_by` user first and current video `post_author` as a
+fallback, then calls `wp_mail()` with site/post/backend/state/progress and the
+sanitized failure details plus the AWVP PeerTube administrator link. A rejected
+or failed mail submission reschedules only the notification task (five total
+claims, delayed retries); it never reopens or replays the upload. Missing usable
+recipients fail only the notification task.
+
+Ordinary upload/reconciliation waits, stale-lock recovery, and safe runtime-budget
+yields do not enqueue failure mail. Transport failures are reduced to controlled
+classifications such as timeout, DNS, connection-refused/reset, or TLS failure.
+For example a cURL timeout retains `curl_28`, the bounded last-request size, and
+a controlled timeout summary rather than the raw cURL diagnostic. The message
+may therefore point toward a stalled or insufficient-throughput network path and
+suggest a smaller configured upload segment after the uncertain state is safely
+reconciled, without persisting arbitrary transport text.
+The existing `upload_indeterminate` no-replay fence remains authoritative.

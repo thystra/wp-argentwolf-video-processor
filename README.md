@@ -123,7 +123,9 @@ drain process uses a size-derived one-hour-to-six-hour safe-boundary budget and
 streamed segment requests use the same size-derived timeout. The detached
 launcher uses `--drain`, but the current R45 development line still does not
 register a recurring PeerTube task scheduler or administrator transfer-launch
-action.
+action. The bounded drain checkpoint is qualified at commit
+`33bdd109da2f452afb2058ce0d044d10a729c669` (Forgejo CI 122 plus its retained
+real-WordPress matrices).
 
 ## Privacy
 
@@ -156,7 +158,12 @@ one-shot media-task path can send an
 explicitly staged source plus the selected private upload metadata only to the
 configured PeerTube origin. Source bytes are transferred through PeerTube's
 resumable protocol using the backend's configured segment policy; no telemetry
-is added. The configured service can observe ordinary HTTP transport metadata,
+is added. A failed/held upload requiring human attention is represented by a
+separate durable local notification task; detached drain execution sends a
+sanitized email through the site's normal WordPress mail path to the initiating
+user, with post-author fallback. The notification excludes credentials, secret
+references, filesystem paths, and raw remote response bodies. The configured
+service can observe ordinary HTTP transport metadata,
 including the WordPress server's network address and the plugin product/version
 User-Agent. Its operator terms and privacy policy apply.
 

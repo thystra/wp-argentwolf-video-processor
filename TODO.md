@@ -235,19 +235,25 @@
   happy/wait, R45 indeterminate/no-replay, and R44 reconciliation Docker matrices
   on those exact clean bytes; feature-branch CI qualification remains recorded
   separately when available.
-- [ ] R45.4b3: qualify the bounded drain mode: detached execution uses `--drain`,
-  reclaims only the same immediately-runnable task or deterministic reconciliation
-  handoff for one operation, never sleeps/polls future work, and yields at a safe
-  request boundary once its size-derived process budget is reached. Guard formula:
-  one minute per 128 MiB, minimum one hour, maximum six hours; streamed request
-  timeout uses the same size-derived bound. Keep `--once` unchanged.
-- [ ] R45.4b4: enqueue a durable failed-upload notification for the initiating
-  WordPress user, falling back to the video post author if necessary. Email must
-  include sanitized failure/held state, PeerTube backend, post/video identity,
-  transport/API error code, HTTP status and retry detail when available, plus an
-  AWVP admin link; never include credentials, raw response bodies, or filesystem
-  paths. Notify only states requiring human attention, not ordinary waits or
-  safe-boundary yields.
+- [x] R45.4b3: qualify bounded drain execution. Exact commit
+  `33bdd109da2f452afb2058ce0d044d10a729c669`, tree
+  `a89963f3e9def2ba65bd43589c87e13a3f4a9b57`, passed Forgejo CI run 122 plus
+  the exact-source drain, one-shot regression, indeterminate/no-replay, and R44
+  reconciliation Docker matrices. `--drain` follows only one logical operation,
+  never sleeps/polls future work, and yields only at a durable boundary under the
+  one-minute-per-128-MiB, one-hour-to-six-hour guard; `--once` remains unchanged.
+- [ ] R45.4b4: qualify the implemented durable failed-upload notification task.
+  `peertube_upload_failure_notify` is idempotent per upload-operation record
+  revision, resolves the initiating WordPress user with post-author fallback,
+  sends only from detached drain execution, and retries rejected `wp_mail()`
+  delivery without replaying upload work. The email contains sanitized
+  failure/held state, backend, post/video identity, progress/last-request size,
+  transport/API code, HTTP status/retry detail when available, and an AWVP admin
+  link; credentials,
+  raw response bodies, secret references, and filesystem paths remain forbidden.
+  Ordinary waits, stale recovery, and safe-boundary yields do not notify. Require
+  focused tests plus exact-source real-WordPress enqueue/delivery/no-replay smoke
+  before marking this checkpoint complete.
 - [ ] R45.5: wire a recurring wake-up only after the detached drain path has a
   real-process qualification gate. WP-Cron must launch detached work, never
   transmit PeerTube media inline.

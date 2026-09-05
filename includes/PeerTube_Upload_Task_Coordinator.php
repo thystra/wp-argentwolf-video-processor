@@ -15,13 +15,15 @@ use Throwable;
  *
  * This class owns no scheduler, worker loop, administrator action, HTTP client,
  * token lifecycle, upload implementation, offset reconciliation, cleanup, or
- * publication policy. A later worker may pass one already-claimed task here;
- * one call advances at most one existing R43 or R44 service boundary.
+ * publication policy. A worker may pass one already-claimed task here; one
+ * call advances at most one existing R43/R44 service boundary or one durable
+ * R45.4b4 failure-notification delivery boundary.
  */
 final class PeerTube_Upload_Task_Coordinator
 {
     public const TASK_UPLOAD_ADVANCE = 'peertube_upload_advance';
     public const TASK_REMOTE_RECONCILE = 'peertube_remote_reconcile';
+    public const TASK_FAILURE_NOTIFY = 'peertube_upload_failure_notify';
     public const PAYLOAD_VERSION = 1;
 
     public const STATUS_REQUEUED = 'requeued';
@@ -46,7 +48,8 @@ final class PeerTube_Upload_Task_Coordinator
         private readonly Task_Repository $tasks,
         callable $operation_reader,
         callable $upload_advance,
-        callable $reconciliation_advance
+        callable $reconciliation_advance,
+        private readonly ?PeerTube_Upload_Failure_Notification $failure_notification = null
     ) {
         $this->operation_reader = Closure::fromCallable($operation_reader);
         $this->upload_advance = Closure::fromCallable($upload_advance);
@@ -92,7 +95,11 @@ final class PeerTube_Upload_Task_Coordinator
         $task_type = $identity['task_type'];
         $lock_token = $identity['lock_token'];
 
-        if (! in_array($task_type, array(self::TASK_UPLOAD_ADVANCE, self::TASK_REMOTE_RECONCILE), true)) {
+        if (! in_array(
+            $task_type,
+            array(self::TASK_UPLOAD_ADVANCE, self::TASK_REMOTE_RECONCILE, self::TASK_FAILURE_NOTIFY),
+            true
+        )) {
             return $this->fail_claimed(
                 $task_id,
                 $task_type,
@@ -100,6 +107,26 @@ final class PeerTube_Upload_Task_Coordinator
                 'Task type is outside the R45 PeerTube coordinator contract.',
                 $now
             );
+        }
+
+        if (self::TASK_FAILURE_NOTIFY === $task_type) {
+            if (null === $this->failure_notification) {
+                $repository_status = $this->tasks->fail(
+                    $task_id,
+                    $lock_token,
+                    'PeerTube failure-notification service is unavailable.',
+                    $now
+                );
+                return self::transition_result(
+                    $repository_status,
+                    self::STATUS_FAILED,
+                    $task_id,
+                    $task_type,
+                    'notification',
+                    0
+                );
+            }
+            return $this->failure_notification->advance_claimed($task, $now);
         }
 
         $payload = self::payload($task['payload_json'] ?? null);
@@ -216,6 +243,7 @@ final class PeerTube_Upload_Task_Coordinator
         }
 
         $service_status = is_string($service['status'] ?? null) ? $service['status'] : '';
+        $service_error = is_array($service['error'] ?? null) ? $service['error'] : array();
         $current = $this->read_operation($operation['operation_id']);
         if (null === $current) {
             return $this->fail_claimed(
@@ -224,7 +252,9 @@ final class PeerTube_Upload_Task_Coordinator
                 $lock_token,
                 'Upload operation could not be re-read after service advancement.',
                 $now,
-                $service_status
+                $service_status,
+                $service_error,
+                $operation
             );
         }
 
@@ -293,7 +323,9 @@ final class PeerTube_Upload_Task_Coordinator
             $lock_token,
             'Upload service stopped at an explicit intervention boundary.',
             $now,
-            $service_status
+            $service_status,
+            $service_error,
+            $current
         );
     }
 
@@ -705,8 +737,24 @@ final class PeerTube_Upload_Task_Coordinator
         string $lock_token,
         string $message,
         int $now,
-        string $service_status = ''
+        string $service_status = '',
+        array $service_error = array(),
+        ?array $operation_override = null
     ): array {
+        $notification = $this->enqueue_failure_notification(
+            $task_id,
+            $task_type,
+            $message,
+            $service_status,
+            $service_error,
+            $now,
+            $operation_override
+        );
+        if ('' !== $notification
+            && ! in_array($notification, array(Task_Repository::APPLIED, Task_Repository::PRESENT), true)) {
+            $message .= ' Failure notification enqueue status: ' . $notification . '.';
+        }
+
         $repository_status = $this->tasks->fail($task_id, $lock_token, $message, $now);
         return self::transition_result(
             $repository_status,
@@ -716,6 +764,43 @@ final class PeerTube_Upload_Task_Coordinator
             $service_status,
             0
         );
+    }
+
+    /** @param array<string,mixed> $service_error @param array<string,mixed>|null $operation_override */
+    private function enqueue_failure_notification(
+        int $task_id,
+        string $task_type,
+        string $message,
+        string $service_status,
+        array $service_error,
+        int $now,
+        ?array $operation_override = null
+    ): string {
+        if (null === $this->failure_notification || self::TASK_FAILURE_NOTIFY === $task_type) {
+            return '';
+        }
+
+        $operation = is_array($operation_override)
+            && PeerTube_Staged_Upload_State_Machine::valid($operation_override)
+            ? $operation_override
+            : null;
+        if (null === $operation) {
+            $task = $this->tasks->find($task_id);
+            $payload = is_array($task) ? self::payload($task['payload_json'] ?? null) : null;
+            $operation = is_array($payload) ? $this->read_operation($payload['operation_id']) : null;
+        }
+        if (! is_array($operation)) {
+            return '';
+        }
+
+        $queued = $this->failure_notification->enqueue(
+            $operation,
+            $message,
+            $service_status,
+            $service_error,
+            $now
+        );
+        return is_string($queued['status'] ?? null) ? $queued['status'] : Task_Repository::INDETERMINATE;
     }
 
     /** @return array{status:string,task_id:int,task_type:string,service_status:string,repository_status:string,run_after:int} */
@@ -729,6 +814,16 @@ final class PeerTube_Upload_Task_Coordinator
         string $service_status = ''
     ): array {
         $repository_status = $this->tasks->reschedule($task_id, $lock_token, $run_after, $message, $now);
+        if (Task_Repository::EXHAUSTED === $repository_status) {
+            $this->enqueue_failure_notification(
+                $task_id,
+                $task_type,
+                'Task attempt limit reached while: ' . $message,
+                $service_status,
+                array(),
+                $now
+            );
+        }
         $success = Task_Repository::EXHAUSTED === $repository_status ? self::STATUS_FAILED : self::STATUS_REQUEUED;
         return self::transition_result(
             $repository_status,

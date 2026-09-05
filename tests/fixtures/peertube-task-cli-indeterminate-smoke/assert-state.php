@@ -60,20 +60,87 @@ $tasks = $wpdb->get_results(
     $wpdb->prepare("SELECT * FROM %i WHERE video_post_id = %d ORDER BY id ASC", $task_table, (int) $record['video_post_id']),
     ARRAY_A
 );
-$assert(is_array($tasks) && 1 === count($tasks), 'R45 indeterminate smoke created a task outside the original upload task.');
-$task = $tasks[0];
+$assert(is_array($tasks) && 2 === count($tasks), 'R45 indeterminate smoke did not retain exactly the upload task plus one failure-notification task.');
+$upload_task = null;
+$notification_task = null;
+foreach ($tasks as $candidate) {
+    if (PeerTube_Upload_Task_Coordinator::TASK_UPLOAD_ADVANCE === ($candidate['task_type'] ?? null)) {
+        $upload_task = $candidate;
+    } elseif (PeerTube_Upload_Task_Coordinator::TASK_FAILURE_NOTIFY === ($candidate['task_type'] ?? null)) {
+        $notification_task = $candidate;
+    }
+}
+$assert(is_array($upload_task), 'R45 indeterminate upload task is missing.');
 $assert(
-    PeerTube_Upload_Task_Coordinator::TASK_UPLOAD_ADVANCE === ($task['task_type'] ?? null)
-        && Task_Repository::STATUS_FAILED === ($task['status'] ?? null)
-        && 2 === (int) ($task['attempts'] ?? 0)
-        && null === ($task['lock_token'] ?? null)
-        && null === ($task['locked_at'] ?? null)
-        && str_contains((string) ($task['error_message'] ?? ''), 'explicit intervention'),
+    Task_Repository::STATUS_FAILED === ($upload_task['status'] ?? null)
+        && 2 === (int) ($upload_task['attempts'] ?? 0)
+        && null === ($upload_task['lock_token'] ?? null)
+        && null === ($upload_task['locked_at'] ?? null)
+        && str_contains((string) ($upload_task['error_message'] ?? ''), 'explicit intervention'),
     'R45 indeterminate upload task was not terminally held after exactly two one-shot claims.'
 );
-$serialized = serialize(array($task['payload_json'] ?? null, $task['error_message'] ?? null));
-foreach (array('r37-success-access-token-canary', 'r37-success-refresh-token-canary') as $canary) {
-    $assert(! str_contains($serialized, $canary), 'R45 indeterminate task persistence retained plaintext managed credential material.');
+$assert(is_array($notification_task), 'R45 indeterminate failure did not enqueue its durable notification task.');
+$assert(
+    Task_Repository::STATUS_COMPLETE === ($notification_task['status'] ?? null)
+        && 1 === (int) ($notification_task['attempts'] ?? 0)
+        && null === ($notification_task['lock_token'] ?? null)
+        && null === ($notification_task['locked_at'] ?? null)
+        && null !== ($notification_task['completed_at'] ?? null)
+        && null === ($notification_task['error_message'] ?? null),
+    'R45 indeterminate failure notification was not durably delivered exactly once by detached drain execution.'
+);
+$notification_payload = json_decode((string) ($notification_task['payload_json'] ?? ''), true);
+$assert(
+    is_array($notification_payload)
+        && 1 === ($notification_payload['version'] ?? null)
+        && ($record['operation_id'] ?? null) === ($notification_payload['operation_id'] ?? null)
+        && 'upload_indeterminate' === ($notification_payload['failure']['state'] ?? null)
+        && 'peertube.upload.indeterminate' === ($notification_payload['failure']['awvp_error_code'] ?? null),
+    'R45 indeterminate notification payload did not preserve the bounded failed-state snapshot.'
+);
+$captured_mail = get_option('awvp_r45_failure_mail_capture', null);
+$assert(is_array($captured_mail), 'R45 indeterminate smoke did not capture the durable failure email.');
+$assert('awvp@example.invalid' === ($captured_mail['to'] ?? null), 'R45 failure email did not target the initiating WordPress user.');
+$assert(
+    is_string($captured_mail['subject'] ?? null)
+        && str_contains($captured_mail['subject'], 'PeerTube upload requires attention')
+        && str_contains($captured_mail['subject'], 'R45 one-shot CLI smoke'),
+    'R45 failure email subject did not identify the failed video.'
+);
+$mail_body = is_string($captured_mail['message'] ?? null) ? $captured_mail['message'] : '';
+foreach (array(
+    'Video: R45 one-shot CLI smoke (#' . (int) $record['video_post_id'] . ')',
+    'Upload operation: ' . (string) $record['operation_id'],
+    'PeerTube backend: r38-admin (http://peertube.test:9000)',
+    'State: upload_indeterminate',
+    'AWVP error code: peertube.upload.indeterminate',
+    'Last upload request: chunk at byte 0 for 16 bytes',
+    'Service status: indeterminate',
+    'Error classification:',
+    'Transport/API code:',
+    'AWVP PeerTube settings:',
+) as $expected_mail_fragment) {
+    $assert(str_contains($mail_body, $expected_mail_fragment), 'R45 failure email omitted bounded diagnostic context: ' . $expected_mail_fragment);
+}
+$assert(
+    str_contains($mail_body, 'network transport boundary') || str_contains($mail_body, 'definitive response'),
+    'R45 failure email did not include its controlled network/transport diagnostic detail.'
+);
+
+$serialized = serialize(array(
+    $upload_task['payload_json'] ?? null,
+    $upload_task['error_message'] ?? null,
+    $notification_task['payload_json'] ?? null,
+    $notification_task['error_message'] ?? null,
+    $captured_mail,
+));
+foreach (array(
+    'r37-success-access-token-canary',
+    'r37-success-refresh-token-canary',
+    '/var/www/html',
+    '/wp-content/uploads/',
+) as $canary) {
+    $assert(! str_contains($serialized, $canary), 'R45 indeterminate notification persistence/mail retained forbidden credential or filesystem material.');
 }
 
 $remote_table = $wpdb->prefix . Model_Activator::REMOTE_ASSETS_TABLE;

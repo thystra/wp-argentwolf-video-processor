@@ -1449,3 +1449,9 @@ logical operation. The detached launcher uses `--drain` but is not yet wired to
 cron/admin. Safe-boundary process and streamed-request guards scale from one hour
 to six hours according to source/segment size; saving this settings form never
 launches transfer work.
+
+R45.4b4 does not add another connection-form or credential action. Failure mail
+is queued only from the already-claimed media task boundary and delivered later
+by `--drain` through WordPress `wp_mail()`. It resolves the operation initiator
+first and post author as fallback, uses only sanitized failure metadata, and does
+not contact PeerTube while sending the notification.

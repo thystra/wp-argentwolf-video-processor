@@ -28,6 +28,7 @@ require_once dirname(__DIR__) . '/includes/PeerTube_Staged_Upload_Guard.php';
 require_once dirname(__DIR__) . '/includes/PeerTube_Staged_Upload_State_Machine.php';
 require_once dirname(__DIR__) . '/includes/PeerTube_Staged_Upload_Operation_Store.php';
 require_once dirname(__DIR__) . '/includes/PeerTube_Staged_Upload_Api.php';
+require_once dirname(__DIR__) . '/includes/PeerTube_Api_Error.php';
 require_once dirname(__DIR__) . '/includes/PeerTube_Staged_Upload_Service.php';
 
 use ArgentVideo\Backend_Registry;

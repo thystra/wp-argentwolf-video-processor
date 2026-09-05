@@ -761,5 +761,12 @@ administrator launch action. Drain/process and streamed-request guards scale at
 one minute per 128 MiB with a one-hour floor and six-hour ceiling; the worker
 observes its deadline only at safe durable request boundaries. PeerTube
 staged-ingest/server-push/processing capability advertisement remains false until
-a later production scheduling checkpoint is qualified. Durable user notification
-for upload failures is the separately reviewed R45.4b4 boundary.
+a later production scheduling checkpoint is qualified.
+
+R45.4b4 adds a separate durable notification branch without expanding media
+transport authority. Human-attention upload failures enqueue
+`peertube_upload_failure_notify`; `--drain` may claim that type, resolve the
+initiating WordPress user (post-author fallback), and call `wp_mail()` with a
+bounded sanitized snapshot. Mail retry affects only the notification task and
+cannot cause upload replay. The `--once` task-type set remains upload/reconcile
+only, preserving its qualified no-replay diagnostic behavior.

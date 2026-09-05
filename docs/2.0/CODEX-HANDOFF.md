@@ -1648,13 +1648,20 @@ runnable task and then that operation's deterministic reconciliation handoff,
 never unrelated queue work. It never sleeps or polls a future `run_after`. Both
 process budget and streamed-request timeout use one minute per 128 MiB with a
 one-hour floor and six-hour ceiling; process deadline is checked only after a
-remote request reaches a durable boundary. The detached launcher now targets
-`--drain` but remains not cron-wired. This checkpoint must receive focused and
-real-process qualification before R45.5 adds recurring wake-up.
+remote request reaches a durable boundary. Exact commit
+`33bdd109da2f452afb2058ce0d044d10a729c669`, tree
+`a89963f3e9def2ba65bd43589c87e13a3f4a9b57`, passed Forgejo CI run 122 plus
+exact-source drain, one-shot, indeterminate/no-replay, and R44 regression Docker
+matrices. The detached launcher now targets `--drain` but remains not cron-wired.
 
-R45.4b4 is the next separate failure-notification boundary: a terminal/held
-upload requiring human attention must enqueue durable email to the initiating
-WordPress user (fallback post author), including sanitized state, backend,
-transport/API error code, HTTP status/retry information when available, and an
-AWVP admin link. Ordinary waits and safe budget yields do not notify. Secrets,
-filesystem paths, and raw remote bodies must never be included.
+R45.4b4 adds the separate `peertube_upload_failure_notify` task. Human-attention
+upload failures/holds enqueue a deterministic notification keyed by operation ID
+and failure record revision; `--drain` resolves the initiating WordPress user
+(fallback post author) and sends sanitized site/post/backend/state/progress,
+last-request size, transport/API code/classification, HTTP/retry detail when
+available, and the AWVP admin link. Timeout mail may suggest a smaller segment
+only after the uncertain upload state is safely reconciled. Rejected mail is
+durably retried without touching upload state.
+Ordinary waits and safe budget yields do not notify. Secrets, filesystem paths,
+and raw remote bodies must never be included. This checkpoint still requires its
+own exact-source real-WordPress enqueue/delivery qualification before R45.5.
