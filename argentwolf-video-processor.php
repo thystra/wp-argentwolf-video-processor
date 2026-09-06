@@ -79,6 +79,8 @@ require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Upload_Task_Coordinator.php';
 require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Task_Worker.php';
 require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Task_Worker_Launcher.php';
 require_once ARGENT_VIDEO_DIR . 'includes/Video_Post_Type.php';
+require_once ARGENT_VIDEO_DIR . 'includes/Video_Destination.php';
+require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Publication_Plan.php';
 require_once ARGENT_VIDEO_DIR . 'includes/Video_Meta.php';
 require_once ARGENT_VIDEO_DIR . 'includes/Activator.php';
 require_once ARGENT_VIDEO_DIR . 'includes/Job_Repository.php';

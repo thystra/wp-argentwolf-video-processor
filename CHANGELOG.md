@@ -87,6 +87,15 @@
   `peertube-task-worker --drain --quiet` launcher; it performs no PeerTube HTTP
   inline, adds no second scheduler, and adds no administrator transfer-launch
   surface.
+- Begin R46 destination/publication modeling without enabling editor or remote
+  publication mutation. Missing legacy destination metadata resolves permanently
+  to WordPress/local rather than the current site default; malformed present
+  destination state fails closed. Add a versioned per-video PeerTube publication
+  plan with independent explicitly reviewed tags (maximum five), title/Markdown
+  description, channel, support selection, provider vocabulary IDs, comments,
+  sensitive-content/moderation and embed-domain policy, dispatch timing, and a
+  WordPress-authoritative release policy. Remote readiness remains distinct from
+  editorial metadata readiness and does not block WordPress publication.
 - Expand focused PeerTube security/state tests and isolated real-WordPress Docker
   development matrices through the R39 identity/destination checkpoint, with an
   R40 activation continuation that proves activation performs no additional

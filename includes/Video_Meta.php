@@ -16,6 +16,7 @@ final class Video_Meta
     public const MASTER_AUTHORITY = '_argent_video_master_authority';
     public const SOURCE_STATE = '_argent_video_source_state';
     public const DESTINATION = '_argent_video_destination';
+    public const PEERTUBE_PUBLICATION_PLAN = '_argent_video_peertube_publication_plan';
     public const PROFILE_SNAPSHOT = '_argent_video_profile_snapshot';
     public const PUBLICATION_POLICY = '_argent_video_publication_policy';
     public const METADATA_ORIGIN = '_argent_video_metadata_origin';
@@ -66,6 +67,10 @@ final class Video_Meta
             self::DESTINATION => $base + array(
                 'type'              => 'array',
                 'sanitize_callback' => array(self::class, 'sanitize_destination'),
+            ),
+            self::PEERTUBE_PUBLICATION_PLAN => $base + array(
+                'type'              => 'array',
+                'sanitize_callback' => array(self::class, 'sanitize_peertube_publication_plan'),
             ),
             self::PROFILE_SNAPSHOT => $base + array(
                 'type'              => 'array',
@@ -157,29 +162,13 @@ final class Video_Meta
     /** @return array<string, mixed> */
     public static function sanitize_destination(mixed $value): array
     {
-        if (! is_array($value)) {
-            return array();
-        }
+        return Video_Destination::sanitize($value);
+    }
 
-        $backend_id = self::sanitize_backend_id($value['backend_id'] ?? '');
-        if ('' === $backend_id) {
-            return array();
-        }
-
-        $result = array(
-            'version'    => max(1, absint($value['version'] ?? 1)),
-            'backend_id' => $backend_id,
-        );
-
-        if (array_key_exists('channel_id', $value)) {
-            $channel_id = self::sanitize_remote_identifier($value['channel_id'], 191);
-            if ('' === $channel_id) {
-                return array();
-            }
-            $result['channel_id'] = $channel_id;
-        }
-
-        return $result;
+    /** @return array<string, mixed> */
+    public static function sanitize_peertube_publication_plan(mixed $value): array
+    {
+        return PeerTube_Publication_Plan::sanitize($value);
     }
 
     /** @return array<string|int, mixed> */

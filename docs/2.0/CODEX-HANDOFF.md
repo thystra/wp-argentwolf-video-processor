@@ -1673,3 +1673,20 @@ second scheduler and no browser/admin launch surface. The callback performs the
 due/stale owned-task probe and detached `--drain --quiet` launch only; R43/R44
 services and the task coordinator/worker remain constructed strictly behind the
 `WP_CLI` guard. Capability bits remain false pending R45.6.
+
+
+## R46 destination/publication model handoff
+
+The revised R46 contract is `docs/2.0/VIDEO-DESTINATION-PUBLICATION.md`.
+R46.1 is intentionally a model-only checkpoint: canonical destination binding,
+legacy missing-destination => local resolution, and strict editable PeerTube
+publication-plan validation/review state. Do not add site defaults, block/editor
+surfaces, migration, post-status hooks, remote privacy mutation, serving cutover,
+or cleanup to this checkpoint.
+
+The exact R45.5 candidate immediately below R46 is commit
+`07259b927b7cd7ff393807777cf23de4f64c0795`, tree
+`7ec2177ded8d522ceaf8e6911194a8085d25aed2`. Its dedicated cron-wiring matrix and
+retained drain, indeterminate/notification/no-replay, one-shot, and R44 matrices
+passed on exact clean bytes; feature push/integration CI closure should be
+recorded separately before release claims.

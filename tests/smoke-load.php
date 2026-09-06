@@ -86,6 +86,12 @@ if (
     exit(1);
 }
 
+if (! class_exists(ArgentVideo\Video_Destination::class, false)
+    || ! class_exists(ArgentVideo\PeerTube_Publication_Plan::class, false)) {
+    fwrite(STDERR, "Plugin smoke load missed required R46 destination/publication model classes.\n");
+    exit(1);
+}
+
 if (! interface_exists(ArgentVideo\PeerTube_Password_Grant_Api::class, false)) {
     fwrite(STDERR, "Plugin smoke load missed required R37 interface " . ArgentVideo\PeerTube_Password_Grant_Api::class . ".\n");
     exit(1);

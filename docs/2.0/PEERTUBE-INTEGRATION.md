@@ -400,3 +400,14 @@ may therefore point toward a stalled or insufficient-throughput network path and
 suggest a smaller configured upload segment after the uncertain state is safely
 reconciled, without persisting arbitrary transport text.
 The existing `upload_indeterminate` no-replay fence remains authoritative.
+
+
+## R46 publication lifecycle refinement
+
+The R46 contract separates editorial metadata readiness from remote media
+readiness. PeerTube tags are independent of WordPress tags and require explicit
+review. Early or scheduled remote preparation stays private; the actual
+WordPress publication transition authorizes a durable visibility change. The
+WordPress/local copy remains playable until remote readiness and final intended
+privacy are verified, so PeerTube processing does not block post publication.
+See `VIDEO-DESTINATION-PUBLICATION.md`.

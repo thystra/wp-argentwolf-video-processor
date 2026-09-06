@@ -700,3 +700,13 @@ surface is bounded and sanitized; credential values, secret references,
 filesystem paths, and raw remote bodies are not copied into mail. PeerTube
 network I/O is not performed by notification delivery. PeerTube ingest/processing
 capabilities remain false pending later production scheduling qualification.
+
+
+## R46 WordPress publication boundary
+
+R46 may validate unresolved required PeerTube editorial decisions before a post
+publishes, but must not block publication merely because PeerTube is uploading or
+processing. Post-status callbacks may enqueue durable remote work only; they must
+not perform PeerTube HTTP inline. Scheduled timestamps alone do not authorize
+public remote reveal: the actual WordPress publication transition is the default
+authority. See `VIDEO-DESTINATION-PUBLICATION.md`.

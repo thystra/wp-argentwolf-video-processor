@@ -392,3 +392,15 @@ perform consequential network I/O in the cron callback, and do not let future
 `run_after` rows spawn idle workers. AWVP R45.5 applies this pattern by adding the
 PeerTube launcher as a second callback on `argent_video_processor_dispatch`; the
 actual upload/reconciliation/mail services remain behind the WP-CLI guard.
+
+
+## 2.0 R46 destination/publication workflow
+
+The current R46 contract is `docs/2.0/VIDEO-DESTINATION-PUBLICATION.md`. Existing
+1.x videos with no destination metadata remain WordPress/local even if the site
+default later changes. PeerTube tags and moderation are explicit per-video
+publication decisions. After metadata review an author may send immediately or
+wait until the post is scheduled/published; early remote copies stay private and
+WordPress publication authorizes later reveal. Remote readiness never blocks the
+post: AWVP serves local until verified PeerTube cutover. Migration is explicit,
+local-first during transfer, and logically one-way after cutover.

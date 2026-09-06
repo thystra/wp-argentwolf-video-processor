@@ -206,11 +206,40 @@ This field does not by itself authorize deletion.
 
 ### `_argent_video_destination`
 
-Versioned structured snapshot containing the desired backend ID and
+Versioned structured snapshot containing the desired backend ID and optional
 backend-specific channel/destination ID.
 
-This is the destination selected for this video, not proof that a remote asset
-exists there.
+R46 makes the local backend an explicit canonical destination. For upgrade
+safety, **absence** of this metadata on an existing/legacy video resolves to
+WordPress/local and is never replaced by a later site-default change. A malformed
+present value is invalid and must not silently fall back to the current default.
+
+This is the selected final destination, not proof that a remote asset exists
+there and not proof that it is already the serving authority. A PeerTube-bound
+video may continue serving its local copy until the remote copy and intended
+publication state have been positively verified.
+
+### `_argent_video_peertube_publication_plan`
+
+R46 versioned editable per-video PeerTube publication intent. It is separate from
+WordPress post taxonomy and from the immutable upload-operation snapshot that a
+later tranche will freeze at dispatch time.
+
+The R46.1 plan contains backend/channel, title, Markdown description, up to five
+PeerTube tags, support selection/custom Markdown, opaque provider privacy/licence/
+category identifiers, language, optional thumbnail attachment, download policy, optional
+original-publication timestamp, comments policy,
+sensitive-content/moderation review, embed-domain policy, dispatch policy,
+release policy, and the controlling WordPress post ID.
+
+Required review state is explicit. In particular, an empty PeerTube tag list is
+valid only when `tags` review is true; WordPress tags do not make that decision.
+The initial release policy is `when_wordpress_published`, allowing early private
+remote preparation while making actual WordPress publication authoritative for
+later reveal.
+
+R46.1 does not enable site defaults, editor controls, migration, remote privacy
+mutation, or serving cutover.
 
 ### `_argent_video_profile_snapshot`
 

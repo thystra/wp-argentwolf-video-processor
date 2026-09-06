@@ -92,6 +92,15 @@ PeerTube backends also expose an upload-segment tuning control: the default is
 and the accepted range is 0–8192 MiB. Saving this policy does not itself start a
 transfer.
 
+The R46 development plan treats video destination and PeerTube publication
+metadata as explicit per-video state. Existing/legacy videos with no destination
+metadata resolve to WordPress/local regardless of later site-default changes.
+PeerTube-bound videos retain a local serving fallback until remote readiness and
+the intended visibility are verified. PeerTube tags are reviewed independently
+from WordPress post tags, and early/scheduled uploads remain private on PeerTube
+until the WordPress post actually reaches its publication state. See
+`docs/2.0/VIDEO-DESTINATION-PUBLICATION.md` for the frozen development contract.
+
 ## WP-CLI
 
 ```bash

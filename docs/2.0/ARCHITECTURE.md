@@ -775,3 +775,29 @@ initiating WordPress user (post-author fallback), and call `wp_mail()` with a
 bounded sanitized snapshot. Mail retry affects only the notification task and
 cannot cause upload replay. The `--once` task-type set remains upload/reconcile
 only, preserving its qualified no-replay diagnostic behavior.
+
+
+## R46 destination/publication and migration refinement
+
+R46 refines the earlier destination/publication sketches with these binding
+rules:
+
+- a missing legacy per-video destination means WordPress/local forever unless an
+  explicit migration changes it; site-default changes affect only new authoring;
+- one AWVP block selects a final destination; separate Local/PeerTube block types
+  are not required;
+- PeerTube publication metadata, especially the maximum-five tag set, is reviewed
+  independently from WordPress post metadata;
+- unresolved required editorial metadata may block post publication, but remote
+  upload/transcoding/readiness never does; local playback remains available until
+  verified cutover;
+- authors choose `Send now` or `Send when scheduled or published` after review;
+- early/scheduled PeerTube preparation remains private, and actual WordPress
+  publication is authoritative for later remote reveal;
+- post-status hooks enqueue durable visibility work only and perform no remote HTTP
+  inline;
+- existing-video migration is explicit, local-first during transfer, and logically
+  one-way after verified cutover; local retention is a separate policy.
+
+The full frozen contract and checkpoint sequence live in
+`docs/2.0/VIDEO-DESTINATION-PUBLICATION.md`.

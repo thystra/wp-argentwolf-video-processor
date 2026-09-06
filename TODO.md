@@ -251,13 +251,59 @@
   sends only from detached drain execution, retries rejected `wp_mail()` without
   replaying upload work, and excludes credentials, raw response bodies, secret
   references, and filesystem paths.
-- [ ] R45.5: recurring production wake-up is implemented in the current tree by
-  registering the reviewed `PeerTube_Task_Worker_Launcher` on the existing
-  five-minute `argent_video_processor_dispatch` event. The callback performs only
-  the due/stale owned-task probe and detached `--drain` launch; it adds no second
-  scheduler, browser/admin launch surface, or inline PeerTube HTTP. Require
-  focused wiring tests, retained exact-source Docker regressions, feature-branch
-  CI, then merge qualification before marking complete.
+- [ ] R45.5: recurring production wake-up exact candidate
+  `07259b927b7cd7ff393807777cf23de4f64c0795`, tree
+  `7ec2177ded8d522ceaf8e6911194a8085d25aed2`, passed the dedicated cron-wiring
+  WordPress matrix plus the retained drain, indeterminate/notification/no-replay,
+  one-shot, and R44 matrices on exact clean bytes. It registers the reviewed
+  `PeerTube_Task_Worker_Launcher` on the existing five-minute
+  `argent_video_processor_dispatch` event; the callback performs only the
+  due/stale owned-task probe and detached `--drain` launch, with no second
+  scheduler, browser/admin launch surface, or inline PeerTube HTTP. Feature-branch
+  CI and integration qualification remain before final closure.
 - [ ] R45.6: consider enabling PeerTube ingest/processing capability bits only
   after the production-reachable execution/scheduling path is separately
   reviewed and qualified.
+
+
+### R46 video destination, publication metadata, and migration
+
+- [x] R46 design contract: changing the site default applies only to newly
+  authored videos. Missing legacy destination metadata resolves to WordPress/local
+  permanently; existing videos are never rerouted merely because the site default
+  changes. One AWVP video block will expose a per-video destination override.
+- [x] R46 design contract: PeerTube video tags are independent from WordPress post
+  tags and require explicit review, including an explicit reviewed zero-tag state;
+  no more than five PeerTube tags may be selected.
+- [x] R46 design contract: PeerTube publication metadata includes title, Markdown
+  description, channel, support selection/presets, final privacy, licence,
+  category, language, optional cover/thumbnail, comments policy, sensitive-content
+  declaration/classification, and optional embed-domain restriction. Captions and
+  chapters are deferred unless a later implementation makes them a small additive
+  extension.
+- [x] R46 design contract: unresolved required editorial metadata may block
+  WordPress publication, but PeerTube upload/transcoding/readiness does not. The
+  local file remains the serving fallback until the remote copy and intended
+  visibility are verified.
+- [x] R46 design contract: after metadata review the author can choose `Send now`
+  or `Send when scheduled or published`. Scheduling may start an early private
+  PeerTube upload, but public reveal is authorized by the actual WordPress post
+  publication transition, not merely the scheduled timestamp.
+- [x] R46 design contract: local-to-PeerTube migration is explicit and logically
+  one-way. The wizard supports individual/select-all planning, per-video metadata
+  review/Needs Review, local-first serving during migration, verified cutover, and
+  separately configured post-cutover retention. WordPress/blog storage is not the
+  archival master.
+- [ ] R46.1: qualify the destination/publication-plan model foundation. Add the
+  canonical legacy-local destination resolver and strict per-video PeerTube
+  publication-plan persistence/review contract, but no site default, block UI,
+  migration, post-status hooks, visibility mutation, serving cutover, or cleanup.
+- [ ] R46.2: site/backend publishing defaults and reusable support presets.
+- [ ] R46.3: one-block destination/publication wizard and explicit review UX.
+- [ ] R46.4: editorial publish validation for unresolved required metadata only.
+- [ ] R46.5: private prepublication visibility and durable WordPress-authoritative
+  reveal/schedule synchronization.
+- [ ] R46.6: local-first serving and verified remote cutover.
+- [ ] R46.7: existing-video migration planner / Needs Review workflow.
+- [ ] R46.8: one-way local-to-PeerTube migration execution.
+- [ ] R46.9: post-cutover local retention/cleanup policy.

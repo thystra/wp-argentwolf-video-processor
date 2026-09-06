@@ -44,6 +44,7 @@ jobs:
       - name: Run tests
         run: |
           php tests/model-persistence.php
+          php tests/video-destination-publication-plan.php
           php tests/task-repository.php
           php tests/peertube-upload-task-coordinator.php
           php tests/peertube-upload-failure-notification.php

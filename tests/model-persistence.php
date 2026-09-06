@@ -82,6 +82,9 @@ function update_option(string $option, mixed $value, ?bool $autoload = null): bo
 }
 
 require_once dirname(__DIR__) . '/includes/Backend_Identity.php';
+require_once dirname(__DIR__) . '/includes/Backend_Registry.php';
+require_once dirname(__DIR__) . '/includes/Video_Destination.php';
+require_once dirname(__DIR__) . '/includes/PeerTube_Publication_Plan.php';
 require_once dirname(__DIR__) . '/includes/Model_Activator.php';
 require_once dirname(__DIR__) . '/includes/Video_Post_Type.php';
 require_once dirname(__DIR__) . '/includes/Video_Meta.php';
@@ -128,6 +131,7 @@ $expected_meta = array(
     Video_Meta::MASTER_AUTHORITY,
     Video_Meta::SOURCE_STATE,
     Video_Meta::DESTINATION,
+    Video_Meta::PEERTUBE_PUBLICATION_PLAN,
     Video_Meta::PROFILE_SNAPSHOT,
     Video_Meta::PUBLICATION_POLICY,
     Video_Meta::METADATA_ORIGIN,
@@ -178,6 +182,12 @@ $destination = Video_Meta::sanitize_destination(
 );
 $assert('home-pt' === ($destination['backend_id'] ?? ''), 'Canonical backend ID was not retained.');
 $assert('travel' === ($destination['channel_id'] ?? ''), 'Canonical channel ID was not retained.');
+
+$assert(
+    array('version' => 1, 'backend_id' => 'local')
+        === Video_Meta::sanitize_destination(array('version' => 1, 'backend_id' => 'local')),
+    'Canonical local destination was not retained.'
+);
 
 $assert(
     array() === Video_Meta::sanitize_destination(

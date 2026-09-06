@@ -651,3 +651,13 @@ retained Docker matrices. R45.4b4 failure notification is qualified at
 `7f938a05c446e000b0d45db76e03e703432a10dc` with CI run 123. Capability
 advertisement remains unchanged until R45.6 is separately reviewed and
 qualified.
+
+
+## R46 destination/publication note
+
+Backend eligibility/defaults do not constitute an existing video's destination.
+R46 resolves missing legacy per-video destination metadata to `local`; future
+site defaults apply only when authoring a new video. Provider publication
+vocabularies (channel/privacy/licence/category and later capability-dependent
+fields) are resolved against the selected backend, while the per-video plan
+retains exact provider IDs. See `VIDEO-DESTINATION-PUBLICATION.md`.
