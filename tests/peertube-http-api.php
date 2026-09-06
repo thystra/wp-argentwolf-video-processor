@@ -177,6 +177,8 @@ namespace ArgentVideo {
     require_once dirname(__DIR__) . '/includes/PeerTube_Token_Lifecycle_Api.php';
     require_once dirname(__DIR__) . '/includes/PeerTube_Staged_Upload_Api.php';
     require_once dirname(__DIR__) . '/includes/PeerTube_Remote_Reconciliation_Api.php';
+    require_once dirname(__DIR__) . '/includes/PeerTube_Publication_Catalog_Api.php';
+    require_once dirname(__DIR__) . '/includes/PeerTube_Publication_Catalog.php';
     require_once dirname(__DIR__) . '/includes/PeerTube_Staged_Upload_State_Machine.php';
     require_once dirname(__DIR__) . '/includes/PeerTube_Api_Client.php';
 
@@ -249,6 +251,7 @@ namespace ArgentVideo {
     foreach (
         array(
             static fn (): array => $http->get_account_channels('user@remote.example', 0, 100),
+            static fn (): array => $http->get_publication_vocabulary('unreviewed-kind'),
             static fn (): array => $http->post_password_token(
                 array(
                     'client_id'     => 'client-id',
@@ -1138,6 +1141,63 @@ namespace ArgentVideo {
             'Channel page did not use the reviewed 2 MiB response bound.'
         );
     }
+
+    // R46.3a: publication-choice discovery is bounded and sends the bearer only
+    // to the current-user identity endpoint. All provider vocabularies are public.
+    $before_bad_catalog_token = count($GLOBALS['awvp_http_requests']);
+    $bad_catalog_token = $api->publication_catalog("token\r\nInjected: yes");
+    $assert(false === $bad_catalog_token['ok'], 'Unsafe publication-catalog bearer was accepted.');
+    $assert('publication_catalog_token_invalid' === $bad_catalog_token['error']['code'], 'Unsafe publication-catalog bearer returned the wrong diagnostic.');
+    $assert($before_bad_catalog_token === count($GLOBALS['awvp_http_requests']), 'Unsafe publication-catalog bearer performed HTTP.');
+
+    $queue_identity();
+    $queue($response(200, json_encode(array('total'=>1,'data'=>array($channel(7))), JSON_THROW_ON_ERROR), array('Content-Type'=>'application/json')));
+    $queue($response(200, json_encode(array('serverVersion'=>'8.2.0','nsfwFlagsSettings'=>array('enabled'=>true)), JSON_THROW_ON_ERROR), array('Content-Type'=>'application/json')));
+    $queue($response(200, json_encode(array('1'=>'Public','2'=>'Unlisted','3'=>'Private','4'=>'Internal','5'=>'Password protected'), JSON_THROW_ON_ERROR), array('Content-Type'=>'application/json')));
+    $queue($response(200, json_encode(array('1'=>'Attribution','9'=>'All Rights Reserved'), JSON_THROW_ON_ERROR), array('Content-Type'=>'application/json')));
+    $queue($response(200, json_encode(array('1'=>'Music','15'=>'Science & Technology'), JSON_THROW_ON_ERROR), array('Content-Type'=>'application/json')));
+    $queue($response(200, json_encode(array('en'=>'English','fr'=>'French','_unknown'=>'Unknown'), JSON_THROW_ON_ERROR), array('Content-Type'=>'application/json')));
+    $before_publication = count($GLOBALS['awvp_http_requests']);
+    $publication = $api->publication_catalog($access_sentinel);
+    $assert(true === $publication['ok'], 'R46.3a publication catalog discovery failed.');
+    $assert(
+        array('server_version','channels','privacies','licences','categories','languages','capabilities') === array_keys($publication['data']),
+        'Publication catalog exposed an unreviewed top-level field.'
+    );
+    $assert('8.2.0' === $publication['data']['server_version'], 'Publication catalog version mismatch.');
+    $assert('7' === $publication['data']['channels'][0]['id'], 'Publication catalog channel mismatch.');
+    $assert('Private' === $publication['data']['privacies']['3'], 'Publication privacy vocabulary mismatch.');
+    $assert(true === $publication['data']['capabilities']['sensitive_flags'], 'NSFW flag capability was not projected.');
+    $assert(true === $publication['data']['capabilities']['password_privacy'], 'Password privacy discovery mismatch.');
+    $publication_requests = array_slice($GLOBALS['awvp_http_requests'], $before_publication);
+    $assert(7 === count($publication_requests), 'Publication catalog used an unexpected request count.');
+    $assert('https://video.example.org/api/v1/users/me' === $publication_requests[0]['url'], 'Publication catalog identity request mismatch.');
+    $assert('Bearer ' . $access_sentinel === $publication_requests[0]['args']['headers']['Authorization'], 'Publication identity request omitted bearer.');
+    foreach (array_slice($publication_requests, 1) as $public_request) {
+        $assert(! isset($public_request['args']['headers']['Authorization']), 'Publication public discovery leaked bearer state.');
+        $assert(! isset($public_request['args']['body']), 'Publication read-only discovery unexpectedly sent a body.');
+        $assert('GET' === $public_request['args']['method'], 'Publication discovery used a non-GET method.');
+    }
+    $assert(str_ends_with($publication_requests[2]['url'], '/api/v1/config'), 'Publication config request mismatch.');
+    $assert(str_ends_with($publication_requests[3]['url'], '/api/v1/videos/privacies'), 'Publication privacy request mismatch.');
+    $assert(str_ends_with($publication_requests[4]['url'], '/api/v1/videos/licences'), 'Publication licence request mismatch.');
+    $assert(str_ends_with($publication_requests[5]['url'], '/api/v1/videos/categories'), 'Publication category request mismatch.');
+    $assert(str_ends_with($publication_requests[6]['url'], '/api/v1/videos/languages'), 'Publication language request mismatch.');
+
+    // Provider dictionaries remain untrusted even though the endpoints are public.
+    // A malformed category label must fail immediately and must not continue into
+    // later discovery requests.
+    $queue_identity();
+    $queue($response(200, json_encode(array('total'=>0,'data'=>array()), JSON_THROW_ON_ERROR), array('Content-Type'=>'application/json')));
+    $queue($response(200, json_encode(array('serverVersion'=>'8.2.0'), JSON_THROW_ON_ERROR), array('Content-Type'=>'application/json')));
+    $queue($response(200, json_encode(array('1'=>'Public','5'=>'Password protected'), JSON_THROW_ON_ERROR), array('Content-Type'=>'application/json')));
+    $queue($response(200, json_encode(array('1'=>'Attribution'), JSON_THROW_ON_ERROR), array('Content-Type'=>'application/json')));
+    $queue($response(200, "{\"1\":\"Music\",\"2\":\"Bad\\nLabel\"}", array('Content-Type'=>'application/json')));
+    $before_bad_publication = count($GLOBALS['awvp_http_requests']);
+    $bad_publication = $api->publication_catalog($access_sentinel);
+    $assert(false === $bad_publication['ok'], 'Unsafe publication vocabulary label was accepted.');
+    $assert('publication_categories_shape_invalid' === $bad_publication['error']['code'], 'Unsafe publication vocabulary returned the wrong diagnostic.');
+    $assert($before_bad_publication + 6 === count($GLOBALS['awvp_http_requests']), 'Malformed category vocabulary continued into later provider endpoints.');
 
     $before_injected_path = count($GLOBALS['awvp_http_requests']);
     $fabricated_identity_rejected = false;

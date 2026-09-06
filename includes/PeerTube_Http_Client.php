@@ -29,6 +29,12 @@ final class PeerTube_Http_Client
     private const REVOKE_TOKEN_PATH = '/api/v1/users/revoke-token';
     private const CURRENT_USER_PATH = '/api/v1/users/me';
     private const RESUMABLE_UPLOAD_PATH = '/api/v1/videos/upload-resumable';
+    private const PUBLICATION_VOCABULARY_PATHS = array(
+        'categories' => '/api/v1/videos/categories',
+        'licences'   => '/api/v1/videos/licences',
+        'languages'  => '/api/v1/videos/languages',
+        'privacies'  => '/api/v1/videos/privacies',
+    );
 
     public function __construct(private readonly string $origin)
     {
@@ -62,6 +68,20 @@ final class PeerTube_Http_Client
         }
 
         return $this->request('GET', self::CONFIG_PATH, $response_limit);
+    }
+
+    /** @return array<string, mixed> */
+    public function get_publication_vocabulary(string $kind): array
+    {
+        if (! isset(self::PUBLICATION_VOCABULARY_PATHS[$kind])) {
+            throw new InvalidArgumentException('PeerTube publication vocabulary is outside the reviewed endpoint set.');
+        }
+
+        return $this->request(
+            'GET',
+            self::PUBLICATION_VOCABULARY_PATHS[$kind],
+            self::MAX_METADATA_RESPONSE_BYTES
+        );
     }
 
     /** @return array<string, mixed> */

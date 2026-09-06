@@ -808,3 +808,15 @@ checkpoint) over backend provider/channel overrides over site defaults. Missing
 settings default to local for new authoring only; existing video resolution never
 consults this option. Support presets resolve to Markdown values before an operation
 is frozen, and moderation defaults are prefills only, never proof of review.
+
+
+R46.3a adds a separate read-only discovery plane for editor choices. Each active
+PeerTube backend can be explicitly refreshed into a bounded non-secret,
+non-autoloaded last-known-good catalog of owned channels, provider vocabularies,
+server version, and conservative moderation/privacy signals. Each observation is
+bound to backend ID + canonical origin + managed-secret generation; this keeps a
+credential rotation or origin change from inheriting old discovery authority.
+Discovery does not run during page rendering, does not alter backend capability
+advertisement, and has no video create/update/publication authority. Failed
+refreshes retain prior valid provider data but mark the snapshot stale so editor
+choice availability does not collapse to an empty set or masquerade as current.

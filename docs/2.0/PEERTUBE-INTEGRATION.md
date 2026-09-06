@@ -416,3 +416,13 @@ R46.2 adds only local WordPress-side defaults/presets. It performs no PeerTube
 HTTP. Provider privacy/licence/category values and backend channel overrides are
 editor prefills and must be validated against the selected active PeerTube backend
 before a later dispatch checkpoint freezes an operation manifest.
+
+R46.3a supplies that later editor work with an explicit read-only publication
+catalog. An administrator refresh authenticates the configured local account,
+discovers only its owned channels, then reads the instance's public privacy,
+licence, category, language, version, and conservative moderation/privacy signals.
+Only the bounded non-secret projection is cached, including the canonical origin
+and managed-secret generation under which it was observed. The settings-page GET
+never refreshes implicitly; failed refreshes preserve the previous valid provider
+data and persistently mark it stale. This discovery boundary has no remote-video
+mutation authority.

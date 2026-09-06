@@ -12,11 +12,15 @@ final class Video_Publishing_Admin
 {
     public const PAGE_SLUG = 'argent-video-publishing';
     public const ACTION_SAVE = 'argent_video_save_publishing_defaults';
+    public const ACTION_REFRESH_CHOICES = 'argent_video_refresh_peertube_publication_choices';
     private const NONCE_ACTION = 'argent_video_save_publishing_defaults';
+    private const NONCE_REFRESH = 'argent_video_refresh_peertube_publication_choices';
 
     public function __construct(
         private readonly Video_Publishing_Defaults_Store $store,
-        private readonly Backend_Registry $registry
+        private readonly Backend_Registry $registry,
+        private readonly ?PeerTube_Publication_Catalog_Store $catalogs = null,
+        private readonly ?PeerTube_Publication_Catalog_Service $catalog_service = null
     ) {
     }
 
@@ -59,6 +63,34 @@ final class Video_Publishing_Admin
         exit;
     }
 
+    public function refresh_choices_action(): void
+    {
+        if (! current_user_can('manage_options')) {
+            wp_die(esc_html__('You are not allowed to refresh PeerTube publication choices.', 'argentwolf-video-processor'));
+        }
+        $backend_id = isset($_POST['backend_id']) && is_string($_POST['backend_id'])
+            ? Backend_Identity::sanitize(wp_unslash($_POST['backend_id']))
+            : '';
+        check_admin_referer(self::NONCE_REFRESH . ':' . $backend_id);
+
+        $status = PeerTube_Publication_Catalog_Service::REFUSED;
+        if ('' !== $backend_id && null !== $this->catalog_service) {
+            $result = $this->catalog_service->refresh($backend_id, time());
+            $status = is_string($result['status'] ?? null) ? $result['status'] : PeerTube_Publication_Catalog_Service::REFUSED;
+        }
+        $notice = match ($status) {
+            PeerTube_Publication_Catalog_Service::COMPLETE => 'choices-refreshed',
+            PeerTube_Publication_Catalog_Service::REMOTE_FAILED => 'choices-remote-failed',
+            PeerTube_Publication_Catalog_Service::CACHE_FAILED => 'choices-cache-failed',
+            default => 'choices-refused',
+        };
+        wp_safe_redirect(add_query_arg(
+            array('page'=>self::PAGE_SLUG,'awvp_publishing_notice'=>$notice),
+            admin_url('options-general.php')
+        ));
+        exit;
+    }
+
     public function page(): void
     {
         if (! current_user_can('manage_options')) {
@@ -76,6 +108,7 @@ final class Video_Publishing_Admin
             <?php if (null === $settings) : ?>
                 <div class="notice notice-error"><p><?php esc_html_e('The stored publishing-defaults record is malformed or from a future schema. AWVP preserved it and will not overwrite it from this page.', 'argentwolf-video-processor'); ?></p></div>
             <?php else : ?>
+                <?php $this->render_publication_catalogs($backends); ?>
                 <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
                     <input type="hidden" name="action" value="<?php echo esc_attr(self::ACTION_SAVE); ?>">
                     <?php wp_nonce_field(self::NONCE_ACTION); ?>
@@ -212,6 +245,60 @@ final class Video_Publishing_Admin
                 </form>
             <?php endif; ?>
         </div>
+        <?php
+    }
+
+    /** @param array<string,array<string,mixed>> $backends */
+    private function render_publication_catalogs(array $backends): void
+    {
+        if ([] === $backends || null === $this->catalogs || null === $this->catalog_service) {
+            return;
+        }
+        ?>
+        <h2><?php esc_html_e('PeerTube publication choices', 'argentwolf-video-processor'); ?></h2>
+        <p><?php esc_html_e('Refresh is explicit and read-only with respect to PeerTube videos. Page load performs no PeerTube HTTP request. A failed refresh preserves the last-known-good cached choices; cached choices may be stale until a refresh succeeds.', 'argentwolf-video-processor'); ?></p>
+        <table class="widefat striped" style="max-width:1100px">
+            <thead><tr><th><?php esc_html_e('Backend', 'argentwolf-video-processor'); ?></th><th><?php esc_html_e('Cached choices', 'argentwolf-video-processor'); ?></th><th><?php esc_html_e('Refresh', 'argentwolf-video-processor'); ?></th></tr></thead>
+            <tbody>
+            <?php foreach ($backends as $backend_id => $backend) : ?>
+                <?php $catalog = $this->catalogs->get($backend_id); ?>
+                <tr>
+                    <td><strong><?php echo esc_html($this->backend_label($backend)); ?></strong></td>
+                    <td>
+                        <?php if (null === $catalog) : ?>
+                            <?php esc_html_e('No valid cached publication catalog yet.', 'argentwolf-video-processor'); ?>
+                        <?php else : ?>
+                            <?php echo esc_html(sprintf(
+                                __('PeerTube %1$s; %2$d channels, %3$d privacy choices, %4$d licences, %5$d categories, %6$d languages. Refreshed %7$s UTC under credential generation %8$d.', 'argentwolf-video-processor'),
+                                (string) $catalog['server_version'],
+                                count($catalog['channels']),
+                                count($catalog['privacies']),
+                                count($catalog['licences']),
+                                count($catalog['categories']),
+                                count($catalog['languages']),
+                                gmdate('Y-m-d H:i:s', (int) $catalog['refreshed_at']),
+                                (int) $catalog['secret_generation']
+                            )); ?>
+                            <?php if (true === $catalog['stale']) : ?>
+                                <br><strong><?php echo esc_html(sprintf(
+                                    __('Stale since %s UTC; refresh must succeed before these choices can be treated as current.', 'argentwolf-video-processor'),
+                                    gmdate('Y-m-d H:i:s', (int) $catalog['stale_since'])
+                                )); ?></strong>
+                            <?php endif; ?>
+                        <?php endif; ?>
+                    </td>
+                    <td>
+                        <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
+                            <input type="hidden" name="action" value="<?php echo esc_attr(self::ACTION_REFRESH_CHOICES); ?>">
+                            <input type="hidden" name="backend_id" value="<?php echo esc_attr($backend_id); ?>">
+                            <?php wp_nonce_field(self::NONCE_REFRESH . ':' . $backend_id); ?>
+                            <?php submit_button(__('Refresh choices', 'argentwolf-video-processor'), 'secondary', 'submit', false); ?>
+                        </form>
+                    </td>
+                </tr>
+            <?php endforeach; ?>
+            </tbody>
+        </table>
         <?php
     }
 
@@ -360,10 +447,14 @@ final class Video_Publishing_Admin
             'saved' => __('Video publishing defaults saved.', 'argentwolf-video-processor'),
             'indeterminate' => __('AWVP could not verify whether the publishing-defaults save committed. Reload and inspect the current values before retrying.', 'argentwolf-video-processor'),
             'refused' => __('Publishing defaults were not saved. Check backend references, provider IDs, support presets, and stored-schema compatibility.', 'argentwolf-video-processor'),
+            'choices-refreshed' => __('PeerTube publication choices refreshed and cached.', 'argentwolf-video-processor'),
+            'choices-remote-failed' => __('PeerTube publication-choice refresh failed. AWVP preserved the previous valid cache, if any; treat it as stale until refresh succeeds.', 'argentwolf-video-processor'),
+            'choices-cache-failed' => __('PeerTube choices were read successfully but AWVP could not safely persist the cache. Existing cached choices were preserved.', 'argentwolf-video-processor'),
+            'choices-refused' => __('PeerTube publication-choice refresh was refused because the backend or managed credential state is not eligible.', 'argentwolf-video-processor'),
             default => '',
         };
         if ('' !== $message) {
-            $class = 'saved' === $notice ? 'notice notice-success is-dismissible' : 'notice notice-error';
+            $class = in_array($notice, array('saved','choices-refreshed'), true) ? 'notice notice-success is-dismissible' : 'notice notice-error';
             echo '<div class="' . esc_attr($class) . '"><p>' . esc_html($message) . '</p></div>';
         }
     }

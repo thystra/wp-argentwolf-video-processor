@@ -411,3 +411,12 @@ default to reinterpret legacy video metadata. Preserve malformed/future defaults
 records rather than overwriting them. Support preset Markdown is resolved/frozen
 when a later operation is created, and sensitive-content defaults are editor
 prefills only: explicit per-video moderation review remains mandatory.
+
+R46.3a provider discovery is explicit administrator work, not a page-load side
+effect. Use the configured canonical backend origin, bound every response, send
+the managed bearer only where authentication is actually required, and cache only
+a non-secret last-known-good projection bound to canonical origin and
+managed-secret generation. A failed refresh must preserve previous valid provider
+data while marking the retained snapshot stale. Provider discovery is
+observational state: it must not mutate a video or change backend capability
+advertisement.

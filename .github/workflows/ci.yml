@@ -47,6 +47,7 @@ jobs:
           php tests/video-destination-publication-plan.php
           php tests/video-publishing-defaults.php
           php tests/video-publishing-admin-boundary.php
+          php tests/peertube-publication-catalog.php
           php tests/task-repository.php
           php tests/peertube-upload-task-coordinator.php
           php tests/peertube-upload-failure-notification.php

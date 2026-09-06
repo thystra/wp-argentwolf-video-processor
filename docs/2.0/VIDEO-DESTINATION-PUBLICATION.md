@@ -166,9 +166,12 @@ migration.
 - **R46.2** — site/backend defaults: default destination, channel, privacy,
   licence, language, category, comments/moderation defaults, and reusable support
   presets.
-- **R46.3** — one AWVP block wizard with destination selector, independent
-  PeerTube tags, metadata/moderation review, and `Send now` / `Send when scheduled
-  or published` choice.
+- **R46.3a** — explicit read-only publication-choice discovery for the selected
+  PeerTube backend, with a bounded non-secret last-known-good catalog.
+- **R46.3b** — one AWVP Gutenberg block foundation and destination selector.
+- **R46.3c** — PeerTube publication wizard with independent tags,
+  metadata/moderation review, and `Send now` / `Send when scheduled or published`
+  choice.
 - **R46.4** — WordPress editorial validation for unresolved required metadata;
   remote readiness remains non-blocking.
 - **R46.5** — prepublication private visibility lifecycle and durable
@@ -178,7 +181,7 @@ migration.
 - **R46.8** — one-way local-to-PeerTube migration execution.
 - **R46.9** — post-cutover local retention/cleanup policy.
 
-## 9. Current R46.1/R46.2 implementation boundary
+## 9. Current R46.1-R46.3a implementation boundary
 
 R46.1 introduces the per-video model foundation:
 
@@ -212,5 +215,23 @@ R46.2 adds authoring defaults without changing any existing video:
 - Settings > AWVP Video Publishing is `manage_options` + nonce protected and
   performs no PeerTube HTTP.
 
-R46.2 still does **not** add the block/editor wizard, migration planner,
+R46.3a adds only explicit read-only provider-choice discovery:
+
+- each active PeerTube backend has a separate administrator **Refresh choices**
+  action; loading the settings page itself performs no PeerTube HTTP;
+- the managed bearer is used only to establish the authenticated local identity;
+  owned-channel discovery and public provider vocabularies/configuration use the
+  existing reviewed read-only API boundary;
+- only a bounded non-secret projection is cached per backend: owned channels,
+  privacy/licence/category/language choices, server version, refresh time,
+  managed-secret generation, and conservative moderation/privacy capability
+  signals;
+- catalog options are non-autoloaded and last-known-good. Context is bound to
+  backend + canonical origin + managed-secret generation; a refused, failed, or
+  malformed refresh preserves valid provider data and marks it stale rather than
+  replacing it with an empty catalog;
+- catalog discovery never creates, updates, publishes, or deletes a remote video
+  and does not change backend capability advertisement.
+
+R46.3a still does **not** add the block/editor wizard, migration planner,
 post-status hooks, visibility mutation, serving cutover, or cleanup behavior.

@@ -102,6 +102,12 @@
   backend overrides, and exposes a nonce/capability-protected Settings page.
   Moderation values are editor prefills only and never satisfy required per-video
   review; changing defaults never rewrites existing video destinations/plans.
+- Add R46.3a read-only PeerTube publication-catalog discovery. An explicit
+  administrator refresh reads the connected account's owned channels and public
+  provider vocabularies/configuration, persists a bounded non-secret per-backend
+  last-known-good catalog bound to canonical origin + managed-secret generation,
+  persistently marks retained data stale after failed/refused refresh, and
+  performs no remote video mutation.
 - Expand focused PeerTube security/state tests and isolated real-WordPress Docker
   development matrices through the R39 identity/destination checkpoint, with an
   R40 activation continuation that proves activation performs no additional

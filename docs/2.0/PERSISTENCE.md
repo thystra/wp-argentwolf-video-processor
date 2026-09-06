@@ -255,6 +255,24 @@ or a frozen publication operation. Sensitive-content defaults are prefills witho
 a review flag. Backend/provider values are validated again against the concrete
 PeerTube backend before later remote dispatch.
 
+### `argent_video_processor_pt_catalog_<backend-hash>`
+
+R46.3a non-autoloaded, per-PeerTube-backend **last-known-good publication-choice
+cache**. The suffix is a bounded SHA-256-derived backend identifier; the value is
+a versioned non-secret projection containing the canonical backend/origin,
+managed-secret generation, server version, last successful refresh timestamp,
+stale state, authenticated account-owned channels, privacy/licence/category/
+language vocabularies, and conservative moderation/privacy capability signals.
+
+This option is observational cache state only. It stores no bearer/refresh token,
+secret reference, raw PeerTube response, or remote-video mutation authority. A
+failed/refused refresh preserves existing valid provider data and marks the
+snapshot stale instead of replacing it with an empty result. A catalog is
+context-current only for the same backend + canonical origin + secret generation.
+A present malformed or future-schema value is not overwritten by the current
+writer. Loading the publishing settings page reads this cache but does not perform
+PeerTube HTTP.
+
 ### `_argent_video_profile_snapshot`
 
 Versioned structured copy of the effective storage/processing profile at video

@@ -44,6 +44,9 @@ final class Plugin
         $this->backend_registry = new Backend_Registry();
         $peertube_upload_policy = new PeerTube_Upload_Policy_Store($this->backend_registry);
         $video_publishing_defaults = new Video_Publishing_Defaults_Store($this->backend_registry);
+        $peertube_publication_catalogs = new PeerTube_Publication_Catalog_Store();
+        $peertube_api_factory = static fn (string $origin): PeerTube_Api_Client =>
+            new PeerTube_Api_Client(new PeerTube_Http_Client($origin));
         $this->backend_factory = new Backend_Adapter_Factory(
             new Local_Backend_Adapter($queue, $diagnostics),
             new PeerTube_Backend_Adapter($peertube_secrets)
@@ -92,9 +95,17 @@ final class Plugin
                 $peertube_secrets,
                 $this->backend_registry
             );
+            $peertube_publication_catalog_service = new PeerTube_Publication_Catalog_Service(
+                $peertube_publication_catalogs,
+                $peertube_secrets,
+                $this->backend_registry,
+                $peertube_api_factory
+            );
             $video_publishing_admin = new Video_Publishing_Admin(
                 $video_publishing_defaults,
-                $this->backend_registry
+                $this->backend_registry,
+                $peertube_publication_catalogs,
+                $peertube_publication_catalog_service
             );
             $peertube_admin = new PeerTube_Connection_Admin(
                 new PeerTube_Connection_Admin_Service(
@@ -164,14 +175,16 @@ final class Plugin
                 'admin_post_' . Video_Publishing_Admin::ACTION_SAVE,
                 array($video_publishing_admin, 'save_action')
             );
+            add_action(
+                'admin_post_' . Video_Publishing_Admin::ACTION_REFRESH_CHOICES,
+                array($video_publishing_admin, 'refresh_choices_action')
+            );
             add_action('admin_notices', array($admin, 'notices'));
             add_action('admin_notices', array($peertube_admin, 'notices'));
         }
 
         if (defined('WP_CLI') && WP_CLI) {
             $peertube_upload_operations = new PeerTube_Staged_Upload_Operation_Store();
-            $peertube_api_factory = static fn (string $origin): PeerTube_Api_Client =>
-                new PeerTube_Api_Client(new PeerTube_Http_Client($origin));
             $peertube_upload = new PeerTube_Staged_Upload_Service(
                 $peertube_upload_operations,
                 $this->backend_registry,

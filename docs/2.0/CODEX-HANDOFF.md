@@ -1698,3 +1698,31 @@ The exact R45.5 source immediately below R46 is commit
 `7ec2177ded8d522ceaf8e6911194a8085d25aed2`. Its dedicated cron-wiring matrix and
 retained drain, indeterminate/notification/no-replay, one-shot, and R44 matrices
 passed on exact clean bytes; Forgejo CI run 124 is green.
+
+### R46.2 qualification and R46.3a continuation
+
+R46.2 is qualified at exact commit
+`86c08ea4b9cad49ab55bd462135c2c7b5c3fb6b3`, tree
+`13ce8a4219c99f9d66b4089efb807530ca780e61`; Forgejo CI run 126 is green.
+That checkpoint remains the authority immediately below R46.3a.
+
+R46.3a is limited to explicit read-only PeerTube publication-choice discovery.
+For each active PeerTube backend it may authenticate the current local identity,
+discover owned channels, and read the public server/version, privacy, licence,
+category, language, and conservative moderation/privacy capability vocabulary.
+The managed bearer is sent only where authentication is required; public provider
+dictionaries/configuration are GET-only and receive no bearer or request body.
+
+The resulting cache is observational, non-secret, non-autoloaded, and scoped by
+backend ID + canonical origin + managed-secret generation. A failed/refused
+refresh must keep the last valid provider data and mark that snapshot stale rather
+than substituting an empty result or treating old data as current under rotated
+credentials. A successful context-matching refresh clears stale state. Page GET
+must perform no PeerTube HTTP.
+
+R46.3a grants no upload, remote video create/update/delete, privacy mutation,
+post-status hook, migration, serving cutover, Gutenberg/editor UI, credential
+refresh, or secret-persistence authority. Unsupported-but-advertised provider
+values remain observable; a later authoring checkpoint must separately decide
+which discovered values it can safely enable and must revalidate/freeze choices
+before consequential publication work is created.

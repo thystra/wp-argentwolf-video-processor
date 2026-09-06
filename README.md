@@ -109,6 +109,17 @@ presets, moderation prefills, and per-backend channel/provider overrides. These
 values only prefill new/unfrozen videos: they never rewrite existing video state,
 and moderation/tags still require explicit per-video review.
 
+R46.3a adds an explicit **Refresh choices** action for each active PeerTube
+backend on that publishing page. It performs only bounded read-only discovery of
+the authenticated account's owned channels plus the configured instance's public
+privacy, licence, category, language, version, and moderation-capability
+projection. Results are cached per backend as non-secret, non-autoloaded
+last-known-good state bound to the configured origin and managed-credential
+generation. A failed refresh never replaces provider data with an empty result:
+the retained snapshot is persistently marked stale until a context-matching
+refresh succeeds. Page load itself performs no PeerTube HTTP, and catalog
+discovery does not create, update, publish, or delete a remote video.
+
 ## WP-CLI
 
 ```bash

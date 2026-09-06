@@ -251,7 +251,7 @@
   sends only from detached drain execution, retries rejected `wp_mail()` without
   replaying upload work, and excludes credentials, raw response bodies, secret
   references, and filesystem paths.
-- [ ] R45.5: recurring production wake-up exact candidate
+- [x] R45.5: recurring production wake-up exact candidate
   `07259b927b7cd7ff393807777cf23de4f64c0795`, tree
   `7ec2177ded8d522ceaf8e6911194a8085d25aed2`, passed the dedicated cron-wiring
   WordPress matrix plus the retained drain, indeterminate/notification/no-replay,
@@ -260,7 +260,8 @@
   `argent_video_processor_dispatch` event; the callback performs only the
   due/stale owned-task probe and detached `--drain` launch, with no second
   scheduler, browser/admin launch surface, or inline PeerTube HTTP. Feature-branch
-  CI and integration qualification remain before final closure.
+  Forgejo CI run 124 is green; the exact candidate is qualified as a development
+  checkpoint.
 - [ ] R45.6: consider enabling PeerTube ingest/processing capability bits only
   after the production-reachable execution/scheduling path is separately
   reviewed and qualified.
@@ -299,12 +300,23 @@
   and strict per-video PeerTube
   publication-plan persistence/review contract, but no site default, block UI,
   migration, post-status hooks, visibility mutation, serving cutover, or cleanup.
-- [ ] R46.2: qualify site/backend publishing defaults and reusable support presets.
-  The implementation candidate adds a non-autoloaded fail-closed settings store,
-  upgrade-safe local default destination, support preset resolution, backend
-  channel/provider overrides, moderation prefills that do not imply review, and
-  a nonce/capability-protected administrator settings page.
-- [ ] R46.3: one-block destination/publication wizard and explicit review UX.
+- [x] R46.2: site/backend publishing defaults and reusable support presets are
+  qualified at commit `86c08ea4b9cad49ab55bd462135c2c7b5c3fb6b3`, tree
+  `13ce8a4219c99f9d66b4089efb807530ca780e61`, with the exact dependency-free
+  qualification and Forgejo CI run 126 green. The non-autoloaded fail-closed
+  settings store keeps the upgrade-safe local default, support preset resolution,
+  backend channel/provider overrides, moderation prefills that do not imply
+  review, and the nonce/capability-protected administrator settings page.
+- [ ] R46.3a: implementation candidate adds explicit read-only PeerTube
+  publication-choice discovery and a bounded per-backend last-known-good cache for
+  owned channels, provider privacy/licence/category/language vocabularies, server
+  version, and reviewed moderation/privacy capability signals. Cache observations
+  are bound to backend + canonical origin + managed-secret generation; failed
+  refresh preserves provider data while marking it stale, and page GET performs
+  no remote HTTP. Local dependency-free/workflow replay is green; Forgejo CI on
+  the exact pushed candidate remains the qualification gate.
+- [ ] R46.3b: add the one AWVP Gutenberg block foundation and destination selector.
+- [ ] R46.3c: add the PeerTube publication wizard and explicit review UX.
 - [ ] R46.4: editorial publish validation for unresolved required metadata only.
 - [ ] R46.5: private prepublication visibility and durable WordPress-authoritative
   reveal/schedule synchronization.
