@@ -241,6 +241,20 @@ later reveal.
 R46.1 does not enable site defaults, editor controls, migration, remote privacy
 mutation, or serving cutover.
 
+### `argent_video_processor_video_publishing_defaults`
+
+R46.2 non-autoloaded versioned option for **new-video authoring defaults only**.
+Absence is meaningful and resolves to WordPress/local without materializing the
+option. A present malformed/future value fails closed and must not be overwritten
+by the current settings UI.
+
+The record contains the site default destination, site PeerTube publication
+prefills, active-backend channel/provider overrides, and reusable support presets.
+It is never consulted to reinterpret an existing video's `_argent_video_destination`
+or a frozen publication operation. Sensitive-content defaults are prefills without
+a review flag. Backend/provider values are validated again against the concrete
+PeerTube backend before later remote dispatch.
+
 ### `_argent_video_profile_snapshot`
 
 Versioned structured copy of the effective storage/processing profile at video

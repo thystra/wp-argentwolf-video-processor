@@ -294,11 +294,16 @@
   review/Needs Review, local-first serving during migration, verified cutover, and
   separately configured post-cutover retention. WordPress/blog storage is not the
   archival master.
-- [ ] R46.1: qualify the destination/publication-plan model foundation. Add the
-  canonical legacy-local destination resolver and strict per-video PeerTube
+- [x] R46.1: destination/publication-plan model foundation implemented and exact
+  source committed/pushed, with the canonical legacy-local destination resolver
+  and strict per-video PeerTube
   publication-plan persistence/review contract, but no site default, block UI,
   migration, post-status hooks, visibility mutation, serving cutover, or cleanup.
-- [ ] R46.2: site/backend publishing defaults and reusable support presets.
+- [ ] R46.2: qualify site/backend publishing defaults and reusable support presets.
+  The implementation candidate adds a non-autoloaded fail-closed settings store,
+  upgrade-safe local default destination, support preset resolution, backend
+  channel/provider overrides, moderation prefills that do not imply review, and
+  a nonce/capability-protected administrator settings page.
 - [ ] R46.3: one-block destination/publication wizard and explicit review UX.
 - [ ] R46.4: editorial publish validation for unresolved required metadata only.
 - [ ] R46.5: private prepublication visibility and durable WordPress-authoritative

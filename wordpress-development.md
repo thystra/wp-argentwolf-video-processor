@@ -404,3 +404,10 @@ wait until the post is scheduled/published; early remote copies stay private and
 WordPress publication authorizes later reveal. Remote readiness never blocks the
 post: AWVP serves local until verified PeerTube cutover. Migration is explicit,
 local-first during transfer, and logically one-way after cutover.
+
+R46.2 stores new-video authoring defaults separately from per-video state. Treat a
+missing defaults option as `local` without writing it; never use the current site
+default to reinterpret legacy video metadata. Preserve malformed/future defaults
+records rather than overwriting them. Support preset Markdown is resolved/frozen
+when a later operation is created, and sensitive-content defaults are editor
+prefills only: explicit per-video moderation review remains mandatory.

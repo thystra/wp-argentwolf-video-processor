@@ -710,3 +710,8 @@ processing. Post-status callbacks may enqueue durable remote work only; they mus
 not perform PeerTube HTTP inline. Scheduled timestamps alone do not authorize
 public remote reveal: the actual WordPress publication transition is the default
 authority. See `VIDEO-DESTINATION-PUBLICATION.md`.
+
+R46.2's Settings > AWVP Video Publishing mutation requires `manage_options` and a
+WordPress nonce, uses a non-autoloaded versioned option, refuses to overwrite
+malformed/future stored state, and performs no remote HTTP. Reading absent settings
+returns the local-safe defaults without writing an option.

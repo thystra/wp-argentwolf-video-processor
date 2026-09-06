@@ -1680,13 +1680,21 @@ services and the task coordinator/worker remain constructed strictly behind the
 The revised R46 contract is `docs/2.0/VIDEO-DESTINATION-PUBLICATION.md`.
 R46.1 is intentionally a model-only checkpoint: canonical destination binding,
 legacy missing-destination => local resolution, and strict editable PeerTube
-publication-plan validation/review state. Do not add site defaults, block/editor
-surfaces, migration, post-status hooks, remote privacy mutation, serving cutover,
-or cleanup to this checkpoint.
+publication-plan validation/review state. R46.2 then adds the separate
+non-autoloaded authoring-default/support-preset store and Settings page. Those
+defaults apply only to new/unfrozen videos, preserve malformed/future option state,
+and cannot satisfy per-video moderation review. Do not add block/editor surfaces,
+migration, post-status hooks, remote privacy mutation, serving cutover, or cleanup
+to R46.2.
 
-The exact R45.5 candidate immediately below R46 is commit
+
+R46.1 exact source is commit
+`35da5e2f37060648e53b0b2d7424fceb3bb45f7e`, tree
+`8cf3f9f27f65f5dc90ed17041d625f45865ceca0`; feature push CI status should be
+recorded separately before qualification claims.
+
+The exact R45.5 source immediately below R46 is commit
 `07259b927b7cd7ff393807777cf23de4f64c0795`, tree
 `7ec2177ded8d522ceaf8e6911194a8085d25aed2`. Its dedicated cron-wiring matrix and
 retained drain, indeterminate/notification/no-replay, one-shot, and R44 matrices
-passed on exact clean bytes; feature push/integration CI closure should be
-recorded separately before release claims.
+passed on exact clean bytes; Forgejo CI run 124 is green.

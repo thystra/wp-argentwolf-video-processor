@@ -801,3 +801,10 @@ rules:
 
 The full frozen contract and checkpoint sequence live in
 `docs/2.0/VIDEO-DESTINATION-PUBLICATION.md`.
+
+R46.2 materializes the authoring-default layer as a separate non-autoloaded
+versioned option. The resolver hierarchy is per-video explicit state (later editor
+checkpoint) over backend provider/channel overrides over site defaults. Missing
+settings default to local for new authoring only; existing video resolution never
+consults this option. Support presets resolve to Markdown values before an operation
+is frozen, and moderation defaults are prefills only, never proof of review.

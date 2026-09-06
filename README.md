@@ -101,6 +101,14 @@ from WordPress post tags, and early/scheduled uploads remain private on PeerTube
 until the WordPress post actually reaches its publication state. See
 `docs/2.0/VIDEO-DESTINATION-PUBLICATION.md` for the frozen development contract.
 
+R46.2 adds a separate **Settings > AWVP Video Publishing** page for new-video
+authoring defaults. Its upgrade-safe default destination is WordPress/local. The
+page can select a default active PeerTube backend, final privacy, licence/category
+IDs, language, comments/download policy, send timing, reusable Markdown support
+presets, moderation prefills, and per-backend channel/provider overrides. These
+values only prefill new/unfrozen videos: they never rewrite existing video state,
+and moderation/tags still require explicit per-video review.
+
 ## WP-CLI
 
 ```bash

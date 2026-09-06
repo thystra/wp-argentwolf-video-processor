@@ -178,9 +178,9 @@ migration.
 - **R46.8** — one-way local-to-PeerTube migration execution.
 - **R46.9** — post-cutover local retention/cleanup policy.
 
-## 9. Current R46.1 implementation boundary
+## 9. Current R46.1/R46.2 implementation boundary
 
-R46.1 introduces only the model foundation:
+R46.1 introduces the per-video model foundation:
 
 - `Video_Destination` defines the canonical binding and the legacy missing-value
   rule (`missing => local`, malformed-present => invalid);
@@ -190,7 +190,27 @@ R46.1 introduces only the model foundation:
   whether required review is complete;
 - zero reviewed tags are valid, but more than five or duplicate tags are not;
 - sensitive-content/moderation review is explicit;
-- the only release policy in this checkpoint is
-  `when_wordpress_published`;
-- no site default, block UI, migration wizard, post-status hook, visibility
-  mutation, serving cutover, or cleanup behavior is enabled here.
+- the only release policy is `when_wordpress_published`.
+
+R46.2 adds authoring defaults without changing any existing video:
+
+- `argent_video_processor_video_publishing_defaults` is non-autoloaded and
+  versioned; an absent option resolves to WordPress/local plus conservative
+  authoring defaults without writing the database;
+- a present malformed/future option fails closed and is not overwritten by the
+  current administrator form;
+- site defaults include final PeerTube privacy, optional licence/category,
+  language, comments/download policy, send timing, support preset, and a
+  sensitive-content *prefill*;
+- backend overrides can select a channel and override provider privacy/licence/
+  category values for an active PeerTube backend;
+- reusable support presets have stable IDs, labels, and Markdown; resolving a
+  preset produces a value snapshot so a later preset edit cannot mutate an
+  already-frozen operation;
+- the sensitive-content default never carries a `reviewed` flag and therefore
+  cannot satisfy the per-video moderation-review gate;
+- Settings > AWVP Video Publishing is `manage_options` + nonce protected and
+  performs no PeerTube HTTP.
+
+R46.2 still does **not** add the block/editor wizard, migration planner,
+post-status hooks, visibility mutation, serving cutover, or cleanup behavior.

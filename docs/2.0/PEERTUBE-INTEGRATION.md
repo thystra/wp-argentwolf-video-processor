@@ -411,3 +411,8 @@ WordPress publication transition authorizes a durable visibility change. The
 WordPress/local copy remains playable until remote readiness and final intended
 privacy are verified, so PeerTube processing does not block post publication.
 See `VIDEO-DESTINATION-PUBLICATION.md`.
+
+R46.2 adds only local WordPress-side defaults/presets. It performs no PeerTube
+HTTP. Provider privacy/licence/category values and backend channel overrides are
+editor prefills and must be validated against the selected active PeerTube backend
+before a later dispatch checkpoint freezes an operation manifest.

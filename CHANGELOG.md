@@ -96,6 +96,12 @@
   sensitive-content/moderation and embed-domain policy, dispatch timing, and a
   WordPress-authoritative release policy. Remote readiness remains distinct from
   editorial metadata readiness and does not block WordPress publication.
+- Add R46.2 durable video-publishing defaults and reusable support presets. The
+  non-autoloaded settings record defaults safely to WordPress/local when absent,
+  preserves malformed/future stored state, supports site and active-PeerTube
+  backend overrides, and exposes a nonce/capability-protected Settings page.
+  Moderation values are editor prefills only and never satisfy required per-video
+  review; changing defaults never rewrites existing video destinations/plans.
 - Expand focused PeerTube security/state tests and isolated real-WordPress Docker
   development matrices through the R39 identity/destination checkpoint, with an
   R40 activation continuation that proves activation performs no additional
