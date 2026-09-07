@@ -127,8 +127,8 @@ awvp_r38_assert(
     str_contains($complete_page->body, 'disconnect_complete')
         && str_contains($complete_page->body, 'retired')
         && str_contains($complete_page->body, 'No active remote credential action.')
-        && str_contains($complete_page->body, 'No media upload, processing, publication'),
-    'The completed disconnect did not expose the durable retired/no-media-work boundary.'
+        && str_contains($complete_page->body, 'This connection page manages backend authorization only and does not itself start media transfers.'),
+    'The completed disconnect did not expose the durable retired/no-direct-media-action boundary.'
 );
 awvp_r38_assert_no_form($complete_page->body, AWVP_R41_ACTION_REFRESH);
 awvp_r38_assert_no_form($complete_page->body, AWVP_R41_ACTION_DISCONNECT);
