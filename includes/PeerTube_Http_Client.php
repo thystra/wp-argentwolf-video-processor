@@ -371,7 +371,7 @@ final class PeerTube_Http_Client
      *
      * @param array<string,mixed> $fields Ordered multipart field map. Array
      *        values are emitted as repeated field-name[] parts.
-     * @param array{path:string,mime:string}|null $thumbnail
+     * @param array{filename:string,mime:string,content:string}|null $thumbnail
      * @return array<string,mixed>
      */
     public function put_video_publication(
@@ -436,7 +436,7 @@ final class PeerTube_Http_Client
         return $this->put_video_publication($access_token, $video_uuid, array('privacy'=>$privacy_id));
     }
 
-    /** @param array<string,mixed> $fields @param array{path:string,mime:string}|null $thumbnail */
+    /** @param array<string,mixed> $fields @param array{filename:string,mime:string,content:string}|null $thumbnail */
     private static function multipart_body(string $boundary, array $fields, ?array $thumbnail): string
     {
         $body = '';
@@ -451,17 +451,16 @@ final class PeerTube_Http_Client
             }
         }
         if (null !== $thumbnail) {
-            $path = is_string($thumbnail['path'] ?? null) ? $thumbnail['path'] : '';
+            $filename = is_string($thumbnail['filename'] ?? null) ? $thumbnail['filename'] : '';
             $mime = is_string($thumbnail['mime'] ?? null) ? $thumbnail['mime'] : '';
-            if ('' === $path || ! is_file($path) || is_link($path) || ! is_readable($path)
-                || ! in_array($mime, array('image/jpeg','image/png','image/webp'), true)) {
-                throw new InvalidArgumentException('PeerTube thumbnail is outside the reviewed multipart contract.');
+            $bytes = is_string($thumbnail['content'] ?? null) ? $thumbnail['content'] : '';
+            if (
+                ! in_array($mime, array('image/jpeg','image/png','image/webp'), true)
+                || strlen($bytes) < 1
+                || strlen($bytes) > PeerTube_Publication_Thumbnail::MAX_BYTES
+            ) {
+                throw new InvalidArgumentException('PeerTube thumbnail bytes are outside the reviewed multipart contract.');
             }
-            $bytes = file_get_contents($path);
-            if (! is_string($bytes) || strlen($bytes) < 1 || strlen($bytes) > PeerTube_Publication_Thumbnail::MAX_BYTES) {
-                throw new InvalidArgumentException('PeerTube thumbnail bytes are outside the reviewed bound.');
-            }
-            $filename = basename($path);
             if (! self::safe_filename($filename)) {
                 $filename = 'thumbnail';
             }

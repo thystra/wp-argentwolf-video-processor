@@ -214,13 +214,18 @@ final class PeerTube_Publication_Task_Coordinator
         $api=$state['api']; $secret=$state['secret'];
         $thumbnail=null;
         if ((int)$manifest['thumbnail_attachment_id']>0) {
-            $thumbnail=PeerTube_Publication_Thumbnail::capture((int)$manifest['thumbnail_attachment_id']);
-            if (null===$thumbnail
-                || ! hash_equals((string)$manifest['thumbnail_sha256'],(string)$thumbnail['sha256'])
-                || (int)$manifest['thumbnail_bytes'] !== (int)$thumbnail['bytes']
-                || (string)$manifest['thumbnail_mime'] !== (string)$thumbnail['mime']) {
+            $thumbnail_capture=PeerTube_Publication_Thumbnail::capture((int)$manifest['thumbnail_attachment_id']);
+            if (null===$thumbnail_capture
+                || ! hash_equals((string)$manifest['thumbnail_sha256'],(string)$thumbnail_capture['sha256'])
+                || (int)$manifest['thumbnail_bytes'] !== (int)$thumbnail_capture['bytes']
+                || (string)$manifest['thumbnail_mime'] !== (string)$thumbnail_capture['mime']) {
                 return $this->fail($task_id,self::TASK_FINALIZE,$lock,'Selected PeerTube thumbnail changed or is unreadable.',$now,'thumbnail_changed');
             }
+            $thumbnail=array(
+                'filename'=>basename((string)$thumbnail_capture['relative_path']),
+                'mime'=>(string)$thumbnail_capture['mime'],
+                'content'=>(string)$thumbnail_capture['content'],
+            );
         }
         try { $updated=$api->update_publication((string)$secret['access_token'],(string)$execution['remote_uuid'],$manifest,$target,$thumbnail); }
         catch(Throwable){ $updated=array('ok'=>false); }

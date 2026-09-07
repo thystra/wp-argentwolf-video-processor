@@ -1741,6 +1741,35 @@ namespace ArgentVideo {
     );
     $assert(! str_contains($publication_body, 'refresh-token') && ! str_contains($publication_body, 'client-secret'), 'R46.5b publication body leaked unrelated secrets.');
 
+    // Thumbnail multipart transport accepts only already-captured bounded bytes; it never reads an arbitrary path.
+    $thumbnail_payload = array('filename'=>'reviewed-thumb.jpg','mime'=>'image/jpeg','content'=>"\xff\xd8AWVP-thumb\xff\xd9");
+    $before_thumbnail_put = count($GLOBALS['awvp_http_requests']);
+    $queue($response(204, '', array()));
+    $thumbnail_put = $api->update_publication($remote_access, $remote_uuid, $publication_manifest, '1', $thumbnail_payload);
+    $assert(true === $thumbnail_put['ok'] && $before_thumbnail_put + 1 === count($GLOBALS['awvp_http_requests']), 'R46.5b bounded thumbnail publication PUT was not accepted.');
+    $thumbnail_request = $GLOBALS['awvp_http_requests'][array_key_last($GLOBALS['awvp_http_requests'])];
+    $thumbnail_body = (string)($thumbnail_request['args']['body'] ?? '');
+    $assert(
+        str_contains($thumbnail_body, 'name="thumbnailfile"; filename="reviewed-thumb.jpg"')
+        && str_contains($thumbnail_body, 'Content-Type: image/jpeg')
+        && str_contains($thumbnail_body, $thumbnail_payload['content']),
+        'R46.5b thumbnail bytes escaped the reviewed in-memory multipart contract.'
+    );
+    $before_path_payload = count($GLOBALS['awvp_http_requests']);
+    $path_payload_refused = false;
+    try {
+        $api->update_publication(
+            $remote_access,
+            $remote_uuid,
+            $publication_manifest,
+            '1',
+            array('filename'=>'reviewed-thumb.jpg','mime'=>'image/jpeg','path'=>'/tmp/forbidden.jpg')
+        );
+    } catch (\InvalidArgumentException) {
+        $path_payload_refused = true;
+    }
+    $assert($path_payload_refused && $before_path_payload === count($GLOBALS['awvp_http_requests']), 'Path-based thumbnail payload reached PeerTube HTTP.');
+
     // Emergency correction is privacy-only and cannot acquire metadata authority.
     $before_privacy_put = count($GLOBALS['awvp_http_requests']);
     $queue($response(204, '', array()));
