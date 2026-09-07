@@ -1,4 +1,13 @@
 
+- Add the R46.5b detached publication executor. Generation-fenced publication
+  tasks now freeze a non-secret reviewed manifest, stage/reuse an immutable MP4,
+  reuse the existing private resumable upload/reconciliation path, and only after
+  `ready_verified` apply and verify current WordPress-authorized PeerTube metadata
+  and privacy. Non-private updates re-check WordPress afterward and immediately
+  correct to Private if reveal authority changed in flight; per-video execution
+  locking prevents adjacent generations from performing concurrent publication
+  mutation. The `--once` diagnostic set remains upload/reconcile only and serving
+  cutover is still deferred.
 - Add the R46.5a WordPress-authoritative publication lifecycle intent boundary.
   Reviewed plan saves and post-status changes derive generation-fenced local
   private-upload/reveal intent and enqueue `peertube_publication_sync` without

@@ -76,7 +76,7 @@ namespace {
 
     $types = array(Coordinator::TASK_UPLOAD_ADVANCE, Coordinator::TASK_REMOTE_RECONCILE);
 
-    // Idle one-shot execution recovers/claims only the reviewed PeerTube types.
+    // Idle one-shot execution preserves the qualified upload/reconciliation-only diagnostic set.
     $tasks = new Task_Repository();
     $tasks->recover_result = 2;
     $coordinator = new Coordinator();
@@ -151,6 +151,11 @@ namespace {
     // source cleanup, network implementation, or offset-reconciliation grant.
     $root = dirname(__DIR__);
     $source = (string) file_get_contents($root.'/includes/PeerTube_Task_Worker.php');
+    $assert(str_contains($source, "'peertube_publication_sync'") && str_contains($source, "'peertube_publication_finalize'"), 'R46.5b publication task types are not owned by the drain worker.');
+    $once_start = strpos($source, 'private const ONCE_TASK_TYPES');
+    $drain_start = strpos($source, 'private const DRAIN_TASK_TYPES');
+    $once_chunk = false !== $once_start && false !== $drain_start ? substr($source, $once_start, $drain_start - $once_start) : '';
+    $assert(! str_contains($once_chunk, 'peertube_publication_'), 'R46.5b widened the qualified --once diagnostic task set.');
     foreach (array(
         'wp_schedule','wp_cron','register_rest_route','wp_ajax','admin_post',
         'exec(','proc_open','shell_exec','unlink(','wp_delete',

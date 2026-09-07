@@ -41,17 +41,23 @@ final class PeerTube_Task_Worker
         PeerTube_Upload_Task_Coordinator::TASK_UPLOAD_ADVANCE,
         PeerTube_Upload_Task_Coordinator::TASK_REMOTE_RECONCILE,
         PeerTube_Upload_Task_Coordinator::TASK_FAILURE_NOTIFY,
+        'peertube_publication_sync',
+        'peertube_publication_finalize',
     );
 
     /** @var Closure(string):array<string,mixed>|null */
     private Closure $operation_reader;
+    /** @var Closure(array<string,mixed>,int):array<string,mixed>|null */
+    private ?Closure $publication_advance;
 
     public function __construct(
         private readonly Task_Repository $tasks,
         private readonly PeerTube_Upload_Task_Coordinator $coordinator,
-        callable $operation_reader
+        callable $operation_reader,
+        ?callable $publication_advance = null
     ) {
         $this->operation_reader = Closure::fromCallable($operation_reader);
+        $this->publication_advance = null === $publication_advance ? null : Closure::fromCallable($publication_advance);
     }
 
     /**
@@ -264,7 +270,14 @@ final class PeerTube_Task_Worker
         }
 
         try {
-            $advanced = $this->coordinator->advance_claimed($task, $now);
+            if (in_array($task_type, array('peertube_publication_sync','peertube_publication_finalize'), true)) {
+                if (null === $this->publication_advance) {
+                    return self::result(self::STATUS_INDETERMINATE, $recovered, $task_id, $task_type);
+                }
+                $advanced = ($this->publication_advance)($task, $now);
+            } else {
+                $advanced = $this->coordinator->advance_claimed($task, $now);
+            }
         } catch (Throwable) {
             return self::result(self::STATUS_INDETERMINATE, $recovered, $task_id, $task_type);
         }

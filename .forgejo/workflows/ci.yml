@@ -58,6 +58,10 @@ jobs:
           php tests/editorial-publish-gate.php
           php tests/peertube-publication-lifecycle.php
           php tests/peertube-publication-synchronizer.php
+          php tests/peertube-publication-manifest.php
+          php tests/peertube-publication-execution.php
+          php tests/peertube-publication-staging.php
+          php tests/peertube-publication-task-coordinator.php
           php tests/video-block-editor-service.php
           php tests/video-block-editor-rest.php
           php tests/video-block.php

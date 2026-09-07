@@ -296,18 +296,31 @@ reachability, cached catalog freshness, upload/task/transcoding state, or remote
 readiness, so a reviewed post may publish while PeerTube is unavailable and the
 local video remains the serving fallback.
 
-### R46.5a publication lifecycle synchronization (development)
+### R46.5 publication lifecycle synchronization (development)
 
-R46.4 is qualified at commit `5c30a62`, tree
-`922fdb59ca6f784260e1aa5cd6e1ee163118adc1`; Forgejo CI run 130 is green. The
-next sub-checkpoint records durable WordPress-authoritative lifecycle intent for a
-reviewed PeerTube-bound video. Scheduled posts may authorize an early upload, but
-the desired remote visibility remains private until WordPress actually reaches
-`publish`. Reschedule/revert/private/trash changes create a newer generation that
-supersedes an older reveal intent.
+R46.5a is qualified at commit `7b639d8`, tree
+`867a13ba23495bfacb7e2e065061c2ce34637842`; Forgejo CI run 131 is green. Its
+WordPress-side synchronizer records only generation-fenced local lifecycle intent:
+`future` may authorize early upload but remains PeerTube private, and actual
+WordPress `publish` is the only state that can authorize the reviewed final
+privacy. A later draft/pending/private/trash/reschedule generation supersedes an
+older reveal generation without destructive queue cancellation.
 
-R46.5a performs no PeerTube HTTP and its new queue task is not yet owned by the
-PeerTube worker. It does not change the qualified recurring-dispatch topology or add
-a bootstrap scheduler: lifecycle state is established by a reviewed-plan save or an
-actual WordPress status transition. Pre-R46.5 reviewed plans remain inert until one
-of those local events occurs. Remote upload/visibility execution follows in R46.5b.
+R46.5b adds the detached executor for that intent. The existing five-minute AWVP
+dispatch event and detached `--drain` launcher own the new publication sync/finalize
+task types; the qualified diagnostic `--once` set remains upload/reconciliation
+only. Sync freezes a non-secret execution manifest from the strict reviewed plan,
+current backend catalog/default/support context, and immutable thumbnail identity;
+it stages or reuses an AWVP-managed MP4 and hands the operation to the existing
+resumable uploader, whose creation request is privacy `3` (Private).
+
+Finalization waits for the existing upload/reconciliation journal to reach
+`ready_verified`. Immediately before mutation it revalidates the current lifecycle
+generation, plan commitment, concrete destination, fresh provider authority, and
+actual anchor post. After any non-private PeerTube update it checks WordPress again;
+if publication authority changed during the network request, it immediately sends a
+privacy-only correction to Private and positively verifies that correction. A
+per-video execution lock serializes adjacent lifecycle generations' remote work.
+Indeterminate mutation is held rather than replayed, and provider edits requiring
+an ambiguous destructive clear fail closed. Frontend serving remains local until
+the separate R46.6 verified-cutover checkpoint.

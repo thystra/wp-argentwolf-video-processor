@@ -55,6 +55,7 @@ require_once dirname(__DIR__).'/includes/PeerTube_Connection_Input.php';
 require_once dirname(__DIR__).'/includes/PeerTube_Staged_Source_Identity.php';
 require_once dirname(__DIR__).'/includes/PeerTube_Staged_Upload_State_Machine.php';
 require_once dirname(__DIR__).'/includes/PeerTube_Remote_Asset_Store.php';
+require_once dirname(__DIR__).'/includes/PeerTube_Publication_Asset_Store.php';
 require_once dirname(__DIR__).'/includes/Remote_Asset_Repository.php';
 
 use ArgentVideo\PeerTube_Staged_Upload_State_Machine as Machine;

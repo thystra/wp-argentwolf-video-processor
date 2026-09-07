@@ -426,3 +426,33 @@ and managed-secret generation under which it was observed. The settings-page GET
 never refreshes implicitly; failed refreshes preserve the previous valid provider
 data and persistently mark it stale. This discovery boundary has no remote-video
 mutation authority.
+
+## R46.5b publication execution through the detached drain worker
+
+R46.5a's WordPress-authoritative lifecycle intent is qualified at commit `7b639d8`,
+tree `867a13ba23495bfacb7e2e065061c2ce34637842`, Forgejo CI run 131. R46.5b adds
+`peertube_publication_sync` and `peertube_publication_finalize` to the detached
+launcher/`--drain` owned set. `--once` deliberately remains the earlier
+upload/reconciliation diagnostic set; publication execution is not added to it.
+The existing five-minute launcher is reused and no additional schedule is created.
+
+Publication sync freezes reviewed provider metadata into a non-secret execution
+manifest and resolves the selected support preset and optional thumbnail identity.
+It stages/reuses a confined MP4 and creates or recovers the same resumable-upload
+operation for the selected channel. Resumable initialization remains hard-coded to
+privacy `3`, so remote processing can occur while WordPress is draft/future without
+premature reveal.
+
+Publication finalize waits on the existing staged-upload/reconciliation journal's
+`ready_verified` phase. It then revalidates the current lifecycle generation, plan
+commitment, destination/backend/channel, current managed-secret generation, fresh
+provider catalog, frozen manifest, and actual WordPress anchor status. The bounded
+PeerTube `PUT /api/v1/videos/{uuid}` applies only reviewed metadata and target
+privacy; a subsequent status GET must verify ready state, UUID, owned channel, and
+privacy. After any non-private PUT, WordPress is checked again and a lost reveal
+authority causes one immediate privacy-only correction to `3` plus verification.
+
+Mutation acceptance uncertainty is held rather than automatically replayed. Edits
+that would require an undocumented clear representation for already-applied
+provider values are refused. Even after a verified publication, frontend serving
+remains local until R46.6 explicitly verifies and switches serving authority.

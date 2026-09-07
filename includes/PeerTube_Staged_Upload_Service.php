@@ -54,7 +54,8 @@ final class PeerTube_Staged_Upload_Service
         string $source_path,
         string $name,
         int $actor_id,
-        int $now
+        int $now,
+        ?string $destination_id = null
     ): array {
         if ($video_post_id < 1 || $actor_id < 1 || $now < 1) {
             return self::result(self::STATUS_REFUSED);
@@ -74,11 +75,18 @@ final class PeerTube_Staged_Upload_Service
             return self::result(self::STATUS_REFUSED);
         }
 
+        $destination_id = null === $destination_id
+            ? PeerTube_Connection_Input::destination_id($descriptor['default_destination'] ?? null)
+            : PeerTube_Connection_Input::destination_id($destination_id);
+        if ('' === $destination_id) {
+            return self::result(self::STATUS_REFUSED);
+        }
+
         $intent = array(
             'video_post_id'  => $video_post_id,
             'backend_id'     => $backend_id,
             'origin'         => $descriptor['config']['origin'],
-            'destination_id' => $descriptor['default_destination'],
+            'destination_id' => $destination_id,
             'source'         => $source,
             'upload'         => array(
                 'filename'     => basename($source['relative_path']),
@@ -96,10 +104,14 @@ final class PeerTube_Staged_Upload_Service
         if (Atomic_Option_Result::APPLIED === $result->status()) {
             return self::result(self::STATUS_ADVANCED, $record);
         }
-        return self::result(
-            Atomic_Option_Result::CONFLICT === $result->status() ? self::STATUS_CONFLICT : self::STATUS_REFUSED,
-            $record
-        );
+        if (Atomic_Option_Result::CONFLICT === $result->status()) {
+            $existing = $this->operations->find_by_intent_sha256((string) ($record['intent_sha256'] ?? ''));
+            if (is_array($existing) && PeerTube_Staged_Upload_State_Machine::valid($existing)) {
+                return self::result(self::STATUS_ADVANCED, $existing);
+            }
+            return self::result(self::STATUS_CONFLICT, $record);
+        }
+        return self::result(self::STATUS_REFUSED, $record);
     }
 
     /** @return array<string,mixed> */

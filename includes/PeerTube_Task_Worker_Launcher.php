@@ -33,6 +33,8 @@ final class PeerTube_Task_Worker_Launcher
         PeerTube_Upload_Task_Coordinator::TASK_UPLOAD_ADVANCE,
         PeerTube_Upload_Task_Coordinator::TASK_REMOTE_RECONCILE,
         PeerTube_Upload_Task_Coordinator::TASK_FAILURE_NOTIFY,
+        'peertube_publication_sync',
+        'peertube_publication_finalize',
     );
 
     public function __construct(private readonly Task_Repository $tasks)

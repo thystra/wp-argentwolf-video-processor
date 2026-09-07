@@ -475,3 +475,16 @@ missing destination metadata still means local, while malformed present state
 fails closed. Separate the later scheduled/publication transition and remote reveal
 lifecycle into its own checkpoint rather than smuggling those side effects into a
 validation filter.
+
+### Cross-system publication authority: generation fence before and after HTTP
+
+When WordPress is authoritative for a remote publication state, checking post
+status only before a remote request is insufficient: WordPress can change while
+that request is in flight. Persist a generation/hash commitment to editorial
+intent, re-read it immediately before mutation, and for any exposure-increasing
+request re-read WordPress again afterward. If authority was superseded during the
+request, issue the narrowest safe compensating mutation (for example privacy-only
+Private) and positively verify it. Do not hold a WordPress database lock across
+network I/O, and do not blindly replay an indeterminate exposure-changing request.
+A short per-resource executor lock can serialize competing remote workers while
+leaving the local authority writer free to supersede the generation.

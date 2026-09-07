@@ -771,3 +771,25 @@ freshness, secrets, task/upload/transcoding state, or remote readiness. It does
 not register a post-status transition callback, call `wp_publish_post()`, enqueue
 remote work, or mutate remote visibility. Scheduled-post execution and durable
 WordPress-authoritative PeerTube reveal remain a separate R46.5 lifecycle.
+
+### R46.5b detached publication mutation boundary
+
+WordPress post/plan hooks remain network-free. They may only write R46.5 lifecycle
+intent and enqueue a generic durable task. PeerTube publication HTTP is reachable
+only after WP-Cron's already-qualified callback launches the detached WP-CLI
+`--drain` worker. No REST/AJAX/admin-post action, editor save callback, or
+`transition_post_status` callback invokes the publication API directly.
+
+R46.5b adds publication task types only to the detached drain/launcher ownership
+set. The explicitly qualified `wp argent-video peertube-task-worker --once`
+diagnostic remains upload/reconciliation-only. The five-minute
+`argent_video_processor_dispatch` event still has exactly the existing two
+callbacks: legacy FFmpeg dispatch and the PeerTube detached launcher; no third
+publication scheduler is registered.
+
+Outbound metadata/privacy changes use the existing origin-bound WordPress safe HTTP
+transport and exact configured PeerTube origin. Dynamic video UUID, bearer, field
+names, scalar sizes, tag count, multipart size, and thumbnail path/MIME/bytes are
+bounded before `wp_safe_remote_request()`. Emergency re-private is a dedicated
+privacy-only projection through the same PUT boundary. No direct cURL publication
+request, arbitrary URL, browser-supplied bearer, or raw provider body is persisted.

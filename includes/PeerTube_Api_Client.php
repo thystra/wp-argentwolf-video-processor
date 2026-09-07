@@ -14,7 +14,7 @@ namespace ArgentVideo;
  * ephemeral caller-owned values. This class performs no option writes and
  * never returns an unreviewed raw response object.
  */
-final class PeerTube_Api_Client implements PeerTube_Password_Grant_Api, PeerTube_Identity_Destination_Api, PeerTube_Token_Lifecycle_Api, PeerTube_Staged_Upload_Api, PeerTube_Remote_Reconciliation_Api, PeerTube_Publication_Catalog_Api
+final class PeerTube_Api_Client implements PeerTube_Password_Grant_Api, PeerTube_Identity_Destination_Api, PeerTube_Token_Lifecycle_Api, PeerTube_Staged_Upload_Api, PeerTube_Remote_Reconciliation_Api, PeerTube_Publication_Catalog_Api, PeerTube_Publication_Mutation_Api
 {
     private const CONFIG_PATH = '/api/v1/config';
     private const MAX_VERSION_BYTES = 64;
@@ -431,6 +431,63 @@ final class PeerTube_Api_Client implements PeerTube_Password_Grant_Api, PeerTube
             'embed_path'  => $embed_path,
             'is_live'     => false,
         ));
+    }
+
+    /** @param array<string,mixed> $manifest @param array<string,mixed>|null $thumbnail */
+    public function update_publication(
+        string $access_token,
+        string $video_uuid,
+        array $manifest,
+        string $privacy_id,
+        ?array $thumbnail = null
+    ): array {
+        $access_token = self::opaque_secret($access_token, self::MAX_SECRET_BYTES);
+        $video_uuid = strtolower($video_uuid);
+        $manifest = PeerTube_Publication_Manifest::sanitize($manifest);
+        if ('' === $access_token || array() === $manifest
+            || 1 !== preg_match('/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/D', $video_uuid)
+            || ! in_array($privacy_id, array('1','2','3','4'), true)) {
+            return self::failure(PeerTube_Api_Error::invalid_response('publication_update_input_invalid'));
+        }
+        $comments = array('enabled'=>1,'disabled'=>2,'approval_required'=>3);
+        $flags = ($manifest['moderation']['violent'] ? 1 : 0) | ($manifest['moderation']['sexually_explicit'] ? 2 : 0);
+        $fields = array(
+            'name'=>(string)$manifest['title'],
+            'description'=>(string)$manifest['description_markdown'],
+            'channelId'=>(int)$manifest['channel_id'],
+            'privacy'=>(int)$privacy_id,
+            'support'=>(string)$manifest['support_markdown'],
+            'commentsPolicy'=>$comments[$manifest['comments_policy']],
+            'downloadEnabled'=>(bool)$manifest['download_enabled'],
+            'nsfw'=>(bool)$manifest['moderation']['sensitive'],
+            'nsfwFlags'=>$flags,
+            'nsfwSummary'=>(string)$manifest['moderation']['reason'],
+        );
+        if ('' !== $manifest['licence_id']) $fields['licence']=(int)$manifest['licence_id'];
+        if ('' !== $manifest['category_id']) $fields['category']=(int)$manifest['category_id'];
+        if ('' !== $manifest['language']) $fields['language']=(string)$manifest['language'];
+        if ('' !== $manifest['originally_published_at']) $fields['originallyPublishedAt']=(string)$manifest['originally_published_at'];
+        if ([] !== $manifest['tags']) $fields['tags']=$manifest['tags'];
+        $raw = $this->http->put_video_publication($access_token, $video_uuid, $fields, $thumbnail);
+        if (true !== ($raw['ok'] ?? null) || 204 !== ($raw['http_status'] ?? null)) {
+            return self::failure(self::transport_error_from_http($raw, 'publication_update'));
+        }
+        return self::success(array('updated'=>true));
+    }
+
+    public function update_privacy(string $access_token, string $video_uuid, string $privacy_id): array
+    {
+        $access_token = self::opaque_secret($access_token, self::MAX_SECRET_BYTES);
+        $video_uuid = strtolower($video_uuid);
+        if ('' === $access_token || ! in_array($privacy_id,array('1','2','3','4'),true)
+            || 1 !== preg_match('/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/D',$video_uuid)) {
+            return self::failure(PeerTube_Api_Error::invalid_response('privacy_update_input_invalid'));
+        }
+        $raw=$this->http->put_video_privacy($access_token,$video_uuid,(int)$privacy_id);
+        if (true !== ($raw['ok'] ?? null) || 204 !== ($raw['http_status'] ?? null)) {
+            return self::failure(self::transport_error_from_http($raw, 'privacy_update'));
+        }
+        return self::success(array('updated'=>true));
     }
 
     /**
@@ -1010,7 +1067,18 @@ final class PeerTube_Api_Client implements PeerTube_Password_Grant_Api, PeerTube
         return $received_at + $seconds;
     }
 
-    /** @param array<string, mixed> $data */
+    /** @param array<string,mixed> $raw @return array<string,mixed> */
+    private static function transport_error_from_http(array $raw, string $context): array
+    {
+        $error = $raw['error'] ?? null;
+        return is_array($error)
+            ? $error
+            : PeerTube_Api_Error::invalid_response(
+                $context . '_http_error',
+                is_int($raw['http_status'] ?? null) ? $raw['http_status'] : 0
+            );
+    }
+
     private static function success(array $data): array
     {
         return array('ok' => true, 'data' => $data, 'error' => null);

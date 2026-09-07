@@ -49,6 +49,6 @@ $plan['dispatch_policy']=Plan::DISPATCH_SEND_NOW; $GLOBALS['awvp_sync_meta'][100
 $before=count($GLOBALS['wpdb']->rows); $sync->sync_video(100,'draft',1041); $assert($before===count($GLOBALS['wpdb']->rows),'Exact lifecycle replay duplicated a durable task.');
 $source=(string)file_get_contents(dirname(__DIR__).'/includes/PeerTube_Publication_Synchronizer.php'); foreach(array('PeerTube_Http_Client','PeerTube_Api_Client','wp_safe_remote','curl_','PeerTube_Staged_Upload_Service','transition_post_status(') as $needle){$assert(!str_contains($source,$needle),'Synchronizer acquired forbidden remote/inline execution authority: '.$needle);}
 $worker=(string)file_get_contents(dirname(__DIR__).'/includes/PeerTube_Task_Worker.php'); $launcher=(string)file_get_contents(dirname(__DIR__).'/includes/PeerTube_Task_Worker_Launcher.php'); $plugin=(string)file_get_contents(dirname(__DIR__).'/includes/Plugin.php');
-$assert(!str_contains($worker,Sync::TASK_TYPE)&&!str_contains($launcher,Sync::TASK_TYPE),'R46.5a publication task acquired worker/launcher ownership prematurely.');
-$assert(2===substr_count($plugin,'add_action(Activator::CRON_HOOK,'),'R46.5a changed the qualified recurring-dispatch topology.');
+$assert(str_contains($worker,Sync::TASK_TYPE)&&str_contains($launcher,Sync::TASK_TYPE),'R46.5b publication task did not acquire explicit detached worker/launcher ownership.');
+$assert(2===substr_count($plugin,'add_action(Activator::CRON_HOOK,'),'R46.5b changed the qualified recurring-dispatch topology.');
 fwrite(STDOUT,"R46.5a publication synchronizer tests passed.\n");

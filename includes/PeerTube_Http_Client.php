@@ -366,6 +366,114 @@ final class PeerTube_Http_Client
         );
     }
 
+    /**
+     * Update the reviewed publication fields of one local PeerTube video.
+     *
+     * @param array<string,mixed> $fields Ordered multipart field map. Array
+     *        values are emitted as repeated field-name[] parts.
+     * @param array{path:string,mime:string}|null $thumbnail
+     * @return array<string,mixed>
+     */
+    public function put_video_publication(
+        string $access_token,
+        string $video_uuid,
+        array $fields,
+        ?array $thumbnail = null
+    ): array {
+        if (! self::safe_bearer_token($access_token) || ! self::safe_video_uuid($video_uuid)) {
+            throw new InvalidArgumentException('PeerTube publication update identity is outside the reviewed contract.');
+        }
+        if (array() === $fields || count($fields) > 24) {
+            throw new InvalidArgumentException('PeerTube publication update field set is outside the reviewed contract.');
+        }
+        $allowed = array(
+            'name','description','channelId','privacy','licence','category','language','support',
+            'commentsPolicy','downloadEnabled','originallyPublishedAt','nsfw','nsfwFlags','nsfwSummary','tags',
+        );
+        foreach ($fields as $key => $value) {
+            if (! is_string($key) || ! in_array($key, $allowed, true)) {
+                throw new InvalidArgumentException('PeerTube publication update contains an unreviewed field.');
+            }
+            if (is_array($value)) {
+                if ('tags' !== $key || ! array_is_list($value) || count($value) > 5) {
+                    throw new InvalidArgumentException('PeerTube publication array field is outside the reviewed contract.');
+                }
+                foreach ($value as $item) {
+                    if (! self::safe_request_value($item, 128, false)) {
+                        throw new InvalidArgumentException('PeerTube publication tag is outside the reviewed contract.');
+                    }
+                }
+            } elseif (! is_bool($value) && ! is_int($value) && ! self::safe_request_value($value, 100000, true)) {
+                throw new InvalidArgumentException('PeerTube publication scalar is outside the reviewed contract.');
+            }
+        }
+
+        $boundary = '----------------awvp' . bin2hex(random_bytes(12));
+        $body = self::multipart_body($boundary, $fields, $thumbnail);
+        if (strlen($body) > 12 * 1024 * 1024) {
+            throw new InvalidArgumentException('PeerTube publication multipart body exceeds the reviewed bound.');
+        }
+        return $this->request(
+            'PUT',
+            '/api/v1/videos/' . strtolower($video_uuid),
+            self::MAX_METADATA_RESPONSE_BYTES,
+            'bearer',
+            array(
+                'Authorization' => 'Bearer ' . $access_token,
+                'Content-Type'  => 'multipart/form-data; boundary=' . $boundary,
+            ),
+            $body,
+            array(204)
+        );
+    }
+
+    /** @return array<string,mixed> */
+    public function put_video_privacy(string $access_token, string $video_uuid, int $privacy_id): array
+    {
+        if (! in_array($privacy_id, array(1,2,3,4), true)) {
+            throw new InvalidArgumentException('PeerTube privacy update is outside the reviewed contract.');
+        }
+        return $this->put_video_publication($access_token, $video_uuid, array('privacy'=>$privacy_id));
+    }
+
+    /** @param array<string,mixed> $fields @param array{path:string,mime:string}|null $thumbnail */
+    private static function multipart_body(string $boundary, array $fields, ?array $thumbnail): string
+    {
+        $body = '';
+        foreach ($fields as $name => $value) {
+            $values = is_array($value) ? $value : array($value);
+            $part_name = is_array($value) ? $name . '[]' : $name;
+            foreach ($values as $item) {
+                $encoded = is_bool($item) ? ($item ? 'true' : 'false') : (string) $item;
+                $body .= '--' . $boundary . "\r\n";
+                $body .= 'Content-Disposition: form-data; name="' . $part_name . '"' . "\r\n\r\n";
+                $body .= $encoded . "\r\n";
+            }
+        }
+        if (null !== $thumbnail) {
+            $path = is_string($thumbnail['path'] ?? null) ? $thumbnail['path'] : '';
+            $mime = is_string($thumbnail['mime'] ?? null) ? $thumbnail['mime'] : '';
+            if ('' === $path || ! is_file($path) || is_link($path) || ! is_readable($path)
+                || ! in_array($mime, array('image/jpeg','image/png','image/webp'), true)) {
+                throw new InvalidArgumentException('PeerTube thumbnail is outside the reviewed multipart contract.');
+            }
+            $bytes = file_get_contents($path);
+            if (! is_string($bytes) || strlen($bytes) < 1 || strlen($bytes) > PeerTube_Publication_Thumbnail::MAX_BYTES) {
+                throw new InvalidArgumentException('PeerTube thumbnail bytes are outside the reviewed bound.');
+            }
+            $filename = basename($path);
+            if (! self::safe_filename($filename)) {
+                $filename = 'thumbnail';
+            }
+            $body .= '--' . $boundary . "\r\n";
+            $body .= 'Content-Disposition: form-data; name="thumbnailfile"; filename="' . $filename . '"' . "\r\n";
+            $body .= 'Content-Type: ' . $mime . "\r\n\r\n";
+            $body .= $bytes . "\r\n";
+        }
+        $body .= '--' . $boundary . "--\r\n";
+        return $body;
+    }
+
     /** @return array<string, mixed> */
     public function get_account_channels(string $account_name, int $start, int $count): array
     {

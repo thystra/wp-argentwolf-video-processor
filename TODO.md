@@ -335,17 +335,29 @@
   run 130 is green. `publish`, `future`, and `private` require coherent local
   destination/anchor/backend/channel state plus explicit title/channel/tags/
   privacy/moderation review, while PeerTube readiness remains non-blocking.
-- [ ] R46.5a: durable WordPress-authoritative publication lifecycle intent and
-  superseding task generation. Plan saves and post-status changes may derive only
-  local upload/reveal intent and enqueue `peertube_publication_sync`; scheduled
-  content targets PeerTube private, actual WordPress `publish` alone authorizes
-  final privacy, and later generations supersede stale reveal intent. No PeerTube
-  HTTP or worker ownership in this sub-checkpoint.
-- [ ] R46.5b: detached-worker consumption of publication lifecycle intent: freeze
-  current reviewed provider metadata/source into private upload work, reconcile
-  readiness, apply/verify final privacy only for the current publish-authorized
-  generation, and re-private on a superseding non-published generation. No inline
-  post-hook HTTP and no serving cutover yet.
+- [x] R46.5a: durable WordPress-authoritative publication lifecycle intent is
+  qualified at commit `7b639d8`, tree
+  `867a13ba23495bfacb7e2e065061c2ce34637842`; Forgejo CI run 131 is green.
+  Reviewed-plan saves and post-status changes derive generation-fenced local
+  upload/reveal intent and enqueue `peertube_publication_sync`; scheduled content
+  targets PeerTube private, actual WordPress `publish` alone authorizes final
+  privacy, and later generations supersede stale reveal intent. This checkpoint
+  performs no PeerTube HTTP and did not give the worker ownership of the task.
+- [ ] R46.5b: implementation candidate gives the detached `--drain` worker explicit
+  ownership of `peertube_publication_sync` and `peertube_publication_finalize`,
+  freezes current reviewed provider metadata/support/thumbnail identity into a
+  non-secret execution manifest, stages/reuses an immutable MP4 source, and reuses
+  the existing resumable uploader whose initialization is always privacy `3`.
+  Finalization waits for `ready_verified`, re-checks lifecycle generation/plan/
+  destination/provider authority and the actual WordPress anchor status, applies
+  and verifies reviewed metadata/final privacy, then re-checks WordPress after any
+  non-private PUT and immediately re-privates + verifies if reveal authority was
+  superseded during the request. A per-video execution lock serializes remote
+  publication workers, ambiguous destructive provider clears fail closed, and an
+  indeterminate mutation is not replayed automatically. The qualified diagnostic
+  `--once` task set remains upload/reconcile only; no new scheduler, inline post-
+  hook HTTP, remote deletion, cleanup, or serving cutover is added. Exact-byte
+  qualification and Forgejo CI remain before completion.
 - [ ] R46.6: local-first serving and verified remote cutover.
 - [ ] R46.7: existing-video migration planner / Needs Review workflow.
 - [ ] R46.8: one-way local-to-PeerTube migration execution.

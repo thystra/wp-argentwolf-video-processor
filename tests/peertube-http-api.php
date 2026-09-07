@@ -178,7 +178,14 @@ namespace ArgentVideo {
     require_once dirname(__DIR__) . '/includes/PeerTube_Staged_Upload_Api.php';
     require_once dirname(__DIR__) . '/includes/PeerTube_Remote_Reconciliation_Api.php';
     require_once dirname(__DIR__) . '/includes/PeerTube_Publication_Catalog_Api.php';
+    require_once dirname(__DIR__) . '/includes/PeerTube_Publication_Mutation_Api.php';
     require_once dirname(__DIR__) . '/includes/PeerTube_Publication_Catalog.php';
+    require_once dirname(__DIR__) . '/includes/Backend_Identity.php';
+    require_once dirname(__DIR__) . '/includes/Backend_Registry.php';
+    require_once dirname(__DIR__) . '/includes/PeerTube_Publication_Plan.php';
+    require_once dirname(__DIR__) . '/includes/PeerTube_Publication_Lifecycle.php';
+    require_once dirname(__DIR__) . '/includes/PeerTube_Publication_Manifest.php';
+    require_once dirname(__DIR__) . '/includes/PeerTube_Publication_Thumbnail.php';
     require_once dirname(__DIR__) . '/includes/PeerTube_Staged_Upload_State_Machine.php';
     require_once dirname(__DIR__) . '/includes/PeerTube_Api_Client.php';
 
@@ -1698,6 +1705,56 @@ namespace ArgentVideo {
         && ! str_contains(serialize($missing_remote), 'not-found-canary'),
         'R44 remote-video 404 did not normalize to a bounded not-found result.'
     );
+
+    // R46.5b publication mutation: one exact authenticated multipart PUT.
+    $publication_manifest = PeerTube_Publication_Manifest::sanitize(array(
+        'version'=>1,'backend_id'=>'pt-primary','channel_id'=>'41','anchor_post_id'=>10,
+        'plan_sha256'=>str_repeat('a',64),'title'=>'Reviewed publication title',
+        'description_markdown'=>'Reviewed description','tags'=>array('one','two'),
+        'support_markdown'=>'Support this work','final_privacy_id'=>'1','licence_id'=>'2',
+        'category_id'=>'3','language'=>'en','thumbnail_attachment_id'=>0,'thumbnail_sha256'=>'',
+        'thumbnail_bytes'=>0,'thumbnail_mime'=>'','download_enabled'=>true,
+        'originally_published_at'=>'2026-09-07T10:00:00Z','comments_policy'=>'approval_required',
+        'moderation'=>array('reviewed'=>true,'sensitive'=>true,'reason'=>'Context note','violent'=>true,'sexually_explicit'=>false),
+    ));
+    $assert(array() !== $publication_manifest, 'R46.5b publication manifest fixture was invalid.');
+    $before_publication_put = count($GLOBALS['awvp_http_requests']);
+    $queue($response(204, '', array()));
+    $publication_put = $api->update_publication($remote_access, $remote_uuid, $publication_manifest, '1', null);
+    $assert(true === $publication_put['ok'], 'R46.5b publication PUT was not accepted.');
+    $assert($before_publication_put + 1 === count($GLOBALS['awvp_http_requests']), 'R46.5b publication mutation performed an unexpected request count.');
+    $publication_request = $GLOBALS['awvp_http_requests'][array_key_last($GLOBALS['awvp_http_requests'])];
+    $publication_body = (string)($publication_request['args']['body'] ?? '');
+    $assert(
+        'https://video.example.org/api/v1/videos/'.$remote_uuid === $publication_request['url']
+        && 'PUT' === ($publication_request['args']['method'] ?? '')
+        && 'Bearer '.$remote_access === ($publication_request['args']['headers']['Authorization'] ?? '')
+        && str_starts_with((string)($publication_request['args']['headers']['Content-Type'] ?? ''), 'multipart/form-data; boundary=')
+        && str_contains($publication_body, 'name="name"')
+        && str_contains($publication_body, 'Reviewed publication title')
+        && str_contains($publication_body, 'name="channelId"')
+        && str_contains($publication_body, "\r\n41\r\n")
+        && str_contains($publication_body, 'name="privacy"')
+        && str_contains($publication_body, 'name="tags[]"')
+        && str_contains($publication_body, 'name="commentsPolicy"'),
+        'R46.5b publication PUT escaped its reviewed multipart boundary.'
+    );
+    $assert(! str_contains($publication_body, 'refresh-token') && ! str_contains($publication_body, 'client-secret'), 'R46.5b publication body leaked unrelated secrets.');
+
+    // Emergency correction is privacy-only and cannot acquire metadata authority.
+    $before_privacy_put = count($GLOBALS['awvp_http_requests']);
+    $queue($response(204, '', array()));
+    $privacy_put = $api->update_privacy($remote_access, $remote_uuid, '3');
+    $assert(true === $privacy_put['ok'] && $before_privacy_put + 1 === count($GLOBALS['awvp_http_requests']), 'R46.5b privacy correction did not perform one exact PUT.');
+    $privacy_request = $GLOBALS['awvp_http_requests'][array_key_last($GLOBALS['awvp_http_requests'])];
+    $privacy_body = (string)($privacy_request['args']['body'] ?? '');
+    $assert('PUT' === ($privacy_request['args']['method'] ?? '') && str_contains($privacy_body, 'name="privacy"') && str_contains($privacy_body, "\r\n3\r\n"), 'R46.5b privacy-only PUT did not carry private privacy.');
+    foreach (array('name="name"','name="channelId"','name="tags[]"','name="description"','name="support"','name="thumbnailfile"') as $forbidden_part) {
+        $assert(! str_contains($privacy_body, $forbidden_part), 'Privacy-only correction acquired unrelated publication field authority: '.$forbidden_part);
+    }
+    $before_privacy_five = count($GLOBALS['awvp_http_requests']);
+    $privacy_five = $api->update_privacy($remote_access, $remote_uuid, '5');
+    $assert(false === $privacy_five['ok'] && $before_privacy_five === count($GLOBALS['awvp_http_requests']), 'Unsupported password privacy performed HTTP.');
 
     $dev_http = new PeerTube_Http_Client('http://127.0.0.1:9000');
     $dev_api = new PeerTube_Api_Client($dev_http);

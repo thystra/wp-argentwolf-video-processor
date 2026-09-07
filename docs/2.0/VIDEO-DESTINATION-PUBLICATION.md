@@ -339,3 +339,33 @@ unknown status writes a later lifecycle generation whose target is private. This
 supersedes any older reveal generation. R46.5a only records/enqueues this local
 intent; R46.5b will consume it in the detached worker and must re-check generation
 before creating or changing a remote video.
+
+### R46.5b private upload and WordPress-authoritative finalization
+
+R46.5a is qualified at commit `7b639d8`, tree
+`867a13ba23495bfacb7e2e065061c2ce34637842`, Forgejo CI run 131. R46.5b consumes
+that intent only in the detached drain worker. Early/scheduled media creation uses
+the existing resumable uploader, whose initialization contract is always PeerTube
+privacy `3`; therefore an upload can process before publication without exposing
+scheduled content.
+
+The worker freezes current reviewed metadata only after revalidating backend,
+credential generation, fresh provider catalog, destination/channel, plan hash,
+support preset, and thumbnail identity. The frozen execution is durable and
+non-secret. Upload and reconciliation proceed through the existing operation/state
+machine; publication finalization waits for the remote copy to reach
+`ready_verified` and never treats mere upload completion as publication readiness.
+
+Final metadata/privacy mutation is generation-fenced. A non-private target is sent
+only when the actual anchor post is currently `publish` and the same current
+lifecycle generation authorizes reveal. The remote result must then be positively
+verified. WordPress is checked again after any non-private request; a superseding
+non-published generation triggers an immediate privacy-only correction to Private
+and that correction must also verify. This closes the unavoidable WordPress /
+PeerTube request race without holding a database lock across network I/O.
+
+An indeterminate metadata mutation is not replayed automatically because duplicate
+PUTs could obscure what the provider actually accepted. Edits requiring ambiguous
+provider clear semantics fail closed. R46.5b does not switch the block/player to
+PeerTube even after successful publication; verified local-first serving cutover
+is the separate R46.6 checkpoint.

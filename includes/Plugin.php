@@ -212,9 +212,10 @@ final class Plugin
                 $peertube_api_factory,
                 array($peertube_upload_policy, 'chunk_mib')
             );
+            $peertube_remote_assets = new Remote_Asset_Repository();
             $peertube_reconciliation = new PeerTube_Remote_Asset_Reconciliation_Service(
                 $peertube_upload_operations,
-                new Remote_Asset_Repository(),
+                $peertube_remote_assets,
                 $this->backend_registry,
                 $peertube_secrets,
                 $peertube_api_factory
@@ -230,10 +231,24 @@ final class Plugin
                 array($peertube_reconciliation, 'advance'),
                 $peertube_failure_notification
             );
+            $peertube_publication_tasks = new PeerTube_Publication_Task_Coordinator(
+                $peertube_tasks,
+                $peertube_upload_operations,
+                $peertube_upload,
+                $peertube_task_coordinator,
+                new PeerTube_Publication_Staging_Service(),
+                $peertube_remote_assets,
+                $this->backend_registry,
+                $peertube_secrets,
+                $peertube_publication_catalogs,
+                $video_publishing_defaults,
+                $peertube_api_factory
+            );
             $peertube_task_worker = new PeerTube_Task_Worker(
                 $peertube_tasks,
                 $peertube_task_coordinator,
-                array($peertube_upload_operations, 'get')
+                array($peertube_upload_operations, 'get'),
+                array($peertube_publication_tasks, 'advance_claimed')
             );
 
             \WP_CLI::add_command(

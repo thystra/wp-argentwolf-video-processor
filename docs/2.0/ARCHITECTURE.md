@@ -919,3 +919,41 @@ network I/O even indirectly through the current worker. R46.5a leaves the qualif
 five-minute dispatch topology unchanged and adds no bootstrap/retry scheduler; a
 reviewed-plan save or actual WordPress status transition establishes/retries local
 lifecycle intent. Pre-R46.5 reviewed plans remain inert until one of those events.
+
+### R46.5b detached publication execution
+
+R46.5b turns the generation-fenced lifecycle task into remote work only inside the
+already-qualified detached PeerTube `--drain` worker. `peertube_publication_sync`
+and `peertube_publication_finalize` are added to the launcher/drain owned set; the
+manual/diagnostic `--once` set remains exactly upload + reconciliation. No new
+WP-Cron event or browser/admin execution surface is introduced.
+
+Sync re-reads the current lifecycle generation, strict reviewed plan, concrete
+PeerTube destination, active backend, current managed-secret generation, fresh
+backend-context catalog, and publishing defaults. It freezes a non-secret
+`PeerTube_Publication_Manifest`, including resolved support Markdown and immutable
+thumbnail identity, into `_argent_video_peertube_publication_execution`. It then
+stages/reuses a confined AWVP-managed MP4 and creates or recovers the existing
+staged-upload operation for the reviewed channel. Resumable initialization remains
+privacy `3`; sync merely queues the existing upload coordinator and a low-priority
+finalizer.
+
+Finalize cannot mutate until the existing operation is `ready_verified` with an
+exact remote asset/UUID. A short-lived non-autoloaded per-video execution lock
+serializes publication workers across lifecycle generations while still allowing
+the WordPress synchronizer to write a newer generation during network I/O. Before
+mutation, the worker re-checks generation + plan commitment, destination/channel,
+provider context, frozen manifest, thumbnail bytes, and the actual anchor status.
+Only actual WordPress `publish` plus current `reveal_authorized=true` permits a
+non-private target.
+
+The final publication PUT is bounded to reviewed metadata fields. Success is not
+accepted until a separate video-status GET verifies UUID, owned channel, ready
+state, and target privacy. After a non-private PUT, WordPress is checked again. If
+reveal authority disappeared during the cross-system race window, the same worker
+issues one privacy-only correction to `3` and positively verifies it before
+completing. A mutation whose acceptance is indeterminate is terminally held rather
+than automatically replayed. Provider edits that would require an undocumented
+clear encoding (for example removing an applied thumbnail or clearing an applied
+non-empty tag list) fail closed. R46.5b still grants no serving cutover, source
+cleanup, retention, remote deletion, or migration authority.

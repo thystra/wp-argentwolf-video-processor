@@ -1330,3 +1330,46 @@ be treated as superseded by the later R46.5b worker. R46.5a adds no periodic
 bootstrap/retry state: plan saves and actual WordPress status transitions are the
 only lifecycle derivation triggers, and pre-R46.5 reviewed plans stay inert until
 one of those events occurs.
+
+### `_argent_video_peertube_publication_execution`
+
+R46.5b adds one strict version-1 **non-secret execution journal** to the hidden
+AWVP Video. It binds backend/channel/anchor identity to the frozen
+`PeerTube_Publication_Manifest` and its SHA-256, the reused staged-upload operation
+ID, verified remote-asset ID/UUID once known, the last positively applied manifest,
+and an update timestamp. The manifest resolves reusable support presets to concrete
+Markdown and freezes thumbnail attachment identity as SHA-256 + byte length + MIME.
+It stores no bearer/refresh token, managed-secret reference, raw PeerTube response,
+filesystem source path, queue lock token, or serving-cutover authority.
+
+A changed reviewed plan may replace the frozen manifest only while backend,
+channel, and anchor identity remain the same. The staged-upload operation identity
+is preserved so metadata edits do not create another remote video. Once a remote
+asset is known, asset ID and UUID must be present together. The last applied
+manifest is retained to detect edits that would require an undocumented destructive
+provider clear; such transitions fail closed instead of claiming synchronization.
+
+### R46.5b publication execution lock and task ownership
+
+Remote publication advancement uses a non-autoloaded option lock named
+`argent_video_processor_publication_execution_lock_<sha256-video-id>`. Its strict
+record is version/token/creation time, live for 180 seconds. A malformed/future
+lock fails closed; a stale valid lock may be replaced. Release deletes only the
+exact token still owned by the worker. The lock serializes detached publication
+workers for one AWVP Video but does not lock the WordPress lifecycle writer, so a
+new generation may supersede authority while remote HTTP is in flight.
+
+`peertube_publication_sync` keeps the R46.5a payload: schema version, lifecycle
+generation, and plan SHA-256. After private upload handoff it creates
+`peertube_publication_finalize` with the same bounded payload, a deterministic
+video/generation/plan idempotency key, lower priority than upload/reconciliation,
+and a 720-claim horizon so long remote processing waits do not exhaust quickly.
+Both are owned by the detached drain/launcher set. The qualified `--once` set
+remains upload + reconciliation only.
+
+The existing staged-upload journal gains exact intent-hash lookup solely for crash
+recovery: if private-upload creation was durably committed but the publication
+execution record was not, replay can adopt that same valid operation. It does not
+make fuzzy/source-only matches and does not overwrite malformed journal state.
+The existing remote-asset row remains the durable remote identity; finalization
+updates its observed desired/actual privacy only after positive remote verification.

@@ -1835,3 +1835,36 @@ status transition establishes/retries lifecycle state; pre-R46.5 reviewed plans
 remain inert until one of those local events. `peertube_publication_sync` is not
 added to launcher/worker owned task types. R46.5b must explicitly add worker
 ownership and generation revalidation before any remote mutation.
+
+### R46.5a qualification and R46.5b continuation
+
+R46.5a is qualified at commit `7b639d8`, tree
+`867a13ba23495bfacb7e2e065061c2ce34637842`; Forgejo CI run 131 is green. Its
+local lifecycle generation remains WordPress-authoritative and contains no remote
+execution state.
+
+R46.5b gives only the detached `--drain` worker ownership of
+`peertube_publication_sync` and `peertube_publication_finalize`. Do not widen the
+qualified diagnostic `--once` task set; it remains upload/reconciliation only. Do
+not add another scheduler. The existing five-minute launcher probe may wake for the
+new task types and starts the same detached drain process.
+
+The sync coordinator must re-read current lifecycle/plan/destination/backend/
+credential/catalog/default authority before freezing a non-secret execution
+manifest. It resolves support presets now, captures thumbnail bytes by SHA-256,
+stages/reuses a confined MP4, and uses the existing private resumable uploader with
+the reviewed channel. Crash recovery may reuse an exact staged-upload operation by
+its intent hash; it must not create a second remote video for the same immutable
+intent merely because the publication execution record was not yet updated.
+
+Finalize waits for `ready_verified`, requires exact remote asset identity, rechecks
+the lifecycle generation and plan hash, and validates the frozen provider choices
+again. Non-private visibility is permitted only while the real anchor post is
+`publish` and the current lifecycle says reveal is authorized. After the bounded
+metadata/privacy PUT, verify the remote UUID/channel/state/privacy. Then re-read
+WordPress: if reveal authority changed while the PUT was in flight, issue exactly
+one privacy-only correction to Private and verify it. Never automatically replay an
+indeterminate metadata PUT. The per-video execution option lock serializes remote
+publication workers but intentionally does not block the local WordPress lifecycle
+writer. R46.6 remains responsible for switching frontend serving authority only
+after remote publication/readiness is independently verified.
