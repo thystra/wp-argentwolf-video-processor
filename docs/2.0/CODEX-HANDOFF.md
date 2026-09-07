@@ -1750,3 +1750,34 @@ must not acquire PeerTube HTTP, upload/task dispatch, publication/reveal,
 post-status hooks, migration, serving cutover, cleanup, credential refresh, or
 secret-persistence authority. The provider vocabulary from R46.3a is reserved for
 the separate R46.3c publication wizard/review checkpoint.
+
+### R46.3b qualification and R46.3c continuation
+
+R46.3b is qualified at commit prefix `4905076`, tree
+`67054ea387ec90c484da01e437010772aad08a13`; Forgejo CI run 128 is green. The
+qualified editor foundation remains one dynamic AWVP Video block with stable
+`videoId`, idempotent WordPress-video adoption, explicit final-destination planning,
+and local frontend serving. It has no PeerTube dispatch/publication authority.
+
+R46.3c adds only the publication-plan authoring/review layer. The Gutenberg
+inspector may edit PeerTube title/Markdown description, an owned channel,
+independent tags (maximum five, including explicit reviewed zero tags), support
+none/preset/custom, final privacy, optional licence/category/language, thumbnail,
+comments/download policy, optional original publication time, sensitive-content
+review/flags, and `send_now` versus `send_on_schedule_or_publish`.
+
+The server-side publication-editor service is authoritative for normalization. It
+reads the R46.3a cached catalog and revalidates channel/provider IDs before storing
+the existing strict `PeerTube_Publication_Plan`. Unsupported advertised privacy
+values remain visible but are not authorable. A backend/origin context mismatch
+cannot authorize a save. Defaults are prefills only and never satisfy title,
+channel, tags, privacy, or moderation review; changing one of those reviewed fields
+clears its review state. A destination/plan channel mismatch likewise requires
+channel review again.
+
+R46.3c still grants no PeerTube HTTP, credential refresh/persistence, staged upload,
+task dispatch, post-status hook, private/public reveal, migration, serving cutover,
+or cleanup. `send_now` is only persisted editorial policy here. R46.4 remains the
+separate WordPress editorial publish-validation checkpoint, and later execution
+must re-resolve/revalidate provider state before freezing consequential remote
+work.

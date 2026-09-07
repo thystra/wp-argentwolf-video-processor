@@ -439,3 +439,20 @@ otherwise.
 Ship canonical block metadata and its dependency manifest in the release package,
 and test the built ZIP—not only a source checkout—so editor functionality cannot
 silently disappear because `blocks/` was omitted by packaging.
+
+### R46.3c: keep review state explicit and remote work outside the editor
+
+The PeerTube publication wizard edits the durable `PeerTube_Publication_Plan`; it
+is not an upload form. Build editor choices from the backend-scoped R46.3a catalog,
+revalidate selected provider IDs server-side, and preserve advertised values that
+AWVP cannot yet author as visible-but-disabled compatibility information. A
+backend-context-changed catalog cannot authorize a save. Transient same-context
+last-known-good data may support editing, but any later consequential operation
+must independently re-resolve/revalidate before freezing remote work.
+
+Never derive required review from publishing defaults. Title, channel, independent
+PeerTube tags (including reviewed zero tags), final privacy, and moderation each
+need explicit per-video confirmation. If a required reviewed field changes, clear
+its confirmation immediately. `send_now` and `send_on_schedule_or_publish` are
+stored dispatch policies at this checkpoint; neither causes editor/REST code to
+perform PeerTube HTTP, enqueue a task, or change WordPress publication state.

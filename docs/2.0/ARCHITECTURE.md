@@ -842,3 +842,27 @@ publication, or post-status authority. A PeerTube destination therefore remains
 planning state. Dynamic frontend rendering still starts from the WordPress
 attachment and `wp_video_shortcode()`, preserving local serving/Renderer behavior
 until the separately reviewed cutover checkpoint.
+
+### R46.3c publication-editor plane
+
+R46.3c layers a publication-plan editor over the single R46.3b AWVP Video block.
+The block still serializes only `videoId`; publication state remains server-owned
+post meta validated by `PeerTube_Publication_Plan`. A dedicated application
+service reads the concrete video destination, active backend descriptor, R46.2
+defaults/presets, and R46.3a last-known-good catalog. Its REST controller is only a
+capability-aware read/save boundary and writes no post meta directly.
+
+Provider-backed values are validated against the selected backend catalog before
+plan persistence. Password-protected privacy and any other advertised but
+unsupported privacy remain observational rather than authoring authority. A
+catalog whose canonical origin no longer matches, or whose stale reason records a
+backend-context change, cannot authorize a save. Same-context stale data may
+remain usable for editorial work because the resulting plan is not a frozen remote
+operation; later dispatch construction must revalidate provider state again.
+
+Required review is explicit per video. Defaults may prefill fields but never review
+them. Editing title, channel, independent PeerTube tags, final privacy, or
+moderation clears the associated review flag; destination/plan channel drift also
+clears channel review in the projected draft. A fully reviewed plan may store a
+dispatch policy, but R46.3c has no PeerTube HTTP, credential lifecycle, task queue,
+post-status, reveal, migration, cleanup, or serving-cutover authority.

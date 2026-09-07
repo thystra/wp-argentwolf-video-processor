@@ -361,3 +361,9 @@ are centralized in `wp-plugin-template`. AWVP keeps project-specific behavior,
 release evidence, and test contracts here. Future work, especially the 2.0
 line, applies the shared template guidance together with `AGENTS-TESTING.md`,
 `wordpress-development.md`, and the 2.0 architecture.
+
+- R46.3c publication editing must keep the block attribute surface stable (`videoId`
+  only). Provider vocabulary is read from the non-authoritative R46.3a cache and
+  revalidated before plan persistence; explicit review is per-video and must never
+  be inferred from site defaults. The editor/REST path must not perform PeerTube
+  HTTP, enqueue tasks, publish posts, or alter serving authority.

@@ -1268,3 +1268,28 @@ default changes do not affect that stored video. Explicit editor selection of
 “site default” likewise resolves the current default at that moment; it is never
 stored as a live pointer. Remote destination state still does not grant serving
 cutover or PeerTube publication authority at R46.3b.
+
+### R46.3c publication-plan editor persistence
+
+R46.3c does not add a new publication-state record. It uses the existing
+`_argent_video_peertube_publication_plan` version-1 schema and the existing
+`_argent_video_destination` record. A successful editor save validates a complete
+plan through `PeerTube_Publication_Plan`, revalidates provider-backed IDs against
+the selected backend's R46.3a catalog, writes the plan, and synchronizes the
+reviewed channel into the concrete destination. Both values are read back and
+compared exactly; uncertainty is surfaced as `indeterminate` rather than treated as
+success.
+
+Malformed/future publication-plan state is preserved and cannot be implicitly
+replaced. Replacing a valid plan that belongs to a different PeerTube backend
+requires an explicit editor replacement acknowledgement. When only the concrete
+destination channel differs, the stored plan is preserved for editing but the
+projected draft clears `review.channel` so old review cannot silently authorize the
+mismatch.
+
+No provider catalog is copied into the publication plan. Catalog state remains
+non-authoritative observational cache; the plan stores only selected normalized
+values and explicit review. Support preset mode stores the stable preset ID with
+blank inline Markdown; a later consequential operation must resolve/freeze the
+preset value and revalidate provider vocabulary. No token, secret reference, raw
+remote response, task ID, or serving-cutover state is added by R46.3c.

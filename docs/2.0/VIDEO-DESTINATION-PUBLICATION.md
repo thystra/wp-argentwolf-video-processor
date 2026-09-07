@@ -181,7 +181,7 @@ migration.
 - **R46.8** — one-way local-to-PeerTube migration execution.
 - **R46.9** — post-cutover local retention/cleanup policy.
 
-## 9. Current R46.1-R46.3b implementation boundary
+## 9. Current R46.1-R46.3c implementation boundary
 
 R46.1 introduces the per-video model foundation:
 
@@ -264,3 +264,30 @@ R46.3b adds only the single-block editor and destination-selection foundation:
 R46.3b still does **not** add the PeerTube publication wizard, remote upload,
 post-status hooks, visibility mutation, migration planner/execution, serving
 cutover, or cleanup behavior.
+
+### R46.3c implemented editor boundary
+
+R46.3b is qualified at commit prefix `4905076`, tree
+`67054ea387ec90c484da01e437010772aad08a13`; Forgejo CI run 128 is green.
+R46.3c builds the publication wizard inside that one AWVP Video block without
+changing its serialized attributes.
+
+For a PeerTube destination, the inspector edits the existing strict publication
+plan: title and Markdown description, owned channel, independent PeerTube tags,
+support selection, privacy/licence/category/language, optional thumbnail, comments,
+download policy, optional original-publication time, moderation/sensitive-content
+state, and dispatch timing. Provider choices come from the backend-scoped R46.3a
+catalog and are revalidated when saved. Advertised privacy modes that need an
+unimplemented lifecycle, such as password protection, are shown as unsupported
+rather than silently enabled. The current PeerTube core upload/update contract has
+no reviewed per-video allowed-domain field used by this implementation, so the
+frozen embed policy stays explicitly unrestricted rather than inventing provider
+state.
+
+Title, channel, tags, privacy, and moderation review remain explicit and are never
+inherited from defaults. Zero PeerTube tags is valid after explicit tag review.
+Changing a required reviewed field clears that review in the draft, and a concrete
+destination/stored-plan channel mismatch clears channel review. Saving may make the
+plan `ready_for_dispatch`, but this is editorial readiness only: R46.3c does not
+start an upload, call PeerTube, queue a task, alter post status/remote visibility,
+or change local serving authority.

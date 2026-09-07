@@ -734,3 +734,19 @@ These editor routes perform no PeerTube HTTP and do not save/publish the enclosi
 WordPress post, enqueue PeerTube tasks, refresh credentials, or alter remote
 visibility. Dynamic frontend rendering continues through the WordPress video
 shortcode/local Renderer path at this checkpoint.
+
+### R46.3c publication-editor REST boundary
+
+The publication wizard adds one nested route under the existing editor namespace:
+`/argentwolf-video-processor/v1/editor/videos/<video_id>/publication`, with GET and
+POST endpoint definitions and an explicit permission callback. Access requires
+`upload_files` plus object-aware `edit_post` on both the hidden AWVP Video and its
+original anchor post; when a plan references a thumbnail attachment, the caller
+must also be able to edit that attachment. The REST controller delegates all durable mutation to the bounded
+publication-editor application service.
+
+The route does not write post meta directly, perform PeerTube HTTP, access managed
+credentials, enqueue PeerTube work, save/publish the enclosing WordPress post, or
+alter frontend serving. The Gutenberg block continues to serialize only the stable
+`videoId`. Required publication-review confirmations are server-persisted inside
+the strict per-video plan, not inferred from WordPress post tags or site defaults.

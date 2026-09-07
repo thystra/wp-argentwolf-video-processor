@@ -315,15 +315,20 @@
   moderation/privacy signals. Last-known-good non-secret cache state is bound to
   backend + canonical origin + managed-secret generation; failed/refused refresh
   preserves provider data and marks it stale, and page GET performs no remote HTTP.
-- [ ] R46.3b: implementation candidate adds the single dynamic AWVP Gutenberg
-  Video block foundation with stable AWVP Video ID binding, idempotent adoption of
-  existing WordPress video attachments, current-default resolution only when a new
-  identity is created, and explicit local/active-PeerTube destination selection.
-  Frontend playback remains local and the block/REST surface grants no PeerTube
-  HTTP, dispatch, publication, post-status, migration, or serving-cutover authority.
-  Local dependency-free/workflow replay and exact-byte qualification remain before
-  completion.
-- [ ] R46.3c: add the PeerTube publication wizard and explicit review UX.
+- [x] R46.3b: the single dynamic AWVP Gutenberg Video block foundation is
+  qualified at commit prefix `4905076`, tree
+  `67054ea387ec90c484da01e437010772aad08a13`; Forgejo CI run 128 is green.
+  Stable AWVP Video ID binding, idempotent WordPress-video adoption, one-time
+  default resolution, explicit local/active-PeerTube destination planning, and
+  local frontend serving are now the qualified editor foundation.
+- [ ] R46.3c: implementation candidate adds the PeerTube publication wizard and
+  explicit review UX over the qualified block. It edits the strict per-video plan,
+  revalidates provider IDs against the cached backend catalog, preserves independent
+  reviewed PeerTube tags including explicit zero tags, exposes channel/support/
+  privacy/licence/category/language/thumbnail/comments/downloads/moderation and
+  dispatch timing, and grants no PeerTube HTTP, task dispatch, post-status, reveal,
+  migration, or serving-cutover authority. Exact-byte qualification and Forgejo CI
+  remain before completion.
 - [ ] R46.4: editorial publish validation for unresolved required metadata only.
 - [ ] R46.5: private prepublication visibility and durable WordPress-authoritative
   reveal/schedule synchronization.

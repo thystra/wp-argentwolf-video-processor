@@ -115,6 +115,12 @@
   PeerTube destination selection through a capability-aware REST boundary. Remote
   destination remains planning state: frontend playback stays on the local
   WordPress attachment and no PeerTube dispatch/publication/cutover is enabled.
+- Add the R46.3c PeerTube publication wizard/review boundary. The Gutenberg
+  inspector edits the strict per-video publication plan with independent reviewed
+  tags, cached provider choices, support/thumbnail/comments/download/moderation
+  fields, and dispatch timing. Unsupported provider privacy values remain
+  discoverable but unselectable; defaults never satisfy required review. Saving
+  remains editor-only state and performs no PeerTube HTTP or task/post-status work.
 - Expand focused PeerTube security/state tests and isolated real-WordPress Docker
   development matrices through the R39 identity/destination checkpoint, with an
   R40 activation continuation that proves activation performs no additional

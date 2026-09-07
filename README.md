@@ -259,3 +259,20 @@ Current stable release: `1.0.0`, published through WordPress.org.
 Install from WordPress.org or use the exact ZIP attached to the tagged Forgejo
 release. Automatically generated source archives are not the canonical
 installable release artifact.
+
+### R46.3c PeerTube publication review (development)
+
+The next editor layer uses the qualified R46.3b block to edit the existing strict
+per-video PeerTube publication plan. Provider-backed channel, privacy, licence,
+category, and language selections come only from the R46.3a cached catalog; a
+backend/origin context mismatch cannot authorize a save, and provider values that
+AWVP cannot safely author (such as password-protected privacy without a password
+lifecycle) remain visible but unselectable. PeerTube tags remain independent from
+WordPress tags and support an explicitly reviewed zero-tag state.
+
+The wizard also covers support preset/custom Markdown, thumbnail, comments,
+download policy, optional original-publication time, sensitive-content review, and
+`Send now` versus `Send when scheduled or published`. Saving this checkpoint
+persists editorial intent only. It performs no PeerTube HTTP, starts no upload,
+changes no WordPress post status, reveals no remote video, and does not change
+frontend serving authority.
