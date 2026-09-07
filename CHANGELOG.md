@@ -3,6 +3,7 @@
 
 ## 2.0.0-rc1 - 2026-09-07
 
+- Align the PeerTube backend capability map with qualified 2.0 runtime support: AWVP-staged/server-push ingest, PeerTube processing, embed delivery, and verified privacy mutation are advertised; direct-browser ingest, account-video selection, provider-native scheduling, source-retention guarantees, and remote delete remain disabled.
 - Add R46.9 explicit post-cutover local retention. KEEP remains the default;
   destructive per-video policies require a 1-365 day grace period and current
   verified PeerTube serving. Cleanup is journaled and detached, fences local

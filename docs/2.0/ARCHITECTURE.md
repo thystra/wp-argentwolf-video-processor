@@ -1028,3 +1028,14 @@ actual absence. A recovered `running` journal may confirm an exact already-absen
 source without replaying deletion; a merely queued job may not. Any mismatch,
 changed serving state, active local work, malformed record, or uncertainty means
 KEEP. No remote PeerTube HTTP or remote deletion is part of retention cleanup.
+
+
+### R45.6 / RC PeerTube capability truth-up
+
+The RC capability map now advertises the already-qualified AWVP-staged ingest,
+server-push transport, PeerTube processing/reconciliation, managed embed, and
+verified privacy-mutation paths. This is descriptive eligibility only: media and
+publication HTTP remain in the reviewed durable detached-worker boundaries. No
+direct-browser ingest, account-video selection, provider-native scheduling,
+backend source-retention guarantee, remote delete, new REST/AJAX/admin upload
+action, or cron-inline PeerTube HTTP is authorized by this change.

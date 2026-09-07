@@ -30,7 +30,7 @@ $assert(
 );
 $factory = new Backend_Adapter_Factory(new PeerTube_Backend_Adapter(new Managed_Backend_Secret_Store()));
 foreach (array(Backend_Capabilities::INGEST_AWVP_STAGING, Backend_Capabilities::PROCESSING_VIDEO) as $capability) {
-    $assert(! $registry->eligible('r38-admin', $capability, $factory), 'R45 indeterminate smoke prematurely advertised PeerTube execution capability.');
+    $assert($registry->eligible('r38-admin', $capability, $factory), 'R45 indeterminate smoke lost an R45.6-qualified PeerTube capability.');
 }
 
 $operations = (new PeerTube_Staged_Upload_Operation_Store())->open_operations();

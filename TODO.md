@@ -264,9 +264,14 @@
   scheduler, browser/admin launch surface, or inline PeerTube HTTP. Feature-branch
   Forgejo CI run 124 is green; the exact candidate is qualified as a development
   checkpoint.
-- [ ] R45.6: consider enabling PeerTube ingest/processing capability bits only
-  after the production-reachable execution/scheduling path is separately
-  reviewed and qualified.
+- [ ] R45.6 capability-activation candidate: the production-reachable detached
+  upload/reconciliation path is now qualified, so advertise only AWVP-staged
+  ingest, server push, and PeerTube processing. The RC capability truth-up also
+  advertises the separately qualified R46.5 verified privacy mutation. Direct
+  browser ingest, account-video listing/selection, provider-native scheduling,
+  backend source-retention guarantees, and remote delete remain false. Qualify
+  the exact map in Forgejo CI and the retained WordPress/PeerTube Docker matrices
+  before cutting the canonical RC1 package.
 
 
 ### R46 video destination, publication metadata, and migration

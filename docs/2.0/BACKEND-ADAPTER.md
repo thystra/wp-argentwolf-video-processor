@@ -661,3 +661,22 @@ site defaults apply only when authoring a new video. Provider publication
 vocabularies (channel/privacy/licence/category and later capability-dependent
 fields) are resolved against the selected backend, while the per-video plan
 retains exact provider IDs. See `VIDEO-DESTINATION-PUBLICATION.md`.
+
+
+## R45.6 / RC capability activation
+
+After R45.5 made the reviewed upload/reconciliation worker production-reachable
+through the existing detached scheduler path, R45.6 may truthfully advertise
+`ingest.awvp_staging`, `ingest.server_push`, and `processing.video`. R46.5 also
+provides the separately qualified `publication.privacy` mutation/verification
+path, so the RC map advertises that capability as well. `delivery.embed` remains
+true from R40.
+
+The grant is exact, not a general PeerTube enable switch.
+`ingest.wordpress_attachment`, `ingest.direct_browser`,
+`library.account_videos`, `asset.select_existing`, `publication.schedule`,
+`source.backend_retention`, and `asset.remote_delete` remain false. Capability
+advertisement does not create a browser/admin upload action, move PeerTube HTTP
+into cron, add a common-adapter mutation method, or weaken task/journal/no-replay
+fences. `Backend_Registry::eligible()` still requires an active canonical
+descriptor and non-blocking credential health.

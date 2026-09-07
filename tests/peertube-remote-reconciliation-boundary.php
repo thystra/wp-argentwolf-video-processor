@@ -1,5 +1,5 @@
 <?php
-/** R44/R45 boundary: reconciliation is reachable only through one-shot WP-CLI task execution. */
+/** R44/R45 boundary after R45.6: capability is advertised, execution remains detached-worker-only. */
 declare(strict_types=1);
 
 require_once dirname(__DIR__).'/includes/Backend_Capabilities.php';
@@ -21,7 +21,7 @@ foreach(
         Backend_Capabilities::PROCESSING_VIDEO
     ) as $cap
 ){
-    $assert(false===($c[$cap]??null),'R44/R45 prematurely enabled capability '.$cap);
+    $assert(true===($c[$cap]??null),'R45.6 did not advertise qualified capability '.$cap);
 }
 
 $root=dirname(__DIR__);

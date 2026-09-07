@@ -809,3 +809,14 @@ that identity immediately before `wp_delete_file()` and confirms absence. It
 never calls `wp_delete_attachment()` or `wp_delete_post()`. Managed AWVP copies
 are removed only through `Storage::remove_tree()` after its existing confinement
 checks, and their output metadata is cleared after the tree is absent.
+
+
+### R45.6 capability advertisement does not add a request surface
+
+The RC capability map now advertises the already-qualified AWVP-staged ingest,
+server-push transport, PeerTube processing/reconciliation, managed embed, and
+verified privacy-mutation paths. This is descriptive eligibility only: media and
+publication HTTP remain in the reviewed durable detached-worker boundaries. No
+direct-browser ingest, account-video selection, provider-native scheduling,
+backend source-retention guarantee, remote delete, new REST/AJAX/admin upload
+action, or cron-inline PeerTube HTTP is authorized by this change.

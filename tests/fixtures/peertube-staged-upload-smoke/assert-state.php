@@ -35,11 +35,11 @@ if (! is_array($descriptor) || 'active' !== ($descriptor['state'] ?? null)) {
 $registry = new Backend_Registry();
 $secrets = new Managed_Backend_Secret_Store();
 $factory = new Backend_Adapter_Factory(new PeerTube_Backend_Adapter($secrets));
-if ($registry->eligible('r38-admin', Backend_Capabilities::INGEST_AWVP_STAGING, $factory)) {
-    throw new RuntimeException('R43 prematurely advertised AWVP-staged PeerTube ingest capability.');
+if (! $registry->eligible('r38-admin', Backend_Capabilities::INGEST_AWVP_STAGING, $factory)) {
+    throw new RuntimeException('R45.6 did not advertise AWVP-staged PeerTube ingest capability.');
 }
-if ($registry->eligible('r38-admin', Backend_Capabilities::PROCESSING_VIDEO, $factory)) {
-    throw new RuntimeException('R43 prematurely advertised PeerTube processing authority.');
+if (! $registry->eligible('r38-admin', Backend_Capabilities::PROCESSING_VIDEO, $factory)) {
+    throw new RuntimeException('R45.6 did not advertise PeerTube processing authority.');
 }
 
 $directory = Storage::root() . '/101/staging';
@@ -114,8 +114,8 @@ foreach (array('r37-success-access-token-canary', 'r37-success-refresh-token-can
     }
 }
 
-if ($registry->eligible('r38-admin', Backend_Capabilities::INGEST_AWVP_STAGING, $factory)) {
-    throw new RuntimeException('R43 upload execution changed advertised ingest capability.');
+if (! $registry->eligible('r38-admin', Backend_Capabilities::INGEST_AWVP_STAGING, $factory)) {
+    throw new RuntimeException('R43/R45 upload execution lost the R45.6 ingest capability.');
 }
 
 echo "PEERTUBE_STAGED_UPLOAD_STATE_ASSERTIONS=PASS\n";

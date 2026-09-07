@@ -456,3 +456,14 @@ Mutation acceptance uncertainty is held rather than automatically replayed. Edit
 that would require an undocumented clear representation for already-applied
 provider values are refused. Even after a verified publication, frontend serving
 remains local until R46.6 explicitly verifies and switches serving authority.
+
+
+### R45.6 / RC capability activation
+
+The RC capability map now advertises the already-qualified AWVP-staged ingest,
+server-push transport, PeerTube processing/reconciliation, managed embed, and
+verified privacy-mutation paths. This is descriptive eligibility only: media and
+publication HTTP remain in the reviewed durable detached-worker boundaries. No
+direct-browser ingest, account-video selection, provider-native scheduling,
+backend source-retention guarantee, remote delete, new REST/AJAX/admin upload
+action, or cron-inline PeerTube HTTP is authorized by this change.

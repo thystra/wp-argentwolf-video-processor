@@ -11,12 +11,12 @@ use Closure;
 use Throwable;
 
 /**
- * Narrow R40 PeerTube adapter registration and health boundary.
+ * PeerTube adapter registration, capability, and credential-health boundary.
  *
- * This checkpoint intentionally exposes no upload/create/update/delete API.
- * Its capability map permits only non-mutating managed-video embed routing;
- * media-transfer and remote-management capabilities remain false until their
- * dedicated implementation tranches land.
+ * The common adapter intentionally exposes no raw upload/create/update/delete
+ * method. Capability advertisement describes separately qualified AWVP services:
+ * staged server-push ingest/processing, managed embed delivery, and verified
+ * privacy mutation. Unsupported/destructive surfaces remain false.
  */
 final class PeerTube_Backend_Adapter implements Backend_Adapter
 {

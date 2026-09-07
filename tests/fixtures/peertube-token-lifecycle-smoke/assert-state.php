@@ -67,7 +67,7 @@ $secrets = new Managed_Backend_Secret_Store();
 $assert(null === $secrets->read($record['secret_ref'], 'r38-admin'), 'The managed token record remained after disconnect.');
 $factory = new Backend_Adapter_Factory(new PeerTube_Backend_Adapter($secrets));
 $assert(! $registry->eligible('r38-admin', Backend_Capabilities::DELIVERY_EMBED, $factory), 'A retired PeerTube backend remained eligible.');
-$assert(! $registry->eligible('r38-admin', Backend_Capabilities::PROCESSING_VIDEO, $factory), 'R41 exposed processing/upload capability.');
+$assert(! $registry->eligible('r38-admin', Backend_Capabilities::PROCESSING_VIDEO, $factory), 'A retired PeerTube backend remained processing-eligible after disconnect.');
 
 $forbidden = array(
     'r37-oauth-client-id',

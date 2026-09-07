@@ -1,8 +1,9 @@
 <?php
 /**
- * R43/R45 regression boundary: resumable-upload primitives are executable only
- * through the explicit one-shot PeerTube WP-CLI task worker. Browser/admin media-transfer,
- * cron/REST/AJAX entry points and capability advertisement stay off.
+ * R43-R45 regression boundary after R45.6 capability activation: resumable
+ * upload remains owned by the durable detached PeerTube worker. Capability
+ * advertisement is now on, but browser/admin/REST/AJAX and cron-inline media
+ * transfer remain forbidden.
  */
 
 declare(strict_types=1);
@@ -20,16 +21,16 @@ $assert = static function (bool $condition, string $message): void {
 
 $capabilities = Backend_Capabilities::peertube_activation();
 $assert(
-    false === ($capabilities[Backend_Capabilities::INGEST_AWVP_STAGING] ?? null),
-    'R43 executable checkpoint prematurely advertised AWVP-staged ingest.'
+    true === ($capabilities[Backend_Capabilities::INGEST_AWVP_STAGING] ?? null),
+    'R45.6 must advertise the qualified AWVP-staged ingest path.'
 );
 $assert(
-    false === ($capabilities[Backend_Capabilities::INGEST_SERVER_PUSH] ?? null),
-    'R43 executable checkpoint prematurely advertised PeerTube server push.'
+    true === ($capabilities[Backend_Capabilities::INGEST_SERVER_PUSH] ?? null),
+    'R45.6 must advertise the qualified server-push transport.'
 );
 $assert(
-    false === ($capabilities[Backend_Capabilities::PROCESSING_VIDEO] ?? null),
-    'R43 executable checkpoint prematurely claimed PeerTube processing authority.'
+    true === ($capabilities[Backend_Capabilities::PROCESSING_VIDEO] ?? null),
+    'R45.6 must advertise qualified PeerTube processing/reconciliation.'
 );
 
 $root = dirname(__DIR__);

@@ -1943,3 +1943,15 @@ Before cutting the canonical RC1 package, resolve the still-open R45.6 backend
 capability-advertisement decision against the now-qualified production detached
 upload/reconciliation path. Do not let capability-map cleanup broaden browser,
 REST, AJAX, cron-inline, remote-delete, or direct-browser authority.
+
+
+### R45.6 capability-activation candidate before RC1
+
+The remaining pre-RC capability decision is now explicit: advertise only
+`ingest.awvp_staging`, `ingest.server_push`, and `processing.video` from the
+qualified R45 worker/reconciliation path, plus `publication.privacy` from the
+qualified R46.5 mutation/verification path. Preserve `delivery.embed=true`. All
+other PeerTube capability keys remain false. The exact-map regression is
+`tests/peertube-capability-activation.php`. Qualify this candidate in Forgejo CI
+and the retained real-WordPress/mock-PeerTube matrices before integrating/cutting
+RC1.

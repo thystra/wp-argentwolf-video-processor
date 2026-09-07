@@ -422,3 +422,14 @@ includes relative path plus size/device/inode/mtime/ctime and is revalidated
 immediately before physical deletion. Any mismatch means KEEP. Do not add
 provider HTTP, remote deletion, a new scheduler, or retention work to the
 qualified `--once` task set.
+
+
+## R45.6 / RC PeerTube capability boundary
+
+PeerTube capability advertisement must match implemented, qualified authority and
+must not be treated as an execution entry point. For RC1 the only true PeerTube
+capabilities are AWVP-staged ingest, server push, video processing, embed delivery,
+and verified privacy mutation. Direct-browser ingest, WordPress-attachment direct
+ingest, account-video listing/selection, provider-native scheduling, backend
+source-retention guarantees, and remote delete remain false. Keep the exact-map
+regression synchronized with any future capability change.
