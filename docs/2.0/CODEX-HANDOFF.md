@@ -1809,3 +1809,29 @@ R46.4 must not enqueue upload/reveal work, call `wp_publish_post()`, register a
 post-status transition handler, mutate PeerTube visibility, or change serving
 authority. In particular, WordPress cron's later transition of a scheduled post
 and the durable WordPress-authoritative remote reveal lifecycle remain R46.5.
+
+### R46.4 qualification and R46.5a continuation
+
+R46.4 is qualified at commit `5c30a62`, tree
+`922fdb59ca6f784260e1aa5cd6e1ee163118adc1`; Forgejo CI run 130 is green.
+R46.5 is intentionally split so WordPress transition authority can be reviewed
+separately from remote mutation.
+
+R46.5a adds a strict local `_argent_video_peertube_publication_lifecycle` record
+and `peertube_publication_sync` task generation only. A reviewed plan plus its
+concrete destination is projected against the anchor post's current WordPress
+status. `send_now` may authorize upload while draft; `future` authorizes private
+preupload; only actual `publish` authorizes the reviewed final privacy. Draft,
+pending, private, trash, reschedule, or revert states target PeerTube privacy `3`
+(private). Each semantic change increments a generation, so an older queued task
+is superseded without destructive queue cancellation.
+
+Plan-save and `transition_post_status` callbacks perform no PeerTube HTTP,
+credential work, source staging, upload creation, remote visibility mutation, or
+serving cutover. They only persist local intent and enqueue a generic durable task.
+R46.5a deliberately leaves the qualified five-minute dispatch topology unchanged
+and adds no bootstrap/retry scheduler. A reviewed-plan save or actual WordPress
+status transition establishes/retries lifecycle state; pre-R46.5 reviewed plans
+remain inert until one of those local events. `peertube_publication_sync` is not
+added to launcher/worker owned task types. R46.5b must explicitly add worker
+ownership and generation revalidation before any remote mutation.

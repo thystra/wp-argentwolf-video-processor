@@ -1309,3 +1309,24 @@ catalog freshness, tasks, upload/transcoding progress, and remote assets are not
 inputs to this projection and therefore cannot accidentally become publication
 authority. Reused blocks on non-origin posts are display references only for this
 validation decision.
+
+### `_argent_video_peertube_publication_lifecycle`
+
+R46.5a adds one strict version-1 local lifecycle record per PeerTube-bound AWVP
+Video. It contains a monotonically increasing semantic `generation`, backend and
+anchor identity, SHA-256 commitment to the strict reviewed publication plan,
+dispatch policy, current WordPress status bucket, upload/reveal authorization,
+the currently desired privacy, local task-pending bookkeeping, and update time.
+It contains no token, secret reference, raw provider response, remote identifier,
+source path, or serving authority.
+
+A non-published lifecycle record is valid only when `reveal_authorized=false` and
+its target privacy is PeerTube private (`3`). Only WordPress status `publish` may
+carry `reveal_authorized=true` and a reviewed non-private target. Semantic changes
+increment generation; queue bookkeeping and timestamps do not. The corresponding
+`peertube_publication_sync` task payload stores only schema version, generation,
+and the plan commitment. Old generations are retained as durable history but must
+be treated as superseded by the later R46.5b worker. R46.5a adds no periodic
+bootstrap/retry state: plan saves and actual WordPress status transitions are the
+only lifecycle derivation triggers, and pre-R46.5 reviewed plans stay inert until
+one of those events occurs.

@@ -83,6 +83,7 @@ require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Task_Worker_Launcher.php';
 require_once ARGENT_VIDEO_DIR . 'includes/Video_Post_Type.php';
 require_once ARGENT_VIDEO_DIR . 'includes/Video_Destination.php';
 require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Publication_Plan.php';
+require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Publication_Lifecycle.php';
 require_once ARGENT_VIDEO_DIR . 'includes/Video_Publishing_Defaults.php';
 require_once ARGENT_VIDEO_DIR . 'includes/Video_Publishing_Defaults_Store.php';
 require_once ARGENT_VIDEO_DIR . 'includes/Video_Block_Editor_Service.php';
@@ -91,6 +92,7 @@ require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Publication_Editor_Service.ph
 require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Publication_Editor_Rest.php';
 require_once ARGENT_VIDEO_DIR . 'includes/Editorial_Publish_Validator.php';
 require_once ARGENT_VIDEO_DIR . 'includes/Editorial_Publish_Gate.php';
+require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Publication_Synchronizer.php';
 require_once ARGENT_VIDEO_DIR . 'includes/Video_Block.php';
 require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Publication_Catalog_Store.php';
 require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Publication_Catalog_Service.php';

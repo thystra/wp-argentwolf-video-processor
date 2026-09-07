@@ -17,6 +17,7 @@ final class Video_Meta
     public const SOURCE_STATE = '_argent_video_source_state';
     public const DESTINATION = '_argent_video_destination';
     public const PEERTUBE_PUBLICATION_PLAN = '_argent_video_peertube_publication_plan';
+    public const PEERTUBE_PUBLICATION_LIFECYCLE = '_argent_video_peertube_publication_lifecycle';
     public const PROFILE_SNAPSHOT = '_argent_video_profile_snapshot';
     public const PUBLICATION_POLICY = '_argent_video_publication_policy';
     public const METADATA_ORIGIN = '_argent_video_metadata_origin';
@@ -71,6 +72,10 @@ final class Video_Meta
             self::PEERTUBE_PUBLICATION_PLAN => $base + array(
                 'type'              => 'array',
                 'sanitize_callback' => array(self::class, 'sanitize_peertube_publication_plan'),
+            ),
+            self::PEERTUBE_PUBLICATION_LIFECYCLE => $base + array(
+                'type'              => 'array',
+                'sanitize_callback' => array(self::class, 'sanitize_peertube_publication_lifecycle'),
             ),
             self::PROFILE_SNAPSHOT => $base + array(
                 'type'              => 'array',
@@ -169,6 +174,12 @@ final class Video_Meta
     public static function sanitize_peertube_publication_plan(mixed $value): array
     {
         return PeerTube_Publication_Plan::sanitize($value);
+    }
+
+    /** @return array<string,mixed> */
+    public static function sanitize_peertube_publication_lifecycle(mixed $value): array
+    {
+        return PeerTube_Publication_Lifecycle::sanitize($value);
     }
 
     /** @return array<string|int, mixed> */

@@ -85,6 +85,7 @@ require_once dirname(__DIR__) . '/includes/Backend_Identity.php';
 require_once dirname(__DIR__) . '/includes/Backend_Registry.php';
 require_once dirname(__DIR__) . '/includes/Video_Destination.php';
 require_once dirname(__DIR__) . '/includes/PeerTube_Publication_Plan.php';
+require_once dirname(__DIR__) . '/includes/PeerTube_Publication_Lifecycle.php';
 require_once dirname(__DIR__) . '/includes/Model_Activator.php';
 require_once dirname(__DIR__) . '/includes/Video_Post_Type.php';
 require_once dirname(__DIR__) . '/includes/Video_Meta.php';
@@ -132,6 +133,7 @@ $expected_meta = array(
     Video_Meta::SOURCE_STATE,
     Video_Meta::DESTINATION,
     Video_Meta::PEERTUBE_PUBLICATION_PLAN,
+    Video_Meta::PEERTUBE_PUBLICATION_LIFECYCLE,
     Video_Meta::PROFILE_SNAPSHOT,
     Video_Meta::PUBLICATION_POLICY,
     Video_Meta::METADATA_ORIGIN,

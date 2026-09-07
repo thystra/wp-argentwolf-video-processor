@@ -895,3 +895,27 @@ unresolved AWVP content without publishing and then reverting; for already
 publicational content it retains the prior live content rather than silently
 making unresolved edits live. R46.4 adds no post-transition/reveal hook: actual
 scheduled publication and remote visibility synchronization remain R46.5 work.
+
+### R46.5a WordPress-authoritative lifecycle intent
+
+R46.5a introduces a local orchestration plane between reviewed editorial intent
+and the later detached remote executor. `PeerTube_Publication_Synchronizer` is
+wired to publication-plan saves and WordPress post-status transitions. It derives
+one strict `PeerTube_Publication_Lifecycle` record per anchored AWVP Video and
+queues a `peertube_publication_sync` task keyed by video + lifecycle generation +
+plan commitment.
+
+The status projection is deliberately asymmetric. `future` may authorize upload
+but always targets PeerTube private. Actual WordPress `publish` is the only state
+that can set `reveal_authorized=true` and target the reviewed final privacy.
+`private`, draft/pending, reschedule/revert, trash, and unknown statuses target
+remote private. Generation increments make stale scheduled/reveal tasks harmless
+once R46.5b consumes them: the worker must re-read the current lifecycle generation
+before mutation.
+
+This sub-checkpoint has no PeerTube API dependency and does not own its new task
+type in `PeerTube_Task_Worker`/launcher yet. Post hooks therefore cannot perform
+network I/O even indirectly through the current worker. R46.5a leaves the qualified
+five-minute dispatch topology unchanged and adds no bootstrap/retry scheduler; a
+reviewed-plan save or actual WordPress status transition establishes/retries local
+lifecycle intent. Pre-R46.5 reviewed plans remain inert until one of those events.

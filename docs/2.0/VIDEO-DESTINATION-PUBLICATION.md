@@ -322,3 +322,20 @@ Gutenberg supplies an immediate save lock only for `publish`, `future`, and
 the same protected statuses at REST pre-insert, with a conservative non-REST
 pre-write fallback. R46.4 does not execute the later scheduled transition or
 remote reveal; those WordPress-authoritative lifecycle actions remain R46.5.
+
+### R46.5a durable lifecycle intent
+
+R46.4 is qualified at commit `5c30a62`, tree
+`922fdb59ca6f784260e1aa5cd6e1ee163118adc1`, with Forgejo CI run 130 green.
+R46.5a begins the post-review lifecycle without performing remote work. Reviewed
+`send_now` intent can authorize an early private upload while the post remains a
+draft. `Send when scheduled or published` becomes upload-authorized when WordPress
+actually reaches `future`, `publish`, or `private`; scheduled and private posts
+still target PeerTube private.
+
+The actual WordPress `publish` status is the sole reveal authority. Rescheduling,
+reverting to draft/pending, making the post private, trashing it, or moving into an
+unknown status writes a later lifecycle generation whose target is private. This
+supersedes any older reveal generation. R46.5a only records/enqueues this local
+intent; R46.5b will consume it in the detached worker and must re-check generation
+before creating or changing a remote video.

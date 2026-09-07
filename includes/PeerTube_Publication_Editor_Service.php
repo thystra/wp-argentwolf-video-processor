@@ -200,6 +200,13 @@ final class PeerTube_Publication_Editor_Service
 
         $before_destination = $destination;
         if ($before === $candidate && $before_destination === $destination_candidate) {
+            if (function_exists('do_action')) {
+                do_action(
+                    'argentwolf_video_processor_publication_plan_saved',
+                    $video_id,
+                    (int) $candidate['anchor_post_id']
+                );
+            }
             return self::result(self::PRESENT);
         }
 
@@ -213,9 +220,18 @@ final class PeerTube_Publication_Editor_Service
             get_post_meta($video_id, Video_Meta::DESTINATION, true)
         );
 
-        return $candidate === $after_plan && $destination_candidate === $after_destination
-            ? self::result(self::APPLIED)
-            : self::result(self::INDETERMINATE);
+        if ($candidate === $after_plan && $destination_candidate === $after_destination) {
+            if (function_exists('do_action')) {
+                do_action(
+                    'argentwolf_video_processor_publication_plan_saved',
+                    $video_id,
+                    (int) $candidate['anchor_post_id']
+                );
+            }
+            return self::result(self::APPLIED);
+        }
+
+        return self::result(self::INDETERMINATE);
     }
 
     /** @return array<string,mixed> */

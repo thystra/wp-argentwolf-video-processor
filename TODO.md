@@ -330,16 +330,22 @@
   thumbnail/comments/downloads/moderation and dispatch timing, and grants no
   PeerTube HTTP, task dispatch, post-status, reveal, migration, or serving-cutover
   authority.
-- [ ] R46.4: implementation candidate adds local-only WordPress editorial publish
-  validation for anchored AWVP blocks. `publish`, `future`, and `private` are
-  blocked when a bound PeerTube destination lacks coherent destination/anchor/
-  backend/channel state or explicit title/channel/tags/privacy/moderation review.
-  Local and missing-legacy destinations remain publishable; reused blocks do not
-  make the second post a publication authority; PeerTube HTTP/catalog/task/upload/
-  transcoding/readiness state is deliberately outside the decision. Exact-byte
-  qualification and Forgejo CI remain before completion.
-- [ ] R46.5: private prepublication visibility and durable WordPress-authoritative
-  reveal/schedule synchronization.
+- [x] R46.4: local-only WordPress editorial publish validation is qualified at
+  commit `5c30a62`, tree `922fdb59ca6f784260e1aa5cd6e1ee163118adc1`; Forgejo CI
+  run 130 is green. `publish`, `future`, and `private` require coherent local
+  destination/anchor/backend/channel state plus explicit title/channel/tags/
+  privacy/moderation review, while PeerTube readiness remains non-blocking.
+- [ ] R46.5a: durable WordPress-authoritative publication lifecycle intent and
+  superseding task generation. Plan saves and post-status changes may derive only
+  local upload/reveal intent and enqueue `peertube_publication_sync`; scheduled
+  content targets PeerTube private, actual WordPress `publish` alone authorizes
+  final privacy, and later generations supersede stale reveal intent. No PeerTube
+  HTTP or worker ownership in this sub-checkpoint.
+- [ ] R46.5b: detached-worker consumption of publication lifecycle intent: freeze
+  current reviewed provider metadata/source into private upload work, reconcile
+  readiness, apply/verify final privacy only for the current publish-authorized
+  generation, and re-private on a superseding non-published generation. No inline
+  post-hook HTTP and no serving cutover yet.
 - [ ] R46.6: local-first serving and verified remote cutover.
 - [ ] R46.7: existing-video migration planner / Needs Review workflow.
 - [ ] R46.8: one-way local-to-PeerTube migration execution.

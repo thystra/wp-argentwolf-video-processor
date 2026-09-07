@@ -1,3 +1,11 @@
+
+- Add the R46.5a WordPress-authoritative publication lifecycle intent boundary.
+  Reviewed plan saves and post-status changes derive generation-fenced local
+  private-upload/reveal intent and enqueue `peertube_publication_sync` without
+  PeerTube HTTP or worker ownership. Actual WordPress `publish` is the only
+  state that may authorize final privacy; reschedule/revert/private/trash intent
+  supersedes older reveal generations with a private target.
+
 <!-- File: CHANGELOG.md -->
 # Changelog
 

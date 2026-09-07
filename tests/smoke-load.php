@@ -147,6 +147,8 @@ foreach (
         ArgentVideo\PeerTube_Task_Worker::class,
         ArgentVideo\PeerTube_Task_Worker_Launcher::class,
         ArgentVideo\PeerTube_Remote_Asset_Reconciliation_Service::class,
+        ArgentVideo\PeerTube_Publication_Lifecycle::class,
+        ArgentVideo\PeerTube_Publication_Synchronizer::class,
     ) as $required_class
 ) {
     if (! class_exists($required_class, false)) {

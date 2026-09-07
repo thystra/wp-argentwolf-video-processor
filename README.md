@@ -295,3 +295,19 @@ blocks remain display-only on non-origin posts. This gate never checks PeerTube
 reachability, cached catalog freshness, upload/task/transcoding state, or remote
 readiness, so a reviewed post may publish while PeerTube is unavailable and the
 local video remains the serving fallback.
+
+### R46.5a publication lifecycle synchronization (development)
+
+R46.4 is qualified at commit `5c30a62`, tree
+`922fdb59ca6f784260e1aa5cd6e1ee163118adc1`; Forgejo CI run 130 is green. The
+next sub-checkpoint records durable WordPress-authoritative lifecycle intent for a
+reviewed PeerTube-bound video. Scheduled posts may authorize an early upload, but
+the desired remote visibility remains private until WordPress actually reaches
+`publish`. Reschedule/revert/private/trash changes create a newer generation that
+supersedes an older reveal intent.
+
+R46.5a performs no PeerTube HTTP and its new queue task is not yet owned by the
+PeerTube worker. It does not change the qualified recurring-dispatch topology or add
+a bootstrap scheduler: lifecycle state is established by a reviewed-plan save or an
+actual WordPress status transition. Pre-R46.5 reviewed plans remain inert until one
+of those local events occurs. Remote upload/visibility execution follows in R46.5b.

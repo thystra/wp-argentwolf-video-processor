@@ -56,6 +56,8 @@ jobs:
           php tests/peertube-publication-editor-rest.php
           php tests/editorial-publish-validator.php
           php tests/editorial-publish-gate.php
+          php tests/peertube-publication-lifecycle.php
+          php tests/peertube-publication-synchronizer.php
           php tests/video-block-editor-service.php
           php tests/video-block-editor-rest.php
           php tests/video-block.php
