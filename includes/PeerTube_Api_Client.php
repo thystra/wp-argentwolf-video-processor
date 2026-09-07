@@ -681,7 +681,7 @@ final class PeerTube_Api_Client implements PeerTube_Password_Grant_Api, PeerTube
                 null === $total
                 || $total > self::MAX_CHANNELS
                 || ! is_array($page)
-                || ! array_is_list($page)
+                || array_values($page) !== $page
                 || count($page) > self::CHANNEL_PAGE_SIZE
                 || (null !== $expected_total && $total !== $expected_total)
             ) {
@@ -696,7 +696,7 @@ final class PeerTube_Api_Client implements PeerTube_Password_Grant_Api, PeerTube
             }
 
             foreach ($page as $candidate) {
-                if (! is_array($candidate) || array_is_list($candidate)) {
+                if (! is_array($candidate) || array_values($candidate) === $candidate) {
                     return self::failure(PeerTube_Api_Error::invalid_response('channel_shape_invalid', 200));
                 }
 
@@ -774,7 +774,7 @@ final class PeerTube_Api_Client implements PeerTube_Password_Grant_Api, PeerTube
             return self::failure(PeerTube_Api_Error::invalid_response($prefix . '_json_invalid', $http_status));
         }
 
-        if (! is_array($decoded) || array_is_list($decoded)) {
+        if (! is_array($decoded) || array_values($decoded) === $decoded) {
             return self::failure(PeerTube_Api_Error::invalid_response($prefix . '_shape_invalid', $http_status));
         }
 
@@ -831,7 +831,7 @@ final class PeerTube_Api_Client implements PeerTube_Password_Grant_Api, PeerTube
             return '';
         }
         $absolute = str_starts_with($location, '/') ? $origin . $location : $location;
-        $parts = function_exists('wp_parse_url') ? wp_parse_url($absolute) : parse_url($absolute);
+        $parts = wp_parse_url($absolute);
         if (! is_array($parts) || isset($parts['user']) || isset($parts['pass']) || isset($parts['fragment'])) {
             return '';
         }
@@ -905,7 +905,7 @@ final class PeerTube_Api_Client implements PeerTube_Password_Grant_Api, PeerTube
     /** @return array<string,string>|null */
     private static function numeric_dictionary(array $value): ?array
     {
-        if (array_is_list($value) || count($value) > PeerTube_Publication_Catalog::MAX_VOCABULARY_ITEMS) {
+        if (array_values($value) === $value || count($value) > PeerTube_Publication_Catalog::MAX_VOCABULARY_ITEMS) {
             return null;
         }
         $out = array();
@@ -924,7 +924,7 @@ final class PeerTube_Api_Client implements PeerTube_Password_Grant_Api, PeerTube
     /** @return array<string,string>|null */
     private static function language_dictionary(array $value): ?array
     {
-        if (array_is_list($value) || count($value) > PeerTube_Publication_Catalog::MAX_VOCABULARY_ITEMS) {
+        if (array_values($value) === $value || count($value) > PeerTube_Publication_Catalog::MAX_VOCABULARY_ITEMS) {
             return null;
         }
         $out = array();
@@ -972,7 +972,7 @@ final class PeerTube_Api_Client implements PeerTube_Password_Grant_Api, PeerTube
     /** @return array<string, mixed> */
     private static function object(mixed $value): array
     {
-        return is_array($value) && ! array_is_list($value) ? $value : array();
+        return is_array($value) && array_values($value) !== $value ? $value : array();
     }
 
     private static function strict_text(mixed $value, int $maximum_characters): string

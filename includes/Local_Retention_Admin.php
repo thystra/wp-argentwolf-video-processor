@@ -14,10 +14,11 @@ final class Local_Retention_Admin
     public function configure_action():void
     {
         if(!current_user_can('manage_options'))wp_die(esc_html__('You do not have permission to configure video retention.','argentwolf-video-processor'));
-        $video=isset($_POST['video_id'])?Video_Meta::sanitize_positive_id(wp_unslash($_POST['video_id'])):0;check_admin_referer(self::NONCE.':'.$video);
+        $video=isset($_POST['video_id'])&&is_string($_POST['video_id'])?Video_Meta::sanitize_positive_id(sanitize_text_field(wp_unslash($_POST['video_id']))):0;check_admin_referer(self::NONCE.':'.$video);
         if($video<1||!current_user_can('edit_post',$video))wp_die(esc_html__('You do not have permission to edit this AWVP Video.','argentwolf-video-processor'));
-        $mode=isset($_POST['mode'])&&is_string($_POST['mode'])?sanitize_key(wp_unslash($_POST['mode'])):'';$master=isset($_POST['master_authority'])&&is_string($_POST['master_authority'])?sanitize_key(wp_unslash($_POST['master_authority'])):'';$grace=isset($_POST['grace_days'])?(int)wp_unslash($_POST['grace_days']):0;
-        if(Local_Retention_Policy::MODE_KEEP!==$mode&&(!isset($_POST['confirm_cleanup'])||'1'!==(string)wp_unslash($_POST['confirm_cleanup'])))$result=array('status'=>Local_Retention_Service::REFUSED);
+        $mode=isset($_POST['mode'])&&is_string($_POST['mode'])?sanitize_key(wp_unslash($_POST['mode'])):'';$master=isset($_POST['master_authority'])&&is_string($_POST['master_authority'])?sanitize_key(wp_unslash($_POST['master_authority'])):'';$grace=isset($_POST['grace_days'])&&is_string($_POST['grace_days'])?absint(wp_unslash($_POST['grace_days'])):0;
+        $confirmed=isset($_POST['confirm_cleanup'])&&is_string($_POST['confirm_cleanup'])&&'1'===sanitize_key(wp_unslash($_POST['confirm_cleanup']));
+        if(Local_Retention_Policy::MODE_KEEP!==$mode&&!$confirmed)$result=array('status'=>Local_Retention_Service::REFUSED);
         else $result=$this->service->configure($video,$mode,$grace,$master,get_current_user_id(),time());
         wp_safe_redirect(add_query_arg(array('page'=>self::PAGE_SLUG,'awvp_retention_notice'=>(string)($result['status']??Local_Retention_Service::REFUSED),'video_id'=>(string)$video),admin_url('tools.php')));exit;
     }
@@ -27,7 +28,8 @@ final class Local_Retention_Admin
         $rows=get_posts(array('post_type'=>Video_Post_Type::POST_TYPE,'post_status'=>'any','numberposts'=>200,'orderby'=>'ID','order'=>'ASC'));
         ?><div class="wrap"><h1><?php esc_html_e('AWVP Local Retention','argentwolf-video-processor'); ?></h1>
         <div class="notice notice-warning inline"><p><?php esc_html_e('KEEP is the default. Destructive cleanup is per-video, delayed, and runs only in the detached worker after verified PeerTube serving. “Delete all local video copies” removes the physical WordPress video file but preserves the attachment record and can eliminate local fallback.','argentwolf-video-processor'); ?></p></div>
-        <?php if(isset($_GET['awvp_retention_notice'])):?><div class="notice notice-info"><p><?php echo esc_html('Retention request: '.sanitize_key(wp_unslash($_GET['awvp_retention_notice']))); ?></p></div><?php endif; ?>
+        <?php // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only redirect notice; it cannot mutate state. ?>
+        <?php if(isset($_GET['awvp_retention_notice'])&&is_string($_GET['awvp_retention_notice'])):?><div class="notice notice-info"><p><?php echo esc_html('Retention request: '.sanitize_key(wp_unslash($_GET['awvp_retention_notice']))); ?></p></div><?php endif; ?>
         <table class="widefat striped"><thead><tr><th><?php esc_html_e('Video','argentwolf-video-processor'); ?></th><th><?php esc_html_e('Serving / source','argentwolf-video-processor'); ?></th><th><?php esc_html_e('Policy','argentwolf-video-processor'); ?></th></tr></thead><tbody>
         <?php foreach($rows as $row):$id=(int)$row->ID;$authority=Video_Serving_Authority::sanitize(get_post_meta($id,Video_Meta::SERVING_AUTHORITY,true));$policy=Local_Retention_Policy::sanitize(get_post_meta($id,Video_Meta::LOCAL_RETENTION_POLICY,true));$execution=Local_Retention_Execution::sanitize(get_post_meta($id,Video_Meta::LOCAL_RETENTION_EXECUTION,true));$cleanup=Video_Meta::sanitize_cleanup_state(get_post_meta($id,Video_Meta::CLEANUP_STATE,true));$source=Video_Meta::sanitize_source_state(get_post_meta($id,Video_Meta::SOURCE_STATE,true));$master=Video_Meta::sanitize_master_authority(get_post_meta($id,Video_Meta::MASTER_AUTHORITY,true));$frozen='removed'===$source||('complete'===$cleanup&&array()!==$execution&&Local_Retention_Policy::MODE_DELETE_ALL===($execution['mode']??null));?>
         <tr><td>#<?php echo esc_html((string)$id); ?> — <?php echo esc_html((string)$row->post_title); ?></td><td><?php echo esc_html(array()===$authority?'local/not verified':'PeerTube verified'); ?>; source=<?php echo esc_html($source); ?>; cleanup=<?php echo esc_html($cleanup); ?></td><td>

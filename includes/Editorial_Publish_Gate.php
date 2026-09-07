@@ -207,7 +207,12 @@ final class Editorial_Publish_Gate
             }
             $video_id = Video_Meta::sanitize_positive_id($issue['video_id'] ?? 0);
             $parts[] = $video_id > 0
-                ? sprintf(__('Video #%1$d: %2$s', 'argentwolf-video-processor'), $video_id, $label)
+                ? sprintf(
+                /* translators: 1: AWVP Video post ID, 2: validation issue label. */
+                __('Video #%1$d: %2$s', 'argentwolf-video-processor'),
+                $video_id,
+                $label
+            )
                 : $label;
             if (count($parts) >= 20) {
                 break;

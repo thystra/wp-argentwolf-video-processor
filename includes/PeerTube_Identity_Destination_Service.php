@@ -762,7 +762,7 @@ final class PeerTube_Identity_Destination_Service
         }
 
         $channels = $result['data']['channels'];
-        if (! is_array($channels) || ! array_is_list($channels) || count($channels) > self::MAX_DESTINATIONS) {
+        if (! is_array($channels) || array_values($channels) !== $channels || count($channels) > self::MAX_DESTINATIONS) {
             return null;
         }
 

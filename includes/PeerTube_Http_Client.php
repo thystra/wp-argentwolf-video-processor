@@ -395,7 +395,7 @@ final class PeerTube_Http_Client
                 throw new InvalidArgumentException('PeerTube publication update contains an unreviewed field.');
             }
             if (is_array($value)) {
-                if ('tags' !== $key || ! array_is_list($value) || count($value) > 5) {
+                if ('tags' !== $key || array_values($value) !== $value || count($value) > 5) {
                     throw new InvalidArgumentException('PeerTube publication array field is outside the reviewed contract.');
                 }
                 foreach ($value as $item) {
@@ -627,6 +627,7 @@ final class PeerTube_Http_Client
                         array($size_option, $upload_slice->bytes()),
                         array(constant('CURLOPT_READFUNCTION'), $read),
                     ) as [$option, $value]) {
+                        // phpcs:ignore WordPress.WP.AlternativeFunctions.curl_curl_setopt -- WordPress http_api_curl hook requires native cURL options for bounded descriptor-backed streaming uploads.
                         if (true !== curl_setopt($handle, $option, $value)) {
                             throw new \RuntimeException('PeerTube streamed upload cURL setup failed before send.');
                         }
@@ -748,7 +749,7 @@ final class PeerTube_Http_Client
 
     private function targets_origin(string $url): bool
     {
-        $parts = function_exists('wp_parse_url') ? wp_parse_url($url) : parse_url($url);
+        $parts = wp_parse_url($url);
         if (! is_array($parts) || isset($parts['user']) || isset($parts['pass'])) {
             return false;
         }
@@ -770,7 +771,7 @@ final class PeerTube_Http_Client
 
     private function configured_port(): ?int
     {
-        $parts = function_exists('wp_parse_url') ? wp_parse_url($this->origin) : parse_url($this->origin);
+        $parts = wp_parse_url($this->origin);
         if (! is_array($parts) || ! isset($parts['port']) || ! is_int($parts['port'])) {
             return null;
         }

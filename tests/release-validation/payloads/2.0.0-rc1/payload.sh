@@ -29,6 +29,10 @@ PLUGIN_CHECK_CASE="wp71-mariadb1011"
 PLUGIN_CHECK_FORMAT="strict-table"
 PLUGIN_CHECK_STATIC_MODES=(new)
 PLUGIN_CHECK_RUNTIME_MODES=(new update)
+# The RC is intentionally not the WordPress.org stable tag. Plugin Check treats
+# that prerelease-only state as an error; all other ERROR/WARNING findings remain
+# release-blocking. Final 2.0.0 validation must remove this allowance.
+PLUGIN_CHECK_ALLOWED_CODES=(stable_tag_mismatch)
 
 DEBUG_PATTERN='argentwolf-video-processor|ArgentVideo|argent_video_|argentwolf_video_processor'
 

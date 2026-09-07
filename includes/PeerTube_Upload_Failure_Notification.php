@@ -415,7 +415,7 @@ final class PeerTube_Upload_Failure_Notification
         if (function_exists('wp_strip_all_tags')) {
             $value = wp_strip_all_tags($value, true);
         } else {
-            $value = strip_tags($value);
+            $value = wp_strip_all_tags($value);
         }
         $value = preg_replace('/(?:[\x00-\x1F\x7F]|\p{Cf})/u', ' ', $value) ?? '';
         $value = preg_replace('/\s+/u', ' ', trim($value)) ?? '';

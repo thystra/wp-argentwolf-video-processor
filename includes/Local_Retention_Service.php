@@ -126,6 +126,7 @@ final class Local_Retention_Service
     public static function attachment_local_processing_blocked(int $attachment_id):bool
     {
         if($attachment_id<1)return true;
+        // phpcs:disable WordPress.DB.SlowDBQuery.slow_db_query_meta_key,WordPress.DB.SlowDBQuery.slow_db_query_meta_value -- Bounded local-processing fence intentionally queries the private attachment-id meta.
         $ids=get_posts(array(
             'post_type'=>Video_Post_Type::POST_TYPE,
             'post_status'=>array('publish','future','draft','pending','private','trash'),
@@ -135,6 +136,7 @@ final class Local_Retention_Service
             'meta_value'=>$attachment_id,
             'meta_compare'=>'=',
         ));
+        // phpcs:enable WordPress.DB.SlowDBQuery.slow_db_query_meta_key,WordPress.DB.SlowDBQuery.slow_db_query_meta_value
         if(!is_array($ids))return true;
         if(count($ids)>self::MAX_ATTACHMENT_REFERENCES)return true;
         foreach($ids as $raw){$video_id=Video_Meta::sanitize_positive_id($raw);if($video_id<1)continue;$state=Video_Meta::sanitize_source_state(get_post_meta($video_id,Video_Meta::SOURCE_STATE,true));$cleanup=Video_Meta::sanitize_cleanup_state(get_post_meta($video_id,Video_Meta::CLEANUP_STATE,true));$policy=Local_Retention_Policy::sanitize(get_post_meta($video_id,Video_Meta::LOCAL_RETENTION_POLICY,true));if('removed'===$state||'running'===$cleanup||('complete'===$cleanup&&array()!==$policy&&Local_Retention_Policy::destructive($policy)))return true;}
@@ -144,6 +146,7 @@ final class Local_Retention_Service
     private static function attachment_exclusive_to_video(int $attachment_id,int $video_id):bool
     {
         if($attachment_id<1||$video_id<1)return false;
+        // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_key,WordPress.DB.SlowDBQuery.slow_db_query_meta_value -- Bounded duplicate-ownership fence intentionally queries the private attachment-id meta.
         $ids=get_posts(array('post_type'=>Video_Post_Type::POST_TYPE,'post_status'=>array('publish','future','draft','pending','private','trash'),'numberposts'=>2,'fields'=>'ids','meta_key'=>Video_Meta::ATTACHMENT_ID,'meta_value'=>$attachment_id,'meta_compare'=>'='));
         if(!is_array($ids))return false;$found=array();foreach($ids as $raw){$id=Video_Meta::sanitize_positive_id($raw);if($id>0)$found[$id]=true;}return 1===count($found)&&isset($found[$video_id]);
     }

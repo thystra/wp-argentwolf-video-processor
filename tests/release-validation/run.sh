@@ -6,6 +6,7 @@ fail() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 
 HARNESS_ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd -- "$HARNESS_ROOT/../.." && pwd)"
+PROJECT_PARENT="$(cd -- "$PROJECT_ROOT/.." && pwd -P)"
 PAYLOAD_REF="${1:-${AWVP_RELEASE_PAYLOAD:-}}"
 
 [[ -n "$PAYLOAD_REF" ]] || fail "Usage: $0 <payload-id|payload-directory>"
@@ -25,6 +26,10 @@ esac
 
 PAYLOAD_REL="${PAYLOAD_DIR#"$HARNESS_ROOT"/}"
 [[ -f "$PAYLOAD_DIR/payload.sh" ]] || fail "Payload definition missing: $PAYLOAD_DIR/payload.sh"
+
+# Optional payload-scoped Plugin Check findings that are expected by design.
+# Keep this empty by default; prerelease payloads may allow only narrowly reviewed codes.
+PLUGIN_CHECK_ALLOWED_CODES=()
 
 # shellcheck disable=SC1090
 source "$PAYLOAD_DIR/payload.sh"
@@ -50,7 +55,7 @@ done
 BUNDLE_ROOT="${BUNDLE_ROOT:-$PROJECT_ROOT}"
 ARTIFACT_DIR="${ARTIFACT_DIR:-$BUNDLE_ROOT/artifacts}"
 CACHE_DIR="${CACHE_DIR:-$BUNDLE_ROOT/.cache}"
-REPORT_DIR="${REPORT_DIR:-$HOME/awvp-vm-test-reports}"
+REPORT_DIR="${REPORT_DIR:-$PROJECT_PARENT/release-evidence/awvp/$PAYLOAD_ID}"
 PLUGIN_CHECK_URL="${PLUGIN_CHECK_URL:-https://downloads.wordpress.org/plugin/plugin-check.${PLUGIN_CHECK_VERSION}.zip}"
 PLUGIN_CHECK_ZIP="${PLUGIN_CHECK_ZIP:-$CACHE_DIR/plugin-check.${PLUGIN_CHECK_VERSION}.zip}"
 
@@ -117,6 +122,7 @@ echo "clean_phases=${CLEAN_PHASES[*]}"
 echo "plugin_check_format=$PLUGIN_CHECK_FORMAT"
 echo "plugin_check_static_modes=${PLUGIN_CHECK_STATIC_MODES[*]:-}"
 echo "plugin_check_runtime_modes=${PLUGIN_CHECK_RUNTIME_MODES[*]:-}"
+echo "plugin_check_allowed_codes=${PLUGIN_CHECK_ALLOWED_CODES[*]:-NONE}"
 
 for phase in \
     "${UPGRADE_PRE_PHASES[@]}" \
@@ -472,10 +478,29 @@ run_case() {
             fail "Plugin Check command failed: mode=$check_mode runtime=$runtime rc=$rc"
         fi
 
-        if grep -Eq $'(^|\t)(ERROR|WARNING)(\t|$)' "$output_file"; then
+        local unexpected=0
+        local finding_line finding_column finding_type finding_code finding_rest
+        local allowed_code
+        while IFS=$'\t' read -r finding_line finding_column finding_type finding_code finding_rest; do
+            [[ "$finding_type" == "ERROR" || "$finding_type" == "WARNING" ]] || continue
+            local allowed=0
+            for allowed_code in "${PLUGIN_CHECK_ALLOWED_CODES[@]}"; do
+                if [[ "$finding_code" == "$allowed_code" ]]; then
+                    allowed=1
+                    break
+                fi
+            done
+            if (( allowed == 1 )); then
+                echo "PLUGIN_CHECK_ALLOWED_FINDING mode=$check_mode runtime=$runtime type=$finding_type code=$finding_code"
+            else
+                unexpected=1
+            fi
+        done < "$output_file"
+
+        if (( unexpected != 0 )); then
             echo "PLUGIN_CHECK_FINDINGS_GATE=FAIL mode=$check_mode runtime=$runtime"
             rm -f "$output_file"
-            fail "Plugin Check reported ERROR/WARNING findings"
+            fail "Plugin Check reported unexpected ERROR/WARNING findings"
         fi
 
         rm -f "$output_file"

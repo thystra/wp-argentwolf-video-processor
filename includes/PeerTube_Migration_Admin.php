@@ -41,7 +41,7 @@ final class PeerTube_Migration_Admin
     {
         $this->require_admin();
         check_admin_referer(self::NONCE_PLAN);
-        $target = isset($_POST['target']) && is_string($_POST['target']) ? wp_unslash($_POST['target']) : '';
+        $target = isset($_POST['target']) && is_string($_POST['target']) ? sanitize_text_field(wp_unslash($_POST['target'])) : '';
         [$backend_id, $channel_id] = $this->parse_target($target);
         $mode = isset($_POST['selection_mode']) && is_string($_POST['selection_mode'])
             ? sanitize_key(wp_unslash($_POST['selection_mode'])) : 'selected';
@@ -58,12 +58,14 @@ final class PeerTube_Migration_Admin
             }
             $truncated = true === $scan['more'];
         } elseif (isset($_POST['video_ids']) && is_array($_POST['video_ids'])) {
+            // phpcs:disable WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Each nonce-protected list member is validated as a strict positive AWVP Video ID below.
             foreach (wp_unslash($_POST['video_ids']) as $raw) {
                 $video_id = Video_Meta::sanitize_positive_id($raw);
                 if ($video_id > 0 && ! in_array($video_id, $video_ids, true)) {
                     $video_ids[] = $video_id;
                 }
             }
+            // phpcs:enable WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
         }
 
         $result = $this->planner->plan($video_ids, $backend_id, $channel_id, time());
@@ -86,7 +88,7 @@ final class PeerTube_Migration_Admin
     public function review_action(): void
     {
         $this->require_admin();
-        $video_id = isset($_POST['video_id']) ? Video_Meta::sanitize_positive_id(wp_unslash($_POST['video_id'])) : 0;
+        $video_id = isset($_POST['video_id']) && is_string($_POST['video_id']) ? Video_Meta::sanitize_positive_id(sanitize_text_field(wp_unslash($_POST['video_id']))) : 0;
         check_admin_referer(self::NONCE_REVIEW . ':' . $video_id);
         $stored = $video_id > 0
             ? PeerTube_Migration_Plan::sanitize(get_post_meta($video_id, Video_Meta::PEERTUBE_MIGRATION_PLAN, true))
@@ -94,7 +96,9 @@ final class PeerTube_Migration_Admin
         if (array() === $stored || ! is_array($stored['publication_plan'] ?? null)) {
             $result = array('status'=>PeerTube_Migration_Planner::REFUSED,'issues'=>array('publication_prefill_incomplete'));
         } else {
+            // phpcs:disable WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- The nonce-protected publication structure is normalized by form_to_plan() and the publication-plan sanitizer.
             $input = isset($_POST['publication']) && is_array($_POST['publication']) ? wp_unslash($_POST['publication']) : array();
+            // phpcs:enable WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
             $plan = $this->form_to_plan($stored['publication_plan'], $input);
             $result = $this->planner->review($video_id, $plan, time());
         }
@@ -114,7 +118,7 @@ final class PeerTube_Migration_Admin
     public function execute_action(): void
     {
         $this->require_admin();
-        $video_id = isset($_POST['video_id']) ? Video_Meta::sanitize_positive_id(wp_unslash($_POST['video_id'])) : 0;
+        $video_id = isset($_POST['video_id']) && is_string($_POST['video_id']) ? Video_Meta::sanitize_positive_id(sanitize_text_field(wp_unslash($_POST['video_id']))) : 0;
         check_admin_referer(self::NONCE_EXECUTE . ':' . $video_id);
         if ($video_id < 1) {
             $result = array('status'=>PeerTube_Migration_Executor::REFUSED);
@@ -122,7 +126,7 @@ final class PeerTube_Migration_Admin
             $existing = metadata_exists('post', $video_id, Video_Meta::PEERTUBE_MIGRATION_EXECUTION)
                 ? PeerTube_Migration_Execution::sanitize(get_post_meta($video_id, Video_Meta::PEERTUBE_MIGRATION_EXECUTION, true))
                 : array();
-            $confirmed = isset($_POST['confirm_one_way']) && '1' === (string) wp_unslash($_POST['confirm_one_way']);
+            $confirmed = isset($_POST['confirm_one_way']) && is_string($_POST['confirm_one_way']) && '1' === sanitize_key(wp_unslash($_POST['confirm_one_way']));
             if (array() === $existing && ! $confirmed) {
                 $result = array('status'=>PeerTube_Migration_Executor::REFUSED);
             } else {
@@ -146,7 +150,8 @@ final class PeerTube_Migration_Admin
     public function page(): void
     {
         $this->require_admin();
-        $review_video_id = isset($_GET['review_video_id']) ? Video_Meta::sanitize_positive_id(wp_unslash($_GET['review_video_id'])) : 0;
+        // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only review selector; no state is changed by rendering the page.
+        $review_video_id = isset($_GET['review_video_id']) && is_string($_GET['review_video_id']) ? Video_Meta::sanitize_positive_id(sanitize_text_field(wp_unslash($_GET['review_video_id']))) : 0;
         ?>
         <div class="wrap">
             <h1><?php esc_html_e('AWVP PeerTube Migration', 'argentwolf-video-processor'); ?></h1>
@@ -199,7 +204,11 @@ final class PeerTube_Migration_Admin
                 </table>
                 <p>
                     <button class="button button-primary" type="submit" name="selection_mode" value="selected"><?php esc_html_e('Plan selected', 'argentwolf-video-processor'); ?></button>
-                    <button class="button" type="submit" name="selection_mode" value="all"><?php echo esc_html(sprintf(__('Plan all eligible (up to %d)', 'argentwolf-video-processor'), PeerTube_Migration_Planner::MAX_SELECT_ALL)); ?></button>
+                    <button class="button" type="submit" name="selection_mode" value="all"><?php echo esc_html(sprintf(
+                            /* translators: %d: maximum number of videos planned in one batch. */
+                            __('Plan all eligible (up to %d)', 'argentwolf-video-processor'),
+                            PeerTube_Migration_Planner::MAX_SELECT_ALL
+                        )); ?></button>
                 </p>
                 <?php if (true === $scan['more']) : ?><p class="description"><?php esc_html_e('More candidates exist beyond the first displayed batch. “Plan all eligible” processes the first bounded migration batch; repeat after reviewing/planning that batch.', 'argentwolf-video-processor'); ?></p><?php endif; ?>
             </form>
@@ -277,7 +286,11 @@ final class PeerTube_Migration_Admin
         $catalog = $this->catalogs->get((string)$migration['backend_id']);
         ?>
         <p><a href="<?php echo esc_url(add_query_arg(array('page'=>self::PAGE_SLUG),admin_url('tools.php'))); ?>">&larr; <?php esc_html_e('Back to migration queue', 'argentwolf-video-processor'); ?></a></p>
-        <h2><?php echo esc_html(sprintf(__('Review AWVP Video #%d', 'argentwolf-video-processor'), $video_id)); ?></h2>
+        <h2><?php echo esc_html(sprintf(
+            /* translators: %d: AWVP Video post ID. */
+            __('Review AWVP Video #%d', 'argentwolf-video-processor'),
+            $video_id
+        )); ?></h2>
         <p><strong><?php esc_html_e('Target', 'argentwolf-video-processor'); ?>:</strong> <?php echo esc_html((string)$migration['backend_id']); ?> / <?php echo esc_html((string)$migration['channel_id']); ?></p>
         <?php if (array() !== $migration['suggested_tags']) : ?><p><strong><?php esc_html_e('WordPress tag suggestions', 'argentwolf-video-processor'); ?>:</strong> <?php echo esc_html(implode(', ', $migration['suggested_tags'])); ?></p><?php endif; ?>
         <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
@@ -407,12 +420,17 @@ final class PeerTube_Migration_Admin
 
     private function notice(): void
     {
+        // phpcs:disable WordPress.Security.NonceVerification.Recommended -- Redirect notice/count fields are read-only presentation state.
         $notice = isset($_GET['awvp_migration_notice']) && is_string($_GET['awvp_migration_notice']) ? sanitize_key(wp_unslash($_GET['awvp_migration_notice'])) : '';
         if ('' === $notice) {
             return;
         }
         $message = match ($notice) {
-            'planned' => sprintf(__('Migration planning state saved for %d video(s).', 'argentwolf-video-processor'), isset($_GET['awvp_migration_count']) ? absint($_GET['awvp_migration_count']) : 0),
+            'planned' => sprintf(
+                /* translators: %d: number of videos whose migration planning state was saved. */
+                __('Migration planning state saved for %d video(s).', 'argentwolf-video-processor'),
+                isset($_GET['awvp_migration_count']) && is_string($_GET['awvp_migration_count']) ? absint(wp_unslash($_GET['awvp_migration_count'])) : 0
+            ),
             'reviewed' => __('Migration review saved.', 'argentwolf-video-processor'),
             'execution_started' => __('Migration was committed one-way and handed to AWVP’s durable publication executor.', 'argentwolf-video-processor'),
             'execution_present' => __('Migration execution was already committed and its durable handoff is present.', 'argentwolf-video-processor'),
@@ -423,7 +441,11 @@ final class PeerTube_Migration_Admin
             default => __('The migration planning request was refused. No remote work was started.', 'argentwolf-video-processor'),
         };
         echo '<div class="notice ' . (in_array($notice, array('refused','indeterminate','execution_refused','execution_indeterminate','busy'), true) ? 'notice-error' : 'notice-success') . ' is-dismissible"><p>' . esc_html($message) . '</p></div>';
-        if ('1' === ($_GET['awvp_migration_more'] ?? '')) {
+        $more = isset($_GET['awvp_migration_more']) && is_string($_GET['awvp_migration_more'])
+            ? sanitize_key(wp_unslash($_GET['awvp_migration_more']))
+            : '';
+        // phpcs:enable WordPress.Security.NonceVerification.Recommended
+        if ('1' === $more) {
             echo '<div class="notice notice-info"><p>' . esc_html__('More than one bounded select-all batch is eligible. Repeat planning after this batch is reviewed.', 'argentwolf-video-processor') . '</p></div>';
         }
     }

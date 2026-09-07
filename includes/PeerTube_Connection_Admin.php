@@ -378,8 +378,9 @@ final class PeerTube_Connection_Admin
     public function upload_policy_action(): void
     {
         $this->require_post_administrator();
+        // phpcs:ignore WordPress.Security.NonceVerification.Missing -- The sanitized backend ID is required to derive the action-specific nonce checked immediately below.
         $backend_id = isset($_POST['backend_id']) && is_string($_POST['backend_id'])
-            ? Backend_Identity::sanitize(wp_unslash($_POST['backend_id']))
+            ? Backend_Identity::sanitize(sanitize_text_field(wp_unslash($_POST['backend_id'])))
             : '';
         if ('' === $backend_id || Backend_Registry::LOCAL_ID === $backend_id) {
             $this->reject_invalid_request();
@@ -417,8 +418,9 @@ final class PeerTube_Connection_Admin
     private function lifecycle_action(string $expected_action, string $nonce_prefix, string $method): void
     {
         $this->require_post_administrator();
+        // phpcs:ignore WordPress.Security.NonceVerification.Missing -- The sanitized backend ID is required to derive the action-specific nonce checked immediately below.
         $backend_id = isset($_POST['backend_id']) && is_string($_POST['backend_id'])
-            ? Backend_Identity::sanitize(wp_unslash($_POST['backend_id']))
+            ? Backend_Identity::sanitize(sanitize_text_field(wp_unslash($_POST['backend_id'])))
             : '';
         if ('' === $backend_id || Backend_Registry::LOCAL_ID === $backend_id) {
             $this->reject_invalid_request();
@@ -1014,7 +1016,10 @@ final class PeerTube_Connection_Admin
 
     private function require_post_administrator(): void
     {
-        if ('POST' !== ($_SERVER['REQUEST_METHOD'] ?? '')) {
+        $request_method = isset($_SERVER['REQUEST_METHOD']) && is_string($_SERVER['REQUEST_METHOD'])
+            ? strtoupper(sanitize_text_field(wp_unslash($_SERVER['REQUEST_METHOD'])))
+            : '';
+        if ('POST' !== $request_method) {
             wp_die(
                 esc_html__('PeerTube connection actions require an explicit POST request.', 'argentwolf-video-processor')
             );
@@ -1030,14 +1035,10 @@ final class PeerTube_Connection_Admin
 
     private function verify_nonce(string $action): void
     {
-        $raw = $_POST[self::NONCE_FIELD] ?? null;
-        if (! is_string($raw)) {
-            $this->reject_invalid_request();
-        }
-
-        $unslashed = wp_unslash($raw);
-        $nonce = is_string($unslashed) ? sanitize_text_field($unslashed) : '';
-        if ('' === $nonce || $nonce !== $unslashed || false === wp_verify_nonce($nonce, $action)) {
+        $nonce = isset($_POST[self::NONCE_FIELD]) && is_string($_POST[self::NONCE_FIELD])
+            ? sanitize_text_field(wp_unslash($_POST[self::NONCE_FIELD]))
+            : '';
+        if ('' === $nonce || false === wp_verify_nonce($nonce, $action)) {
             wp_die(
                 esc_html__('The PeerTube connection request could not be verified.', 'argentwolf-video-processor')
             );
@@ -1049,6 +1050,7 @@ final class PeerTube_Connection_Admin
      * @param list<string> $expected
      * @return array<string, string>|null
      */
+    // phpcs:disable WordPress.Security.NonceVerification.Missing,WordPress.Security.ValidatedSanitizedInput.MissingUnslash,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Every caller verifies its action-specific nonce before post_fields(); this helper intentionally preserves raw field bytes for strict domain validation.
     private function post_fields(array $expected): ?array
     {
         $actual = array_keys($_POST);
@@ -1079,14 +1081,14 @@ final class PeerTube_Connection_Admin
 
         return $values;
     }
+    // phpcs:enable WordPress.Security.NonceVerification.Missing,WordPress.Security.ValidatedSanitizedInput.MissingUnslash,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
 
     private function raw_operation_id(): string
     {
-        $value = $_POST['operation_id'] ?? null;
-        if (! is_string($value)) {
-            return '';
-        }
-        $value = wp_unslash($value);
+        // phpcs:ignore WordPress.Security.NonceVerification.Missing -- The sanitized operation ID is required to derive the action-specific nonce checked by every caller immediately afterward.
+        $value = isset($_POST['operation_id']) && is_string($_POST['operation_id'])
+            ? sanitize_text_field(wp_unslash($_POST['operation_id']))
+            : '';
         return PeerTube_Connection_Input::operation_id($value);
     }
 
@@ -1320,7 +1322,7 @@ final class PeerTube_Connection_Admin
      */
     private function validated_operations(array $operations): ?array
     {
-        if (! array_is_list($operations) || count($operations) > self::MAX_OPEN_OPERATIONS) {
+        if (array_values($operations) !== $operations || count($operations) > self::MAX_OPEN_OPERATIONS) {
             return null;
         }
 
@@ -1781,7 +1783,7 @@ final class PeerTube_Connection_Admin
             || PeerTube_Connection_State_Machine::PHASE_AWAITING_DESTINATION !== $result['phase']
             || $result['record_revision'] < 1
             || ! self::valid_identity_projection($result['identity'])
-            || ! array_is_list($result['destinations'])
+            || array_values($result['destinations']) !== $result['destinations']
             || count($result['destinations']) > 500
             || (PeerTube_Identity_Destination_Service::STATUS_NO_DESTINATIONS === $result['status']
                 && array() !== $result['destinations'])
@@ -1850,40 +1852,32 @@ final class PeerTube_Connection_Admin
 
     private function query_page(): string
     {
-        $value = $_GET['page'] ?? null;
-        if (! is_string($value)) {
-            return '';
-        }
-        $value = wp_unslash($value);
-        return is_string($value) && self::PAGE_SLUG === $value ? $value : '';
+        // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only settings-page selector; no state mutation occurs.
+        $value = isset($_GET['page']) && is_string($_GET['page']) ? sanitize_key(wp_unslash($_GET['page'])) : '';
+        return self::PAGE_SLUG === $value ? $value : '';
     }
 
     private function query_notice(): string
     {
-        $value = $_GET[self::NOTICE_QUERY] ?? null;
-        if (! is_string($value)) {
-            return '';
-        }
-        $value = wp_unslash($value);
-        if (! is_string($value)) {
-            return '';
-        }
-        $sanitized = sanitize_key($value);
-        return $sanitized === $value ? $value : '';
+        // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only redirect notice; no state mutation occurs.
+        $value = isset($_GET[self::NOTICE_QUERY]) && is_string($_GET[self::NOTICE_QUERY])
+            ? sanitize_key(wp_unslash($_GET[self::NOTICE_QUERY]))
+            : '';
+        return $value;
     }
 
     private function query_operation_id(): string
     {
-        $value = $_GET[self::OPERATION_QUERY] ?? null;
-        if (! is_string($value)) {
-            return '';
-        }
-        $value = wp_unslash($value);
+        // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only operation selector; mutations use separate nonce-protected POST actions.
+        $value = isset($_GET[self::OPERATION_QUERY]) && is_string($_GET[self::OPERATION_QUERY])
+            ? sanitize_text_field(wp_unslash($_GET[self::OPERATION_QUERY]))
+            : '';
         return PeerTube_Connection_Input::operation_id($value);
     }
 
     private function discovery_requested(string $operation_id): bool
     {
+        // phpcs:disable WordPress.Security.ValidatedSanitizedInput.MissingUnslash,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Exact query bytes are unslashed, shape-checked, and nonce-verified below before use.
         $requested = $_GET[self::DISCOVER_QUERY] ?? null;
         if (null === $requested) {
             return false;
@@ -1896,6 +1890,7 @@ final class PeerTube_Connection_Admin
         $raw_nonce = $nonce;
         $requested = wp_unslash($requested);
         $nonce = wp_unslash($nonce);
+        // phpcs:enable WordPress.Security.ValidatedSanitizedInput.MissingUnslash,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
         if (
             ! is_string($requested)
             || ! is_string($nonce)

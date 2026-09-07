@@ -120,6 +120,7 @@ final class PeerTube_Origin
             return is_array($parsed) ? $parsed : false;
         }
 
+        // phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Dependency-free test fallback only; supported WordPress always provides wp_parse_url().
         $parsed = parse_url($value);
         return is_array($parsed) ? $parsed : false;
     }

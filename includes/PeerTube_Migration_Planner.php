@@ -230,6 +230,7 @@ final class PeerTube_Migration_Planner
     public function planned(int $limit = 200): array
     {
         $limit = max(1, min(self::MAX_SELECT_ALL, $limit));
+        // phpcs:disable WordPress.DB.SlowDBQuery.slow_db_query_meta_key -- Bounded planned-video listing intentionally filters on the private migration-plan meta key.
         $ids = get_posts(array(
             'post_type'      => Video_Post_Type::POST_TYPE,
             'post_status'    => 'any',
@@ -240,6 +241,7 @@ final class PeerTube_Migration_Planner
             'meta_key'       => Video_Meta::PEERTUBE_MIGRATION_PLAN,
             'no_found_rows'  => true,
         ));
+        // phpcs:enable WordPress.DB.SlowDBQuery.slow_db_query_meta_key
         if (! is_array($ids)) {
             return array();
         }

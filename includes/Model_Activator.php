@@ -117,17 +117,20 @@ final class Model_Activator
     {
         global $wpdb;
 
+        // phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching -- Release/repair diagnostics must inspect the plugin-owned schema directly; these bounded metadata queries are not cacheable application reads.
         foreach (self::schema_contract() as $table => $contract) {
-            $table_query = $wpdb->prepare(
-                'SHOW TABLES LIKE %s',
-                $wpdb->esc_like($table)
-            );
-            if ($table !== (string) $wpdb->get_var($table_query)) {
+            if (
+                $table !== (string) $wpdb->get_var(
+                    $wpdb->prepare('SHOW TABLES LIKE %s', $wpdb->esc_like($table))
+                )
+            ) {
                 return false;
             }
 
-            $column_query = $wpdb->prepare('SHOW COLUMNS FROM %i', $table);
-            $column_rows = $wpdb->get_results($column_query, ARRAY_A);
+            $column_rows = $wpdb->get_results(
+                $wpdb->prepare('SHOW COLUMNS FROM %i', $table),
+                ARRAY_A
+            );
             if (! is_array($column_rows)) {
                 return false;
             }
@@ -145,8 +148,10 @@ final class Model_Activator
                 }
             }
 
-            $index_query = $wpdb->prepare('SHOW INDEX FROM %i', $table);
-            $index_rows = $wpdb->get_results($index_query, ARRAY_A);
+            $index_rows = $wpdb->get_results(
+                $wpdb->prepare('SHOW INDEX FROM %i', $table),
+                ARRAY_A
+            );
             if (! is_array($index_rows)) {
                 return false;
             }
@@ -188,6 +193,7 @@ final class Model_Activator
             }
         }
 
+        // phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
         return true;
     }
 

@@ -86,13 +86,13 @@ final class PeerTube_Publication_Catalog
     /** @return list<array{id:string,name:string,display_name:string,authority:string}>|null */
     private static function channels(mixed $value): ?array
     {
-        if (! is_array($value) || ! array_is_list($value) || count($value) > self::MAX_CHANNELS) {
+        if (! is_array($value) || array_values($value) !== $value || count($value) > self::MAX_CHANNELS) {
             return null;
         }
         $out = array();
         $seen = array();
         foreach ($value as $row) {
-            if (! is_array($row) || array_is_list($row)) {
+            if (! is_array($row) || array_values($row) === $row) {
                 return null;
             }
             $id = self::decimal_id($row['id'] ?? null, PHP_INT_MAX);
@@ -110,7 +110,7 @@ final class PeerTube_Publication_Catalog
     /** @return array<string,string>|null */
     private static function numeric_vocabulary(mixed $value, int $maximum_id): ?array
     {
-        if (! is_array($value) || array_is_list($value) || count($value) > self::MAX_VOCABULARY_ITEMS) {
+        if (! is_array($value) || array_values($value) === $value || count($value) > self::MAX_VOCABULARY_ITEMS) {
             return null;
         }
         $out = array();
@@ -129,7 +129,7 @@ final class PeerTube_Publication_Catalog
     /** @return array<string,string>|null */
     private static function language_vocabulary(mixed $value): ?array
     {
-        if (! is_array($value) || array_is_list($value) || count($value) > self::MAX_VOCABULARY_ITEMS) {
+        if (! is_array($value) || array_values($value) === $value || count($value) > self::MAX_VOCABULARY_ITEMS) {
             return null;
         }
         $out = array();
@@ -150,7 +150,7 @@ final class PeerTube_Publication_Catalog
     /** @param array<string,string> $privacies @return array<string,mixed>|null */
     private static function capabilities(mixed $value, array $privacies): ?array
     {
-        if (! is_array($value) || array_is_list($value)) {
+        if (! is_array($value) || array_values($value) === $value) {
             return null;
         }
         $keys = array('sensitive_content','sensitive_flags','password_privacy');

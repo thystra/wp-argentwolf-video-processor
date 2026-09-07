@@ -29,6 +29,7 @@ final class Backend_Adapter_Factory
         }
 
         if (isset($this->adapters[$type])) {
+            // phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped -- Internal registry exception; adapter types are never rendered without escaping.
             throw new RuntimeException('Backend adapter type is already registered: ' . $type);
         }
 

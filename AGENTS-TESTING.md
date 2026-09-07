@@ -420,7 +420,7 @@ Preserve complete debug output in the run report when a failure is found.
 
 Default VM reports live under:
 
-`~/awvp-vm-test-reports/`
+`<AWVP project parent>/release-evidence/awvp/<payload-id>/`
 
 Each run records:
 

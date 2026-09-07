@@ -238,6 +238,7 @@ final class Task_Repository
 
         for ($attempt = 0; $attempt < 5; $attempt++) {
             try {
+                // phpcs:disable PluginCheck.Security.DirectDB.UnescapedDBParameter,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber,WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- $type_sql contains only generated literal %s placeholders; task-type values are supplied separately to $wpdb->prepare().
                 $task_id = (int) $wpdb->get_var(
                     $wpdb->prepare(
                         "SELECT id FROM %i
@@ -246,6 +247,7 @@ final class Task_Repository
                         ...$select_args
                     )
                 );
+                // phpcs:enable PluginCheck.Security.DirectDB.UnescapedDBParameter,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber,WordPress.DB.PreparedSQL.InterpolatedNotPrepared
             } catch (Throwable) {
                 return null;
             }
@@ -363,6 +365,7 @@ final class Task_Repository
         );
 
         try {
+            // phpcs:disable PluginCheck.Security.DirectDB.UnescapedDBParameter,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber,WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- $type_sql is a generated list of literal %s placeholders and all type values are supplied to $wpdb->prepare().
             $task_id = (int) $wpdb->get_var(
                 $wpdb->prepare(
                     "SELECT id FROM %i
@@ -375,6 +378,7 @@ final class Task_Repository
                     ...$args
                 )
             );
+            // phpcs:enable PluginCheck.Security.DirectDB.UnescapedDBParameter,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber,WordPress.DB.PreparedSQL.InterpolatedNotPrepared
         } catch (Throwable) {
             return false;
         }
@@ -519,6 +523,7 @@ final class Task_Repository
         $select_args[] = $limit;
 
         try {
+            // phpcs:disable PluginCheck.Security.DirectDB.UnescapedDBParameter,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber,WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- $type_sql contains only generated literal %s placeholders; task-type values are supplied separately to $wpdb->prepare().
             $rows = $wpdb->get_results(
                 $wpdb->prepare(
                     "SELECT * FROM %i
@@ -528,6 +533,7 @@ final class Task_Repository
                 ),
                 ARRAY_A
             );
+            // phpcs:enable PluginCheck.Security.DirectDB.UnescapedDBParameter,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber,WordPress.DB.PreparedSQL.InterpolatedNotPrepared
         } catch (Throwable) {
             return 0;
         }

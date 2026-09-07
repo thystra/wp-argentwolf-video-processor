@@ -15,6 +15,8 @@ use Throwable;
 // does not expose an exact old-byte predicate. Cache handling below preserves
 // WordPress option-read coherence after a definite or possible mutation.
 // phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+// This store deliberately reproduces WordPress core option lifecycle hooks around atomic SQL mutations; those hook names must remain the core names, not plugin-prefixed names.
+// phpcs:disable WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound
 final class Atomic_Option_Store
 {
     public const MAX_SERIALIZED_BYTES = 1048576;
@@ -83,6 +85,7 @@ final class Atomic_Option_Store
                 $this->option,
                 $this->option
             );
+            // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- $query is produced by $wpdb->prepare() immediately above with fixed SQL and bounded values.
             $row = $wpdb->get_row($query, ARRAY_A);
         } catch (Throwable) {
             return Atomic_Option_Snapshot::indeterminate($this->option);
@@ -476,6 +479,7 @@ final class Atomic_Option_Store
                 $this->option,
                 $this->option
             );
+            // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- $query is produced by $wpdb->prepare() immediately above with fixed SQL and bounded values.
             $affected = $wpdb->query($query);
         } catch (Throwable) {
             $affected = false;
@@ -541,6 +545,7 @@ final class Atomic_Option_Store
                 (string) $before->autoload(),
                 $this->option
             );
+            // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- $query is produced by $wpdb->prepare() immediately above with fixed SQL and bounded values.
             $affected = $wpdb->query($query);
         } catch (Throwable) {
             $affected = false;
@@ -601,6 +606,7 @@ final class Atomic_Option_Store
                 (string) $before->autoload(),
                 $this->option
             );
+            // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- $query is produced by $wpdb->prepare() immediately above with fixed SQL and bounded values.
             $affected = $wpdb->query($query);
         } catch (Throwable) {
             $affected = false;

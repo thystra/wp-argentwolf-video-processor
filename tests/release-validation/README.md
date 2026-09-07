@@ -8,6 +8,8 @@ This directory is the reusable AWVP release-validation framework.
 bash tests/release-validation/run.sh 0.3.2
 ```
 
+Reports default to `<AWVP project parent>/release-evidence/awvp/<payload-id>/`, never directly under the operator home directory.
+
 The bundle root must contain `artifacts/` with the exact filenames and hashes
 declared by the payload.
 

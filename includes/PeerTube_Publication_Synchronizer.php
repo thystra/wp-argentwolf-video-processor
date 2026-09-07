@@ -32,6 +32,7 @@ final class PeerTube_Publication_Synchronizer
 
     public function register(): void
     {
+        // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- Hook is already fully prefixed with argentwolf_video_processor_.
         add_action('argentwolf_video_processor_publication_plan_saved', array($this, 'plan_saved'), 10, 2);
         add_action('transition_post_status', array($this, 'transition'), 10, 3);
     }
@@ -243,6 +244,7 @@ final class PeerTube_Publication_Synchronizer
     /** @return list<int> */
     private function anchored_video_ids(int $post_id): array
     {
+        // phpcs:disable WordPress.DB.SlowDBQuery.slow_db_query_meta_key,WordPress.DB.SlowDBQuery.slow_db_query_meta_value -- Anchored AWVP Video lookup intentionally filters by its private origin-post meta key/value.
         $ids = get_posts(array(
             'post_type'      => Video_Post_Type::POST_TYPE,
             'post_status'    => 'any',
@@ -253,6 +255,7 @@ final class PeerTube_Publication_Synchronizer
             'meta_key'       => Video_Meta::ORIGIN_POST_ID,
             'meta_value'     => (string) $post_id,
         ));
+        // phpcs:enable WordPress.DB.SlowDBQuery.slow_db_query_meta_key,WordPress.DB.SlowDBQuery.slow_db_query_meta_value
         if (! is_array($ids)) {
             return array();
         }

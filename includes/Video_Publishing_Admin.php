@@ -42,9 +42,11 @@ final class Video_Publishing_Admin
         }
         check_admin_referer(self::NONCE_ACTION);
 
+        // phpcs:disable WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- The nonce-protected structured array is normalized field-by-field by form_to_settings().
         $input = isset($_POST['awvp_publishing']) && is_array($_POST['awvp_publishing'])
             ? wp_unslash($_POST['awvp_publishing'])
             : array();
+        // phpcs:enable WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
         $desired = $this->form_to_settings($input);
         $result = $this->store->save($desired);
         $notice = match ($result['status'] ?? '') {
@@ -69,7 +71,7 @@ final class Video_Publishing_Admin
             wp_die(esc_html__('You are not allowed to refresh PeerTube publication choices.', 'argentwolf-video-processor'));
         }
         $backend_id = isset($_POST['backend_id']) && is_string($_POST['backend_id'])
-            ? Backend_Identity::sanitize(wp_unslash($_POST['backend_id']))
+            ? Backend_Identity::sanitize(sanitize_text_field(wp_unslash($_POST['backend_id'])))
             : '';
         check_admin_referer(self::NONCE_REFRESH . ':' . $backend_id);
 
@@ -125,6 +127,7 @@ final class Video_Publishing_Admin
                                         <option value="<?php echo esc_attr($backend_id); ?>" <?php selected($selected_backend, $backend_id); ?>><?php echo esc_html($this->backend_label($backend)); ?></option>
                                     <?php endforeach; ?>
                                     <?php if (Backend_Registry::LOCAL_ID !== $selected_backend && ! isset($backends[$selected_backend])) : ?>
+                                        <?php /* translators: %s: unavailable backend identifier. */ ?>
                                         <option value="<?php echo esc_attr($selected_backend); ?>" selected disabled><?php echo esc_html(sprintf(__('Unavailable backend: %s', 'argentwolf-video-processor'), $selected_backend)); ?></option>
                                     <?php endif; ?>
                                 </select>
@@ -269,6 +272,7 @@ final class Video_Publishing_Admin
                             <?php esc_html_e('No valid cached publication catalog yet.', 'argentwolf-video-processor'); ?>
                         <?php else : ?>
                             <?php echo esc_html(sprintf(
+                                /* translators: 1: PeerTube version, 2: channels, 3: privacy choices, 4: licences, 5: categories, 6: languages, 7: refresh UTC timestamp, 8: credential generation. */
                                 __('PeerTube %1$s; %2$d channels, %3$d privacy choices, %4$d licences, %5$d categories, %6$d languages. Refreshed %7$s UTC under credential generation %8$d.', 'argentwolf-video-processor'),
                                 (string) $catalog['server_version'],
                                 count($catalog['channels']),
@@ -281,6 +285,7 @@ final class Video_Publishing_Admin
                             )); ?>
                             <?php if (true === $catalog['stale']) : ?>
                                 <br><strong><?php echo esc_html(sprintf(
+                                    /* translators: %s: UTC timestamp when the cached catalog became stale. */
                                     __('Stale since %s UTC; refresh must succeed before these choices can be treated as current.', 'argentwolf-video-processor'),
                                     gmdate('Y-m-d H:i:s', (int) $catalog['stale_since'])
                                 )); ?></strong>
@@ -433,16 +438,22 @@ final class Video_Publishing_Admin
             value="<?php echo esc_attr($selected); ?>"
             pattern="(?:inherit|none|[1-9][0-9]*)"
             style="width:8em"
-            aria-label="<?php echo esc_attr(sprintf(__('%s override', 'argentwolf-video-processor'), $field)); ?>"
+            aria-label="<?php echo esc_attr(sprintf(
+                /* translators: %s: publication field name. */
+                __('%s override', 'argentwolf-video-processor'),
+                $field
+            )); ?>"
         ><br><span class="description"><?php esc_html_e('Use inherit, none, or a numeric provider ID.', 'argentwolf-video-processor'); ?></span>
         <?php
     }
 
     private function render_notice(): void
     {
+        // phpcs:disable WordPress.Security.NonceVerification.Recommended -- Read-only redirect notice; it cannot mutate state.
         $notice = isset($_GET['awvp_publishing_notice']) && is_string($_GET['awvp_publishing_notice'])
             ? sanitize_key(wp_unslash($_GET['awvp_publishing_notice']))
             : '';
+        // phpcs:enable WordPress.Security.NonceVerification.Recommended
         $message = match ($notice) {
             'saved' => __('Video publishing defaults saved.', 'argentwolf-video-processor'),
             'indeterminate' => __('AWVP could not verify whether the publishing-defaults save committed. Reload and inspect the current values before retrying.', 'argentwolf-video-processor'),
