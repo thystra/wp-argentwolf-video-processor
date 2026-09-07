@@ -22,6 +22,8 @@ final class Video_Meta
     public const SERVING_AUTHORITY = '_argent_video_serving_authority';
     public const PEERTUBE_MIGRATION_PLAN = '_argent_video_peertube_migration_plan';
     public const PEERTUBE_MIGRATION_EXECUTION = '_argent_video_peertube_migration_execution';
+    public const LOCAL_RETENTION_POLICY = '_argent_video_local_retention_policy';
+    public const LOCAL_RETENTION_EXECUTION = '_argent_video_local_retention_execution';
     public const PROFILE_SNAPSHOT = '_argent_video_profile_snapshot';
     public const PUBLICATION_POLICY = '_argent_video_publication_policy';
     public const METADATA_ORIGIN = '_argent_video_metadata_origin';
@@ -96,6 +98,14 @@ final class Video_Meta
             self::PEERTUBE_MIGRATION_EXECUTION => $base + array(
                 'type'              => 'array',
                 'sanitize_callback' => array(self::class, 'sanitize_peertube_migration_execution'),
+            ),
+            self::LOCAL_RETENTION_POLICY => $base + array(
+                'type'              => 'array',
+                'sanitize_callback' => array(self::class, 'sanitize_local_retention_policy'),
+            ),
+            self::LOCAL_RETENTION_EXECUTION => $base + array(
+                'type'              => 'array',
+                'sanitize_callback' => array(self::class, 'sanitize_local_retention_execution'),
             ),
             self::PROFILE_SNAPSHOT => $base + array(
                 'type'              => 'array',
@@ -218,6 +228,18 @@ final class Video_Meta
     public static function sanitize_peertube_migration_execution(mixed $value): array
     {
         return PeerTube_Migration_Execution::sanitize($value);
+    }
+
+    /** @return array<string,mixed> */
+    public static function sanitize_local_retention_policy(mixed $value): array
+    {
+        return Local_Retention_Policy::sanitize($value);
+    }
+
+    /** @return array<string,mixed> */
+    public static function sanitize_local_retention_execution(mixed $value): array
+    {
+        return Local_Retention_Execution::sanitize($value);
     }
 
     public static function sanitize_serving_authority(mixed $value): array

@@ -979,3 +979,31 @@ R46.8 converts a `ready` R46.7 plan into live publication intent only after an e
 The local `_argent_video_peertube_migration_execution` journal is written in `prepared` before any live destination/publication change. That record hashes the exact `ready` migration plan and binds video/backend/channel/anchor. Promotion is deliberately ordered and replayable: write/verify the exact live PeerTube publication plan, then write/verify the concrete PeerTube destination, mark the journal `promoted`, and invoke the already-qualified `PeerTube_Publication_Synchronizer`. A successful synchronizer handoff records lifecycle generation/task identity and marks the journal `dispatched`. Crashes after any boundary can resume from the journal without duplicating upload work.
 
 `prepared` is the one-way commitment boundary. R46.7 planning/review is frozen once it exists, and ordinary destination editing cannot return the video to Local or choose another backend/channel. Same-target publication metadata may still evolve after handoff through the normal R46.3c/R46.5 generation model. The migration executor itself performs no PeerTube HTTP, staged-upload operation creation, remote-asset mutation, serving cutover, or cleanup. R46.5/R46.6 remain the only remote execution and verified serving paths; R46.9 remains the only local-retention/cleanup checkpoint.
+
+### R46.9 explicit post-cutover local retention
+
+R46.9 is the only R46 checkpoint with local destructive authority. Retention is
+per AWVP Video and defaults to `keep`. `delete_managed` may remove the
+attachment's AWVP-managed storage tree and `_argent_video_outputs` projection
+while preserving the physical WordPress source. `delete_all` additionally
+removes the physical WordPress video file but never the attachment post; it is
+refused while `wordpress_source` remains the declared master authority.
+
+A destructive policy is not deletion authority by itself. The operator must
+confirm the exact per-video policy, choose a 1-365 day grace period, and the
+video must still have current R46.6 public/unlisted serving authority. The
+cleanup journal freezes that serving generation/plan/manifest/remote asset and,
+for source deletion, a confined uploads-relative device/inode/size/mtime source
+identity. Cleanup runs only as `peertube_local_retention_cleanup` in the existing
+detached `--drain` worker; `--once` is not expanded.
+
+Immediately before deletion the worker re-proves serving authority, master
+policy, grace expiry, source identity, and absence of queued/processing local
+FFmpeg work. Entering cleanup `running` fences the ordinary local queue, then the
+job repository is checked a second time to close the enqueue race. Managed tree
+deletion uses the existing confined `Storage` boundary. Physical source deletion
+uses `wp_delete_file()` only after an immediate stat identity recheck and verifies
+actual absence. A recovered `running` journal may confirm an exact already-absent
+source without replaying deletion; a merely queued job may not. Any mismatch,
+changed serving state, active local work, malformed record, or uncertainty means
+KEEP. No remote PeerTube HTTP or remote deletion is part of retention cleanup.

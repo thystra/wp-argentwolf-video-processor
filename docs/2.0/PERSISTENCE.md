@@ -1391,3 +1391,27 @@ The record is deliberately separate from `_argent_video_destination`, `_argent_v
 R46.8 version-1 non-secret, crash-recoverable migration-promotion journal. It stores the AWVP Video ID, SHA-256 commitment to the exact `ready` `_argent_video_peertube_migration_plan`, backend/channel/anchor identity, `prepared|promoted|dispatched`, eventual publication lifecycle generation/task ID, and bounded local timestamps. It stores no credential, source path, upload-session identity, remote UUID, or serving URL.
 
 `prepared` is written before live promotion and is the one-way commitment point. While prepared, retries may recover an exact publication-plan write or exact destination write but must refuse conflicting live state. `promoted` means the exact reviewed plan and destination both read back correctly. `dispatched` means the existing publication synchronizer returned a durable generation/task identity. Malformed/future journal values are never overwritten implicitly. No rollback state exists in this schema; cleanup/retention remains R46.9.
+
+### R46.9 local retention policy and cleanup execution
+
+`_argent_video_local_retention_policy` is a strict version-1 non-secret per-video
+record with `mode`, `grace_days`, `confirmed_by`, and `confirmed_at`. Modes are
+`keep`, `delete_managed`, and `delete_all`. KEEP forces zero grace; destructive
+modes require 1-365 days. Changing a policy creates a new commitment hash, so an
+older queued cleanup task becomes stale rather than inheriting new authority.
+
+`_argent_video_local_retention_execution` is the durable audit journal for one
+cleanup attempt. It freezes video/attachment identity, policy hash, serving-
+authority hash/generation, plan and manifest commitments, remote asset/UUID,
+eligibility time, attempt number, and (for `delete_all`) the exact confined
+WordPress source identity. Mutable fields track task ID, queued/running/terminal
+status, completion time, and a bounded local error. The generic task row is not
+sole deletion authority; the worker must re-read and match current policy,
+execution journal, serving authority, source/master state, and local job state.
+
+`_argent_video_cleanup_state` remains a projection (`none`, `pending`, `eligible`,
+`running`, `complete`, `blocked`, `failed`) and cannot authorize deletion by
+itself. `_argent_video_source_state=removed` is written only after physical source
+absence is positively verified. `_argent_video_outputs` is removed only after
+the corresponding AWVP-managed storage tree has been removed. The attachment
+object and its identity metadata remain present after physical source deletion.

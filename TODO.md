@@ -361,13 +361,17 @@
   run 134 is green. The bounded planner writes only inert migration state, preserves
   same-target review, and never silently truncates more than five WordPress tag
   suggestions or wakes publication execution.
-- [ ] R46.8: implementation candidate adds explicit one-way migration promotion.
-  `ready` plans are revalidated against current source identity, active backend,
-  fresh current-secret-generation catalog, provider choices, support preset, and thumbnail bytes before a
-  crash-recoverable `_argent_video_peertube_migration_execution` journal commits
-  the operation. Promotion writes the exact reviewed publication plan first and
-  concrete PeerTube destination second, verifies both, then hands off only through
-  the qualified R46.5 publication synchronizer. The migration executor performs no
-  PeerTube HTTP/upload/serving work; committed migration freezes backend/channel
-  rollback or retargeting in ordinary editor surfaces.
-- [ ] R46.9: post-cutover local retention/cleanup policy.
+- [x] R46.8: explicit one-way migration promotion is qualified at commit
+  `9485ebb`, tree `3ed54e0c5cd7c436b54f63da49b3dcf76305cfc6`; Forgejo CI run
+  135 is green. `ready` plans are revalidated against current source identity,
+  active backend, fresh current-secret-generation catalog, provider choices,
+  support preset, and thumbnail bytes before the crash-recoverable migration
+  execution journal commits. Promotion converges forward through the qualified
+  publication synchronizer and freezes backend/channel rollback or retargeting.
+- [ ] R46.9: implementation candidate adds explicit post-cutover local retention.
+  KEEP is the default. Per-video policies may delete only AWVP-managed copies or,
+  after an explicit non-WordPress master-authority decision, all local video copies.
+  Destructive policies require a 1-365 day grace period and current verified
+  PeerTube serving evidence. Cleanup is a durable detached-worker task, rechecks
+  serving/file identity and local-job quiescence immediately before deletion,
+  preserves the WordPress attachment object, and treats every uncertainty as KEEP.

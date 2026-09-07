@@ -798,3 +798,14 @@ request, arbitrary URL, browser-supplied bearer, or raw provider body is persist
 ### R46.8 explicit migration action
 
 One-way migration execution is exposed only through the administrator Tools workflow and a capability/nonce-protected `admin-post.php` action. The first Start migration requires an explicit one-way acknowledgement. The request performs only bounded local validation/meta writes and calls the local publication synchronizer; it performs no provider HTTP in the browser/admin request. Resume uses the same per-video nonce and crash journal rather than creating a second migration. Ordinary Gutenberg destination editing is prevented from rolling back or retargeting a committed migration.
+
+### R46.9 physical source cleanup implementation
+
+R46.9 implements the destructive-retention checklist through the existing
+WordPress filesystem APIs. The source path is derived from the attachment and
+must remain beneath the resolved uploads directory without symlink traversal.
+The cleanup journal freezes a relative path and stat identity; the worker re-stats
+that identity immediately before `wp_delete_file()` and confirms absence. It
+never calls `wp_delete_attachment()` or `wp_delete_post()`. Managed AWVP copies
+are removed only through `Storage::remove_tree()` after its existing confinement
+checks, and their output metadata is cleared after the tree is absent.

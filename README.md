@@ -133,6 +133,8 @@ R46.7 adds **Tools > AWVP Video Migration** for planning existing local AWVP Vid
 
 R46.8 adds the explicit **Start migration** step for a `ready` plan. Starting is a one-way local commitment: AWVP revalidates current source/provider/default/thumbnail evidence, journals the exact migration plan, promotes its publication plan and target destination, and then invokes the existing durable publication synchronizer. Remote upload/publication and verified serving cutover continue through the already-qualified R46.5/R46.6 paths; R46.8 adds no parallel uploader or frontend path.
 
+R46.9 adds **Tools > AWVP Local Retention**. Retention is per-video and defaults to **Keep all local copies**. An operator may explicitly choose delayed cleanup of AWVP-managed copies while preserving the WordPress source, or delayed cleanup of all local video copies after declaring a non-WordPress master authority. Destructive actions require a 1-365 day grace period and run only in the existing detached durable worker after current public/unlisted PeerTube serving evidence, local-job quiescence, and exact filesystem identity are revalidated. Physical-source cleanup never deletes the WordPress attachment record; any uncertainty keeps local data.
+
 ## WP-CLI
 
 ```bash

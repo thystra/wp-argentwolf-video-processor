@@ -92,6 +92,9 @@ require_once dirname(__DIR__) . '/includes/PeerTube_Publication_Manifest.php';
 require_once dirname(__DIR__) . '/includes/PeerTube_Publication_Execution.php';
 require_once dirname(__DIR__) . '/includes/PeerTube_Connection_Input.php';
 require_once dirname(__DIR__) . '/includes/Video_Serving_Authority.php';
+require_once dirname(__DIR__) . '/includes/Local_Retention_Policy.php';
+require_once dirname(__DIR__) . '/includes/WordPress_Source_File.php';
+require_once dirname(__DIR__) . '/includes/Local_Retention_Execution.php';
 require_once dirname(__DIR__) . '/includes/Model_Activator.php';
 require_once dirname(__DIR__) . '/includes/Video_Post_Type.php';
 require_once dirname(__DIR__) . '/includes/Video_Meta.php';
@@ -144,6 +147,8 @@ $expected_meta = array(
     Video_Meta::SERVING_AUTHORITY,
     Video_Meta::PEERTUBE_MIGRATION_PLAN,
     Video_Meta::PEERTUBE_MIGRATION_EXECUTION,
+    Video_Meta::LOCAL_RETENTION_POLICY,
+    Video_Meta::LOCAL_RETENTION_EXECUTION,
     Video_Meta::PROFILE_SNAPSHOT,
     Video_Meta::PUBLICATION_POLICY,
     Video_Meta::METADATA_ORIGIN,

@@ -43,21 +43,26 @@ final class PeerTube_Task_Worker
         PeerTube_Upload_Task_Coordinator::TASK_FAILURE_NOTIFY,
         'peertube_publication_sync',
         'peertube_publication_finalize',
+        'peertube_local_retention_cleanup',
     );
 
     /** @var Closure(string):array<string,mixed>|null */
     private Closure $operation_reader;
     /** @var Closure(array<string,mixed>,int):array<string,mixed>|null */
     private ?Closure $publication_advance;
+    /** @var Closure(array<string,mixed>,int):array<string,mixed>|null */
+    private ?Closure $retention_advance;
 
     public function __construct(
         private readonly Task_Repository $tasks,
         private readonly PeerTube_Upload_Task_Coordinator $coordinator,
         callable $operation_reader,
-        ?callable $publication_advance = null
+        ?callable $publication_advance = null,
+        ?callable $retention_advance = null
     ) {
         $this->operation_reader = Closure::fromCallable($operation_reader);
         $this->publication_advance = null === $publication_advance ? null : Closure::fromCallable($publication_advance);
+        $this->retention_advance = null === $retention_advance ? null : Closure::fromCallable($retention_advance);
     }
 
     /**
@@ -275,6 +280,11 @@ final class PeerTube_Task_Worker
                     return self::result(self::STATUS_INDETERMINATE, $recovered, $task_id, $task_type);
                 }
                 $advanced = ($this->publication_advance)($task, $now);
+            } elseif ('peertube_local_retention_cleanup' === $task_type) {
+                if (null === $this->retention_advance) {
+                    return self::result(self::STATUS_INDETERMINATE, $recovered, $task_id, $task_type);
+                }
+                $advanced = ($this->retention_advance)($task, $now);
             } else {
                 $advanced = $this->coordinator->advance_claimed($task, $now);
             }

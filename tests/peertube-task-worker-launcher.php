@@ -120,7 +120,7 @@ namespace {
     $assert(0 === count($GLOBALS['awvp_r45_launcher_exec_calls']), 'Idle launcher spawned a process.');
     $assert(1 === count($tasks->calls) && 4100 === $tasks->calls[0]['stale_before'], 'Launcher work probe did not use the reviewed stale-lock boundary.');
     $assert(
-        array('peertube_upload_advance','peertube_remote_reconcile','peertube_upload_failure_notify','peertube_publication_sync','peertube_publication_finalize') === $tasks->calls[0]['types'],
+        array('peertube_upload_advance','peertube_remote_reconcile','peertube_upload_failure_notify','peertube_publication_sync','peertube_publication_finalize','peertube_local_retention_cleanup') === $tasks->calls[0]['types'],
         'Launcher work probe was not restricted to the reviewed PeerTube task types.'
     );
 

@@ -389,3 +389,20 @@ R46.7 is qualified at commit `15b5dec`, tree `0eb6728c2a39a6a00440153dae54fb215e
 R46.8 makes execution an explicit one-way administrator action. Before commitment AWVP requires the exact `ready` plan, unchanged source/anchor/local destination, current active backend/origin, a non-stale current-secret-generation catalog, and a buildable current `PeerTube_Publication_Manifest`. The new migration-execution journal is written before promotion, so publication-plan and destination writes can be resumed safely after a crash. The exact reviewed plan is promoted first, then the concrete PeerTube destination, then the normal publication synchronizer creates generation-fenced durable work according to the reviewed `send_now` versus `send_on_schedule_or_publish` policy.
 
 Starting migration does not itself perform PeerTube HTTP. R46.5b remains the only detached remote publication executor, and R46.6 remains the only verified serving cutover. The local copy therefore remains frontend authority until the existing remote publication/cutover evidence becomes valid. The migration journal intentionally has no rollback phase; after commitment editor surfaces cannot return to Local or retarget the migration backend/channel. R46.9 alone may later make local files eligible for retention cleanup.
+
+## R46.9 post-cutover local retention
+
+Verified PeerTube serving makes local bytes *eligible for a separately confirmed
+policy*; it never deletes them automatically. R46.9 defaults every video to KEEP.
+Operators may remove AWVP-managed copies after a grace period while retaining the
+WordPress source, or explicitly choose full local cleanup after changing the
+master-authority decision away from `wordpress_source`. Full cleanup removes the
+physical video file only; the WordPress attachment object survives.
+
+Cleanup is local-only and detached. It revalidates the exact R46.6 serving
+commitment and current published anchor, refuses private/internal or otherwise
+non-serving targets, fences local FFmpeg queue work, and re-proves filesystem
+confinement/identity immediately before deletion. No PeerTube API request, remote
+asset deletion, destination rollback, or frontend cutover mutation occurs in the
+cleanup worker. If serving evidence is superseded or any check is uncertain,
+local bytes are retained and the attempt is blocked/failed for explicit review.

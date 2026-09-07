@@ -390,3 +390,19 @@ Treat `_argent_video_serving_authority` as revocable evidence, not a destination
 `PeerTube_Migration_Executor` is a local promotion coordinator, not a provider executor. A fresh Start migration action must require a strict `ready` R46.7 plan and revalidate the hidden video/attachment/anchor identity, canonical-local destination, active PeerTube backend/origin, a non-stale current-secret-generation publication catalog, provider vocabulary, support preset resolution, and immutable thumbnail identity by successfully building the existing `PeerTube_Publication_Manifest`. It writes `_argent_video_peertube_migration_execution` before live promotion, then converges only forward: exact publication plan first, exact PeerTube destination second, journal `promoted`, and finally `PeerTube_Publication_Synchronizer::sync_video()`.
 
 Do not add PeerTube HTTP, upload session creation, task enqueueing, remote-asset mutation, serving cutover, cleanup, or deletion to the migration executor. The synchronizer remains the sole handoff to R46.5. A present migration-execution journal is the one-way commitment boundary: planner review is frozen and ordinary destination/publication editor operations may not change backend/channel. Malformed/future journal state must be preserved and fail closed; prepared/promoted retries must be idempotent and crash-recoverable.
+
+## R46.9 retention/cleanup boundary
+
+Local retention is destructive and must remain fail-closed. KEEP is the default.
+Never infer deletion authority from destination, remote readiness, serving
+cutover, cleanup-state enum, or migration completion alone. A destructive
+operation requires the explicit versioned per-video retention policy, its grace
+period, current R46.6 serving evidence, and a durable cleanup execution journal.
+
+`delete_all` must not run while `wordpress_source` is master. Physical source
+deletion must preserve the WordPress attachment object, use a confined uploads
+path, reject symlinks/escapes, compare exact file identity immediately before
+`wp_delete_file()`, and verify absence afterward. The normal local FFmpeg queue
+must be fenced while cleanup is running, with active jobs checked on both sides
+of that fence. Any mismatch means KEEP. Do not add provider HTTP, remote deletion,
+a new scheduler, or retention work to the qualified `--once` task set.

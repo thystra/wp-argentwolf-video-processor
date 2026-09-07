@@ -1890,3 +1890,25 @@ R46.7 is qualified at commit `15b5dec`, tree `0eb6728c2a39a6a00440153dae54fb215e
 R46.8 adds an explicit administrator Start migration action plus `PeerTube_Migration_Execution` and `PeerTube_Migration_Executor`. Fresh execution requires the exact strict `ready` plan and revalidates current video/attachment/anchor identity, local destination, active backend/origin, a fresh catalog, provider-backed choices, support-preset resolution, and thumbnail identity via `PeerTube_Publication_Manifest::build()`. Only then is a non-secret `prepared` migration journal written.
 
 Promotion must converge forward from that journal: publication plan first, destination second, exact readback, `promoted`, then `PeerTube_Publication_Synchronizer::sync_video()`. Successful durable handoff records generation/task ID and becomes `dispatched`; replay is `present`. The executor itself must contain no PeerTube HTTP/uploader/remote-asset/serving/cleanup path and must not enqueue tasks directly. A committed migration freezes planner review and backend/channel retarget/rollback in editor surfaces. R46.9 remains post-cutover local retention/cleanup only.
+
+### R46.8 qualification and R46.9 retention continuation
+
+R46.8 is qualified at commit `9485ebb`, tree
+`3ed54e0c5cd7c436b54f63da49b3dcf76305cfc6`; Forgejo CI run 135 is green. The
+one-way migration journal is therefore the qualified promotion boundary into the
+existing R46.5/R46.6 execution and serving path.
+
+R46.9 alone may delete local bytes. KEEP must remain the implicit/default policy.
+Destructive policy is per-video, explicitly confirmed, delayed 1-365 days, and
+journaled before the detached worker owns any delete. `delete_managed` may remove
+only AWVP-managed copies/output projection. `delete_all` also removes the physical
+WordPress video file and is forbidden while WordPress is declared master. The
+attachment post itself must never be deleted by retention.
+
+The worker must require current R46.6 serving evidence, exact policy/execution
+hashes, grace expiry, quiescent local processing, and immediately revalidated
+filesystem ownership. Fence normal local enqueue once cleanup enters `running`
+and recheck the local job repository after that fence. A source-delete crash may
+converge from an existing `running` journal plus exact confined absence; generic
+missing-source observations never authorize success. Use no PeerTube HTTP,
+remote-delete API, editor/browser deletion, new scheduler, or `--once` expansion.

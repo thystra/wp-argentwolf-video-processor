@@ -79,6 +79,11 @@ require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Connection_Admin_Service.php'
 require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Connection_Admin.php';
 require_once ARGENT_VIDEO_DIR . 'includes/Model_Activator.php';
 require_once ARGENT_VIDEO_DIR . 'includes/Task_Repository.php';
+require_once ARGENT_VIDEO_DIR . 'includes/Local_Retention_Policy.php';
+require_once ARGENT_VIDEO_DIR . 'includes/Local_Retention_Execution.php';
+require_once ARGENT_VIDEO_DIR . 'includes/WordPress_Source_File.php';
+require_once ARGENT_VIDEO_DIR . 'includes/Local_Retention_Service.php';
+require_once ARGENT_VIDEO_DIR . 'includes/Local_Retention_Admin.php';
 require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Upload_Failure_Notification.php';
 require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Upload_Task_Coordinator.php';
 require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Task_Worker.php';

@@ -1,3 +1,10 @@
+- Add R46.9 explicit post-cutover local retention. KEEP remains the default;
+  destructive per-video policies require a 1-365 day grace period and current
+  verified PeerTube serving. Cleanup is journaled and detached, fences local
+  processing, revalidates source identity before deletion, preserves the WordPress
+  attachment object, and treats uncertainty as KEEP. R46.8 is qualified at commit
+  `9485ebb`, tree `3ed54e0c5cd7c436b54f63da49b3dcf76305cfc6`, Forgejo CI 135 green.
+
 - Add R46.6 verified local-first serving cutover. A strict non-secret serving
   authority is written only from positively verified current publication evidence;
   the AWVP block independently revalidates lifecycle/plan/execution/remote-asset

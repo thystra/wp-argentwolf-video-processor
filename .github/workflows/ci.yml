@@ -60,6 +60,10 @@ jobs:
           php tests/peertube-publication-task-coordinator.php
           php tests/video-serving-authority.php
           php tests/video-serving-cutover.php
+          php tests/local-retention-policy.php
+          php tests/wordpress-source-file.php
+          php tests/local-retention-service.php
+          php tests/local-retention-admin.php
           php tests/peertube-migration-plan.php
           php tests/peertube-migration-execution.php
           php tests/peertube-migration-planner.php

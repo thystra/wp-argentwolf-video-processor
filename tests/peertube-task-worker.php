@@ -152,6 +152,7 @@ namespace {
     $root = dirname(__DIR__);
     $source = (string) file_get_contents($root.'/includes/PeerTube_Task_Worker.php');
     $assert(str_contains($source, "'peertube_publication_sync'") && str_contains($source, "'peertube_publication_finalize'"), 'R46.5b publication task types are not owned by the drain worker.');
+    $assert(str_contains($source, "'peertube_local_retention_cleanup'"), 'R46.9 retention cleanup is not owned by the drain worker.');
     $once_start = strpos($source, 'private const ONCE_TASK_TYPES');
     $drain_start = strpos($source, 'private const DRAIN_TASK_TYPES');
     $once_chunk = false !== $once_start && false !== $drain_start ? substr($source, $once_start, $drain_start - $once_start) : '';

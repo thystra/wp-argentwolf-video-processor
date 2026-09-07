@@ -48,6 +48,7 @@ final class Plugin
         $video_block_editor_rest = new Video_Block_Editor_Rest($video_block_editor_service);
         $frontend_remote_assets = new Remote_Asset_Repository();
         $video_serving = new Video_Serving_Service($frontend_remote_assets);
+        $local_retention_service = new Local_Retention_Service($peertube_tasks, $video_serving, $jobs);
         $video_block = new Video_Block($video_serving);
         $peertube_publication_catalogs = new PeerTube_Publication_Catalog_Store();
         $peertube_publication_editor = new PeerTube_Publication_Editor_Service(
@@ -155,6 +156,7 @@ final class Plugin
                     return $generation > 0 ? $generation : 0;
                 }
             );
+            $local_retention_admin = new Local_Retention_Admin($local_retention_service);
             $peertube_migration_admin = new PeerTube_Migration_Admin(
                 $peertube_migration_planner,
                 $peertube_migration_executor,
@@ -179,6 +181,7 @@ final class Plugin
             add_action('admin_menu', array($peertube_admin, 'menu'));
             add_action('admin_menu', array($video_publishing_admin, 'menu'));
             add_action('admin_menu', array($peertube_migration_admin, 'menu'));
+            add_action('admin_menu', array($local_retention_admin, 'menu'));
             add_filter('manage_media_columns', array($admin, 'media_columns'));
             add_action('manage_media_custom_column', array($admin, 'media_column'), 10, 2);
             add_action('admin_post_argent_video_queue_attachment', array($admin, 'queue_action'));
@@ -233,6 +236,10 @@ final class Plugin
             add_action(
                 'admin_post_' . Video_Publishing_Admin::ACTION_REFRESH_CHOICES,
                 array($video_publishing_admin, 'refresh_choices_action')
+            );
+            add_action(
+                'admin_post_' . Local_Retention_Admin::ACTION_CONFIGURE,
+                array($local_retention_admin, 'configure_action')
             );
             add_action(
                 'admin_post_' . PeerTube_Migration_Admin::ACTION_PLAN,
@@ -297,7 +304,8 @@ final class Plugin
                 $peertube_tasks,
                 $peertube_task_coordinator,
                 array($peertube_upload_operations, 'get'),
-                array($peertube_publication_tasks, 'advance_claimed')
+                array($peertube_publication_tasks, 'advance_claimed'),
+                array($local_retention_service, 'advance_claimed')
             );
 
             \WP_CLI::add_command(
