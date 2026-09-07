@@ -1931,3 +1931,15 @@ ctime and is checked again immediately before deletion. A source-delete crash ma
 converge from an existing `running` journal plus exact confined absence; generic
 missing-source observations never authorize success. Use no PeerTube HTTP,
 remote-delete API, editor/browser deletion, new scheduler, or `--once` expansion.
+
+### R46.9 qualification and RC integration continuation
+
+R46.9 is qualified at commit `773c7e9`, tree
+`9f1e853b1c0a4a526a1ae73ad17c8f5ccc686132`; Forgejo CI run 138 is green. This
+closes the final R46 implementation checkpoint. Preserve that exact retention
+boundary while the 2.0 line moves into integration and release-candidate testing.
+
+Before cutting the canonical RC1 package, resolve the still-open R45.6 backend
+capability-advertisement decision against the now-qualified production detached
+upload/reconciliation path. Do not let capability-map cleanup broaden browser,
+REST, AJAX, cron-inline, remote-delete, or direct-browser authority.

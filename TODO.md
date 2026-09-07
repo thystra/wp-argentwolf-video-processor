@@ -370,14 +370,15 @@
   support preset, and thumbnail bytes before the crash-recoverable migration
   execution journal commits. Promotion converges forward through the qualified
   publication synchronizer and freezes backend/channel rollback or retargeting.
-- [ ] R46.9: implementation candidate adds explicit post-cutover local retention.
-  KEEP is the default. Per-video policies may delete only AWVP-managed copies or,
-  after an explicit non-WordPress master-authority decision, all local video copies.
-  Destructive policies require a 1-365 day grace period and current verified
-  PeerTube serving evidence. Cleanup is a durable detached-worker task, rechecks
-  serving/file identity, current exclusive attachment ownership, and local-job
-  quiescence immediately before deletion, preserves the WordPress attachment
-  object, and treats every uncertainty as KEEP.
+- [x] R46.9: explicit post-cutover local retention is qualified at commit
+  `773c7e9`, tree `9f1e853b1c0a4a526a1ae73ad17c8f5ccc686132`; Forgejo CI run 138
+  is green. KEEP is the default. Per-video policies may delete only AWVP-managed
+  copies or, after an explicit non-WordPress master-authority decision, all local
+  video copies. Destructive policies require a 1-365 day grace period and current
+  verified PeerTube serving evidence. Cleanup is a durable detached-worker task,
+  rechecks serving/file identity, current exclusive attachment ownership, and
+  local-job quiescence immediately before deletion, preserves the WordPress
+  attachment object, and treats every uncertainty as KEEP.
 
 ### 2.0 release-candidate and final-release gates
 
@@ -385,8 +386,9 @@
   `Stable tag: 1.0.0`; enforce that split in normal CI and canonical builds.
 - [x] Add regression coverage proving PHP/WordPress ordering for `1.0.0 < 2.0.0`,
   increasing `2.0.0-rcN`, and `2.0.0-rcN < 2.0.0`.
-- [ ] Qualify R46.9 hardening on exact Forgejo source/CI and close the final R46
-  implementation checkpoint.
+- [x] Qualify R46.9 hardening on exact Forgejo source/CI and close the final R46
+  implementation checkpoint: `773c7e9` / tree
+  `9f1e853b1c0a4a526a1ae73ad17c8f5ccc686132` / Forgejo CI run 138.
 - [ ] Merge the qualified R46 line into the reviewed 2.0 integration branch and
   cut/preserve the exact RC1 candidate commit and canonical Forgejo package.
 - [ ] Pass the full isolated WordPress VM/Docker upgrade, regression, security,
