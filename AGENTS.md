@@ -53,6 +53,10 @@ maintainer must inspect the result, approve the design, execute or review
 validation, control releases and deployments, and remain accountable for the
 software.
 
+## R46.7 migration planning boundary
+
+`PeerTube_Migration_Plan`, `PeerTube_Migration_Planner`, and `PeerTube_Migration_Admin` are planner-only. They may read local AWVP Video/attachment/post metadata, publishing defaults, backend descriptors, and cached publication catalogs, but may write only `Video_Meta::PEERTUBE_MIGRATION_PLAN`. They must not write live destination/publication/lifecycle/execution/serving state, enqueue tasks, perform PeerTube HTTP, or delete media. `MAX_SELECT_ALL` is deliberately bounded, and repeated same-source/same-target planning must preserve completed review. R46.8 is the only checkpoint allowed to promote a reviewed migration plan into executable state.
+
 ## WordPress development policy
 
 `wordpress-development.md` is a required companion to this file. Review it

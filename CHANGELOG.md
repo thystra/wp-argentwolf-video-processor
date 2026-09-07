@@ -26,6 +26,7 @@
 
 ## 2.0.0 - Unreleased
 
+- Add the R46.7 existing-video PeerTube migration planner and Needs Review workflow. Planning is isolated from live destination/publication/lifecycle/execution/serving state, supports bounded selected/select-all batches, preserves completed same-target review, and keeps WordPress tags as explicitly-reviewed suggestions without truncating more than five. No upload, task dispatch, provider HTTP, or serving cutover is added.
 - Add an origin-bound WordPress safe-HTTP client and bounded PeerTube instance
   detection through `GET /api/v1/config`, followed by authenticated identity and
   owned-channel discovery through the configured PeerTube origin.

@@ -129,6 +129,16 @@ final class Plugin
                 $peertube_publication_catalogs,
                 $peertube_publication_catalog_service
             );
+            $peertube_migration_planner = new PeerTube_Migration_Planner(
+                $this->backend_registry,
+                $video_publishing_defaults,
+                $peertube_publication_catalogs
+            );
+            $peertube_migration_admin = new PeerTube_Migration_Admin(
+                $peertube_migration_planner,
+                $this->backend_registry,
+                $peertube_publication_catalogs
+            );
             $peertube_admin = new PeerTube_Connection_Admin(
                 new PeerTube_Connection_Admin_Service(
                     $peertube_operations,
@@ -146,6 +156,7 @@ final class Plugin
             add_action('admin_menu', array($admin, 'menu'));
             add_action('admin_menu', array($peertube_admin, 'menu'));
             add_action('admin_menu', array($video_publishing_admin, 'menu'));
+            add_action('admin_menu', array($peertube_migration_admin, 'menu'));
             add_filter('manage_media_columns', array($admin, 'media_columns'));
             add_action('manage_media_custom_column', array($admin, 'media_column'), 10, 2);
             add_action('admin_post_argent_video_queue_attachment', array($admin, 'queue_action'));
@@ -200,6 +211,14 @@ final class Plugin
             add_action(
                 'admin_post_' . Video_Publishing_Admin::ACTION_REFRESH_CHOICES,
                 array($video_publishing_admin, 'refresh_choices_action')
+            );
+            add_action(
+                'admin_post_' . PeerTube_Migration_Admin::ACTION_PLAN,
+                array($peertube_migration_admin, 'plan_action')
+            );
+            add_action(
+                'admin_post_' . PeerTube_Migration_Admin::ACTION_REVIEW,
+                array($peertube_migration_admin, 'review_action')
             );
             add_action('admin_notices', array($admin, 'notices'));
             add_action('admin_notices', array($peertube_admin, 'notices'));

@@ -350,14 +350,18 @@
   rechecks WordPress after non-private PUTs, and immediately re-privates if reveal
   authority changed. `--once` remains upload/reconcile only and serving cutover
   remains separate.
-- [ ] R46.6: implementation candidate adds a strict non-secret per-video serving-
-  authority record plus a local-only cutover service and fail-closed frontend
-  resolver. Public/unlisted PeerTube serving is enabled only after the current
-  lifecycle generation/plan/destination/applied manifest, actual published anchor,
-  remote asset identity, ready state, final privacy, verification timestamp, and
-  exact embed URL all agree. Private/internal targets remain local. Any stale or
-  malformed evidence renders through the existing local WordPress shortcode path;
-  no frontend/provider HTTP, cleanup, migration, or deletion authority is added.
-- [ ] R46.7: existing-video migration planner / Needs Review workflow.
+- [x] R46.6: verified local-first PeerTube serving cutover is qualified at commit
+  prefix `012bcdc`, tree `03cc4e647a65c778ace3fbaddb02374f4e9f9b4b`; Forgejo CI
+  run 133 is green. Public/unlisted remote serving requires exact current local
+  lifecycle/plan/destination/execution/asset evidence; any uncertainty, private
+  target, or superseding WordPress state immediately retains the local shortcode
+  path with no frontend PeerTube HTTP.
+- [ ] R46.7: implementation candidate adds the existing-video migration planner and
+  explicit Needs Review workflow. It scans only locally-destined AWVP Videos,
+  supports selected or bounded 500-item select-all planning, stores an inert
+  `_argent_video_peertube_migration_plan`, offers WordPress tags only as suggestions
+  (never silently truncating >5), and permits explicit per-video publication review.
+  It does not write live destination/publication/lifecycle/execution/serving state,
+  enqueue tasks, or call PeerTube; R46.8 remains the sole promotion/execution step.
 - [ ] R46.8: one-way local-to-PeerTube migration execution.
 - [ ] R46.9: post-cutover local retention/cleanup policy.

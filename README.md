@@ -129,6 +129,8 @@ planning state. This checkpoint still renders the local WordPress attachment and
 does not start a PeerTube upload, publish a remote video, or switch serving
 authority. The detailed PeerTube publication/review wizard follows separately.
 
+R46.7 adds **Tools > AWVP Video Migration** for planning existing local AWVP Videos. The planner can select individual videos or a bounded select-all batch, choose an owned PeerTube channel from the last-known-good catalog, and review per-video publication metadata. WordPress tags are suggestions only and more than five are never silently truncated. Planning writes only inert migration state; it does not change the live destination/publication plan, enqueue PeerTube work, or switch frontend serving.
+
 ## WP-CLI
 
 ```bash

@@ -60,6 +60,9 @@ jobs:
           php tests/peertube-publication-task-coordinator.php
           php tests/video-serving-authority.php
           php tests/video-serving-cutover.php
+          php tests/peertube-migration-plan.php
+          php tests/peertube-migration-planner.php
+          php tests/peertube-migration-admin.php
           php tests/video-block-editor-service.php
           php tests/video-block-editor-rest.php
           php tests/video-block.php

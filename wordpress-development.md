@@ -492,3 +492,7 @@ leaving the local authority writer free to supersede the generation.
 ### R46.6 serving boundary
 
 The AWVP dynamic block may render the verified PeerTube embed only through `Video_Serving_Service`; otherwise it must call the existing local `wp_video_shortcode()` path. Rendering performs local metadata/database reads only and never provider HTTP. The detached cutover writer is fed by R46.5b's positively verified publication state and stores only non-secret evidence.
+
+### R46.7 migration planner development rule
+
+Migration planning is an administrator-only, local-state operation. Use `Tools > AWVP Video Migration`; refresh PeerTube publication choices separately if the target channel/catalog is unavailable. A migration plan is intentionally inert and does not trigger the R46.5 executor. Treat `ready` as an editorial planning state only; remote execution remains R46.8.
