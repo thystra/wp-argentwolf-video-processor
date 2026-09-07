@@ -5,10 +5,12 @@ declare(strict_types=1);
 $GLOBALS['awvp_stage_meta'] = array();
 $GLOBALS['awvp_stage_mime'] = array();
 $GLOBALS['awvp_stage_files'] = array();
+$GLOBALS['awvp_stage_posts'] = array();
 $GLOBALS['awvp_stage_uploads'] = sys_get_temp_dir().'/awvp-publication-staging-'.bin2hex(random_bytes(4));
 @mkdir($GLOBALS['awvp_stage_uploads'], 0777, true);
 
 function wp_upload_dir(): array { return array('basedir'=>$GLOBALS['awvp_stage_uploads'],'baseurl'=>'https://example.test/uploads','error'=>false); }
+function get_post(int $id): mixed { return $GLOBALS['awvp_stage_posts'][$id] ?? null; }
 function wp_normalize_path(string $p): string { return str_replace('\\','/',$p); }
 function wp_mkdir_p(string $p): bool { return is_dir($p) || mkdir($p,0777,true); }
 function wp_delete_file(string $p): void { @unlink($p); }
@@ -29,6 +31,7 @@ require_once dirname(__DIR__).'/includes/PeerTube_Publication_Manifest.php';
 require_once dirname(__DIR__).'/includes/PeerTube_Publication_Execution.php';
 require_once dirname(__DIR__).'/includes/Video_Meta.php';
 require_once dirname(__DIR__).'/includes/Storage.php';
+require_once dirname(__DIR__).'/includes/WordPress_Source_File.php';
 require_once dirname(__DIR__).'/includes/PeerTube_Publication_Staging_Service.php';
 
 use ArgentVideo\Storage;
@@ -38,17 +41,26 @@ use ArgentVideo\PeerTube_Publication_Staging_Service;
 $assert=static function(bool $ok,string $m):void{if(!$ok){fwrite(STDERR,"FAIL: {$m}\n");exit(1);}};
 $cleanup=static function(string $root) use (&$cleanup): void { if(!is_dir($root))return; foreach(scandir($root)?:array() as $n){if('.'===$n||'..'===$n)continue;$p=$root.'/'.$n;if(is_dir($p)&&!is_link($p))$cleanup($p);else @unlink($p);} @rmdir($root); };
 
-$outside=sys_get_temp_dir().'/awvp-source-'.bin2hex(random_bytes(4)).'.mp4'; file_put_contents($outside,"ftyp\0synthetic-mp4-data\n");
+$source_dir=$GLOBALS['awvp_stage_uploads'].'/2026/09'; mkdir($source_dir,0777,true);
+$source=$source_dir.'/source.mp4'; file_put_contents($source,"ftyp\0synthetic-mp4-data\n");
+$outside=sys_get_temp_dir().'/awvp-source-outside-'.bin2hex(random_bytes(4)).'.mp4'; file_put_contents($outside,"outside-mp4\n");
 $GLOBALS['awvp_stage_meta'][100][Video_Meta::ATTACHMENT_ID]=20;
 $GLOBALS['awvp_stage_mime'][20]='video/mp4';
-$GLOBALS['awvp_stage_files'][20]=$outside;
+$GLOBALS['awvp_stage_posts'][20]=(object)array('ID'=>20,'post_type'=>'attachment');
+$GLOBALS['awvp_stage_files'][20]=$source;
 $service=new PeerTube_Publication_Staging_Service();
 $first=$service->stage(100);
 $assert('ready'===$first['status'],'Original MP4 did not stage.');
 $assert(20===$first['attachment_id']&&Storage::is_managed_path($first['path']),'Staged source did not land inside managed storage.');
-$assert(hash_file('sha256',$outside)===hash_file('sha256',$first['path']),'Staged bytes changed.');
+$assert(hash_file('sha256',$source)===hash_file('sha256',$first['path']),'Staged bytes changed.');
 $second=$service->stage(100);
 $assert($first===$second,'Exact staging replay did not reuse the stable managed source.');
+
+
+// Original attachments outside wp_upload_dir()['basedir'] must never become PeerTube staging authority.
+$GLOBALS['awvp_stage_files'][20]=$outside;
+$assert('refused'===($service->stage(100)['status']??''),'Original outside WordPress uploads was accepted for staging.');
+$GLOBALS['awvp_stage_files'][20]=$source;
 
 // A managed transcoded MP4 wins over the original attachment.
 $managed=Storage::ensure_attachment_directory(20).'/preferred.mp4'; file_put_contents($managed,"preferred-mp4\n");
@@ -63,13 +75,13 @@ $assert('refused'===($service->stage(100)['status']??''),'Non-MP4 original was a
 $GLOBALS['awvp_stage_mime'][20]='video/mp4';
 
 // Symlinked originals fail closed.
-$link=sys_get_temp_dir().'/awvp-source-link-'.bin2hex(random_bytes(4)).'.mp4';
+$link=$source_dir.'/source-link.mp4';
 if (@symlink($outside,$link)) {
     $GLOBALS['awvp_stage_files'][20]=$link;
     $assert('refused'===($service->stage(100)['status']??''),'Symlinked source was accepted.');
     @unlink($link);
 }
-$GLOBALS['awvp_stage_files'][20]=$outside;
+$GLOBALS['awvp_stage_files'][20]=$source;
 
 // A managed-output path that resolves through a symlink is not accepted; fallback
 // to the ordinary original remains safe and deterministic.

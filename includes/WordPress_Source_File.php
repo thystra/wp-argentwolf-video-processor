@@ -33,6 +33,47 @@ final class WordPress_Source_File
 
     public static function matches(int $attachment_id,array $identity):bool{return self::sanitize_identity($identity)===self::capture($attachment_id);}
 
+    /** Hash the exact confined attachment object represented by the identity. */
+    public static function sha256(int $attachment_id,array $identity):string
+    {
+        $opened=self::open_verified($attachment_id,$identity);if(!is_array($opened))return '';
+        [$handle,$path,$relative]=$opened;
+        try{
+            $context=hash_init('sha256');$read=hash_update_stream($context,$handle);
+            if(!is_int($read)||$read!==$identity['bytes']||!self::verified_handle_matches($handle,$path,$relative,$identity))return '';
+            $sha=hash_final($context);return 1===preg_match('/^[a-f0-9]{64}$/D',$sha)?$sha:'';
+        }finally{
+            // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose -- Closes the exact read-only descriptor for an already-confined WordPress attachment source.
+            fclose($handle);
+        }
+    }
+
+    /** Copy one exact confined attachment source into plugin-managed uploads storage. */
+    public static function copy_to_managed(int $attachment_id,array $identity,string $target):bool
+    {
+        $identity=self::sanitize_identity($identity);if(array()===$identity)return false;
+        try{$target=Storage::assert_managed_path($target);}catch(RuntimeException){return false;}
+        if(file_exists($target)||is_link($target))return false;
+        $opened=self::open_verified($attachment_id,$identity);if(!is_array($opened))return false;
+        [$source_handle,$source_path,$relative]=$opened;$target_handle=false;$keep=false;
+        try{
+            // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fopen -- Exclusive creation is required for a plugin-managed staging file; Storage confines the destination above.
+            $target_handle=@fopen($target,'xb');if(false===$target_handle)return false;
+            $copied=stream_copy_to_stream($source_handle,$target_handle);$flushed=fflush($target_handle);
+            $target_stat=fstat($target_handle);
+            if(!is_int($copied)||$copied!==$identity['bytes']||!$flushed||!is_array($target_stat)||(int)($target_stat['size']??-1)!==$identity['bytes']||!self::verified_handle_matches($source_handle,$source_path,$relative,$identity))return false;
+            $keep=true;return true;
+        }finally{
+            if(is_resource($target_handle)){
+                // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose -- Closes the exclusive plugin-managed staging descriptor opened above.
+                fclose($target_handle);
+            }
+            // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose -- Closes the exact read-only descriptor for an already-confined WordPress attachment source.
+            fclose($source_handle);
+            if(!$keep&&(is_file($target)||is_link($target))){try{Storage::delete_file($target);}catch(RuntimeException){}}
+        }
+    }
+
     public static function absent(int $attachment_id,array $identity):bool
     {
         $identity=self::sanitize_identity($identity);if(array()===$identity||$attachment_id<1)return false;
@@ -52,6 +93,37 @@ final class WordPress_Source_File
         $immediate=self::sanitize_identity(array('relative_path'=>$relative,'bytes'=>(int)$stat['size'],'device'=>(int)$stat['dev'],'inode'=>(int)$stat['ino'],'mtime'=>(int)$stat['mtime'],'ctime'=>(int)$stat['ctime']));
         if($immediate!==$identity)return false;
         wp_delete_file($path);clearstatcache(true,$path);return !file_exists($path)&&!is_link($path);
+    }
+
+    /** @return array{0:resource,1:string,2:string}|null */
+    private static function open_verified(int $attachment_id,array $identity):?array
+    {
+        $identity=self::sanitize_identity($identity);if(array()===$identity||$attachment_id<1)return null;
+        $path=get_attached_file($attachment_id,true);if(!is_string($path)||''===$path)return null;
+        try{[$path,$relative]=self::confined($path);}catch(RuntimeException){return null;}
+        if($relative!==$identity['relative_path']||is_link($path)||!is_file($path))return null;
+        $stat=@stat($path);if(!is_array($stat)||self::identity_from_stat($relative,$stat)!==$identity)return null;
+        // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fopen -- A stable read-only descriptor is required to bind hashing/copying to the exact confined attachment object.
+        $handle=@fopen($path,'rb');if(false===$handle)return null;
+        if(!self::verified_handle_matches($handle,$path,$relative,$identity)){
+            // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose -- Closes the rejected read-only attachment descriptor.
+            fclose($handle);return null;
+        }
+        return array($handle,$path,$relative);
+    }
+
+    /** @param resource $handle */
+    private static function verified_handle_matches($handle,string $path,string $relative,array $identity):bool
+    {
+        if(!is_resource($handle)||is_link($path))return false;
+        $handle_stat=fstat($handle);$path_stat=@stat($path);
+        return is_array($handle_stat)&&is_array($path_stat)&&self::identity_from_stat($relative,$handle_stat)===$identity&&self::identity_from_stat($relative,$path_stat)===$identity;
+    }
+
+    /** @param array<string,mixed> $stat @return array<string,mixed> */
+    private static function identity_from_stat(string $relative,array $stat):array
+    {
+        return self::sanitize_identity(array('relative_path'=>$relative,'bytes'=>(int)($stat['size']??-1),'device'=>(int)($stat['dev']??-1),'inode'=>(int)($stat['ino']??-1),'mtime'=>(int)($stat['mtime']??-1),'ctime'=>(int)($stat['ctime']??-1)));
     }
 
     /** @return array{0:string,1:string} */
