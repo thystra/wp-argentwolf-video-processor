@@ -420,3 +420,22 @@ managed-secret generation. A failed refresh must preserve previous valid provide
 data while marking the retained snapshot stale. Provider discovery is
 observational state: it must not mutate a video or change backend capability
 advertisement.
+
+### R46.3b: bind block identity server-side, not in serialized provider state
+
+For a dynamic media block that may later target multiple backends, serialize a
+stable local model ID rather than a provider URL, remote UUID, or mutable defaults.
+AWVP’s R46.3b block stores only the hidden AWVP Video ID. Attachment adoption and
+destination resolution happen through a capability-checked server boundary so
+concurrent requests can converge on one durable identity and existing videos never
+inherit later site-default changes.
+
+Keep destination planning separate from serving authority. Choosing a PeerTube
+backend in the editor does not itself upload, publish, or switch playback. The
+dynamic block continues to render the WordPress attachment through the existing
+local shortcode/renderer integration until a separately reviewed cutover state says
+otherwise.
+
+Ship canonical block metadata and its dependency manifest in the release package,
+and test the built ZIP—not only a source checkout—so editor functionality cannot
+silently disappear because `blocks/` was omitted by packaging.

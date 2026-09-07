@@ -129,6 +129,7 @@ Existing legacy identifiers remain where compatibility requires them. New global
 - `argentwolf-video-processor.php`: metadata, constants, dependency loading, and
   bootstrap only.
 - `includes/`: runtime services.
+- `blocks/`: canonical block.json metadata plus shipped Gutenberg editor assets.
 - `assets/js/`: locally maintained browser player integration.
 - `assets/vendor/`: runtime third-party browser assets that are actually shipped.
 - `build/`: deterministic release tooling.

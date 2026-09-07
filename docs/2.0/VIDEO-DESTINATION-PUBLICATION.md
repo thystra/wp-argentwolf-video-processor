@@ -181,7 +181,7 @@ migration.
 - **R46.8** — one-way local-to-PeerTube migration execution.
 - **R46.9** — post-cutover local retention/cleanup policy.
 
-## 9. Current R46.1-R46.3a implementation boundary
+## 9. Current R46.1-R46.3b implementation boundary
 
 R46.1 introduces the per-video model foundation:
 
@@ -233,5 +233,34 @@ R46.3a adds only explicit read-only provider-choice discovery:
 - catalog discovery never creates, updates, publishes, or deletes a remote video
   and does not change backend capability advertisement.
 
-R46.3a still does **not** add the block/editor wizard, migration planner,
-post-status hooks, visibility mutation, serving cutover, or cleanup behavior.
+R46.3a is qualified at commit prefix `0a13687`, tree
+`3587e3d15fef45d2776f3273ad517b26dc1aebe6`; Forgejo CI run 127 is green.
+
+R46.3b adds only the single-block editor and destination-selection foundation:
+
+- `argentwolf-video-processor/video` is a dynamic block registered from canonical
+  `block.json`; serialized block state contains only the stable AWVP Video ID;
+- selecting an existing WordPress video attachment passes through a purpose-built
+  REST application boundary and adopts/binds it to one hidden AWVP Video identity.
+  A per-attachment non-autoloaded claim option serializes plugin-owned adoption so
+  duplicate requests converge instead of intentionally creating multiple assets;
+- the origin post is written only on first adoption. Reusing the same attachment
+  from another post returns the established AWVP Video and never silently changes
+  that origin;
+- a new binding resolves the current site default once into concrete destination
+  state. Existing bindings are identified before current defaults are consulted, so
+  later default changes or malformed/future defaults cannot reroute or invalidate
+  an already-bound video;
+- the block inspector may store WordPress/local, the currently resolved site
+  default, or an active PeerTube backend. The concrete backend channel currently
+  comes from the qualified backend/default override; channel-level publication UI
+  remains R46.3c work;
+- frontend rendering still uses the local WordPress attachment through
+  `wp_video_shortcode()`, retaining the established local `Renderer` compatibility
+  path regardless of selected final destination;
+- the editor REST/controller path performs no PeerTube HTTP and owns no task
+  dispatch or publication transition authority.
+
+R46.3b still does **not** add the PeerTube publication wizard, remote upload,
+post-status hooks, visibility mutation, migration planner/execution, serving
+cutover, or cleanup behavior.

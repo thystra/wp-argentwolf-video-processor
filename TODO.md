@@ -307,15 +307,22 @@
   settings store keeps the upgrade-safe local default, support preset resolution,
   backend channel/provider overrides, moderation prefills that do not imply
   review, and the nonce/capability-protected administrator settings page.
-- [ ] R46.3a: implementation candidate adds explicit read-only PeerTube
-  publication-choice discovery and a bounded per-backend last-known-good cache for
-  owned channels, provider privacy/licence/category/language vocabularies, server
-  version, and reviewed moderation/privacy capability signals. Cache observations
-  are bound to backend + canonical origin + managed-secret generation; failed
-  refresh preserves provider data while marking it stale, and page GET performs
-  no remote HTTP. Local dependency-free/workflow replay is green; Forgejo CI on
-  the exact pushed candidate remains the qualification gate.
-- [ ] R46.3b: add the one AWVP Gutenberg block foundation and destination selector.
+- [x] R46.3a: read-only PeerTube publication-choice discovery is qualified at
+  commit prefix `0a13687`, tree
+  `3587e3d15fef45d2776f3273ad517b26dc1aebe6`; Forgejo CI run 127 is green.
+  The explicit administrator refresh discovers owned channels, provider privacy/
+  licence/category/language vocabularies, server version, and conservative
+  moderation/privacy signals. Last-known-good non-secret cache state is bound to
+  backend + canonical origin + managed-secret generation; failed/refused refresh
+  preserves provider data and marks it stale, and page GET performs no remote HTTP.
+- [ ] R46.3b: implementation candidate adds the single dynamic AWVP Gutenberg
+  Video block foundation with stable AWVP Video ID binding, idempotent adoption of
+  existing WordPress video attachments, current-default resolution only when a new
+  identity is created, and explicit local/active-PeerTube destination selection.
+  Frontend playback remains local and the block/REST surface grants no PeerTube
+  HTTP, dispatch, publication, post-status, migration, or serving-cutover authority.
+  Local dependency-free/workflow replay and exact-byte qualification remain before
+  completion.
 - [ ] R46.3c: add the PeerTube publication wizard and explicit review UX.
 - [ ] R46.4: editorial publish validation for unresolved required metadata only.
 - [ ] R46.5: private prepublication visibility and durable WordPress-authoritative

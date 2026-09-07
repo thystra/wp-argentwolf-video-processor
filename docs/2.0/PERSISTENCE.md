@@ -1240,3 +1240,31 @@ The launcher's repository probe considers only due queued rows or stale processi
 rows of the reviewed PeerTube task types; future `run_after` rows therefore do
 not cause useless worker processes. The probe remains advisory and the detached
 worker's lock-token claim/recovery remains authoritative.
+
+### R46.3b block binding and serialized identity
+
+The Gutenberg block `argentwolf-video-processor/video` serializes one integer
+`videoId`: the stable hidden AWVP Video post ID. It does not serialize a PeerTube
+URL/UUID, bearer, secret reference, channel vocabulary, current site default, or
+other provider state.
+
+When an existing WordPress video attachment is first adopted, AWVP persists the
+already-defined forward `_argent_video_attachment_id` on the AWVP Video and the
+attachment reverse `_argent_video_asset_id`. The reverse pointer is claimed only
+after establishing the candidate AWVP Video fields and is guarded by a short-lived,
+non-autoloaded option mutex named
+`argentwolf_video_processor_attachment_bind_lock_<sha256-attachment-id>`. The lock
+is concurrency control, not identity or publication authority; it is removed after
+the bounded bind attempt and a stale valid lock may be recovered.
+
+A valid existing reverse/forward pair wins repeated adoption regardless of the
+current site publishing-default record. The original `_argent_video_origin_post_id`
+is not rewritten when the video is reused elsewhere. A malformed present reverse
+pointer fails closed rather than being overwritten as an implicit repair.
+
+For a genuinely new identity, the current R46.2 site/backend destination default is
+resolved once and persisted as concrete `_argent_video_destination` state. Later
+default changes do not affect that stored video. Explicit editor selection of
+“site default” likewise resolves the current default at that moment; it is never
+stored as a live pointer. Remote destination state still does not grant serving
+cutover or PeerTube publication authority at R46.3b.

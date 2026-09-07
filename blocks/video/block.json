@@ -1,0 +1,21 @@
+{
+  "$schema": "https://schemas.wp.org/trunk/block.json",
+  "apiVersion": 3,
+  "name": "argentwolf-video-processor/video",
+  "title": "ArgentWolf Video",
+  "category": "media",
+  "icon": "video-alt3",
+  "description": "Bind a WordPress video to an AWVP Video and choose its final destination.",
+  "keywords": ["video", "media", "peertube"],
+  "textdomain": "argentwolf-video-processor",
+  "attributes": {
+    "videoId": {
+      "type": "integer",
+      "default": 0
+    }
+  },
+  "supports": {
+    "html": false
+  },
+  "editorScript": "file:./index.js"
+}

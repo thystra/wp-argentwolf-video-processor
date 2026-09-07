@@ -715,3 +715,22 @@ R46.2's Settings > AWVP Video Publishing mutation requires `manage_options` and 
 WordPress nonce, uses a non-autoloaded versioned option, refuses to overwrite
 malformed/future stored state, and performs no remote HTTP. Reading absent settings
 returns the local-safe defaults without writing an option.
+
+### R46.3b Gutenberg/REST implementation boundary
+
+The AWVP Video editor surface follows the WordPress block metadata path:
+`blocks/video/block.json` is canonical and `register_block_type()` is called
+server-side during `init`. The installable ZIP must include `block.json`,
+`index.js`, and the reviewed `index.asset.php` dependency manifest.
+
+The purpose-built `argentwolf-video-processor/v1/editor/videos` REST routes use
+explicit `permission_callback` checks. Attachment adoption requires `upload_files`
+plus `edit_post` on both the source attachment and origin post; existing AWVP Video
+reads/destination changes require `upload_files` plus object-aware `edit_post` on
+that video. The controller delegates durable model work to the bounded application
+service rather than writing post meta directly.
+
+These editor routes perform no PeerTube HTTP and do not save/publish the enclosing
+WordPress post, enqueue PeerTube tasks, refresh credentials, or alter remote
+visibility. Dynamic frontend rendering continues through the WordPress video
+shortcode/local Renderer path at this checkpoint.

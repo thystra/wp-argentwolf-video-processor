@@ -1726,3 +1726,27 @@ refresh, or secret-persistence authority. Unsupported-but-advertised provider
 values remain observable; a later authoring checkpoint must separately decide
 which discovered values it can safely enable and must revalidate/freeze choices
 before consequential publication work is created.
+
+### R46.3a qualification and R46.3b continuation
+
+R46.3a is qualified at commit prefix `0a13687`, tree
+`3587e3d15fef45d2776f3273ad517b26dc1aebe6`; Forgejo CI run 127 is green.
+The read-only publication catalog remains observational, non-secret, and
+last-known-good, bound to backend + canonical origin + managed-secret generation.
+It grants no video mutation or publication authority.
+
+R46.3b introduces the single AWVP Gutenberg Video block foundation only. The
+dynamic block serializes the stable AWVP Video ID, can adopt an existing WordPress
+video attachment idempotently under a per-attachment claim lock, and exposes
+explicit local/active-PeerTube final-destination planning through a
+capability-aware REST boundary. Current publishing defaults are consulted only to
+initialize a genuinely new AWVP identity, or when the editor explicitly asks to
+resolve “site default”; a valid existing attachment binding is returned before
+current defaults are consulted.
+
+Frontend serving stays local through `wp_video_shortcode()` and the established
+Renderer path even when the stored final destination is PeerTube. R46.3b therefore
+must not acquire PeerTube HTTP, upload/task dispatch, publication/reveal,
+post-status hooks, migration, serving cutover, cleanup, credential refresh, or
+secret-persistence authority. The provider vocabulary from R46.3a is reserved for
+the separate R46.3c publication wizard/review checkpoint.

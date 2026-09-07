@@ -48,6 +48,9 @@ jobs:
           php tests/video-publishing-defaults.php
           php tests/video-publishing-admin-boundary.php
           php tests/peertube-publication-catalog.php
+          php tests/video-block-editor-service.php
+          php tests/video-block-editor-rest.php
+          php tests/video-block.php
           php tests/task-repository.php
           php tests/peertube-upload-task-coordinator.php
           php tests/peertube-upload-failure-notification.php
@@ -121,6 +124,7 @@ jobs:
           php tests/ffmpeg-integration.php
           bash tests/vendor-fetch.sh
           node --check assets/js/argent-video-player.js
+          node --check blocks/video/index.js
 
       - name: Check whitespace errors
         run: git diff --check
@@ -140,6 +144,9 @@ jobs:
           grep -qx 'argentwolf-video-processor/argentwolf-video-processor.php' "${MANIFEST}"
           grep -qx 'argentwolf-video-processor/assets/vendor/hls.min.js' "${MANIFEST}"
           grep -qx 'argentwolf-video-processor/assets/vendor/hls.LICENSE' "${MANIFEST}"
+          grep -qx 'argentwolf-video-processor/blocks/video/block.json' "${MANIFEST}"
+          grep -qx 'argentwolf-video-processor/blocks/video/index.js' "${MANIFEST}"
+          grep -qx 'argentwolf-video-processor/blocks/video/index.asset.php' "${MANIFEST}"
           ! grep -qx 'argentwolf-video-processor/assets/vendor/hls.VERSION' "${MANIFEST}"
           ! grep -qx 'argentwolf-video-processor/assets/vendor/hls.SHA256' "${MANIFEST}"
           ! grep -Eq '/(AGENTS|ARCHITECTURE|TODO|tests|build|ops|\.github)' "${MANIFEST}"

@@ -66,6 +66,7 @@ install -m 0644 "${ROOT_DIR}/uninstall.php" "${STAGE_DIR}/uninstall.php"
 
 rsync -a "${ROOT_DIR}/includes/" "${STAGE_DIR}/includes/"
 rsync -a "${ROOT_DIR}/assets/" "${STAGE_DIR}/assets/"
+rsync -a "${ROOT_DIR}/blocks/" "${STAGE_DIR}/blocks/"
 
 # hls.VERSION and hls.SHA256 are build-time integrity evidence only. The
 # WordPress.org runtime package ships the verified hls.js runtime and license,
@@ -133,6 +134,18 @@ do
             rm -f "${ZIP_MANIFEST}"
             exit 1
         fi
+    fi
+done
+
+for required_block_file in \
+    block.json \
+    index.js \
+    index.asset.php
+do
+    if ! grep -qx "${SLUG}/blocks/video/${required_block_file}" "${ZIP_MANIFEST}"; then
+        echo "Release ZIP is missing blocks/video/${required_block_file}." >&2
+        rm -f "${ZIP_MANIFEST}"
+        exit 1
     fi
 done
 

@@ -820,3 +820,25 @@ Discovery does not run during page rendering, does not alter backend capability
 advertisement, and has no video create/update/publication authority. Failed
 refreshes retain prior valid provider data but mark the snapshot stale so editor
 choice availability does not collapse to an empty set or masquerade as current.
+
+### R46.3b single-block editor plane
+
+R46.3b introduces one dynamic `argentwolf-video-processor/video` Gutenberg block
+as the durable editor identity surface. The serialized block attribute is only the
+stable AWVP Video ID; attachment identity, origin, destination, provider choices,
+and future publication state remain server-owned model state.
+
+An existing WordPress video attachment is adopted through a narrow application
+service under a per-attachment non-autoloaded option claim. The attachment reverse
+pointer and AWVP Video forward pointer are verified together, repeated requests
+converge on the established identity, and an ambiguous malformed reverse pointer
+fails closed rather than being silently repaired. Site defaults are resolved only
+when a new AWVP Video is created or an explicit “use site default” selection is
+made; an existing binding is never reinterpreted through mutable current defaults.
+
+The R46.3b REST surface exposes only bind, bounded editor-state read, and concrete
+destination selection. It owns no PeerTube HTTP, credential, task-dispatch,
+publication, or post-status authority. A PeerTube destination therefore remains
+planning state. Dynamic frontend rendering still starts from the WordPress
+attachment and `wp_video_shortcode()`, preserving local serving/Renderer behavior
+until the separately reviewed cutover checkpoint.

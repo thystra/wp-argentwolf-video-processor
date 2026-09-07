@@ -120,6 +120,15 @@ the retained snapshot is persistently marked stale until a context-matching
 refresh succeeds. Page load itself performs no PeerTube HTTP, and catalog
 discovery does not create, update, publish, or delete a remote video.
 
+R46.3b adds the first editor-facing foundation: one dynamic **ArgentWolf Video**
+Gutenberg block. Selecting an existing WordPress video attachment binds it
+idempotently to one hidden AWVP Video identity; the block itself serializes only
+that stable AWVP Video ID. Its inspector can choose WordPress/local, resolve the
+current site default, or select an active PeerTube backend as final destination
+planning state. This checkpoint still renders the local WordPress attachment and
+does not start a PeerTube upload, publish a remote video, or switch serving
+authority. The detailed PeerTube publication/review wizard follows separately.
+
 ## WP-CLI
 
 ```bash

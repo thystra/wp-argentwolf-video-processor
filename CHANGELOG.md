@@ -108,6 +108,13 @@
   last-known-good catalog bound to canonical origin + managed-secret generation,
   persistently marks retained data stale after failed/refused refresh, and
   performs no remote video mutation.
+- Add the R46.3b single AWVP Gutenberg Video block foundation. The dynamic block
+  serializes only a stable AWVP Video ID, adopts existing WordPress video
+  attachments idempotently under a per-attachment claim lock, resolves the site
+  destination default only for new identities, and exposes explicit local/active
+  PeerTube destination selection through a capability-aware REST boundary. Remote
+  destination remains planning state: frontend playback stays on the local
+  WordPress attachment and no PeerTube dispatch/publication/cutover is enabled.
 - Expand focused PeerTube security/state tests and isolated real-WordPress Docker
   development matrices through the R39 identity/destination checkpoint, with an
   R40 activation continuation that proves activation performs no additional
