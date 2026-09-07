@@ -783,8 +783,8 @@ No second scheduler or administrator transfer-launch action is added.
 Drain/process and streamed-request guards scale at one minute per 128 MiB with a
 one-hour floor and six-hour ceiling; the worker observes its deadline only at
 safe durable request boundaries. PeerTube staged-ingest/server-push/processing
-capability advertisement remains false until R45.6 is separately reviewed and
-qualified.
+capability advertisement remained false through R45.5; R45.6 later activated only
+the separately qualified capability map described below.
 
 R45.4b4 adds a separate durable notification branch without expanding media
 transport authority. Human-attention upload failures enqueue

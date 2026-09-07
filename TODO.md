@@ -264,14 +264,17 @@
   scheduler, browser/admin launch surface, or inline PeerTube HTTP. Feature-branch
   Forgejo CI run 124 is green; the exact candidate is qualified as a development
   checkpoint.
-- [ ] R45.6 capability-activation candidate: the production-reachable detached
-  upload/reconciliation path is now qualified, so advertise only AWVP-staged
-  ingest, server push, and PeerTube processing. The RC capability truth-up also
-  advertises the separately qualified R46.5 verified privacy mutation. Direct
-  browser ingest, account-video listing/selection, provider-native scheduling,
-  backend source-retention guarantees, and remote delete remain false. Qualify
-  the exact map in Forgejo CI and the retained WordPress/PeerTube Docker matrices
-  before cutting the canonical RC1 package.
+- [x] R45.6 capability activation is qualified at exact commit
+  `a73739e5bd051e708f1616a207bf579e6f2abb93`, tree
+  `0098986b489a29099c4215fb804cf21f10aff632`; Forgejo CI run 142 is green and
+  all eight retained real-WordPress/mock-PeerTube Docker matrices passed on those
+  exact clean bytes under Docker 29.8.0. The qualified map advertises only
+  AWVP-staged ingest, server push, PeerTube processing, managed embed delivery,
+  and the separately qualified R46.5 verified privacy mutation. Direct-browser
+  ingest, WordPress-attachment direct ingest, account-video listing/selection,
+  provider-native scheduling, backend source-retention guarantees, and remote
+  delete remain false. The qualification transcript SHA-256 is
+  `deeffa1bc987facb78023c1c447a7e44a6d9cb6fc93f907cadac52c64cd3273f`.
 
 
 ### R46 video destination, publication metadata, and migration
@@ -394,8 +397,25 @@
 - [x] Qualify R46.9 hardening on exact Forgejo source/CI and close the final R46
   implementation checkpoint: `773c7e9` / tree
   `9f1e853b1c0a4a526a1ae73ad17c8f5ccc686132` / Forgejo CI run 138.
-- [ ] Merge the qualified R46 line into the reviewed 2.0 integration branch and
-  cut/preserve the exact RC1 candidate commit and canonical Forgejo package.
+- [x] Qualify the final R45.6 capability truth-up on exact source before RC
+  integration: `a73739e5bd051e708f1616a207bf579e6f2abb93` / tree
+  `0098986b489a29099c4215fb804cf21f10aff632` / Forgejo CI run 142 plus all eight
+  retained real-WordPress/mock-PeerTube Docker matrices.
+- [ ] Merge the qualified R45/R46 feature line into the reviewed 2.0 integration
+  branch and cut/preserve the exact RC1 candidate commit and canonical Forgejo
+  package.
+- [ ] Audit the 2.0 filesystem delta against the WordPress.org-approved 1.0
+  confinement model before RC1: PeerTube staging and AWVP-managed derivatives stay
+  beneath `wp_upload_dir()['basedir']` (prefer the plugin-managed subtree), managed
+  tree deletion remains behind `Storage`, physical source deletion remains behind
+  confined attachment-derived identity plus `wp_delete_file()`, attachment-object
+  deletion uses WordPress attachment lifecycle APIs, and no stored/arbitrary path
+  becomes deletion authority.
+- [ ] Run the official WordPress Plugin Check against the exact canonical RC ZIP
+  and compare new findings with the accepted 1.0 remediation baseline, especially
+  commits `82f095bf40`, `937969c190`, and `5d43ea346c`; resolve or explicitly
+  document every new result rather than weakening the approved filesystem/API
+  boundaries merely to silence a scanner.
 - [ ] Pass the full isolated WordPress VM/Docker upgrade, regression, security,
   destructive-boundary, Plugin Check, and package-identity gates on the exact RC.
 - [ ] Install the accepted RC on the controlled live WordPress site and validate

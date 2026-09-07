@@ -1939,19 +1939,33 @@ R46.9 is qualified at commit `773c7e9`, tree
 closes the final R46 implementation checkpoint. Preserve that exact retention
 boundary while the 2.0 line moves into integration and release-candidate testing.
 
-Before cutting the canonical RC1 package, resolve the still-open R45.6 backend
-capability-advertisement decision against the now-qualified production detached
-upload/reconciliation path. Do not let capability-map cleanup broaden browser,
-REST, AJAX, cron-inline, remote-delete, or direct-browser authority.
+R45.6 is now closed before RC integration. Do not let later capability-map or
+release cleanup broaden browser, REST, AJAX, cron-inline, remote-delete, or
+direct-browser authority.
 
 
-### R45.6 capability-activation candidate before RC1
+### R45.6 capability activation qualified before RC1
 
-The remaining pre-RC capability decision is now explicit: advertise only
-`ingest.awvp_staging`, `ingest.server_push`, and `processing.video` from the
-qualified R45 worker/reconciliation path, plus `publication.privacy` from the
-qualified R46.5 mutation/verification path. Preserve `delivery.embed=true`. All
-other PeerTube capability keys remain false. The exact-map regression is
-`tests/peertube-capability-activation.php`. Qualify this candidate in Forgejo CI
-and the retained real-WordPress/mock-PeerTube matrices before integrating/cutting
-RC1.
+R45.6 is qualified at exact commit
+`a73739e5bd051e708f1616a207bf579e6f2abb93`, tree
+`0098986b489a29099c4215fb804cf21f10aff632`; Forgejo CI run 142 is green. The
+retained real-WordPress/mock-PeerTube qualification ran all eight backend
+activation, token lifecycle, staged upload, reconciliation, one-shot,
+indeterminate/no-replay, drain, and cron-wiring matrices on those exact clean
+bytes under Docker 29.8.0. Every matrix passed; HEAD/tree remained unchanged and
+the checkout remained clean. The aggregate qualification transcript SHA-256 is
+`deeffa1bc987facb78023c1c447a7e44a6d9cb6fc93f907cadac52c64cd3273f`.
+
+The qualified map advertises `ingest.awvp_staging`, `ingest.server_push`, and
+`processing.video` from the R45 worker/reconciliation path, plus
+`publication.privacy` from the qualified R46.5 mutation/verification path and the
+existing `delivery.embed=true`. All other PeerTube capability keys remain false.
+The exact-map regression is `tests/peertube-capability-activation.php`.
+
+This qualification is a development checkpoint, not the 2.0 release gate. Next
+integrate the qualified R45/R46 feature line into `develop-2.0`, then run the full
+RC1 package/upgrade/WordPress-compliance matrix on the exact integration commit.
+The RC filesystem audit must preserve the WordPress.org-approved 1.0 confinement
+model: PeerTube staging/managed outputs stay beneath WordPress uploads, arbitrary
+stored paths never become deletion authority, and WordPress file/attachment
+lifecycle APIs remain authoritative at destructive boundaries.

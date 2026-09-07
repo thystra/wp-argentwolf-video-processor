@@ -820,3 +820,26 @@ publication HTTP remain in the reviewed durable detached-worker boundaries. No
 direct-browser ingest, account-video selection, provider-native scheduling,
 backend source-retention guarantee, remote delete, new REST/AJAX/admin upload
 action, or cron-inline PeerTube HTTP is authorized by this change.
+
+
+### RC1 filesystem and Plugin Check regression gate
+
+Treat the WordPress.org-approved 1.0 file-handling model as the baseline rather
+than inventing a second PeerTube filesystem authority. The 2.0 RC audit must
+compare the delta from `v1.0.0`, including the confinement and Plugin Check
+remediation represented by commits `82f095bf40`, `937969c190`, and `5d43ea346c`.
+PeerTube staging and AWVP-managed derivatives must remain beneath the WordPress
+uploads tree, preferably the existing plugin-managed subtree; managed tree
+removal stays behind `Storage`, and physical source removal requires the
+attachment-derived confined path plus the R46.9 identity/revalidation boundary
+before `wp_delete_file()`. Deleting the attachment object itself, if ever
+intended, remains a WordPress attachment-lifecycle operation rather than a raw
+filesystem substitute. Database/journal path strings are evidence, never
+standalone deletion authority.
+
+Run the official WordPress Plugin Check against the exact canonical RC package.
+Resolve or explicitly document every new result against that approved 1.0
+baseline; do not weaken confinement, escaping, nonce/capability, or lifecycle
+boundaries merely to make a scanner quiet. The already-reviewed bundled hls.js
+model need not be reopened unless 2.0 changes its vendoring, licensing, source
+provenance, or runtime behavior.

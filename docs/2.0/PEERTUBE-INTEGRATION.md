@@ -338,9 +338,10 @@ executes PeerTube media HTTP inline. R45.4b3's execution semantics remain
 unchanged: one minute is budgeted per 128 MiB of authoritative source/segment
 size, with a one-hour floor and six-hour ceiling. The process checks its deadline
 only between durable request boundaries; a byte-bearing PUT is never interrupted
-by the worker. The streamed HTTP timeout uses the same size-derived bound. The
-adapter still does not advertise staged ingest/server push/processing capability;
-that remains a separate R45.6 decision.
+by the worker. The streamed HTTP timeout uses the same size-derived bound. At this
+R45.4/R45.5 checkpoint the adapter still did not advertise staged
+ingest/server-push/processing capability; R45.6 later activated only the
+separately qualified RC capability map described below.
 
 
 ### R45.4b4 durable failed-upload notification boundary
@@ -393,7 +394,8 @@ that process remain authoritative.
 The cron callback does not construct the R43 upload service, R44 reconciliation
 service, task coordinator, or task worker. Those remain behind the `WP_CLI`
 guard. No admin/AJAX/REST upload-launch action is introduced, and capability
-advertisement remains unchanged pending R45.6.
+advertisement remained unchanged through R45.5; R45.6 later activated only the
+separately qualified map without adding a request surface.
 For example a cURL timeout retains `curl_28`, the bounded last-request size, and
 a controlled timeout summary rather than the raw cURL diagnostic. The message
 may therefore point toward a stalled or insufficient-throughput network path and

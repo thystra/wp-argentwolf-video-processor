@@ -649,8 +649,8 @@ The drain path is qualified at exact commit
 retained Docker matrices. R45.4b4 failure notification is qualified at
 `96fe661682accaa63e2860dc236cb9c1f4733950` / tree
 `7f938a05c446e000b0d45db76e03e703432a10dc` with CI run 123. Capability
-advertisement remains unchanged until R45.6 is separately reviewed and
-qualified.
+advertisement remained unchanged through R45.5; R45.6 later activated only the
+separately qualified RC capability map described below.
 
 
 ## R46 destination/publication note
