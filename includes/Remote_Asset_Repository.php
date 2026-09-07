@@ -20,7 +20,7 @@ use Throwable;
 // This class is the authoritative repository for high-churn remote media state.
 // Object caching would return stale reconciliation data.
 // phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
-final class Remote_Asset_Repository implements PeerTube_Remote_Asset_Store
+final class Remote_Asset_Repository implements PeerTube_Remote_Asset_Store, PeerTube_Publication_Asset_Store
 {
     public const TABLE_SUFFIX = 'argent_video_remote_assets';
 
@@ -172,6 +172,87 @@ final class Remote_Asset_Repository implements PeerTube_Remote_Asset_Store
             return self::INDETERMINATE;
         }
         return self::CONFLICT;
+    }
+
+    public function record_publication_observation(
+        int $remote_asset_id,
+        int $video_post_id,
+        string $backend_id,
+        string $remote_uuid,
+        string $channel_id,
+        string $privacy_id,
+        int $now
+    ): string {
+        $privacy = self::privacy_name($privacy_id);
+        $remote_uuid = strtolower($remote_uuid);
+        if ($remote_asset_id < 1 || $video_post_id < 1 || $now < 1 || '' === $privacy
+            || '' === Backend_Identity::sanitize($backend_id)
+            || '' === PeerTube_Connection_Input::destination_id($channel_id)
+            || 1 !== preg_match('/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/D', $remote_uuid)) {
+            return self::CONFLICT;
+        }
+        $current = $this->find($remote_asset_id);
+        if (! is_array($current)
+            || $video_post_id !== (int) ($current['video_post_id'] ?? 0)
+            || $backend_id !== (string) ($current['backend_id'] ?? '')
+            || $remote_uuid !== (string) ($current['remote_id'] ?? '')
+            || $channel_id !== (string) ($current['channel_id'] ?? '')
+            || 'ready' !== (string) ($current['state'] ?? '')) {
+            return self::CONFLICT;
+        }
+        global $wpdb;
+        $timestamp = gmdate('Y-m-d H:i:s', $now);
+        $updated = false;
+        try {
+            $updated = $wpdb->update(
+                $this->table,
+                array(
+                    'desired_privacy'=>$privacy,
+                    'actual_privacy'=>$privacy,
+                    'remote_processing_state'=>'1:published',
+                    'last_synced_at'=>$timestamp,
+                    'last_verified_at'=>$timestamp,
+                    'error_code'=>null,
+                    'error_message'=>null,
+                    'updated_at'=>$timestamp,
+                ),
+                array(
+                    'id'=>$remote_asset_id,
+                    'backend_id'=>$backend_id,
+                    'remote_id'=>$remote_uuid,
+                    'channel_id'=>$channel_id,
+                    'state'=>'ready',
+                    'desired_privacy'=>$current['desired_privacy'] ?? null,
+                    'actual_privacy'=>$current['actual_privacy'] ?? null,
+                    'updated_at'=>$current['updated_at'] ?? null,
+                ),
+                array('%s','%s','%s','%s','%s','%s','%s','%s'),
+                array('%d','%s','%s','%s','%s','%s','%s','%s')
+            );
+        } catch (Throwable) {
+            $updated = false;
+        }
+        $after = $this->find($remote_asset_id);
+        if (is_array($after)
+            && $remote_asset_id === (int) ($after['id'] ?? 0)
+            && $video_post_id === (int) ($after['video_post_id'] ?? 0)
+            && $backend_id === (string) ($after['backend_id'] ?? '')
+            && $remote_uuid === (string) ($after['remote_id'] ?? '')
+            && $channel_id === (string) ($after['channel_id'] ?? '')
+            && 'ready' === (string) ($after['state'] ?? '')
+            && $privacy === (string) ($after['desired_privacy'] ?? '')
+            && $privacy === (string) ($after['actual_privacy'] ?? '')
+            && '1:published' === (string) ($after['remote_processing_state'] ?? '')) {
+            return 1 === $updated ? self::APPLIED : self::PRESENT;
+        }
+        return false === $updated ? self::INDETERMINATE : self::CONFLICT;
+    }
+
+    private static function privacy_name(string $privacy_id): string
+    {
+        return match ($privacy_id) {
+            '1'=>'public', '2'=>'unlisted', '3'=>'private', '4'=>'internal', default=>'',
+        };
     }
 
     /** @return array<string,mixed>|null */

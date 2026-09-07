@@ -32,8 +32,8 @@ $registry = new Backend_Registry();
 if (! $registry->eligible('r38-admin', Backend_Capabilities::DELIVERY_EMBED, $factory)) {
     throw new RuntimeException('The R40 PeerTube descriptor was not eligible for its non-mutating capability.');
 }
-if ($registry->eligible('r38-admin', Backend_Capabilities::PROCESSING_VIDEO, $factory)) {
-    throw new RuntimeException('R40 incorrectly exposed PeerTube processing/upload capability.');
+if (! $registry->eligible('r38-admin', Backend_Capabilities::PROCESSING_VIDEO, $factory)) {
+    throw new RuntimeException('The current adapter did not expose R45.6-qualified PeerTube processing capability.');
 }
 $health = $factory->resolve(Backend_Registry::PEERTUBE_TYPE)?->health($descriptor);
 if (

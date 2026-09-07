@@ -436,3 +436,85 @@ plaintext credential/raw-response canaries, all staged-ingest/server-push/
 processing capability bits false, and no gated `WP_DEBUG` diagnostics. This is a
 development-checkpoint mock gate, not live-PeerTube/TLS, production upload wiring,
 publication, source cleanup, retention, remote deletion, or release qualification.
+
+## PeerTube one-shot task-worker CLI checkpoint
+
+After the R45 one-shot WP-CLI execution boundary is committed, run its exact
+clean-source matrix on the disposable Docker host:
+
+```bash
+bash tests/integration/peertube-task-cli-smoke.sh
+bash tests/integration/peertube-task-cli-drain-smoke.sh
+```
+
+The runner reuses the qualified administrator setup only to establish an exact
+active PeerTube backend and managed encrypted credential. It then seeds one
+local staged-upload operation and `peertube_upload_advance` task without remote
+HTTP. Every `wp argent-video peertube-task-worker --once` call runs in a fresh
+WP-CLI container/process. The sequence proves separate bounded init, byte PUT,
+remote-asset commit, processing observation, durable wait, ready observation,
+and terminal idle boundaries. An immediate invocation during the journaled
+processing wait must be idle and must make no additional PeerTube request.
+
+The exact committed tree is exported once and mounted read-only. Both supported
+matrix edges are exercised: WordPress 6.4.2/PHP 8.1/MariaDB 10.6.27 and
+WordPress 7.1/PHP 8.3/MariaDB 10.11.18. The isolated mock request transcript is
+compared exactly, the staged source must remain present, task payload/error
+storage must contain no managed-token canaries, the final remote asset must be
+ready/private, and the PeerTube ingest/processing capability bits must remain
+disabled. This is development-checkpoint evidence, not a release gate or a
+real-PeerTube/TLS test.
+
+To preserve its report outside the checkout:
+
+```bash
+AWVP_R45_REPORT_DIR=/absolute/report/path \
+    bash tests/integration/peertube-task-cli-smoke.sh
+```
+
+
+## PeerTube one-shot task-worker indeterminate-chunk checkpoint
+
+After the happy/wait R45 CLI matrix passes, run the uncertainty gate:
+
+```bash
+bash tests/integration/peertube-task-cli-indeterminate-smoke.sh
+```
+
+This matrix starts from the same exact active-backend and staged-source
+prerequisites, establishes one resumable session in a fresh WP-CLI process, and
+then arms the isolated mock to durably record the first byte-bearing PUT before
+terminating its own HTTP process without a response. The worker must persist
+`upload_indeterminate`, fail/hold the upload task after exactly two claims, and
+leave the staged source intact. R45.4b4 also requires exactly one durable
+`peertube_upload_failure_notify` task. A later fresh `peertube-task-worker --once`
+invocation must still be idle while the mock remains offline, proving that the
+qualified one-shot worker does not automatically issue a zero-byte offset probe,
+replay the chunk, create a replacement resumable session, or consume notification
+work.
+
+The fixture then installs a disposable `pre_wp_mail` capture in the isolated
+WordPress volume and runs one `--drain` process. That process must complete only
+the durable notification task, deliver one sanitized message to the initiating
+WordPress user, and perform **zero** additional PeerTube HTTP requests while the
+mock remains stopped. The captured message must identify post/backend/state/error
+and controlled network diagnostics while containing no managed-token canaries or
+filesystem paths.
+
+The exact PeerTube request transcript still requires one resumable-init POST, one
+byte-bearing PUT with the fixture's transport-drop marker, zero zero-byte probes,
+zero remote video GETs, and no replacement upload initialization. No remote-asset
+row or reconciliation task may exist, and the PeerTube ingest/processing
+capability bits remain disabled. This remains development-checkpoint evidence,
+not an authorization for automatic offset reconciliation or a release gate.
+
+To preserve its report outside the checkout:
+
+```bash
+AWVP_R45_REPORT_DIR=/absolute/report/path \
+    bash tests/integration/peertube-task-cli-indeterminate-smoke.sh
+```
+
+### R45.4b3 bounded-drain smoke
+
+`peertube-task-cli-drain-smoke.sh` reuses the qualified isolated WordPress/mock-PeerTube fixture but invokes `wp argent-video peertube-task-worker --drain`. One fresh process must cross the immediately runnable upload initialization, byte-bearing upload, deterministic reconciliation handoff, and immediate reconciliation transition, then stop at the durable processing wait without sleeping or polling. After the wait expires, one later drain invocation completes readiness. Exact commit `33bdd109da2f452afb2058ce0d044d10a729c669`, tree `a89963f3e9def2ba65bd43589c87e13a3f4a9b57`, passed this matrix plus the one-shot, indeterminate/no-replay, and R44 regression matrices and Forgejo CI run 122.

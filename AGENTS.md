@@ -53,6 +53,10 @@ maintainer must inspect the result, approve the design, execute or review
 validation, control releases and deployments, and remain accountable for the
 software.
 
+## R46.7 migration planning boundary
+
+`PeerTube_Migration_Plan`, `PeerTube_Migration_Planner`, and `PeerTube_Migration_Admin` are planner-only. They may read local AWVP Video/attachment/post metadata, publishing defaults, backend descriptors, and cached publication catalogs, but may write only `Video_Meta::PEERTUBE_MIGRATION_PLAN`. They must not write live destination/publication/lifecycle/execution/serving state, enqueue tasks, perform PeerTube HTTP, or delete media. `MAX_SELECT_ALL` is deliberately bounded, and repeated same-source/same-target planning must preserve completed review. R46.8 is the only checkpoint allowed to promote a reviewed migration plan into executable state.
+
 ## WordPress development policy
 
 `wordpress-development.md` is a required companion to this file. Review it
@@ -129,6 +133,7 @@ Existing legacy identifiers remain where compatibility requires them. New global
 - `argentwolf-video-processor.php`: metadata, constants, dependency loading, and
   bootstrap only.
 - `includes/`: runtime services.
+- `blocks/`: canonical block.json metadata plus shipped Gutenberg editor assets.
 - `assets/js/`: locally maintained browser player integration.
 - `assets/vendor/`: runtime third-party browser assets that are actually shipped.
 - `build/`: deterministic release tooling.
@@ -290,9 +295,15 @@ WordPress.org reviewer findings are durable engineering lessons, not one-line co
   provenance immediately after the approved build, then promote those exact
   bytes unchanged to the Forgejo Release, GitHub Release, and WordPress.org
   surfaces as their separate gates permit.
-- Every code release increments the plugin version. Keep the main plugin header,
-  `readme.txt` Stable Tag, changelog, Git tag, release artifact name, and
-  WordPress.org SVN tag aligned.
+- Every code release increments the plugin version. Final WordPress.org releases
+  keep the main plugin header, `ARGENT_VIDEO_VERSION`, `readme.txt` Stable Tag,
+  changelog, Git tag, release artifact name, and WordPress.org SVN tag aligned.
+  Controlled Forgejo prereleases are the exception: use `X.Y.Z-rcN` consistently
+  for the plugin/runtime version, changelog, Git tag, and artifact while leaving
+  `readme.txt` Stable Tag on the current numeric WordPress.org release. Never
+  publish an RC to WordPress.org SVN. Final promotion must change the runtime and
+  Stable Tag to the numeric release and then prove both public-stable -> final and
+  RC -> final update ordering/upgrade behavior.
 - Tag only after the reviewed commit is pushed, native CI passes, and the exact
   canonical release-candidate bytes pass the required package/WordPress gates.
 - The downstream GitHub mirror must not auto-build release bytes from a tag.
@@ -353,10 +364,72 @@ WordPress.org reviewer findings are durable engineering lessons, not one-line co
 
 ## Stable 1.0 and shared engineering baseline
 
-Current stable release: `1.0.0`.
+Current public stable release: `1.0.0`. The permanent `release/1.x` maintenance
+branch is rooted at exact tag `v1.0.0` so emergency 1.0.x work remains possible
+while 2.0 advances independently. Current controlled candidate: `2.0.0-rc1`; it
+must remain off WordPress.org SVN until final 2.0.0 promotion.
 
 Cross-project release, validator, partial-mutation, shared-host, and ZFS lessons
 are centralized in `wp-plugin-template`. AWVP keeps project-specific behavior,
 release evidence, and test contracts here. Future work, especially the 2.0
 line, applies the shared template guidance together with `AGENTS-TESTING.md`,
 `wordpress-development.md`, and the 2.0 architecture.
+
+- R46.3c publication editing must keep the block attribute surface stable (`videoId`
+  only). Provider vocabulary is read from the non-authoritative R46.3a cache and
+  revalidated before plan persistence; explicit review is per-video and must never
+  be inferred from site defaults. The editor/REST path must not perform PeerTube
+  HTTP, enqueue tasks, publish posts, or alter serving authority.
+
+- R46.4 editorial publication validation is local-only. Protected WordPress status
+  attempts (`publish`, `future`, `private`) may be refused for incomplete/coherence-
+  broken AWVP editorial state, but PeerTube catalog freshness, HTTP availability,
+  credentials, upload/task/transcoding progress, remote readiness, and serving
+  state must never be inputs. Reused blocks do not transfer publication authority
+  away from the immutable origin post. Validation filters must not enqueue remote
+  work, register reveal transitions, or publish-then-revert content.
+
+## R46.6 serving-cutover boundary
+
+Treat `_argent_video_serving_authority` as revocable evidence, not a destination selector. Public/unlisted remote rendering requires current lifecycle/plan/execution/remote-asset agreement; any uncertainty stays local. Do not add render-time PeerTube HTTP or cleanup authority while working in R46.6.
+
+
+## R46.8 migration execution boundary
+
+`PeerTube_Migration_Executor` is a local promotion coordinator, not a provider executor. A fresh Start migration action must require a strict `ready` R46.7 plan and revalidate the hidden video/attachment/anchor identity, canonical-local destination, active PeerTube backend/origin, a non-stale current-secret-generation publication catalog, provider vocabulary, support preset resolution, and immutable thumbnail identity by successfully building the existing `PeerTube_Publication_Manifest`. It writes `_argent_video_peertube_migration_execution` before live promotion, then converges only forward: exact publication plan first, exact PeerTube destination second, journal `promoted`, and finally `PeerTube_Publication_Synchronizer::sync_video()`.
+
+Do not add PeerTube HTTP, upload session creation, task enqueueing, remote-asset mutation, serving cutover, cleanup, or deletion to the migration executor. The synchronizer remains the sole handoff to R46.5. A present migration-execution journal is the one-way commitment boundary: planner review is frozen and ordinary destination/publication editor operations may not change backend/channel. Malformed/future journal state must be preserved and fail closed; prepared/promoted retries must be idempotent and crash-recoverable.
+
+## R46.9 retention/cleanup boundary
+
+Local retention is destructive and must remain fail-closed. KEEP is the default.
+Never infer deletion authority from destination, remote readiness, serving
+cutover, cleanup-state enum, or migration completion alone. A destructive
+operation requires the explicit versioned per-video retention policy, its grace
+period, current R46.6 serving evidence, and a durable cleanup execution journal.
+
+`delete_all` must not run while `wordpress_source` is master. Physical source
+deletion must preserve the WordPress attachment object, use a confined uploads
+path, reject symlinks/escapes, compare exact file identity immediately before
+`wp_delete_file()`, and verify absence afterward. The normal local FFmpeg queue
+must be fenced while cleanup is running, with active jobs checked on both sides
+of that fence. The cleanup journal's attachment must still be the video's current
+attachment and must be exclusively owned by that one AWVP Video; duplicate or
+ambiguous attachment references fail closed because managed output storage is
+attachment-scoped. Bounded attachment-reference scans must fail closed when the
+bound is exceeded, and trash must not bypass the fence. Source-file identity
+includes relative path plus size/device/inode/mtime/ctime and is revalidated
+immediately before physical deletion. Any mismatch means KEEP. Do not add
+provider HTTP, remote deletion, a new scheduler, or retention work to the
+qualified `--once` task set.
+
+
+## R45.6 / RC PeerTube capability boundary
+
+PeerTube capability advertisement must match implemented, qualified authority and
+must not be treated as an execution entry point. For RC1 the only true PeerTube
+capabilities are AWVP-staged ingest, server push, video processing, embed delivery,
+and verified privacy mutation. Direct-browser ingest, WordPress-attachment direct
+ingest, account-video listing/selection, provider-native scheduling, backend
+source-retention guarantees, and remote delete remain false. Keep the exact-map
+regression synchronized with any future capability change.

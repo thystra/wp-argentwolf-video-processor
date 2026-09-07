@@ -55,6 +55,9 @@ interface PeerTube_Connection_Admin_Actions
     /** @return array<string, mixed> */
     public function disconnect_backend(string $backend_id, int $now): array;
 
+    /** @return array{status:string} */
+    public function save_upload_policy(string $backend_id, mixed $chunk_mib): array;
+
     /** @return list<array<string,mixed>> */
     public function managed_backends(): array;
 

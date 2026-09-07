@@ -1,7 +1,9 @@
 <?php
 /**
- * R43 regression boundary: executable resumable-upload primitives exist, but
- * capability advertisement and WordPress-triggerable upload entry points stay off.
+ * R43-R45 regression boundary after R45.6 capability activation: resumable
+ * upload remains owned by the durable detached PeerTube worker. Capability
+ * advertisement is now on, but browser/admin/REST/AJAX and cron-inline media
+ * transfer remain forbidden.
  */
 
 declare(strict_types=1);
@@ -19,16 +21,16 @@ $assert = static function (bool $condition, string $message): void {
 
 $capabilities = Backend_Capabilities::peertube_activation();
 $assert(
-    false === ($capabilities[Backend_Capabilities::INGEST_AWVP_STAGING] ?? null),
-    'R43 executable checkpoint prematurely advertised AWVP-staged ingest.'
+    true === ($capabilities[Backend_Capabilities::INGEST_AWVP_STAGING] ?? null),
+    'R45.6 must advertise the qualified AWVP-staged ingest path.'
 );
 $assert(
-    false === ($capabilities[Backend_Capabilities::INGEST_SERVER_PUSH] ?? null),
-    'R43 executable checkpoint prematurely advertised PeerTube server push.'
+    true === ($capabilities[Backend_Capabilities::INGEST_SERVER_PUSH] ?? null),
+    'R45.6 must advertise the qualified server-push transport.'
 );
 $assert(
-    false === ($capabilities[Backend_Capabilities::PROCESSING_VIDEO] ?? null),
-    'R43 executable checkpoint prematurely claimed PeerTube processing authority.'
+    true === ($capabilities[Backend_Capabilities::PROCESSING_VIDEO] ?? null),
+    'R45.6 must advertise qualified PeerTube processing/reconciliation.'
 );
 
 $root = dirname(__DIR__);
@@ -37,6 +39,7 @@ $api = (string) file_get_contents($root . '/includes/PeerTube_Api_Client.php');
 $service = (string) file_get_contents($root . '/includes/PeerTube_Staged_Upload_Service.php');
 $plugin = (string) file_get_contents($root . '/includes/Plugin.php');
 $admin = (string) file_get_contents($root . '/includes/PeerTube_Connection_Admin.php');
+$cli = (string) file_get_contents($root . '/includes/CLI_Command.php');
 $loader = (string) file_get_contents($root . '/argentwolf-video-processor.php');
 
 $assert(
@@ -54,12 +57,14 @@ foreach (array($http, $api, $service, $plugin, $admin, $loader) as $runtime) {
 $assert(
     str_contains($http, 'post_resumable_upload_init')
     && str_contains($http, 'put_resumable_upload_chunk')
+    && str_contains($http, 'put_resumable_upload_slice')
     && str_contains($http, 'put_resumable_upload_probe'),
     'R43 bounded HTTP client is missing one reviewed resumable primitive.'
 );
 $assert(
     str_contains($api, 'begin_resumable_upload')
     && str_contains($api, 'upload_resumable_chunk')
+    && str_contains($api, 'upload_resumable_slice')
     && str_contains($api, 'probe_resumable_upload'),
     'R43 API projection is missing one reviewed resumable primitive.'
 );
@@ -70,23 +75,54 @@ $assert(
     'R43 executor lost its durable claim/uncertainty/reconciliation boundary.'
 );
 
-// The service is class-loaded for testability but is deliberately not wired to
-// a user-, cron-, REST-, AJAX-, WP-CLI-, or capability-triggered execution path.
+$assert(
+    str_contains($service, 'PeerTube_Upload_Slice::open')
+        && str_contains($service, 'upload_resumable_slice(')
+        && ! str_contains($service, '$chunk .=')
+        && ! str_contains($service, 'private static function read_chunk')
+        && ! str_contains($service, 'upload_resumable_chunk('),
+    'R45 streamed executor regressed to materializing a policy-sized upload segment in PHP memory.'
+);
+$assert(
+    str_contains($http, "add_action('http_api_curl'")
+        && str_contains($http, "remove_action('http_api_curl'")
+        && str_contains($http, 'CURLOPT_READFUNCTION'),
+    'R45 streamed HTTP boundary lost its temporary WordPress cURL streaming hook.'
+);
+
+// R45.3b adds one explicit CLI-only construction path. The service remains
+// unreachable from browser/admin/cron/REST/AJAX entry points.
 $assert(
     str_contains($loader, "PeerTube_Staged_Upload_Service.php"),
     'R43 staged-upload executor is not loadable.'
 );
+$wp_cli_guard = strpos($plugin, "if (defined('WP_CLI') && WP_CLI)");
+$upload_build = strpos($plugin, '$peertube_upload = new PeerTube_Staged_Upload_Service(');
 $assert(
-    ! str_contains($plugin, 'PeerTube_Staged_Upload_Service')
-    && ! str_contains($admin, 'PeerTube_Staged_Upload_Service'),
-    'R43 staged-upload executor was prematurely wired into WordPress runtime actions.'
+    false !== $wp_cli_guard && false !== $upload_build && $upload_build > $wp_cli_guard,
+    'R45.3b staged-upload service is not composed strictly behind the WP_CLI guard.'
+);
+$assert(
+    ! str_contains($admin, 'PeerTube_Staged_Upload_Service'),
+    'Staged-upload executor leaked into PeerTube admin actions.'
+);
+$assert(
+    str_contains($cli, 'public function peertube_task_worker(')
+        && ! str_contains($cli, 'PeerTube_Staged_Upload_Service'),
+    'PeerTube CLI boundary bypasses the task worker and directly owns R43 upload execution.'
 );
 
-$entrypoint_surface = strtolower($plugin . "\n" . $admin);
+$entrypoint_surface = strtolower($admin);
 foreach (array('wp_ajax', 'register_rest_route', 'wp_schedule', 'wp cron', 'staged_upload', 'upload_resumable') as $needle) {
     $assert(
         ! str_contains($entrypoint_surface, strtolower($needle)),
-        'R43 exposed a premature WordPress upload entry point: ' . $needle
+        'R43 exposed a browser/admin upload entry point: ' . $needle
+    );
+}
+foreach (array('register_rest_route', 'wp_ajax', 'admin_post_argentwolf_video_processor_peertube_upload') as $needle) {
+    $assert(
+        ! str_contains(strtolower($plugin), strtolower($needle)),
+        'R45.3b Plugin exposed an unreviewed staged-upload entry point: ' . $needle
     );
 }
 

@@ -139,6 +139,16 @@ Use WordPress database and HTTP APIs rather than bypassing them without a
 reviewed technical reason. Parameterize database queries and keep SQL,
 filesystem, and shell boundaries explicit.
 
+For large outbound request bodies, do not assume the WordPress HTTP API requires
+materializing the complete body as a PHP string. When a reviewed transport needs
+streaming, keep `wp_safe_remote_request()` (or the appropriate WordPress HTTP
+entry point) as the URL/policy boundary and scope any lower-level transport hook
+to the exact request. A cURL read callback must read only from an already-proven
+plugin-owned descriptor, set an exact content length/range, be removed after the
+request on success or failure, and fail closed when the required transport is
+unavailable. Do not silently fall back from a reviewed streaming contract to a
+large in-memory body.
+
 For shell execution, prefer a small reviewed command builder. Keep executable
 selection constrained to administrator-authorized configuration, validate
 values before use, pass fixed arguments where possible, quote each shell
@@ -347,3 +357,147 @@ commit was sufficient.
 WordPress.org SVN remains a distribution surface. `trunk/` and `tags/1.0.0/`
 were derived from the canonical plugin tree, while directory artwork belongs in
 top-level SVN `assets/`.
+
+
+## Long-running detached network transfers
+
+A detached WP-CLI network worker should not use an arbitrary small wall-clock
+limit that converts a slow but healthy transfer into failure. Derive a generous
+budget from the amount of data being sent, apply a finite ceiling, and observe
+that process budget only at durable request boundaries. If a safe boundary is
+reached after the process budget, persist/requeue and yield so a later process can
+resume. Do not sleep or poll a future retry time inside the worker.
+
+For AWVP PeerTube uploads the reviewed R45.4b3 guard is one minute per 128 MiB,
+with a one-hour floor and six-hour ceiling for both process budgeting and an
+individual streamed upload request. A user-selectable all-remaining (`0`) segment
+therefore trades fewer requests for a larger uncertainty/timeout unit and should
+be recommended only for fast, reliable links such as same-host transfers.
+
+
+For long-running detached jobs, user-facing failure notification should be its
+own durable task rather than an inline side effect of the consequential network
+request. Bind notification idempotency to authoritative failure state, re-derive
+recipient/object identity at delivery time, retry mail delivery independently,
+and include only bounded sanitized diagnostics. AWVP R45.4b4 uses the initiating
+WordPress user with post-author fallback and may report controlled timeout/DNS/
+connection/TLS classifications, HTTP status, retry-after, and progress; never
+copy credentials, filesystem paths, secret references, or raw response bodies.
+
+When adding a recurring wake-up for an already-detached worker, prefer reusing an
+existing plugin-owned WP-Cron event when cadence and lifecycle match rather than
+creating another schedule. Keep the cron callback advisory and cheap: check only
+whether owned work is due/stale, launch the detached worker, and return. Do not
+perform consequential network I/O in the cron callback, and do not let future
+`run_after` rows spawn idle workers. AWVP R45.5 applies this pattern by adding the
+PeerTube launcher as a second callback on `argent_video_processor_dispatch`; the
+actual upload/reconciliation/mail services remain behind the WP-CLI guard.
+
+
+## 2.0 R46 destination/publication workflow
+
+The current R46 contract is `docs/2.0/VIDEO-DESTINATION-PUBLICATION.md`. Existing
+1.x videos with no destination metadata remain WordPress/local even if the site
+default later changes. PeerTube tags and moderation are explicit per-video
+publication decisions. After metadata review an author may send immediately or
+wait until the post is scheduled/published; early remote copies stay private and
+WordPress publication authorizes later reveal. Remote readiness never blocks the
+post: AWVP serves local until verified PeerTube cutover. Migration is explicit,
+local-first during transfer, and logically one-way after cutover.
+
+R46.2 stores new-video authoring defaults separately from per-video state. Treat a
+missing defaults option as `local` without writing it; never use the current site
+default to reinterpret legacy video metadata. Preserve malformed/future defaults
+records rather than overwriting them. Support preset Markdown is resolved/frozen
+when a later operation is created, and sensitive-content defaults are editor
+prefills only: explicit per-video moderation review remains mandatory.
+
+R46.3a provider discovery is explicit administrator work, not a page-load side
+effect. Use the configured canonical backend origin, bound every response, send
+the managed bearer only where authentication is actually required, and cache only
+a non-secret last-known-good projection bound to canonical origin and
+managed-secret generation. A failed refresh must preserve previous valid provider
+data while marking the retained snapshot stale. Provider discovery is
+observational state: it must not mutate a video or change backend capability
+advertisement.
+
+### R46.3b: bind block identity server-side, not in serialized provider state
+
+For a dynamic media block that may later target multiple backends, serialize a
+stable local model ID rather than a provider URL, remote UUID, or mutable defaults.
+AWVP’s R46.3b block stores only the hidden AWVP Video ID. Attachment adoption and
+destination resolution happen through a capability-checked server boundary so
+concurrent requests can converge on one durable identity and existing videos never
+inherit later site-default changes.
+
+Keep destination planning separate from serving authority. Choosing a PeerTube
+backend in the editor does not itself upload, publish, or switch playback. The
+dynamic block continues to render the WordPress attachment through the existing
+local shortcode/renderer integration until a separately reviewed cutover state says
+otherwise.
+
+Ship canonical block metadata and its dependency manifest in the release package,
+and test the built ZIP—not only a source checkout—so editor functionality cannot
+silently disappear because `blocks/` was omitted by packaging.
+
+### R46.3c: keep review state explicit and remote work outside the editor
+
+The PeerTube publication wizard edits the durable `PeerTube_Publication_Plan`; it
+is not an upload form. Build editor choices from the backend-scoped R46.3a catalog,
+revalidate selected provider IDs server-side, and preserve advertised values that
+AWVP cannot yet author as visible-but-disabled compatibility information. A
+backend-context-changed catalog cannot authorize a save. Transient same-context
+last-known-good data may support editing, but any later consequential operation
+must independently re-resolve/revalidate before freezing remote work.
+
+Never derive required review from publishing defaults. Title, channel, independent
+PeerTube tags (including reviewed zero tags), final privacy, and moderation each
+need explicit per-video confirmation. If a required reviewed field changes, clear
+its confirmation immediately. `send_now` and `send_on_schedule_or_publish` are
+stored dispatch policies at this checkpoint; neither causes editor/REST code to
+perform PeerTube HTTP, enqueue a task, or change WordPress publication state.
+
+### R46.4: gate editorial intent, never remote readiness
+
+When a remote media workflow has a local serving fallback, publication validation
+should answer only whether the editor has completed the decisions that WordPress
+needs to authorize publication. Recompute that state from durable local model data
+at the publication boundary; do not persist a generic “ready” flag and do not
+query the remote service, task queue, upload journal, transcoder, or observational
+provider cache. Otherwise transient infrastructure failure can incorrectly become
+a CMS publication outage.
+
+Use editor save locks for immediate UX, but enforce the rule server-side before
+write as well. Keep draft authoring saveable. For shared/reused media, retain one
+immutable publication anchor so embedding the same block elsewhere cannot grant a
+second post authority over its release plan. Preserve legacy semantics explicitly:
+missing destination metadata still means local, while malformed present state
+fails closed. Separate the later scheduled/publication transition and remote reveal
+lifecycle into its own checkpoint rather than smuggling those side effects into a
+validation filter.
+
+### Cross-system publication authority: generation fence before and after HTTP
+
+When WordPress is authoritative for a remote publication state, checking post
+status only before a remote request is insufficient: WordPress can change while
+that request is in flight. Persist a generation/hash commitment to editorial
+intent, re-read it immediately before mutation, and for any exposure-increasing
+request re-read WordPress again afterward. If authority was superseded during the
+request, issue the narrowest safe compensating mutation (for example privacy-only
+Private) and positively verify it. Do not hold a WordPress database lock across
+network I/O, and do not blindly replay an indeterminate exposure-changing request.
+A short per-resource executor lock can serialize competing remote workers while
+leaving the local authority writer free to supersede the generation.
+
+### R46.6 serving boundary
+
+The AWVP dynamic block may render the verified PeerTube embed only through `Video_Serving_Service`; otherwise it must call the existing local `wp_video_shortcode()` path. Rendering performs local metadata/database reads only and never provider HTTP. The detached cutover writer is fed by R46.5b's positively verified publication state and stores only non-secret evidence.
+
+### R46.7 migration planner development rule
+
+Migration planning is an administrator-only, local-state operation. Use `Tools > AWVP Video Migration`; refresh PeerTube publication choices separately if the target channel/catalog is unavailable. A migration plan is intentionally inert and does not trigger the R46.5 executor. Treat `ready` as an editorial planning state only; remote execution remains R46.8.
+
+
+### R46.8 migration execution development rule
+
+Treat **Start migration** as a local one-way promotion transaction, not a remote upload button. Before creating its journal, revalidate the current local source/anchor, fresh current-secret-generation backend-bound publication catalog, reviewed provider choices, support preset, and thumbnail bytes. Once `_argent_video_peertube_migration_execution` exists, only converge forward: recover partial local promotion, preserve the selected backend/channel, and hand the promoted plan to `PeerTube_Publication_Synchronizer`. Do not call PeerTube, create an upload operation, switch serving, or delete local media from the migration admin/executor path.

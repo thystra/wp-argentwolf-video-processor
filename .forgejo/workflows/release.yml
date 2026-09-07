@@ -5,7 +5,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Plugin version to build (X.Y.Z)'
+        description: 'Plugin version to build (X.Y.Z or X.Y.Z-prerelease)'
         required: true
         type: string
       expected_commit:
@@ -71,8 +71,6 @@ jobs:
 
           ACTUAL_COMMIT="$(git rev-parse HEAD)"
           SOURCE_TREE="$(git rev-parse 'HEAD^{tree}')"
-          PLUGIN_VERSION="$(sed -n 's/^ \* Version: //p' argentwolf-video-processor.php | head -n1)"
-          STABLE_TAG="$(sed -n 's/^Stable tag: //p' readme.txt | head -n1)"
           TAG="v${VERSION}"
 
           if [[ "${ACTUAL_COMMIT}" != "${EXPECTED_COMMIT}" ]]; then
@@ -83,10 +81,7 @@ jobs:
             echo "Forgejo dispatch SHA ${FORGEJO_SHA} does not match approved ${EXPECTED_COMMIT}." >&2
             exit 1
           fi
-          if [[ "${PLUGIN_VERSION}" != "${VERSION}" || "${STABLE_TAG}" != "${VERSION}" ]]; then
-            echo "Plugin/readme version does not match requested ${VERSION}." >&2
-            exit 1
-          fi
+          bash build/validate-version.sh "${VERSION}"
           if ! grep -Fq "## ${VERSION} - " CHANGELOG.md; then
             echo "CHANGELOG.md has no ${VERSION} release entry." >&2
             exit 1
@@ -117,8 +112,11 @@ jobs:
 
       - name: Run release tests
         run: |
+          bash tests/version-validator.sh
+          php tests/version-policy.php
           php tests/model-persistence.php
           php tests/backend-local.php
+          php tests/peertube-capability-activation.php
           php tests/peertube-connection-foundation.php
           php tests/peertube-http-api.php
           php tests/atomic-option-cas.php

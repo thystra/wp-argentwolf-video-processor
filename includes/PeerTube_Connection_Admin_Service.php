@@ -20,7 +20,8 @@ final class PeerTube_Connection_Admin_Service implements PeerTube_Connection_Adm
         private readonly PeerTube_Password_Grant_Service $grants,
         private readonly PeerTube_Identity_Destination_Service $identity_destinations,
         private readonly PeerTube_Backend_Activation_Service $activation,
-        private readonly ?PeerTube_Token_Lifecycle_Service $token_lifecycle = null
+        private readonly ?PeerTube_Token_Lifecycle_Service $token_lifecycle = null,
+        private readonly ?PeerTube_Upload_Policy_Store $upload_policy = null
     ) {
     }
 
@@ -92,9 +93,26 @@ final class PeerTube_Connection_Admin_Service implements PeerTube_Connection_Adm
             : array('status' => PeerTube_Token_Lifecycle_Service::STATUS_REFUSED);
     }
 
+    public function save_upload_policy(string $backend_id, mixed $chunk_mib): array
+    {
+        return array(
+            'status' => null !== $this->upload_policy
+                ? $this->upload_policy->save_chunk_mib($backend_id, $chunk_mib)
+                : PeerTube_Upload_Policy_Store::REFUSED,
+        );
+    }
+
     public function managed_backends(): array
     {
-        return null !== $this->token_lifecycle ? $this->token_lifecycle->managed_backends() : array();
+        $backends = null !== $this->token_lifecycle ? $this->token_lifecycle->managed_backends() : array();
+        foreach ($backends as &$backend) {
+            $backend_id = is_string($backend['backend_id'] ?? null) ? $backend['backend_id'] : '';
+            $backend['upload_chunk_mib'] = null !== $this->upload_policy
+                ? $this->upload_policy->chunk_mib($backend_id)
+                : PeerTube_Upload_Policy::DEFAULT_CHUNK_MIB;
+        }
+        unset($backend);
+        return $backends;
     }
 
     public function open_operations(): ?array

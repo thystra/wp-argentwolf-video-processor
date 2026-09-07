@@ -7,9 +7,19 @@ declare(strict_types=1);
 
 define('ABSPATH', '/tmp/wordpress/');
 define('MINUTE_IN_SECONDS', 60);
+define('WP_CLI', true);
 $GLOBALS['wpdb'] = (object) array('prefix' => 'wp_');
 $GLOBALS['awvp_smoke_actions'] = array();
 $GLOBALS['awvp_smoke_filters'] = array();
+$GLOBALS['awvp_smoke_cli_commands'] = array();
+
+final class WP_CLI
+{
+    public static function add_command(string $name, object $command): void
+    {
+        $GLOBALS['awvp_smoke_cli_commands'][] = array($name, $command);
+    }
+}
 
 function plugin_dir_path(string $file): string
 {
@@ -76,6 +86,12 @@ if (
     exit(1);
 }
 
+if (! class_exists(ArgentVideo\Video_Destination::class, false)
+    || ! class_exists(ArgentVideo\PeerTube_Publication_Plan::class, false)) {
+    fwrite(STDERR, "Plugin smoke load missed required R46 destination/publication model classes.\n");
+    exit(1);
+}
+
 if (! interface_exists(ArgentVideo\PeerTube_Password_Grant_Api::class, false)) {
     fwrite(STDERR, "Plugin smoke load missed required R37 interface " . ArgentVideo\PeerTube_Password_Grant_Api::class . ".\n");
     exit(1);
@@ -116,18 +132,38 @@ foreach (
         ArgentVideo\PeerTube_Token_Lifecycle_Store::class,
         ArgentVideo\PeerTube_Token_Lifecycle_Service::class,
         ArgentVideo\PeerTube_Staged_Source_Identity::class,
+        ArgentVideo\PeerTube_Upload_Slice::class,
+        ArgentVideo\PeerTube_Upload_Runtime_Budget::class,
+        ArgentVideo\PeerTube_Upload_Policy::class,
+        ArgentVideo\PeerTube_Upload_Policy_Store::class,
         ArgentVideo\PeerTube_Staged_Upload_State_Machine::class,
         ArgentVideo\PeerTube_Staged_Upload_Guard::class,
         ArgentVideo\PeerTube_Staged_Upload_Operation_Store::class,
         ArgentVideo\PeerTube_Staged_Upload_Service::class,
         ArgentVideo\Remote_Asset_Repository::class,
+        ArgentVideo\Task_Repository::class,
+        ArgentVideo\PeerTube_Upload_Task_Coordinator::class,
+        ArgentVideo\PeerTube_Upload_Failure_Notification::class,
+        ArgentVideo\PeerTube_Task_Worker::class,
+        ArgentVideo\PeerTube_Task_Worker_Launcher::class,
         ArgentVideo\PeerTube_Remote_Asset_Reconciliation_Service::class,
+        ArgentVideo\PeerTube_Publication_Lifecycle::class,
+        ArgentVideo\PeerTube_Publication_Synchronizer::class,
     ) as $required_class
 ) {
     if (! class_exists($required_class, false)) {
         fwrite(STDERR, "Plugin smoke load missed required connection/activation class {$required_class}.\n");
         exit(1);
     }
+}
+
+if (
+    1 !== count($GLOBALS['awvp_smoke_cli_commands'])
+    || 'argent-video' !== ($GLOBALS['awvp_smoke_cli_commands'][0][0] ?? null)
+    || ! (($GLOBALS['awvp_smoke_cli_commands'][0][1] ?? null) instanceof ArgentVideo\CLI_Command)
+) {
+    fwrite(STDERR, "Plugin smoke load missed or duplicated the composed Argent Video WP-CLI command.\n");
+    exit(1);
 }
 
 $registered_actions = array_column($GLOBALS['awvp_smoke_actions'], 0);

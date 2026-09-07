@@ -20,7 +20,8 @@ final class CLI_Command
         private readonly Bulk_Queue $bulk,
         private readonly Worker $worker,
         private readonly Diagnostics $diagnostics,
-        private readonly Worker_Log_Repository $worker_logs
+        private readonly Worker_Log_Repository $worker_logs,
+        private readonly PeerTube_Task_Worker $peertube_task_worker
     ) {
     }
 
@@ -82,6 +83,91 @@ final class CLI_Command
             }
             WP_CLI::error($error->getMessage());
         }
+    }
+
+    /**
+     * Run the reviewed PeerTube asynchronous task worker.
+     *
+     * --once preserves the qualified one-task boundary. --drain allows the
+     * worker abstraction (not the CLI method) to continue one logical operation
+     * across immediately-runnable durable boundaries until it reaches a wait,
+     * terminal/intervention state, or safe-boundary runtime yield.
+     *
+     * @subcommand peertube-task-worker
+     *
+     * ## OPTIONS
+     *
+     * [--once]
+     * : Advance at most one eligible PeerTube task.
+     *
+     * [--drain]
+     * : Drain one logical operation across immediately-runnable boundaries.
+     */
+    public function peertube_task_worker(array $args, array $assoc_args): void
+    {
+        unset($args);
+
+        $unexpected = array_diff(array_keys($assoc_args), array('once', 'drain'));
+        $once = isset($assoc_args['once']);
+        $drain = isset($assoc_args['drain']);
+        if ([] !== $unexpected || $once === $drain) {
+            WP_CLI::error('PeerTube task worker requires exactly one of --once or --drain.');
+            return;
+        }
+
+        $started_at = time();
+        try {
+            $result = $drain
+                ? $this->peertube_task_worker->run_drain($started_at)
+                : $this->peertube_task_worker->run_once($started_at);
+        } catch (Throwable $error) {
+            WP_CLI::error('PeerTube task worker failed before a bounded result: ' . $this->error_summary($error->getMessage()));
+            return;
+        }
+
+        $status = is_string($result['status'] ?? null) ? $result['status'] : '';
+        $recovered = max(0, (int) ($result['recovered'] ?? 0));
+
+        if (PeerTube_Task_Worker::STATUS_IDLE === $status) {
+            WP_CLI::success(sprintf(
+                'PeerTube task worker idle; %d stale recovered.',
+                $recovered
+            ));
+            return;
+        }
+
+        if ($drain && in_array($status, array(PeerTube_Task_Worker::STATUS_ADVANCED, PeerTube_Task_Worker::STATUS_YIELDED), true)) {
+            WP_CLI::success(sprintf(
+                'PeerTube task worker %s after %d bounded step(s); last task %d (%s): %s; elapsed %ds of %ds budget; %d stale recovered.',
+                PeerTube_Task_Worker::STATUS_YIELDED === $status ? 'yielded safely' : 'stopped at a durable boundary',
+                max(0, (int) ($result['steps'] ?? 0)),
+                max(0, (int) ($result['task_id'] ?? 0)),
+                (string) ($result['task_type'] ?? ''),
+                (string) ($result['coordinator_status'] ?? ''),
+                max(0, (int) ($result['elapsed_seconds'] ?? 0)),
+                max(0, (int) ($result['budget_seconds'] ?? 0)),
+                $recovered
+            ));
+            return;
+        }
+
+        if (! $drain && PeerTube_Task_Worker::STATUS_ADVANCED === $status) {
+            WP_CLI::success(sprintf(
+                'PeerTube task worker advanced task %d (%s): %s; %d stale recovered.',
+                max(0, (int) ($result['task_id'] ?? 0)),
+                (string) ($result['task_type'] ?? ''),
+                (string) ($result['coordinator_status'] ?? ''),
+                $recovered
+            ));
+            return;
+        }
+
+        WP_CLI::error(sprintf(
+            'PeerTube task worker ended indeterminate after task %d (%s); %d stale recovered.',
+            max(0, (int) ($result['task_id'] ?? 0)),
+            (string) ($result['task_type'] ?? ''),
+            $recovered
+        ));
     }
 
     /** Display configuration and executable checks. */

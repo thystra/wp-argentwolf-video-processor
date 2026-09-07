@@ -214,12 +214,12 @@ awvp_coordinator_assert(
     'Confirmed active PeerTube descriptor was not eligible for the R40 non-mutating capability.'
 );
 awvp_coordinator_assert(
-    ! $bundle['registry']->eligible(
+    $bundle['registry']->eligible(
         $planned_record['backend_id'],
         Backend_Capabilities::PROCESSING_VIDEO,
         $bundle['factory']
     ),
-    'R40 PeerTube adapter prematurely claimed processing/upload capability.'
+    'R45.6 current PeerTube adapter did not expose qualified processing capability.'
 );
 awvp_coordinator_assert(
     array() === (new Operation_Store())->open_operations(),

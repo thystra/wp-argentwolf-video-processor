@@ -8,6 +8,8 @@ ArgentWolf Video Processor 2.0 development.
 - `main` is the stable/public line. The stable 1.0 release remains identified by
   `v1.0.0`; later `main` commits are documentation/maintenance history unless a
   new release is deliberately prepared.
+- `release/1.x` is the permanent 1.0 maintenance line, recreated directly from
+  `v1.0.0` before the 2.0 RC transition so emergency 1.0.x fixes remain isolated.
 - `develop-2.0` is the next-major integration line and contains the validated
   R39 identity/destination checkpoint plus the qualified prebuilt FFmpeg CI
   toolchain.
@@ -43,8 +45,19 @@ That line contains the existing 2.0 architecture, persistence skeleton, backend
 registry/local adapter, PeerTube connection contract, and the deliberate stable
 1.0 synchronization.
 
-The runtime version is intentionally still `1.0.0`; synchronizing the foundation
-did not itself create a 2.0 release.
+That historical synchronization did not itself create a 2.0 release. The assembled
+R46 line now enters controlled release-candidate testing as `2.0.0-rc1`: the
+plugin header and runtime constant carry the RC version, while `readme.txt` keeps
+`Stable tag: 1.0.0` because WordPress.org remains on the public 1.0 line until
+final promotion. RC packages are Forgejo-only and must not be pushed to the
+WordPress.org SVN.
+
+Final promotion is `2.0.0-rcN -> 2.0.0` with no functional changes after the
+last accepted RC. The promotion commit updates release/version metadata, changes
+`Stable tag` to `2.0.0`, rebuilds and requalifies the exact package, then publishes
+the final release to WordPress.org. The controlled live validation site must prove
+the ordinary WordPress update path from its installed RC to final 2.0.0; a
+separate controlled installation must prove the public `1.0.0 -> 2.0.0` path.
 
 ## Preserved PeerTube connection-foundation checkpoint
 
@@ -1588,3 +1601,371 @@ R44 does not implicitly grant the next checkpoint upload, polling, cleanup,
 publication, retention, or remote-delete authority. Any such production
 execution/capability boundary must be separately defined, implemented, and
 qualified.
+
+## R45 asynchronous PeerTube upload coordination — current continuation
+
+R45 was branched from the clean post-R44 `develop-2.0` authority after the
+pipefail-safe release-ZIP correction at
+`a87c6508673ecdfe7a0b753566f0442076da9b3e`. The active feature branch is
+`feature/2.0-peertube-upload-coordination`; Forgejo remains authoritative and any
+pull request from this branch must target `develop-2.0`, not the push-generated
+`main` compare target.
+
+Qualified progression:
+
+- R45.1 generic task repository: exact commit
+  `edf4fa86e521c960b03c725061f6aac36f629aa4`, tree
+  `52694449bfcd320671d6cbb559edbcecfad795c1`, Forgejo CI run 112; follow-up
+  attempt-ceiling correction prefix `11dfa57`, CI run 113.
+- R45.2 bounded upload/reconciliation task coordinator: commit prefix
+  `a4b6b8e`, CI run 114.
+- R45.3a type-owned one-shot PeerTube task worker: exact commit
+  `b28fe12c795d7d9348c97e8bcc8d43d498e98345`, tree
+  `298e1de6f1f2ced97f56599535c12f03f90ebb37`, CI run 115.
+- R45.3b explicit WP-CLI production boundary: exact commit
+  `4332407ceed7528ee577209ff05033d3f20dcda8`, tree
+  `391fe35dd67b8749bc642fb8740ce9fea5a0894a`, CI run 116. The public command
+  is `wp argent-video peertube-task-worker --once`.
+- R45.3c corrected public subcommand and real-WP/mock-PeerTube happy/wait
+  qualification reached exact commit
+  `ab3a036292dc144f91166b77376058c276021756`, tree
+  `8d6d97314adad395716288d9ae97be93298ccb44`, CI run 117.
+- R45.3d uncertainty/no-replay qualification: exact commit
+  `8cb8c21a59a47085b2231b97bfed7af001418251`, tree
+  `188d4b3fcd40eb573b0efde1aeb05ab130032dbf`, CI run 118. The retained
+  happy/wait report is
+  `peertube-r45cli-smoke-20260904T221708Z-282500.log`; the indeterminate report
+  is `peertube-r45chunk-smoke-20260904T223404Z-305089.log`; the same exact
+  source also passed the R44 regression report
+  `peertube-r44-smoke-20260904T221951Z-292292.log`.
+- R45.4a detached PeerTube launcher foundation: qualified commit prefix
+  `3084e348f0`, Forgejo CI run 119. It remains unwired from cron/admin.
+- R45.4b1 backend-scoped upload segmentation policy: qualified commit prefix
+  `ab74815`, Forgejo CI run 120. Policy default is 128 MiB, valid range 0–8192
+  MiB, with `0` meaning all remaining bytes in one resumable segment.
+
+R45.4b2 is exact commit `ca1194235e8a6f7f0c16e8087906816a9ceb50eb`, tree
+`6facc70f9c48f2abb8ebf11e3c6ae4215e4d7b5f`. It streams policy-sized staged-file
+slices through the existing origin-bound WordPress safe-HTTP path without
+building a 128 MiB/1 GiB PHP body string, adds the authenticated per-backend
+admin tuning control, and keeps all R43 claim-before-I/O/no-replay fences. The
+exact clean source passed the retained happy/wait R45 matrix
+`peertube-r45cli-smoke-20260905T003723Z-370943.log`, indeterminate/no-replay
+matrix `peertube-r45chunk-smoke-20260905T005703Z-382876.log`, and R44 regression
+`peertube-r44-smoke-20260905T005804Z-391056.log`. `0` still means all remaining
+bytes through the resumable PUT protocol, not the legacy multipart endpoint.
+
+R45.4b3 adds a second CLI execution mode while preserving `--once`. `--drain`
+continues only one logical operation: it may reclaim the exact same immediately
+runnable task and then that operation's deterministic reconciliation handoff,
+never unrelated queue work. It never sleeps or polls a future `run_after`. Both
+process budget and streamed-request timeout use one minute per 128 MiB with a
+one-hour floor and six-hour ceiling; process deadline is checked only after a
+remote request reaches a durable boundary. Exact commit
+`33bdd109da2f452afb2058ce0d044d10a729c669`, tree
+`a89963f3e9def2ba65bd43589c87e13a3f4a9b57`, passed Forgejo CI run 122 plus
+exact-source drain, one-shot, indeterminate/no-replay, and R44 regression Docker
+matrices. At that R45.4b3 checkpoint the detached launcher targeted `--drain` but remained not cron-wired.
+
+R45.4b4 adds the separate `peertube_upload_failure_notify` task. Human-attention
+upload failures/holds enqueue a deterministic notification keyed by operation ID
+and failure record revision; `--drain` resolves the initiating WordPress user
+(fallback post author) and sends sanitized site/post/backend/state/progress,
+last-request size, transport/API code/classification, HTTP/retry detail when
+available, and the AWVP admin link. Timeout mail may suggest a smaller segment
+only after the uncertain upload state is safely reconciled. Rejected mail is
+durably retried without touching upload state. Ordinary waits and safe budget
+yields do not notify. Secrets, filesystem paths, and raw remote bodies must never
+be included. Exact commit `96fe661682accaa63e2860dc236cb9c1f4733950`, tree
+`7f938a05c446e000b0d45db76e03e703432a10dc`, passed Forgejo CI run 123 plus the
+exact-source notification/no-replay, drain, one-shot, and R44 Docker matrices.
+
+R45.5 then wires only the already-reviewed detached launcher to the existing
+five-minute `argent_video_processor_dispatch` event. It deliberately creates no
+second scheduler and no browser/admin launch surface. The callback performs the
+due/stale owned-task probe and detached `--drain --quiet` launch only; R43/R44
+services and the task coordinator/worker remain constructed strictly behind the
+`WP_CLI` guard. Capability bits remain false pending R45.6.
+
+
+## R46 destination/publication model handoff
+
+The revised R46 contract is `docs/2.0/VIDEO-DESTINATION-PUBLICATION.md`.
+R46.1 is intentionally a model-only checkpoint: canonical destination binding,
+legacy missing-destination => local resolution, and strict editable PeerTube
+publication-plan validation/review state. R46.2 then adds the separate
+non-autoloaded authoring-default/support-preset store and Settings page. Those
+defaults apply only to new/unfrozen videos, preserve malformed/future option state,
+and cannot satisfy per-video moderation review. Do not add block/editor surfaces,
+migration, post-status hooks, remote privacy mutation, serving cutover, or cleanup
+to R46.2.
+
+
+R46.1 exact source is commit
+`35da5e2f37060648e53b0b2d7424fceb3bb45f7e`, tree
+`8cf3f9f27f65f5dc90ed17041d625f45865ceca0`; feature push CI status should be
+recorded separately before qualification claims.
+
+The exact R45.5 source immediately below R46 is commit
+`07259b927b7cd7ff393807777cf23de4f64c0795`, tree
+`7ec2177ded8d522ceaf8e6911194a8085d25aed2`. Its dedicated cron-wiring matrix and
+retained drain, indeterminate/notification/no-replay, one-shot, and R44 matrices
+passed on exact clean bytes; Forgejo CI run 124 is green.
+
+### R46.2 qualification and R46.3a continuation
+
+R46.2 is qualified at exact commit
+`86c08ea4b9cad49ab55bd462135c2c7b5c3fb6b3`, tree
+`13ce8a4219c99f9d66b4089efb807530ca780e61`; Forgejo CI run 126 is green.
+That checkpoint remains the authority immediately below R46.3a.
+
+R46.3a is limited to explicit read-only PeerTube publication-choice discovery.
+For each active PeerTube backend it may authenticate the current local identity,
+discover owned channels, and read the public server/version, privacy, licence,
+category, language, and conservative moderation/privacy capability vocabulary.
+The managed bearer is sent only where authentication is required; public provider
+dictionaries/configuration are GET-only and receive no bearer or request body.
+
+The resulting cache is observational, non-secret, non-autoloaded, and scoped by
+backend ID + canonical origin + managed-secret generation. A failed/refused
+refresh must keep the last valid provider data and mark that snapshot stale rather
+than substituting an empty result or treating old data as current under rotated
+credentials. A successful context-matching refresh clears stale state. Page GET
+must perform no PeerTube HTTP.
+
+R46.3a grants no upload, remote video create/update/delete, privacy mutation,
+post-status hook, migration, serving cutover, Gutenberg/editor UI, credential
+refresh, or secret-persistence authority. Unsupported-but-advertised provider
+values remain observable; a later authoring checkpoint must separately decide
+which discovered values it can safely enable and must revalidate/freeze choices
+before consequential publication work is created.
+
+### R46.3a qualification and R46.3b continuation
+
+R46.3a is qualified at commit prefix `0a13687`, tree
+`3587e3d15fef45d2776f3273ad517b26dc1aebe6`; Forgejo CI run 127 is green.
+The read-only publication catalog remains observational, non-secret, and
+last-known-good, bound to backend + canonical origin + managed-secret generation.
+It grants no video mutation or publication authority.
+
+R46.3b introduces the single AWVP Gutenberg Video block foundation only. The
+dynamic block serializes the stable AWVP Video ID, can adopt an existing WordPress
+video attachment idempotently under a per-attachment claim lock, and exposes
+explicit local/active-PeerTube final-destination planning through a
+capability-aware REST boundary. Current publishing defaults are consulted only to
+initialize a genuinely new AWVP identity, or when the editor explicitly asks to
+resolve “site default”; a valid existing attachment binding is returned before
+current defaults are consulted.
+
+Frontend serving stays local through `wp_video_shortcode()` and the established
+Renderer path even when the stored final destination is PeerTube. R46.3b therefore
+must not acquire PeerTube HTTP, upload/task dispatch, publication/reveal,
+post-status hooks, migration, serving cutover, cleanup, credential refresh, or
+secret-persistence authority. The provider vocabulary from R46.3a is reserved for
+the separate R46.3c publication wizard/review checkpoint.
+
+### R46.3b qualification and R46.3c continuation
+
+R46.3b is qualified at commit prefix `4905076`, tree
+`67054ea387ec90c484da01e437010772aad08a13`; Forgejo CI run 128 is green. The
+qualified editor foundation remains one dynamic AWVP Video block with stable
+`videoId`, idempotent WordPress-video adoption, explicit final-destination planning,
+and local frontend serving. It has no PeerTube dispatch/publication authority.
+
+R46.3c adds only the publication-plan authoring/review layer. The Gutenberg
+inspector may edit PeerTube title/Markdown description, an owned channel,
+independent tags (maximum five, including explicit reviewed zero tags), support
+none/preset/custom, final privacy, optional licence/category/language, thumbnail,
+comments/download policy, optional original publication time, sensitive-content
+review/flags, and `send_now` versus `send_on_schedule_or_publish`.
+
+The server-side publication-editor service is authoritative for normalization. It
+reads the R46.3a cached catalog and revalidates channel/provider IDs before storing
+the existing strict `PeerTube_Publication_Plan`. Unsupported advertised privacy
+values remain visible but are not authorable. A backend/origin context mismatch
+cannot authorize a save. Defaults are prefills only and never satisfy title,
+channel, tags, privacy, or moderation review; changing one of those reviewed fields
+clears its review state. A destination/plan channel mismatch likewise requires
+channel review again.
+
+R46.3c still grants no PeerTube HTTP, credential refresh/persistence, staged upload,
+task dispatch, post-status hook, private/public reveal, migration, serving cutover,
+or cleanup. `send_now` is only persisted editorial policy here. R46.4 remains the
+separate WordPress editorial publish-validation checkpoint, and later execution
+must re-resolve/revalidate provider state before freezing consequential remote
+work.
+
+### R46.3c qualification and R46.4 continuation
+
+R46.3c is qualified at exact tree
+`67444badccb625a458f3436cc596557cfce16817`; Forgejo CI run 129 is green. The
+resulting commit hash was not supplied in the conversation, so the tree + CI run
+are the retained qualification identity. The qualified wizard persists reviewed
+editorial intent only and still has no PeerTube HTTP/task/post-status authority.
+
+R46.4 adds only WordPress editorial publication validation. The local validator
+walks the candidate post's AWVP blocks (including bounded reusable-block
+references), ignores reused videos whose immutable origin belongs to another post,
+preserves the missing-legacy-destination => local rule, and requires a concrete
+PeerTube destination to have a valid plan matching backend, anchor, and channel
+plus explicit title/channel/tags/privacy/moderation review.
+
+The publication decision must not consult PeerTube HTTP, managed credentials, the
+R46.3a catalog or its stale flag, upload/task/transcoding/remote-asset state, or
+serving readiness. Gutenberg may lock protected-status saves for immediate UX,
+but the server is authoritative: REST pre-insert returns a bounded review-required
+error and non-REST pre-write handling refuses to expose unresolved content.
+Protected statuses at this checkpoint are `publish`, `future`, and `private`;
+draft/pending authoring remains saveable.
+
+R46.4 must not enqueue upload/reveal work, call `wp_publish_post()`, register a
+post-status transition handler, mutate PeerTube visibility, or change serving
+authority. In particular, WordPress cron's later transition of a scheduled post
+and the durable WordPress-authoritative remote reveal lifecycle remain R46.5.
+
+### R46.4 qualification and R46.5a continuation
+
+R46.4 is qualified at commit `5c30a62`, tree
+`922fdb59ca6f784260e1aa5cd6e1ee163118adc1`; Forgejo CI run 130 is green.
+R46.5 is intentionally split so WordPress transition authority can be reviewed
+separately from remote mutation.
+
+R46.5a adds a strict local `_argent_video_peertube_publication_lifecycle` record
+and `peertube_publication_sync` task generation only. A reviewed plan plus its
+concrete destination is projected against the anchor post's current WordPress
+status. `send_now` may authorize upload while draft; `future` authorizes private
+preupload; only actual `publish` authorizes the reviewed final privacy. Draft,
+pending, private, trash, reschedule, or revert states target PeerTube privacy `3`
+(private). Each semantic change increments a generation, so an older queued task
+is superseded without destructive queue cancellation.
+
+Plan-save and `transition_post_status` callbacks perform no PeerTube HTTP,
+credential work, source staging, upload creation, remote visibility mutation, or
+serving cutover. They only persist local intent and enqueue a generic durable task.
+R46.5a deliberately leaves the qualified five-minute dispatch topology unchanged
+and adds no bootstrap/retry scheduler. A reviewed-plan save or actual WordPress
+status transition establishes/retries lifecycle state; pre-R46.5 reviewed plans
+remain inert until one of those local events. `peertube_publication_sync` is not
+added to launcher/worker owned task types. R46.5b must explicitly add worker
+ownership and generation revalidation before any remote mutation.
+
+### R46.5a qualification and R46.5b continuation
+
+R46.5a is qualified at commit `7b639d8`, tree
+`867a13ba23495bfacb7e2e065061c2ce34637842`; Forgejo CI run 131 is green. Its
+local lifecycle generation remains WordPress-authoritative and contains no remote
+execution state.
+
+R46.5b gives only the detached `--drain` worker ownership of
+`peertube_publication_sync` and `peertube_publication_finalize`. Do not widen the
+qualified diagnostic `--once` task set; it remains upload/reconciliation only. Do
+not add another scheduler. The existing five-minute launcher probe may wake for the
+new task types and starts the same detached drain process.
+
+The sync coordinator must re-read current lifecycle/plan/destination/backend/
+credential/catalog/default authority before freezing a non-secret execution
+manifest. It resolves support presets now, captures thumbnail bytes by SHA-256,
+stages/reuses a confined MP4, and uses the existing private resumable uploader with
+the reviewed channel. Crash recovery may reuse an exact staged-upload operation by
+its intent hash; it must not create a second remote video for the same immutable
+intent merely because the publication execution record was not yet updated.
+
+Finalize waits for `ready_verified`, requires exact remote asset identity, rechecks
+the lifecycle generation and plan hash, and validates the frozen provider choices
+again. Non-private visibility is permitted only while the real anchor post is
+`publish` and the current lifecycle says reveal is authorized. After the bounded
+metadata/privacy PUT, verify the remote UUID/channel/state/privacy. Then re-read
+WordPress: if reveal authority changed while the PUT was in flight, issue exactly
+one privacy-only correction to Private and verify it. Never automatically replay an
+indeterminate metadata PUT. The per-video execution option lock serializes remote
+publication workers but intentionally does not block the local WordPress lifecycle
+writer. R46.6 remains responsible for switching frontend serving authority only
+after remote publication/readiness is independently verified.
+### R46.5b qualification and R46.6 continuation
+
+R46.5b is qualified at commit `8a7685b`, tree `c6b0db36226bf17738840b3474afdb05af3529c5`; Forgejo CI run 132 is green. Preserve its detached-only remote execution, post-PUT WordPress recheck/private correction, per-video execution lock, and the diagnostic `--once` upload/reconcile-only boundary.
+
+R46.6 may change frontend serving only from already-verified local evidence. The cutover writer must not call PeerTube. The render resolver must distrust the cutover record unless current lifecycle generation/plan, destination/channel, applied execution, published anchor, and remote-asset identity/state/privacy/verification still agree. Public/unlisted may render the verified PeerTube embed; private/internal remain local. Any uncertainty must use the local shortcode/Renderer path. Do not add cleanup, remote deletion, migration, post-status network I/O, or frontend HTTP.
+
+### R46.6 qualification and R46.7 continuation
+
+R46.6 is qualified at commit prefix `012bcdc`, tree `03cc4e647a65c778ace3fbaddb02374f4e9f9b4b`; Forgejo CI run 133 is green. The local-first serving resolver remains network-free and fail-closed.
+
+R46.7 introduces `PeerTube_Migration_Plan`, `PeerTube_Migration_Planner`, and `PeerTube_Migration_Admin`. The planner may inventory only canonical-local AWVP Videos with a present video attachment and stable anchor. It may read active backend descriptors, publishing defaults, and R46.3a cached catalogs; it may write only `_argent_video_peertube_migration_plan`. It must not write the live destination/publication plan, lifecycle, execution, or serving authority; enqueue a task; perform PeerTube HTTP; or delete media.
+
+One plan action supports explicit selection or a bounded select-all of 500 eligible videos, scanning past ineligible hidden rows. Repeated planning for the same source/backend/channel is `present` and must preserve completed review. WordPress post tags are suggestions only. At most five valid unique suggestions may prefill the inert draft, with `review.tags=false`; more than five or invalid suggestions produce Needs Review issues and are never silently truncated. The admin review form persists only a strict provider-revalidated publication draft inside the migration record. `ready` means editorially ready for later promotion, not authorized to execute. R46.8 must revalidate source/provider/current WordPress state and perform the explicit one-way promotion/execution.
+
+
+### R46.7 qualification and R46.8 continuation
+
+R46.7 is qualified at commit `15b5dec`, tree `0eb6728c2a39a6a00440153dae54fb215eee26da`; Forgejo CI run 134 is green. Preserve its invariant that `ready` migration state is inert and isolated from live destination/publication/lifecycle/execution/serving state.
+
+R46.8 adds an explicit administrator Start migration action plus `PeerTube_Migration_Execution` and `PeerTube_Migration_Executor`. Fresh execution requires the exact strict `ready` plan and revalidates current video/attachment/anchor identity, local destination, active backend/origin, a fresh catalog, provider-backed choices, support-preset resolution, and thumbnail identity via `PeerTube_Publication_Manifest::build()`. Only then is a non-secret `prepared` migration journal written.
+
+Promotion must converge forward from that journal: publication plan first, destination second, exact readback, `promoted`, then `PeerTube_Publication_Synchronizer::sync_video()`. Successful durable handoff records generation/task ID and becomes `dispatched`; replay is `present`. The executor itself must contain no PeerTube HTTP/uploader/remote-asset/serving/cleanup path and must not enqueue tasks directly. A committed migration freezes planner review and backend/channel retarget/rollback in editor surfaces. R46.9 remains post-cutover local retention/cleanup only.
+
+### R46.8 qualification and R46.9 retention continuation
+
+R46.8 is qualified at commit `9485ebb`, tree
+`3ed54e0c5cd7c436b54f63da49b3dcf76305cfc6`; Forgejo CI run 135 is green. The
+one-way migration journal is therefore the qualified promotion boundary into the
+existing R46.5/R46.6 execution and serving path.
+
+R46.9 alone may delete local bytes. KEEP must remain the implicit/default policy.
+Destructive policy is per-video, explicitly confirmed, delayed 1-365 days, and
+journaled before the detached worker owns any delete. `delete_managed` may remove
+only AWVP-managed copies/output projection. `delete_all` also removes the physical
+WordPress video file and is forbidden while WordPress is declared master. The
+attachment post itself must never be deleted by retention.
+
+The worker must require current R46.6 serving evidence, exact policy/execution
+hashes, grace expiry, quiescent local processing, and immediately revalidated
+filesystem ownership. The journal's attachment must remain the current attachment
+of the live non-trash AWVP Video and must be exclusively owned by that video;
+duplicate/ambiguous attachment references are a KEEP condition because managed
+output storage is attachment-scoped. Fence normal local enqueue once cleanup
+enters `running`, include trash in the reference fence, fail closed when a bounded
+reference scan overflows, and recheck the local job repository after that fence.
+Physical source identity includes relative path, size, device, inode, mtime, and
+ctime and is checked again immediately before deletion. A source-delete crash may
+converge from an existing `running` journal plus exact confined absence; generic
+missing-source observations never authorize success. Use no PeerTube HTTP,
+remote-delete API, editor/browser deletion, new scheduler, or `--once` expansion.
+
+### R46.9 qualification and RC integration continuation
+
+R46.9 is qualified at commit `773c7e9`, tree
+`9f1e853b1c0a4a526a1ae73ad17c8f5ccc686132`; Forgejo CI run 138 is green. This
+closes the final R46 implementation checkpoint. Preserve that exact retention
+boundary while the 2.0 line moves into integration and release-candidate testing.
+
+R45.6 is now closed before RC integration. Do not let later capability-map or
+release cleanup broaden browser, REST, AJAX, cron-inline, remote-delete, or
+direct-browser authority.
+
+
+### R45.6 capability activation qualified before RC1
+
+R45.6 is qualified at exact commit
+`a73739e5bd051e708f1616a207bf579e6f2abb93`, tree
+`0098986b489a29099c4215fb804cf21f10aff632`; Forgejo CI run 142 is green. The
+retained real-WordPress/mock-PeerTube qualification ran all eight backend
+activation, token lifecycle, staged upload, reconciliation, one-shot,
+indeterminate/no-replay, drain, and cron-wiring matrices on those exact clean
+bytes under Docker 29.8.0. Every matrix passed; HEAD/tree remained unchanged and
+the checkout remained clean. The aggregate qualification transcript SHA-256 is
+`deeffa1bc987facb78023c1c447a7e44a6d9cb6fc93f907cadac52c64cd3273f`.
+
+The qualified map advertises `ingest.awvp_staging`, `ingest.server_push`, and
+`processing.video` from the R45 worker/reconciliation path, plus
+`publication.privacy` from the qualified R46.5 mutation/verification path and the
+existing `delivery.embed=true`. All other PeerTube capability keys remain false.
+The exact-map regression is `tests/peertube-capability-activation.php`.
+
+This qualification is a development checkpoint, not the 2.0 release gate. Next
+integrate the qualified R45/R46 feature line into `develop-2.0`, then run the full
+RC1 package/upgrade/WordPress-compliance matrix on the exact integration commit.
+The RC filesystem audit must preserve the WordPress.org-approved 1.0 confinement
+model: PeerTube staging/managed outputs stay beneath WordPress uploads, arbitrary
+stored paths never become deletion authority, and WordPress file/attachment
+lifecycle APIs remain authoritative at destructive boundaries.

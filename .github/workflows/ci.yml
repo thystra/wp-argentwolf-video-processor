@@ -33,6 +33,7 @@ jobs:
             echo "Invalid plugin version: ${VERSION}" >&2
             exit 1
           fi
+          bash build/validate-version.sh "${VERSION}"
           echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
 
       - name: Verify CI toolchain image
@@ -43,10 +44,52 @@ jobs:
 
       - name: Run tests
         run: |
+          bash tests/version-validator.sh
+          php tests/version-policy.php
           php tests/model-persistence.php
+          php tests/video-destination-publication-plan.php
+          php tests/video-publishing-defaults.php
+          php tests/video-publishing-admin-boundary.php
+          php tests/peertube-publication-catalog.php
+          php tests/peertube-publication-editor.php
+          php tests/peertube-publication-editor-rest.php
+          php tests/editorial-publish-validator.php
+          php tests/editorial-publish-gate.php
+          php tests/peertube-publication-lifecycle.php
+          php tests/peertube-publication-synchronizer.php
+          php tests/peertube-publication-manifest.php
+          php tests/peertube-publication-execution.php
+          php tests/peertube-publication-staging.php
+          php tests/peertube-publication-task-coordinator.php
+          php tests/video-serving-authority.php
+          php tests/video-serving-cutover.php
+          php tests/local-retention-policy.php
+          php tests/wordpress-source-file.php
+          php tests/local-retention-service.php
+          php tests/local-retention-admin.php
+          php tests/peertube-migration-plan.php
+          php tests/peertube-migration-execution.php
+          php tests/peertube-migration-planner.php
+          php tests/peertube-migration-executor.php
+          php tests/peertube-migration-admin.php
+          php tests/video-block-editor-service.php
+          php tests/video-block-editor-rest.php
+          php tests/video-block.php
+          php tests/task-repository.php
+          php tests/peertube-upload-task-coordinator.php
+          php tests/peertube-upload-failure-notification.php
+          php tests/peertube-task-worker.php
+          php tests/peertube-task-worker-drain.php
+          php tests/peertube-task-worker-launcher.php
+          php tests/peertube-task-cron-wiring.php
+          php tests/peertube-upload-policy.php
+          php tests/peertube-upload-runtime-budget.php
+          php tests/peertube-task-cli.php
           php tests/backend-local.php
+          php tests/peertube-capability-activation.php
           php tests/peertube-connection-foundation.php
           php tests/peertube-http-api.php
+          php tests/peertube-stream-upload-http.php
           php tests/atomic-option-cas.php
           AWVP_ATOMIC_MODERN_AUTOLOAD=1 php tests/atomic-option-cas.php
           php tests/atomic-option-planning.php
@@ -69,6 +112,7 @@ jobs:
           php tests/peertube-token-lifecycle-service.php
           AWVP_ATOMIC_MODERN_AUTOLOAD=1 php tests/peertube-token-lifecycle-service.php
           php tests/peertube-staged-source-identity.php
+          php tests/peertube-upload-slice.php
           php tests/peertube-staged-upload-state-machine.php
           php tests/peertube-staged-upload-guard.php
           php tests/peertube-staged-upload-boundary.php
@@ -92,6 +136,10 @@ jobs:
           bash -n tests/integration/peertube-token-lifecycle-smoke.sh
           bash -n tests/integration/peertube-staged-upload-smoke.sh
           bash -n tests/integration/peertube-remote-asset-reconciliation-smoke.sh
+          bash -n tests/integration/peertube-task-cli-smoke.sh
+          bash -n tests/integration/peertube-task-cli-drain-smoke.sh
+          bash -n tests/integration/peertube-task-cli-indeterminate-smoke.sh
+          bash -n tests/integration/peertube-task-cron-wiring-smoke.sh
           php tests/run.php
           php tests/storage-boundary.php
           php -d open_basedir="${GITHUB_WORKSPACE}:/tmp" tests/open-basedir.php
@@ -101,6 +149,7 @@ jobs:
           php tests/ffmpeg-integration.php
           bash tests/vendor-fetch.sh
           node --check assets/js/argent-video-player.js
+          node --check blocks/video/index.js
 
       - name: Check whitespace errors
         run: git diff --check
@@ -120,6 +169,9 @@ jobs:
           grep -qx 'argentwolf-video-processor/argentwolf-video-processor.php' "${MANIFEST}"
           grep -qx 'argentwolf-video-processor/assets/vendor/hls.min.js' "${MANIFEST}"
           grep -qx 'argentwolf-video-processor/assets/vendor/hls.LICENSE' "${MANIFEST}"
+          grep -qx 'argentwolf-video-processor/blocks/video/block.json' "${MANIFEST}"
+          grep -qx 'argentwolf-video-processor/blocks/video/index.js' "${MANIFEST}"
+          grep -qx 'argentwolf-video-processor/blocks/video/index.asset.php' "${MANIFEST}"
           ! grep -qx 'argentwolf-video-processor/assets/vendor/hls.VERSION' "${MANIFEST}"
           ! grep -qx 'argentwolf-video-processor/assets/vendor/hls.SHA256' "${MANIFEST}"
           ! grep -Eq '/(AGENTS|ARCHITECTURE|TODO|tests|build|ops|\.github)' "${MANIFEST}"

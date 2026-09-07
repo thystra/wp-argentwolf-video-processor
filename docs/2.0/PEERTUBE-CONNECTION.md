@@ -1430,3 +1430,30 @@ internal code/tests; it cannot be reached from the settings page, REST, AJAX, WP
 cron, or a worker in this checkpoint. Near-expiry access/refresh credentials stop the
 executor before it claims or transmits an upload request, leaving token refresh to the
 existing explicit R41 lifecycle.
+
+### R45 operational upload policy on the connection settings page
+
+The nine R38-R41 connection/lifecycle `admin_post` actions remain the complete
+credential/connection mutation surface. R45 adds a separate tenth authenticated
+settings action for **upload segmentation policy only**. It requires
+`manage_options`, a backend-scoped nonce, the exact active PeerTube backend ID,
+and a canonical integer `chunk_mib` in the range 0–8192. The default is 128 MiB;
+`0` means all remaining staged bytes in one streamed resumable segment.
+
+Saving this policy does not call PeerTube, create/claim a task, launch a worker,
+or transfer media. The settings page therefore remains a connection/lifecycle and
+operational-configuration surface, not an upload trigger. The current R45 media
+execution boundary is the separate explicit WP-CLI task worker. `--once` retains
+the one-task boundary, while R45.4b3 adds bounded `--drain` execution for one
+logical operation. The detached launcher uses `--drain`; R45.5 wires it to the existing
+five-minute AWVP dispatch event only. The WP-Cron callback performs the due/stale
+task probe and detached process launch but never upload/reconciliation HTTP
+inline, and no administrator transfer-launch action is added. Safe-boundary
+process and streamed-request guards scale from one hour to six hours according
+to source/segment size; saving this settings form never launches transfer work.
+
+R45.4b4 does not add another connection-form or credential action. Failure mail
+is queued only from the already-claimed media task boundary and delivered later
+by `--drain` through WordPress `wp_mail()`. It resolves the operation initiator
+first and post author as fallback, uses only sanitized failure metadata, and does
+not contact PeerTube while sending the notification.

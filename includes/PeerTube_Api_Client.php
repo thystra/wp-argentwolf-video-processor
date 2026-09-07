@@ -14,7 +14,7 @@ namespace ArgentVideo;
  * ephemeral caller-owned values. This class performs no option writes and
  * never returns an unreviewed raw response object.
  */
-final class PeerTube_Api_Client implements PeerTube_Password_Grant_Api, PeerTube_Identity_Destination_Api, PeerTube_Token_Lifecycle_Api, PeerTube_Staged_Upload_Api, PeerTube_Remote_Reconciliation_Api
+final class PeerTube_Api_Client implements PeerTube_Password_Grant_Api, PeerTube_Identity_Destination_Api, PeerTube_Token_Lifecycle_Api, PeerTube_Staged_Upload_Api, PeerTube_Remote_Reconciliation_Api, PeerTube_Publication_Catalog_Api, PeerTube_Publication_Mutation_Api
 {
     private const CONFIG_PATH = '/api/v1/config';
     private const MAX_VERSION_BYTES = 64;
@@ -342,6 +342,37 @@ final class PeerTube_Api_Client implements PeerTube_Password_Grant_Api, PeerTube
     }
 
     /** @return array{ok:bool,data:array<string,mixed>|null,error:array<string,mixed>|null} */
+    public function upload_resumable_slice(
+        string $access_token,
+        string $session_id,
+        int $start,
+        int $total_bytes,
+        string $content_type,
+        PeerTube_Upload_Slice $slice
+    ): array {
+        $access_token = self::opaque_secret($access_token, self::MAX_SECRET_BYTES);
+        if ('' === $access_token || ! self::valid_upload_session_id($session_id)
+            || $start < 0 || $total_bytes < 1 || $start >= $total_bytes
+            || $slice->start() !== $start || $slice->bytes() < 1
+            || $start > PHP_INT_MAX - $slice->bytes() || $start + $slice->bytes() > $total_bytes
+            || 'video/mp4' !== $content_type) {
+            return self::failure(PeerTube_Api_Error::invalid_response('upload_slice_input_invalid'));
+        }
+
+        return self::upload_progress_projection(
+            $this->http->put_resumable_upload_slice(
+                $access_token,
+                $session_id,
+                $total_bytes,
+                $content_type,
+                $slice
+            ),
+            $total_bytes,
+            'upload_slice'
+        );
+    }
+
+    /** @return array{ok:bool,data:array<string,mixed>|null,error:array<string,mixed>|null} */
     public function probe_resumable_upload(string $access_token, string $session_id, int $total_bytes): array
     {
         $access_token = self::opaque_secret($access_token, self::MAX_SECRET_BYTES);
@@ -399,6 +430,131 @@ final class PeerTube_Api_Client implements PeerTube_Password_Grant_Api, PeerTube
             'channel_id'  => $channel_id,
             'embed_path'  => $embed_path,
             'is_live'     => false,
+        ));
+    }
+
+    /** @param array<string,mixed> $manifest @param array<string,mixed>|null $thumbnail */
+    public function update_publication(
+        string $access_token,
+        string $video_uuid,
+        array $manifest,
+        string $privacy_id,
+        ?array $thumbnail = null
+    ): array {
+        $access_token = self::opaque_secret($access_token, self::MAX_SECRET_BYTES);
+        $video_uuid = strtolower($video_uuid);
+        $manifest = PeerTube_Publication_Manifest::sanitize($manifest);
+        if ('' === $access_token || array() === $manifest
+            || 1 !== preg_match('/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/D', $video_uuid)
+            || ! in_array($privacy_id, array('1','2','3','4'), true)) {
+            return self::failure(PeerTube_Api_Error::invalid_response('publication_update_input_invalid'));
+        }
+        $comments = array('enabled'=>1,'disabled'=>2,'approval_required'=>3);
+        $flags = ($manifest['moderation']['violent'] ? 1 : 0) | ($manifest['moderation']['sexually_explicit'] ? 2 : 0);
+        $fields = array(
+            'name'=>(string)$manifest['title'],
+            'description'=>(string)$manifest['description_markdown'],
+            'channelId'=>(int)$manifest['channel_id'],
+            'privacy'=>(int)$privacy_id,
+            'support'=>(string)$manifest['support_markdown'],
+            'commentsPolicy'=>$comments[$manifest['comments_policy']],
+            'downloadEnabled'=>(bool)$manifest['download_enabled'],
+            'nsfw'=>(bool)$manifest['moderation']['sensitive'],
+            'nsfwFlags'=>$flags,
+            'nsfwSummary'=>(string)$manifest['moderation']['reason'],
+        );
+        if ('' !== $manifest['licence_id']) $fields['licence']=(int)$manifest['licence_id'];
+        if ('' !== $manifest['category_id']) $fields['category']=(int)$manifest['category_id'];
+        if ('' !== $manifest['language']) $fields['language']=(string)$manifest['language'];
+        if ('' !== $manifest['originally_published_at']) $fields['originallyPublishedAt']=(string)$manifest['originally_published_at'];
+        if ([] !== $manifest['tags']) $fields['tags']=$manifest['tags'];
+        $raw = $this->http->put_video_publication($access_token, $video_uuid, $fields, $thumbnail);
+        if (true !== ($raw['ok'] ?? null) || 204 !== ($raw['http_status'] ?? null)) {
+            return self::failure(self::transport_error_from_http($raw, 'publication_update'));
+        }
+        return self::success(array('updated'=>true));
+    }
+
+    public function update_privacy(string $access_token, string $video_uuid, string $privacy_id): array
+    {
+        $access_token = self::opaque_secret($access_token, self::MAX_SECRET_BYTES);
+        $video_uuid = strtolower($video_uuid);
+        if ('' === $access_token || ! in_array($privacy_id,array('1','2','3','4'),true)
+            || 1 !== preg_match('/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/D',$video_uuid)) {
+            return self::failure(PeerTube_Api_Error::invalid_response('privacy_update_input_invalid'));
+        }
+        $raw=$this->http->put_video_privacy($access_token,$video_uuid,(int)$privacy_id);
+        if (true !== ($raw['ok'] ?? null) || 204 !== ($raw['http_status'] ?? null)) {
+            return self::failure(self::transport_error_from_http($raw, 'privacy_update'));
+        }
+        return self::success(array('updated'=>true));
+    }
+
+    /**
+     * Discover read-only publication choices for the authenticated local account.
+     *
+     * Only /users/me receives the bearer. Owned channel listing and provider
+     * vocabularies/configuration remain public requests.
+     *
+     * @return array{ok:bool,data:array<string,mixed>|null,error:array<string,mixed>|null}
+     */
+    public function publication_catalog(string $access_token): array
+    {
+        if ('' === self::opaque_secret($access_token, self::MAX_SECRET_BYTES)) {
+            return self::failure(PeerTube_Api_Error::invalid_response('publication_catalog_token_invalid'));
+        }
+
+        $identity_channels = $this->owned_channels($access_token);
+        if (! $identity_channels['ok']) {
+            return $identity_channels;
+        }
+
+        $config = self::success_object($this->http->get(self::CONFIG_PATH), 200, 'publication_config');
+        if (! $config['ok']) {
+            return $config;
+        }
+        $server_version = self::server_version($config['data']['serverVersion'] ?? null);
+        if ('' === $server_version) {
+            return self::failure(PeerTube_Api_Error::invalid_response('publication_version_invalid', 200));
+        }
+
+        $vocabularies = array();
+        foreach (array('privacies','licences','categories','languages') as $kind) {
+            $decoded = self::success_object(
+                $this->http->get_publication_vocabulary($kind),
+                200,
+                'publication_' . $kind
+            );
+            if (! $decoded['ok']) {
+                return $decoded;
+            }
+            $normalized = 'languages' === $kind
+                ? self::language_dictionary($decoded['data'])
+                : self::numeric_dictionary($decoded['data']);
+            if (null === $normalized) {
+                return self::failure(PeerTube_Api_Error::invalid_response('publication_' . $kind . '_shape_invalid', 200));
+            }
+            $vocabularies[$kind] = $normalized;
+        }
+
+        $nsfw_flags = null;
+        $flag_settings = self::object($config['data']['nsfwFlagsSettings'] ?? null);
+        if (array_key_exists('enabled', $flag_settings) && is_bool($flag_settings['enabled'])) {
+            $nsfw_flags = $flag_settings['enabled'];
+        }
+
+        return self::success(array(
+            'server_version' => $server_version,
+            'channels'       => $identity_channels['data']['channels'],
+            'privacies'      => $vocabularies['privacies'],
+            'licences'       => $vocabularies['licences'],
+            'categories'     => $vocabularies['categories'],
+            'languages'      => $vocabularies['languages'],
+            'capabilities'   => array(
+                'sensitive_content' => true,
+                'sensitive_flags'   => $nsfw_flags,
+                'password_privacy' => array_key_exists('5', $vocabularies['privacies']),
+            ),
         ));
     }
 
@@ -746,6 +902,46 @@ final class PeerTube_Api_Client implements PeerTube_Password_Grant_Api, PeerTube
         return '' !== self::strict_text($value, 120);
     }
 
+    /** @return array<string,string>|null */
+    private static function numeric_dictionary(array $value): ?array
+    {
+        if (array_is_list($value) || count($value) > PeerTube_Publication_Catalog::MAX_VOCABULARY_ITEMS) {
+            return null;
+        }
+        $out = array();
+        foreach ($value as $key => $label) {
+            $id = self::canonical_decimal_id($key);
+            $text = self::strict_text($label, PeerTube_Publication_Catalog::MAX_LABEL_CHARACTERS);
+            if ('' === $id || '' === $text || isset($out[$id])) {
+                return null;
+            }
+            $out[$id] = $text;
+        }
+        ksort($out, SORT_NATURAL);
+        return $out;
+    }
+
+    /** @return array<string,string>|null */
+    private static function language_dictionary(array $value): ?array
+    {
+        if (array_is_list($value) || count($value) > PeerTube_Publication_Catalog::MAX_VOCABULARY_ITEMS) {
+            return null;
+        }
+        $out = array();
+        foreach ($value as $key => $label) {
+            if (! is_string($key) || 1 !== preg_match('/^(?:_[a-z0-9_-]{1,34}|[A-Za-z0-9][A-Za-z0-9_-]{0,34})$/D', $key)) {
+                return null;
+            }
+            $text = self::strict_text($label, PeerTube_Publication_Catalog::MAX_LABEL_CHARACTERS);
+            if ('' === $text || isset($out[$key])) {
+                return null;
+            }
+            $out[$key] = $text;
+        }
+        ksort($out, SORT_STRING);
+        return $out;
+    }
+
     private static function server_version(mixed $value): string
     {
         if (
@@ -871,7 +1067,18 @@ final class PeerTube_Api_Client implements PeerTube_Password_Grant_Api, PeerTube
         return $received_at + $seconds;
     }
 
-    /** @param array<string, mixed> $data */
+    /** @param array<string,mixed> $raw @return array<string,mixed> */
+    private static function transport_error_from_http(array $raw, string $context): array
+    {
+        $error = $raw['error'] ?? null;
+        return is_array($error)
+            ? $error
+            : PeerTube_Api_Error::invalid_response(
+                $context . '_http_error',
+                is_int($raw['http_status'] ?? null) ? $raw['http_status'] : 0
+            );
+    }
+
     private static function success(array $data): array
     {
         return array('ok' => true, 'data' => $data, 'error' => null);

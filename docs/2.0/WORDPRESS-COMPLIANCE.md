@@ -623,7 +623,7 @@ change:
 This document is a project contract, not an immutable substitute for the
 current official documentation.
 
-### R43 executable code remains unreachable from WordPress request surfaces
+### R43 checkpoint: executable code was unreachable from WordPress request surfaces
 
 R43 class-loads the resumable transport/service so dependency-free and later Docker
 fixtures can exercise it, but `Plugin` and `PeerTube_Connection_Admin` do not
@@ -635,7 +635,7 @@ executable protocol primitives but does not yet grant a production WordPress pat
 authority to transmit media.
 
 
-### R44 persistence/read reconciliation remains unreachable from production request surfaces
+### R44 checkpoint: persistence/read reconciliation was unreachable from production request surfaces
 
 R44 adds a concrete relational `argent_video_remote_assets` repository and a
 bounded read-only PeerTube video-status client/service, but no tenth PeerTube
@@ -649,3 +649,197 @@ The isolated integration fixture may invoke the class directly from a fresh
 WP-CLI process solely to qualify persistence/restart boundaries. Product
 capabilities remain false for staged ingest, server push, and PeerTube processing
 until a later tranche explicitly wires, discloses, and qualifies those surfaces.
+
+### R45 WordPress runtime and streamed-HTTP boundary
+
+R45 introduces one explicit production runtime surface for staged PeerTube work:
+`wp argent-video peertube-task-worker`. `--once` retains the qualified one-task
+boundary and R45.4b3 adds a bounded `--drain` mode. The command is WP-CLI-only and
+owns no browser/admin/AJAX/REST hook. `--drain` may make multiple lock-token-guarded
+claims, but only for one logical operation's exact immediately-runnable task and
+deterministic handoff (plus R45.4b4 notification delivery); it never wanders into
+unrelated upload work.
+R45.5 reuses the existing WordPress five-minute recurring event rather than
+creating a second scheduler. The legacy FFmpeg dispatcher remains one callback,
+and `PeerTube_Task_Worker_Launcher::launch()` is registered as a second callback.
+That PeerTube callback performs only due/stale task detection and detached
+`--drain --quiet` launch; the R43 upload service, R44 reconciliation service,
+coordinator, and worker remain WP-CLI-only. No administrator transfer-launch
+action is added.
+
+The PeerTube Connection settings page does gain one `manage_options` + nonce
+protected POST for non-secret upload-segment policy. It accepts only the exact
+canonical backend ID and canonical integer 0–8192, updates only the active
+backend's non-autoloaded policy option, and performs no remote request or media
+transfer. Page GET remains read-only with respect to PeerTube/network state.
+
+Policy-sized upload bodies are streamed through the WordPress HTTP API rather
+than bypassing it with a standalone cURL request. `wp_safe_remote_request()`
+retains the project's URL/origin validation and response limits. For the exact
+resumable PUT only, a temporary `http_api_curl` callback configures cURL upload
+mode, exact input length, and a read callback backed by the already-confined
+`PeerTube_Upload_Slice`; the callback is always removed afterward. If WordPress
+cannot provide the cURL transport primitives required for this streamed request,
+the upload fails closed instead of materializing a large PHP body or silently
+using a different transport contract.
+
+The staged source continues to live under the plugin-owned uploads boundary.
+R45.4b3's safe-boundary runtime budget is not a PHP execution-time override or
+an in-browser long request. The detached WP-CLI process computes a one-hour to
+six-hour budget from staged-source bytes and checks it only between durable
+remote-request transitions. Streamed PUT timeout uses the same size-derived
+bound; the worker never sleeps through a future `run_after`.
+
+R45 streaming is read-only with respect to that file; no source cleanup,
+publication/privacy mutation, remote delete, or retention action is gained here.
+R45.4b4 calls WordPress `wp_mail()` only from its separately claimed durable
+notification task, never inline with browser/admin handling or the consequential
+upload request. Failed mail submission reschedules notification delivery only.
+Recipient resolution uses WordPress users, and the persisted/message diagnostic
+surface is bounded and sanitized; credential values, secret references,
+filesystem paths, and raw remote bodies are not copied into mail. PeerTube
+network I/O is not performed by notification delivery. PeerTube ingest/processing
+capabilities remain false pending later production scheduling qualification.
+
+
+## R46 WordPress publication boundary
+
+R46 may validate unresolved required PeerTube editorial decisions before a post
+publishes, but must not block publication merely because PeerTube is uploading or
+processing. Post-status callbacks may enqueue durable remote work only; they must
+not perform PeerTube HTTP inline. Scheduled timestamps alone do not authorize
+public remote reveal: the actual WordPress publication transition is the default
+authority. See `VIDEO-DESTINATION-PUBLICATION.md`.
+
+R46.2's Settings > AWVP Video Publishing mutation requires `manage_options` and a
+WordPress nonce, uses a non-autoloaded versioned option, refuses to overwrite
+malformed/future stored state, and performs no remote HTTP. Reading absent settings
+returns the local-safe defaults without writing an option.
+
+### R46.3b Gutenberg/REST implementation boundary
+
+The AWVP Video editor surface follows the WordPress block metadata path:
+`blocks/video/block.json` is canonical and `register_block_type()` is called
+server-side during `init`. The installable ZIP must include `block.json`,
+`index.js`, and the reviewed `index.asset.php` dependency manifest.
+
+The purpose-built `argentwolf-video-processor/v1/editor/videos` REST routes use
+explicit `permission_callback` checks. Attachment adoption requires `upload_files`
+plus `edit_post` on both the source attachment and origin post; existing AWVP Video
+reads/destination changes require `upload_files` plus object-aware `edit_post` on
+that video. The controller delegates durable model work to the bounded application
+service rather than writing post meta directly.
+
+These editor routes perform no PeerTube HTTP and do not save/publish the enclosing
+WordPress post, enqueue PeerTube tasks, refresh credentials, or alter remote
+visibility. Dynamic frontend rendering continues through the WordPress video
+shortcode/local Renderer path at this checkpoint.
+
+### R46.3c publication-editor REST boundary
+
+The publication wizard adds one nested route under the existing editor namespace:
+`/argentwolf-video-processor/v1/editor/videos/<video_id>/publication`, with GET and
+POST endpoint definitions and an explicit permission callback. Access requires
+`upload_files` plus object-aware `edit_post` on both the hidden AWVP Video and its
+original anchor post; when a plan references a thumbnail attachment, the caller
+must also be able to edit that attachment. The REST controller delegates all durable mutation to the bounded
+publication-editor application service.
+
+The route does not write post meta directly, perform PeerTube HTTP, access managed
+credentials, enqueue PeerTube work, save/publish the enclosing WordPress post, or
+alter frontend serving. The Gutenberg block continues to serialize only the stable
+`videoId`. Required publication-review confirmations are server-persisted inside
+the strict per-video plan, not inferred from WordPress post tags or site defaults.
+
+### R46.4 WordPress publication-validation boundary
+
+R46.4 keeps Gutenberg UX advisory and makes the server publication boundary
+authoritative. The block editor uses `core/editor` save locks only while the
+current edited status is `publish`, `future`, or `private` and an anchored AWVP
+Video has unresolved local editorial review. Draft/pending editing is not locked.
+
+For public REST-enabled post types, AWVP registers the dynamic
+`rest_pre_insert_<post_type>` filter and returns `WP_Error` with bounded issue data
+before a protected status can be persisted. The generic `wp_insert_post_data`
+filter is a non-REST defense-in-depth fallback: it retains a non-public status for
+new transitions and, for already publicational content, retains the prior live
+content rather than exposing unresolved edits. The gate does not publish and then
+revert content.
+
+The validation path performs no external HTTP and does not read PeerTube catalog
+freshness, secrets, task/upload/transcoding state, or remote readiness. It does
+not register a post-status transition callback, call `wp_publish_post()`, enqueue
+remote work, or mutate remote visibility. Scheduled-post execution and durable
+WordPress-authoritative PeerTube reveal remain a separate R46.5 lifecycle.
+
+### R46.5b detached publication mutation boundary
+
+WordPress post/plan hooks remain network-free. They may only write R46.5 lifecycle
+intent and enqueue a generic durable task. PeerTube publication HTTP is reachable
+only after WP-Cron's already-qualified callback launches the detached WP-CLI
+`--drain` worker. No REST/AJAX/admin-post action, editor save callback, or
+`transition_post_status` callback invokes the publication API directly.
+
+R46.5b adds publication task types only to the detached drain/launcher ownership
+set. The explicitly qualified `wp argent-video peertube-task-worker --once`
+diagnostic remains upload/reconciliation-only. The five-minute
+`argent_video_processor_dispatch` event still has exactly the existing two
+callbacks: legacy FFmpeg dispatch and the PeerTube detached launcher; no third
+publication scheduler is registered.
+
+Outbound metadata/privacy changes use the existing origin-bound WordPress safe HTTP
+transport and exact configured PeerTube origin. Dynamic video UUID, bearer, field
+names, scalar sizes, tag count, multipart size, and thumbnail path/MIME/bytes are
+bounded before `wp_safe_remote_request()`. Emergency re-private is a dedicated
+privacy-only projection through the same PUT boundary. No direct cURL publication
+request, arbitrary URL, browser-supplied bearer, or raw provider body is persisted.
+
+
+### R46.8 explicit migration action
+
+One-way migration execution is exposed only through the administrator Tools workflow and a capability/nonce-protected `admin-post.php` action. The first Start migration requires an explicit one-way acknowledgement. The request performs only bounded local validation/meta writes and calls the local publication synchronizer; it performs no provider HTTP in the browser/admin request. Resume uses the same per-video nonce and crash journal rather than creating a second migration. Ordinary Gutenberg destination editing is prevented from rolling back or retargeting a committed migration.
+
+### R46.9 physical source cleanup implementation
+
+R46.9 implements the destructive-retention checklist through the existing
+WordPress filesystem APIs. The source path is derived from the attachment and
+must remain beneath the resolved uploads directory without symlink traversal.
+The cleanup journal freezes a relative path and stat identity; the worker re-stats
+that identity immediately before `wp_delete_file()` and confirms absence. It
+never calls `wp_delete_attachment()` or `wp_delete_post()`. Managed AWVP copies
+are removed only through `Storage::remove_tree()` after its existing confinement
+checks, and their output metadata is cleared after the tree is absent.
+
+
+### R45.6 capability advertisement does not add a request surface
+
+The RC capability map now advertises the already-qualified AWVP-staged ingest,
+server-push transport, PeerTube processing/reconciliation, managed embed, and
+verified privacy-mutation paths. This is descriptive eligibility only: media and
+publication HTTP remain in the reviewed durable detached-worker boundaries. No
+direct-browser ingest, account-video selection, provider-native scheduling,
+backend source-retention guarantee, remote delete, new REST/AJAX/admin upload
+action, or cron-inline PeerTube HTTP is authorized by this change.
+
+
+### RC1 filesystem and Plugin Check regression gate
+
+Treat the WordPress.org-approved 1.0 file-handling model as the baseline rather
+than inventing a second PeerTube filesystem authority. The 2.0 RC audit must
+compare the delta from `v1.0.0`, including the confinement and Plugin Check
+remediation represented by commits `82f095bf40`, `937969c190`, and `5d43ea346c`.
+PeerTube staging and AWVP-managed derivatives must remain beneath the WordPress
+uploads tree, preferably the existing plugin-managed subtree; managed tree
+removal stays behind `Storage`, and physical source removal requires the
+attachment-derived confined path plus the R46.9 identity/revalidation boundary
+before `wp_delete_file()`. Deleting the attachment object itself, if ever
+intended, remains a WordPress attachment-lifecycle operation rather than a raw
+filesystem substitute. Database/journal path strings are evidence, never
+standalone deletion authority.
+
+Run the official WordPress Plugin Check against the exact canonical RC package.
+Resolve or explicitly document every new result against that approved 1.0
+baseline; do not weaken confinement, escaping, nonce/capability, or lifecycle
+boundaries merely to make a scanner quiet. The already-reviewed bundled hls.js
+model need not be reopened unless 2.0 changes its vendoring, licensing, source
+provenance, or runtime behavior.

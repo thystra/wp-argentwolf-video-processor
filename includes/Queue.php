@@ -45,6 +45,10 @@ final class Queue
             throw new RuntimeException('The attachment is not a video.');
         }
 
+        if (class_exists(Local_Retention_Service::class) && Local_Retention_Service::attachment_local_processing_blocked($attachment_id)) {
+            throw new RuntimeException('Local video processing is blocked by the current retention/cleanup state.');
+        }
+
         $source = (string) get_attached_file($attachment_id, true);
         if ('' === $source || ! is_file($source)) {
             throw new RuntimeException('The attachment source file does not exist.');

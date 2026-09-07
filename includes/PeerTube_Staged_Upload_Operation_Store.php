@@ -141,6 +141,25 @@ final class PeerTube_Staged_Upload_Operation_Store
     }
 
     /** @return array<string,mixed>|null */
+    public function find_by_intent_sha256(string $intent_sha256): ?array
+    {
+        if (1 !== preg_match('/^[a-f0-9]{64}$/D', $intent_sha256)) {
+            return null;
+        }
+        $snapshot = (new Atomic_Option_Store(self::OPTION, self::MAX_JOURNAL_BYTES))->snapshot();
+        $journal = $this->journal_from_snapshot($snapshot);
+        if (null === $journal) {
+            return null;
+        }
+        foreach ($journal['operations'] as $record) {
+            if (hash_equals($intent_sha256, (string) ($record['intent_sha256'] ?? ''))) {
+                return $record;
+            }
+        }
+        return null;
+    }
+
+    /** @return array<string,mixed>|null */
     public function get(string $operation_id): ?array
     {
         $probe = $this->probe($operation_id);

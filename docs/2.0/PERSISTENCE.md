@@ -206,11 +206,72 @@ This field does not by itself authorize deletion.
 
 ### `_argent_video_destination`
 
-Versioned structured snapshot containing the desired backend ID and
+Versioned structured snapshot containing the desired backend ID and optional
 backend-specific channel/destination ID.
 
-This is the destination selected for this video, not proof that a remote asset
-exists there.
+R46 makes the local backend an explicit canonical destination. For upgrade
+safety, **absence** of this metadata on an existing/legacy video resolves to
+WordPress/local and is never replaced by a later site-default change. A malformed
+present value is invalid and must not silently fall back to the current default.
+
+This is the selected final destination, not proof that a remote asset exists
+there and not proof that it is already the serving authority. A PeerTube-bound
+video may continue serving its local copy until the remote copy and intended
+publication state have been positively verified.
+
+### `_argent_video_peertube_publication_plan`
+
+R46 versioned editable per-video PeerTube publication intent. It is separate from
+WordPress post taxonomy and from the immutable upload-operation snapshot that a
+later tranche will freeze at dispatch time.
+
+The R46.1 plan contains backend/channel, title, Markdown description, up to five
+PeerTube tags, support selection/custom Markdown, opaque provider privacy/licence/
+category identifiers, language, optional thumbnail attachment, download policy, optional
+original-publication timestamp, comments policy,
+sensitive-content/moderation review, embed-domain policy, dispatch policy,
+release policy, and the controlling WordPress post ID.
+
+Required review state is explicit. In particular, an empty PeerTube tag list is
+valid only when `tags` review is true; WordPress tags do not make that decision.
+The initial release policy is `when_wordpress_published`, allowing early private
+remote preparation while making actual WordPress publication authoritative for
+later reveal.
+
+R46.1 does not enable site defaults, editor controls, migration, remote privacy
+mutation, or serving cutover.
+
+### `argent_video_processor_video_publishing_defaults`
+
+R46.2 non-autoloaded versioned option for **new-video authoring defaults only**.
+Absence is meaningful and resolves to WordPress/local without materializing the
+option. A present malformed/future value fails closed and must not be overwritten
+by the current settings UI.
+
+The record contains the site default destination, site PeerTube publication
+prefills, active-backend channel/provider overrides, and reusable support presets.
+It is never consulted to reinterpret an existing video's `_argent_video_destination`
+or a frozen publication operation. Sensitive-content defaults are prefills without
+a review flag. Backend/provider values are validated again against the concrete
+PeerTube backend before later remote dispatch.
+
+### `argent_video_processor_pt_catalog_<backend-hash>`
+
+R46.3a non-autoloaded, per-PeerTube-backend **last-known-good publication-choice
+cache**. The suffix is a bounded SHA-256-derived backend identifier; the value is
+a versioned non-secret projection containing the canonical backend/origin,
+managed-secret generation, server version, last successful refresh timestamp,
+stale state, authenticated account-owned channels, privacy/licence/category/
+language vocabularies, and conservative moderation/privacy capability signals.
+
+This option is observational cache state only. It stores no bearer/refresh token,
+secret reference, raw PeerTube response, or remote-video mutation authority. A
+failed/refused refresh preserves existing valid provider data and marks the
+snapshot stale instead of replacing it with an empty result. A catalog is
+context-current only for the same backend + canonical origin + secret generation.
+A present malformed or future-schema value is not overwritten by the current
+writer. Loading the publishing settings page reads this cache but does not perform
+PeerTube HTTP.
 
 ### `_argent_video_profile_snapshot`
 
@@ -1078,3 +1139,281 @@ remote deletion, automatic polling, task/worker execution, or production
 administrator/REST/AJAX/WP-CLI entry point. The staged source must remain confined
 and byte-identical during reconciliation. `ready_verified` is only the positive
 persistence/readiness boundary for a later cleanup/publication tranche.
+
+### R45 task-runtime and upload-policy persistence
+
+R45 implements the generic task table without overloading `argent_video_jobs`.
+The current task statuses are `queued`, `processing`, `complete`, and `failed`;
+a durable wait is represented by `queued` plus a future UTC `run_after`. Claims
+increment `attempts`, set a UUID `lock_token`, and move the row to `processing`.
+Completion, failure, and reschedule are conditional on both task ID and the exact
+current lock token so a stale worker cannot finalize a row after another worker
+has recovered/reclaimed it.
+
+The PeerTube consumer owns only these task types:
+
+- `peertube_upload_advance`;
+- `peertube_remote_reconcile`.
+
+Their v1 payload is intentionally minimal:
+
+```json
+{"version":1,"operation_id":"upload_..."}
+```
+
+The staged-upload journal remains authority for origin, destination, staged
+source, remote identity, retry/uncertainty state, and credential/backend binding.
+Task payloads do not duplicate those values and never contain access/refresh
+tokens or other long-lived credentials. Type-owned claim/recovery queries prevent
+a PeerTube worker from stealing a future task type owned by another subsystem.
+The `--once` CLI mode advances at most one task per invocation. R45.4b3 adds a
+separate bounded `--drain` mode: after the first global type-owned claim, it may
+reclaim only that exact immediately-runnable task, or the deterministic
+`peertube_remote_reconcile` handoff task for the same operation. It never selects
+unrelated queue work between segments, never sleeps through a future `run_after`,
+and the detached launcher foundation remains not yet cron-wired.
+
+R45 upload segmentation is persisted separately from backend identity as one
+non-secret, non-autoloaded option per backend:
+
+`argent_video_processor_peertube_upload_policy_<backend_id>`
+
+Version 1 has the exact record shape:
+
+```json
+{"version":1,"chunk_mib":128}
+```
+
+`chunk_mib` accepts 0–8192. Absence resolves to the 128 MiB default without a
+write; `0` means the complete remaining source in one resumable segment. A
+malformed or future-version record is never silently overwritten. The policy is
+operational tuning only and must not become backend descriptor, credential,
+capability, remote identity, or publication authority.
+
+R45 streamed requests may therefore journal a positive `request_bytes` value
+larger than the historical 1 MiB buffered-helper bound, but never larger than the
+remaining immutable staged source. Consequential state still advances only from
+positively classified upload evidence; a byte-bearing uncertain result remains
+`upload_indeterminate` and is not automatically replayed or probed by the R45
+task worker.
+
+
+R45.4b3 does not add a new persistent worker-loop status. Process yielding is an
+execution decision made only after the just-finished remote request has committed
+its durable queue/journal transition. An immediately requeued row remains
+`queued`; a future wait remains `queued` with future `run_after`. The process
+budget is derived from authoritative staged-source bytes at one minute per
+128 MiB, with a 3600-second floor and 21600-second ceiling. Reclaiming the exact
+row still increments normal durable `attempts` and obtains a new lock token.
+
+R45.4b4 uses the generic task table for durable upload-failure notification
+rather than sending email inline from the upload coordinator. The exact task type
+is `peertube_upload_failure_notify`; version 1 binds `operation_id`,
+`failure_revision`, and a bounded credential-free `failure` snapshot. Its
+idempotency key includes the operation ID plus authoritative operation
+`record_revision`, so repeated enqueue attempts for the same failure revision
+resolve to one logical task while a later distinct failure revision may notify
+again.
+
+The notification row has a five-attempt delivery ceiling. A rejected `wp_mail()`
+reschedules the same row with 5-minute, 15-minute, 1-hour, then 3-hour delays;
+exhaustion fails the notification row only and never replays upload bytes. The
+recipient, post title, current backend/operation identity, and administrator URL
+are re-derived at execution time. The duplicated snapshot is limited to
+failed/held phase and time, progress bytes, last request kind/start/size, safe
+AWVP/service/transport codes, HTTP status/retry-after, and bounded controlled
+reason/detail. Credentials,
+secret references, filesystem paths, and raw response bodies are forbidden.
+
+The upload coordinator attempts notification enqueue before finalizing a claimed
+human-attention failure so a normal durable transition leaves notification work
+behind. Task-table/database indeterminacy is still treated as indeterminacy; this
+is not claimed as a cross-row transactional exactly-once guarantee. Likewise,
+`wp_mail()` acceptance and task-row completion cannot be one transaction: a
+process loss after WordPress accepts the message but before the task completion
+commits can cause at-least-once redelivery. The message therefore includes the
+stable upload operation ID so duplicate diagnostic mail remains recognizable.
+
+R45.5 adds no new task status, table, or scheduler state. It reuses the existing
+five-minute AWVP recurring event as a wake-up for the detached PeerTube launcher.
+The launcher's repository probe considers only due queued rows or stale processing
+rows of the reviewed PeerTube task types; future `run_after` rows therefore do
+not cause useless worker processes. The probe remains advisory and the detached
+worker's lock-token claim/recovery remains authoritative.
+
+### R46.3b block binding and serialized identity
+
+The Gutenberg block `argentwolf-video-processor/video` serializes one integer
+`videoId`: the stable hidden AWVP Video post ID. It does not serialize a PeerTube
+URL/UUID, bearer, secret reference, channel vocabulary, current site default, or
+other provider state.
+
+When an existing WordPress video attachment is first adopted, AWVP persists the
+already-defined forward `_argent_video_attachment_id` on the AWVP Video and the
+attachment reverse `_argent_video_asset_id`. The reverse pointer is claimed only
+after establishing the candidate AWVP Video fields and is guarded by a short-lived,
+non-autoloaded option mutex named
+`argentwolf_video_processor_attachment_bind_lock_<sha256-attachment-id>`. The lock
+is concurrency control, not identity or publication authority; it is removed after
+the bounded bind attempt and a stale valid lock may be recovered.
+
+A valid existing reverse/forward pair wins repeated adoption regardless of the
+current site publishing-default record. The original `_argent_video_origin_post_id`
+is not rewritten when the video is reused elsewhere. A malformed present reverse
+pointer fails closed rather than being overwritten as an implicit repair.
+
+For a genuinely new identity, the current R46.2 site/backend destination default is
+resolved once and persisted as concrete `_argent_video_destination` state. Later
+default changes do not affect that stored video. Explicit editor selection of
+“site default” likewise resolves the current default at that moment; it is never
+stored as a live pointer. Remote destination state still does not grant serving
+cutover or PeerTube publication authority at R46.3b.
+
+### R46.3c publication-plan editor persistence
+
+R46.3c does not add a new publication-state record. It uses the existing
+`_argent_video_peertube_publication_plan` version-1 schema and the existing
+`_argent_video_destination` record. A successful editor save validates a complete
+plan through `PeerTube_Publication_Plan`, revalidates provider-backed IDs against
+the selected backend's R46.3a catalog, writes the plan, and synchronizes the
+reviewed channel into the concrete destination. Both values are read back and
+compared exactly; uncertainty is surfaced as `indeterminate` rather than treated as
+success.
+
+Malformed/future publication-plan state is preserved and cannot be implicitly
+replaced. Replacing a valid plan that belongs to a different PeerTube backend
+requires an explicit editor replacement acknowledgement. When only the concrete
+destination channel differs, the stored plan is preserved for editing but the
+projected draft clears `review.channel` so old review cannot silently authorize the
+mismatch.
+
+No provider catalog is copied into the publication plan. Catalog state remains
+non-authoritative observational cache; the plan stores only selected normalized
+values and explicit review. Support preset mode stores the stable preset ID with
+blank inline Markdown; a later consequential operation must resolve/freeze the
+preset value and revalidate provider vocabulary. No token, secret reference, raw
+remote response, task ID, or serving-cutover state is added by R46.3c.
+
+### R46.4 publication validation adds no persistence
+
+R46.4 introduces no new option, post-meta key, task row, journal, or remote-state
+record. Publication validation is a pure read/projection over candidate block
+content plus the already-qualified AWVP Video identity,
+`_argent_video_destination`, `_argent_video_origin_post_id`, and
+`_argent_video_peertube_publication_plan` records.
+
+The server gate does not persist a readiness bit because such a bit could become
+stale when a reviewed field, destination, block binding, or anchor changes. It
+recomputes editorial readiness at each protected publication attempt. Provider
+catalog freshness, tasks, upload/transcoding progress, and remote assets are not
+inputs to this projection and therefore cannot accidentally become publication
+authority. Reused blocks on non-origin posts are display references only for this
+validation decision.
+
+### `_argent_video_peertube_publication_lifecycle`
+
+R46.5a adds one strict version-1 local lifecycle record per PeerTube-bound AWVP
+Video. It contains a monotonically increasing semantic `generation`, backend and
+anchor identity, SHA-256 commitment to the strict reviewed publication plan,
+dispatch policy, current WordPress status bucket, upload/reveal authorization,
+the currently desired privacy, local task-pending bookkeeping, and update time.
+It contains no token, secret reference, raw provider response, remote identifier,
+source path, or serving authority.
+
+A non-published lifecycle record is valid only when `reveal_authorized=false` and
+its target privacy is PeerTube private (`3`). Only WordPress status `publish` may
+carry `reveal_authorized=true` and a reviewed non-private target. Semantic changes
+increment generation; queue bookkeeping and timestamps do not. The corresponding
+`peertube_publication_sync` task payload stores only schema version, generation,
+and the plan commitment. Old generations are retained as durable history but must
+be treated as superseded by the later R46.5b worker. R46.5a adds no periodic
+bootstrap/retry state: plan saves and actual WordPress status transitions are the
+only lifecycle derivation triggers, and pre-R46.5 reviewed plans stay inert until
+one of those events occurs.
+
+### `_argent_video_peertube_publication_execution`
+
+R46.5b adds one strict version-1 **non-secret execution journal** to the hidden
+AWVP Video. It binds backend/channel/anchor identity to the frozen
+`PeerTube_Publication_Manifest` and its SHA-256, the reused staged-upload operation
+ID, verified remote-asset ID/UUID once known, the last positively applied manifest,
+and an update timestamp. The manifest resolves reusable support presets to concrete
+Markdown and freezes thumbnail attachment identity as SHA-256 + byte length + MIME.
+It stores no bearer/refresh token, managed-secret reference, raw PeerTube response,
+filesystem source path, queue lock token, or serving-cutover authority.
+
+A changed reviewed plan may replace the frozen manifest only while backend,
+channel, and anchor identity remain the same. The staged-upload operation identity
+is preserved so metadata edits do not create another remote video. Once a remote
+asset is known, asset ID and UUID must be present together. The last applied
+manifest is retained to detect edits that would require an undocumented destructive
+provider clear; such transitions fail closed instead of claiming synchronization.
+
+### R46.5b publication execution lock and task ownership
+
+Remote publication advancement uses a non-autoloaded option lock named
+`argent_video_processor_publication_execution_lock_<sha256-video-id>`. Its strict
+record is version/token/creation time, live for 180 seconds. A malformed/future
+lock fails closed; a stale valid lock may be replaced. Release deletes only the
+exact token still owned by the worker. The lock serializes detached publication
+workers for one AWVP Video but does not lock the WordPress lifecycle writer, so a
+new generation may supersede authority while remote HTTP is in flight.
+
+`peertube_publication_sync` keeps the R46.5a payload: schema version, lifecycle
+generation, and plan SHA-256. After private upload handoff it creates
+`peertube_publication_finalize` with the same bounded payload, a deterministic
+video/generation/plan idempotency key, lower priority than upload/reconciliation,
+and a 720-claim horizon so long remote processing waits do not exhaust quickly.
+Both are owned by the detached drain/launcher set. The qualified `--once` set
+remains upload + reconciliation only.
+
+The existing staged-upload journal gains exact intent-hash lookup solely for crash
+recovery: if private-upload creation was durably committed but the publication
+execution record was not, replay can adopt that same valid operation. It does not
+make fuzzy/source-only matches and does not overwrite malformed journal state.
+The existing remote-asset row remains the durable remote identity; finalization
+updates its observed desired/actual privacy only after positive remote verification.
+### `_argent_video_serving_authority`
+
+R46.6 adds a strict version-1 non-secret serving evidence record on the hidden AWVP Video. It stores mode `peertube`, backend/channel/anchor identity, lifecycle generation, plan and applied-manifest SHA-256 commitments, remote-asset ID/UUID, exact verified embed URL, public/unlisted privacy ID, and verification time. Missing metadata means local serving. Malformed or stale-present metadata never falls through to another remote asset; the frontend resolves it as local.
+
+The record is only eligible after the durable remote-asset row is `ready`, desired and actual privacy agree with the current public/unlisted target, processing state is `1:published`, `last_verified_at` is present, and the execution's applied manifest equals its desired manifest. Draft/reschedule/private/internal or later-generation intent clears or invalidates remote serving without deleting local media. R46.9 remains the only cleanup/retention authority.
+
+### `_argent_video_peertube_migration_plan`
+
+R46.7 adds one strict version-1 **inert migration planning record** on each selected local AWVP Video. It binds the current video/attachment/anchor identity to a selected active PeerTube backend and owned channel, records `needs_review` or `ready`, bounded machine-readable issue codes, up to 20 WordPress tag suggestions, an optional strict `PeerTube_Publication_Plan` draft, and plan/update timestamps.
+
+The record is deliberately separate from `_argent_video_destination`, `_argent_video_peertube_publication_plan`, publication lifecycle/execution, and serving authority. Neither planning nor review writes those live fields or enqueues a task. A `ready` migration record therefore has no execution authority. Malformed/future migration metadata is preserved rather than overwritten implicitly. Replanning the same attachment/anchor/backend/channel is idempotent and preserves completed review; choosing a different target is an explicit replan that returns the item to Needs Review. R46.8 must independently revalidate source identity, target provider state, and review before promotion.
+
+
+### `_argent_video_peertube_migration_execution`
+
+R46.8 version-1 non-secret, crash-recoverable migration-promotion journal. It stores the AWVP Video ID, SHA-256 commitment to the exact `ready` `_argent_video_peertube_migration_plan`, backend/channel/anchor identity, `prepared|promoted|dispatched`, eventual publication lifecycle generation/task ID, and bounded local timestamps. It stores no credential, source path, upload-session identity, remote UUID, or serving URL.
+
+`prepared` is written before live promotion and is the one-way commitment point. While prepared, retries may recover an exact publication-plan write or exact destination write but must refuse conflicting live state. `promoted` means the exact reviewed plan and destination both read back correctly. `dispatched` means the existing publication synchronizer returned a durable generation/task identity. Malformed/future journal values are never overwritten implicitly. No rollback state exists in this schema; cleanup/retention remains R46.9.
+
+### R46.9 local retention policy and cleanup execution
+
+`_argent_video_local_retention_policy` is a strict version-1 non-secret per-video
+record with `mode`, `grace_days`, `confirmed_by`, and `confirmed_at`. Modes are
+`keep`, `delete_managed`, and `delete_all`. KEEP forces zero grace; destructive
+modes require 1-365 days. Changing a policy creates a new commitment hash, so an
+older queued cleanup task becomes stale rather than inheriting new authority.
+
+`_argent_video_local_retention_execution` is the durable audit journal for one
+cleanup attempt. It freezes video/attachment identity, policy hash, serving-
+authority hash/generation, plan and manifest commitments, remote asset/UUID,
+eligibility time, attempt number, and (for `delete_all`) the exact confined
+WordPress source identity: uploads-relative path plus size, device, inode, mtime,
+and ctime. Mutable fields track task ID, queued/running/terminal
+status, completion time, and a bounded local error. The generic task row is not
+sole deletion authority; the worker must re-read and match current policy,
+execution journal, the video's still-current attachment binding and exclusive
+attachment ownership, serving authority, source/master state, and local job state.
+
+`_argent_video_cleanup_state` remains a projection (`none`, `pending`, `eligible`,
+`running`, `complete`, `blocked`, `failed`) and cannot authorize deletion by
+itself. `_argent_video_source_state=removed` is written only after physical source
+absence is positively verified. `_argent_video_outputs` is removed only after
+the corresponding AWVP-managed storage tree has been removed. The attachment
+object and its identity metadata remain present after physical source deletion.

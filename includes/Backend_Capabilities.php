@@ -42,9 +42,14 @@ final class Backend_Capabilities
     }
 
     /**
-     * R40 exposes only the non-mutating managed-video delivery surface.
-     * Upload, processing, library, publication, retention, and delete claims
-     * stay false until their operational interfaces are implemented.
+     * Current PeerTube implementation capability map.
+     *
+     * The historical method name is retained because R40 introduced this map at
+     * backend activation. R45.6 advertises only the execution capabilities that
+     * now have a production-reachable, durable, no-replay path; R46.5 likewise
+     * makes verified privacy mutation an implemented publication capability.
+     * Browser-direct ingest, account-library selection, provider scheduling,
+     * backend-source-retention guarantees, and remote delete remain false.
      *
      * @return array<string, bool>
      */
@@ -52,14 +57,14 @@ final class Backend_Capabilities
     {
         return array(
             self::INGEST_WORDPRESS_ATTACHMENT => false,
-            self::INGEST_AWVP_STAGING          => false,
-            self::INGEST_SERVER_PUSH           => false,
+            self::INGEST_AWVP_STAGING          => true,
+            self::INGEST_SERVER_PUSH           => true,
             self::INGEST_DIRECT_BROWSER        => false,
-            self::PROCESSING_VIDEO             => false,
+            self::PROCESSING_VIDEO             => true,
             self::LIBRARY_ACCOUNT_VIDEOS       => false,
             self::ASSET_SELECT_EXISTING        => false,
             self::DELIVERY_EMBED               => true,
-            self::PUBLICATION_PRIVACY          => false,
+            self::PUBLICATION_PRIVACY          => true,
             self::PUBLICATION_SCHEDULE         => false,
             self::SOURCE_BACKEND_RETENTION     => false,
             self::ASSET_REMOTE_DELETE          => false,

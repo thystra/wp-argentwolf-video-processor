@@ -177,6 +177,15 @@ namespace ArgentVideo {
     require_once dirname(__DIR__) . '/includes/PeerTube_Token_Lifecycle_Api.php';
     require_once dirname(__DIR__) . '/includes/PeerTube_Staged_Upload_Api.php';
     require_once dirname(__DIR__) . '/includes/PeerTube_Remote_Reconciliation_Api.php';
+    require_once dirname(__DIR__) . '/includes/PeerTube_Publication_Catalog_Api.php';
+    require_once dirname(__DIR__) . '/includes/PeerTube_Publication_Mutation_Api.php';
+    require_once dirname(__DIR__) . '/includes/PeerTube_Publication_Catalog.php';
+    require_once dirname(__DIR__) . '/includes/Backend_Identity.php';
+    require_once dirname(__DIR__) . '/includes/Backend_Registry.php';
+    require_once dirname(__DIR__) . '/includes/PeerTube_Publication_Plan.php';
+    require_once dirname(__DIR__) . '/includes/PeerTube_Publication_Lifecycle.php';
+    require_once dirname(__DIR__) . '/includes/PeerTube_Publication_Manifest.php';
+    require_once dirname(__DIR__) . '/includes/PeerTube_Publication_Thumbnail.php';
     require_once dirname(__DIR__) . '/includes/PeerTube_Staged_Upload_State_Machine.php';
     require_once dirname(__DIR__) . '/includes/PeerTube_Api_Client.php';
 
@@ -249,6 +258,7 @@ namespace ArgentVideo {
     foreach (
         array(
             static fn (): array => $http->get_account_channels('user@remote.example', 0, 100),
+            static fn (): array => $http->get_publication_vocabulary('unreviewed-kind'),
             static fn (): array => $http->post_password_token(
                 array(
                     'client_id'     => 'client-id',
@@ -572,7 +582,22 @@ namespace ArgentVideo {
     $tls = $api->detect_instance();
     $assert(false === $tls['ok'], 'Transport error must fail detection.');
     $assert('tls_error' === $tls['error']['status'], 'TLS transport error was not classified.');
-    $assert('' === $tls['error']['detail'], 'Transport error must not expose raw diagnostic text.');
+    $assert(
+        'TLS or certificate verification failed while contacting PeerTube.' === $tls['error']['detail'],
+        'TLS transport error did not expose only the controlled diagnostic summary.'
+    );
+
+
+    $timeout = PeerTube_Api_Error::transport(
+        new \WP_Error('http_request_failed', 'cURL error 28: Operation timed out after 60000 milliseconds with 0 bytes received')
+    );
+    $assert('transport_timeout' === $timeout['status'], 'Timeout transport error was not classified.');
+    $assert('curl_28' === $timeout['code'], 'Timeout cURL code was not reduced to its safe numeric classifier.');
+    $assert(
+        'The PeerTube request timed out before a definitive response was received; possible causes include a stalled or insufficient-throughput network path.' === $timeout['detail'],
+        'Timeout transport detail was not reduced to the controlled diagnostic summary.'
+    );
+    $assert(! str_contains(serialize($timeout), '60000'), 'Raw timeout diagnostic text escaped normalization.');
 
     $transport_secret_code = PeerTube_Api_Error::transport(
         new \WP_Error('access_token=transport-code-sentinel', 'Synthetic transport failure.')
@@ -1124,6 +1149,63 @@ namespace ArgentVideo {
         );
     }
 
+    // R46.3a: publication-choice discovery is bounded and sends the bearer only
+    // to the current-user identity endpoint. All provider vocabularies are public.
+    $before_bad_catalog_token = count($GLOBALS['awvp_http_requests']);
+    $bad_catalog_token = $api->publication_catalog("token\r\nInjected: yes");
+    $assert(false === $bad_catalog_token['ok'], 'Unsafe publication-catalog bearer was accepted.');
+    $assert('publication_catalog_token_invalid' === $bad_catalog_token['error']['code'], 'Unsafe publication-catalog bearer returned the wrong diagnostic.');
+    $assert($before_bad_catalog_token === count($GLOBALS['awvp_http_requests']), 'Unsafe publication-catalog bearer performed HTTP.');
+
+    $queue_identity();
+    $queue($response(200, json_encode(array('total'=>1,'data'=>array($channel(7))), JSON_THROW_ON_ERROR), array('Content-Type'=>'application/json')));
+    $queue($response(200, json_encode(array('serverVersion'=>'8.2.0','nsfwFlagsSettings'=>array('enabled'=>true)), JSON_THROW_ON_ERROR), array('Content-Type'=>'application/json')));
+    $queue($response(200, json_encode(array('1'=>'Public','2'=>'Unlisted','3'=>'Private','4'=>'Internal','5'=>'Password protected'), JSON_THROW_ON_ERROR), array('Content-Type'=>'application/json')));
+    $queue($response(200, json_encode(array('1'=>'Attribution','9'=>'All Rights Reserved'), JSON_THROW_ON_ERROR), array('Content-Type'=>'application/json')));
+    $queue($response(200, json_encode(array('1'=>'Music','15'=>'Science & Technology'), JSON_THROW_ON_ERROR), array('Content-Type'=>'application/json')));
+    $queue($response(200, json_encode(array('en'=>'English','fr'=>'French','_unknown'=>'Unknown'), JSON_THROW_ON_ERROR), array('Content-Type'=>'application/json')));
+    $before_publication = count($GLOBALS['awvp_http_requests']);
+    $publication = $api->publication_catalog($access_sentinel);
+    $assert(true === $publication['ok'], 'R46.3a publication catalog discovery failed.');
+    $assert(
+        array('server_version','channels','privacies','licences','categories','languages','capabilities') === array_keys($publication['data']),
+        'Publication catalog exposed an unreviewed top-level field.'
+    );
+    $assert('8.2.0' === $publication['data']['server_version'], 'Publication catalog version mismatch.');
+    $assert('7' === $publication['data']['channels'][0]['id'], 'Publication catalog channel mismatch.');
+    $assert('Private' === $publication['data']['privacies']['3'], 'Publication privacy vocabulary mismatch.');
+    $assert(true === $publication['data']['capabilities']['sensitive_flags'], 'NSFW flag capability was not projected.');
+    $assert(true === $publication['data']['capabilities']['password_privacy'], 'Password privacy discovery mismatch.');
+    $publication_requests = array_slice($GLOBALS['awvp_http_requests'], $before_publication);
+    $assert(7 === count($publication_requests), 'Publication catalog used an unexpected request count.');
+    $assert('https://video.example.org/api/v1/users/me' === $publication_requests[0]['url'], 'Publication catalog identity request mismatch.');
+    $assert('Bearer ' . $access_sentinel === $publication_requests[0]['args']['headers']['Authorization'], 'Publication identity request omitted bearer.');
+    foreach (array_slice($publication_requests, 1) as $public_request) {
+        $assert(! isset($public_request['args']['headers']['Authorization']), 'Publication public discovery leaked bearer state.');
+        $assert(! isset($public_request['args']['body']), 'Publication read-only discovery unexpectedly sent a body.');
+        $assert('GET' === $public_request['args']['method'], 'Publication discovery used a non-GET method.');
+    }
+    $assert(str_ends_with($publication_requests[2]['url'], '/api/v1/config'), 'Publication config request mismatch.');
+    $assert(str_ends_with($publication_requests[3]['url'], '/api/v1/videos/privacies'), 'Publication privacy request mismatch.');
+    $assert(str_ends_with($publication_requests[4]['url'], '/api/v1/videos/licences'), 'Publication licence request mismatch.');
+    $assert(str_ends_with($publication_requests[5]['url'], '/api/v1/videos/categories'), 'Publication category request mismatch.');
+    $assert(str_ends_with($publication_requests[6]['url'], '/api/v1/videos/languages'), 'Publication language request mismatch.');
+
+    // Provider dictionaries remain untrusted even though the endpoints are public.
+    // A malformed category label must fail immediately and must not continue into
+    // later discovery requests.
+    $queue_identity();
+    $queue($response(200, json_encode(array('total'=>0,'data'=>array()), JSON_THROW_ON_ERROR), array('Content-Type'=>'application/json')));
+    $queue($response(200, json_encode(array('serverVersion'=>'8.2.0'), JSON_THROW_ON_ERROR), array('Content-Type'=>'application/json')));
+    $queue($response(200, json_encode(array('1'=>'Public','5'=>'Password protected'), JSON_THROW_ON_ERROR), array('Content-Type'=>'application/json')));
+    $queue($response(200, json_encode(array('1'=>'Attribution'), JSON_THROW_ON_ERROR), array('Content-Type'=>'application/json')));
+    $queue($response(200, "{\"1\":\"Music\",\"2\":\"Bad\\nLabel\"}", array('Content-Type'=>'application/json')));
+    $before_bad_publication = count($GLOBALS['awvp_http_requests']);
+    $bad_publication = $api->publication_catalog($access_sentinel);
+    $assert(false === $bad_publication['ok'], 'Unsafe publication vocabulary label was accepted.');
+    $assert('publication_categories_shape_invalid' === $bad_publication['error']['code'], 'Unsafe publication vocabulary returned the wrong diagnostic.');
+    $assert($before_bad_publication + 6 === count($GLOBALS['awvp_http_requests']), 'Malformed category vocabulary continued into later provider endpoints.');
+
     $before_injected_path = count($GLOBALS['awvp_http_requests']);
     $fabricated_identity_rejected = false;
     try {
@@ -1623,6 +1705,56 @@ namespace ArgentVideo {
         && ! str_contains(serialize($missing_remote), 'not-found-canary'),
         'R44 remote-video 404 did not normalize to a bounded not-found result.'
     );
+
+    // R46.5b publication mutation: one exact authenticated multipart PUT.
+    $publication_manifest = PeerTube_Publication_Manifest::sanitize(array(
+        'version'=>1,'backend_id'=>'pt-primary','channel_id'=>'41','anchor_post_id'=>10,
+        'plan_sha256'=>str_repeat('a',64),'title'=>'Reviewed publication title',
+        'description_markdown'=>'Reviewed description','tags'=>array('one','two'),
+        'support_markdown'=>'Support this work','final_privacy_id'=>'1','licence_id'=>'2',
+        'category_id'=>'3','language'=>'en','thumbnail_attachment_id'=>0,'thumbnail_sha256'=>'',
+        'thumbnail_bytes'=>0,'thumbnail_mime'=>'','download_enabled'=>true,
+        'originally_published_at'=>'2026-09-07T10:00:00Z','comments_policy'=>'approval_required',
+        'moderation'=>array('reviewed'=>true,'sensitive'=>true,'reason'=>'Context note','violent'=>true,'sexually_explicit'=>false),
+    ));
+    $assert(array() !== $publication_manifest, 'R46.5b publication manifest fixture was invalid.');
+    $before_publication_put = count($GLOBALS['awvp_http_requests']);
+    $queue($response(204, '', array()));
+    $publication_put = $api->update_publication($remote_access, $remote_uuid, $publication_manifest, '1', null);
+    $assert(true === $publication_put['ok'], 'R46.5b publication PUT was not accepted.');
+    $assert($before_publication_put + 1 === count($GLOBALS['awvp_http_requests']), 'R46.5b publication mutation performed an unexpected request count.');
+    $publication_request = $GLOBALS['awvp_http_requests'][array_key_last($GLOBALS['awvp_http_requests'])];
+    $publication_body = (string)($publication_request['args']['body'] ?? '');
+    $assert(
+        'https://video.example.org/api/v1/videos/'.$remote_uuid === $publication_request['url']
+        && 'PUT' === ($publication_request['args']['method'] ?? '')
+        && 'Bearer '.$remote_access === ($publication_request['args']['headers']['Authorization'] ?? '')
+        && str_starts_with((string)($publication_request['args']['headers']['Content-Type'] ?? ''), 'multipart/form-data; boundary=')
+        && str_contains($publication_body, 'name="name"')
+        && str_contains($publication_body, 'Reviewed publication title')
+        && str_contains($publication_body, 'name="channelId"')
+        && str_contains($publication_body, "\r\n41\r\n")
+        && str_contains($publication_body, 'name="privacy"')
+        && str_contains($publication_body, 'name="tags[]"')
+        && str_contains($publication_body, 'name="commentsPolicy"'),
+        'R46.5b publication PUT escaped its reviewed multipart boundary.'
+    );
+    $assert(! str_contains($publication_body, 'refresh-token') && ! str_contains($publication_body, 'client-secret'), 'R46.5b publication body leaked unrelated secrets.');
+
+    // Emergency correction is privacy-only and cannot acquire metadata authority.
+    $before_privacy_put = count($GLOBALS['awvp_http_requests']);
+    $queue($response(204, '', array()));
+    $privacy_put = $api->update_privacy($remote_access, $remote_uuid, '3');
+    $assert(true === $privacy_put['ok'] && $before_privacy_put + 1 === count($GLOBALS['awvp_http_requests']), 'R46.5b privacy correction did not perform one exact PUT.');
+    $privacy_request = $GLOBALS['awvp_http_requests'][array_key_last($GLOBALS['awvp_http_requests'])];
+    $privacy_body = (string)($privacy_request['args']['body'] ?? '');
+    $assert('PUT' === ($privacy_request['args']['method'] ?? '') && str_contains($privacy_body, 'name="privacy"') && str_contains($privacy_body, "\r\n3\r\n"), 'R46.5b privacy-only PUT did not carry private privacy.');
+    foreach (array('name="name"','name="channelId"','name="tags[]"','name="description"','name="support"','name="thumbnailfile"') as $forbidden_part) {
+        $assert(! str_contains($privacy_body, $forbidden_part), 'Privacy-only correction acquired unrelated publication field authority: '.$forbidden_part);
+    }
+    $before_privacy_five = count($GLOBALS['awvp_http_requests']);
+    $privacy_five = $api->update_privacy($remote_access, $remote_uuid, '5');
+    $assert(false === $privacy_five['ok'] && $before_privacy_five === count($GLOBALS['awvp_http_requests']), 'Unsupported password privacy performed HTTP.');
 
     $dev_http = new PeerTube_Http_Client('http://127.0.0.1:9000');
     $dev_api = new PeerTube_Api_Client($dev_http);

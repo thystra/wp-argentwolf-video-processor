@@ -286,7 +286,186 @@ are durable waits, not background polling. Published/ready is a positive readine
 observation; 404 and reviewed transcoding/storage failures are terminally recorded.
 Transient GET failures are safe to retry only on a later explicit invocation.
 
-This checkpoint does not publish a video, change PeerTube privacy, request
+R44 itself does not publish a video, change PeerTube privacy, request
 transcoding, delete or retain remote media, remove staging bytes, or expose a
 production upload/reconciliation action. PeerTube ingest/processing capability
-advertisement therefore remains unchanged and false.
+advertisement therefore remained unchanged and false at that checkpoint.
+
+## R45 explicit task execution and configurable streamed segments
+
+R45 connects the previously reviewed R43/R44 services to a narrow operational
+consumer without turning them into browser or cron work. The generic task table
+has a type-owned PeerTube worker and the explicit command:
+
+```bash
+wp argent-video peertube-task-worker --once
+```
+
+`--once` claims at most one eligible PeerTube task and performs at most one
+coordinator advancement. R45.4b3 adds `--drain`: after its first type-owned claim,
+the worker may reclaim only that exact immediately-runnable task and, after a
+successful upload handoff, the deterministic reconciliation task for the same
+operation. Processing/rate-limit waits are persisted for a later process; no
+worker sleeps or polls the remote service. An `upload_indeterminate` state is a
+hard stop to this automatic path. The qualified transport-drop matrix proves
+that a fresh worker process does not replay the byte-bearing PUT, issue an
+automatic zero-byte probe, create a replacement upload session, or begin remote
+reconciliation.
+
+R45.4 adds backend-scoped upload segmentation. The default is 128 MiB, valid
+values are 0–8192 MiB, and `0` means one segment containing the entire remaining
+source. This always uses `/api/v1/videos/upload-resumable`; the setting never
+selects PeerTube's non-resumable multipart endpoint. Suggested operator starting
+points are 32–128 MiB for Internet links, 128–512 MiB for reliable VPS/datacenter
+links, and `0` or 1024 MiB when WordPress and PeerTube are on the same host.
+Larger segments reduce request overhead but increase retransmission cost after a
+confirmed interruption.
+
+The byte-bearing path no longer materializes a policy-sized segment as a PHP
+string. `PeerTube_Upload_Slice` opens the exact confined staged source, proves the
+complete immutable source identity, hashes the selected slice, and retains the
+same descriptor while the WordPress HTTP cURL transport pulls bytes through a
+bounded read callback. `Content-Length` and `Content-Range` remain exact. The
+temporary cURL hook is scoped to the exact PUT and removed in a `finally`
+boundary; if the required cURL streaming primitives are unavailable the request
+fails closed. The existing safe-HTTP URL/origin validation remains in force.
+
+The authenticated PeerTube settings page may save the segment policy for an
+active backend, but that action transfers no media. R45.5 wires the reviewed
+detached task launcher to the existing five-minute AWVP dispatch event; cron
+performs only due/stale task detection plus detached `--drain` launch and never
+executes PeerTube media HTTP inline. R45.4b3's execution semantics remain
+unchanged: one minute is budgeted per 128 MiB of authoritative source/segment
+size, with a one-hour floor and six-hour ceiling. The process checks its deadline
+only between durable request boundaries; a byte-bearing PUT is never interrupted
+by the worker. The streamed HTTP timeout uses the same size-derived bound. At this
+R45.4/R45.5 checkpoint the adapter still did not advertise staged
+ingest/server-push/processing capability; R45.6 later activated only the
+separately qualified RC capability map described below.
+
+
+### R45.4b4 durable failed-upload notification boundary
+
+R45.4b4 adds a third generic PeerTube task type,
+`peertube_upload_failure_notify`. A terminal/held upload transition that requires
+human attention attempts to enqueue this notification **before** releasing the
+claimed upload/reconciliation task. Its deterministic idempotency domain is:
+
+```text
+sha256("awvp-task:v1:peertube_upload_failure_notify:" + operation_id + ":" + record_revision)
+```
+
+The version-1 payload binds the operation ID and failing operation record revision
+and duplicates only a bounded sanitized failure snapshot: phase/time, confirmed
+and source bytes, last request kind/start/size, AWVP/service status, safe
+transport/API code/classification, HTTP status/retry-after when available, and a
+controlled reason/detail. Access or
+refresh tokens, secret references, filesystem paths, and raw remote response
+bodies are forbidden.
+
+The notification task is owned by `--drain`, not the qualified diagnostic
+`--once` path. Delivery re-reads authoritative upload/post/user state, resolves
+the staged-operation `created_by` user first and current video `post_author` as a
+fallback, then calls `wp_mail()` with site/post/backend/state/progress and the
+sanitized failure details plus the AWVP PeerTube administrator link. A rejected
+or failed mail submission reschedules only the notification task (five total
+claims, delayed retries); it never reopens or replays the upload. Missing usable
+recipients fail only the notification task.
+
+Ordinary upload/reconciliation waits, stale-lock recovery, and safe runtime-budget
+yields do not enqueue failure mail. Transport failures are reduced to controlled
+classifications such as timeout, DNS, connection-refused/reset, or TLS failure.
+ R45.4b4 is qualified at exact commit
+`96fe661682accaa63e2860dc236cb9c1f4733950`, tree
+`7f938a05c446e000b0d45db76e03e703432a10dc`, Forgejo CI run 123, with retained
+real-WordPress notification/no-replay, drain, one-shot, and R44 matrices.
+
+### R45.5 recurring detached wake-up
+
+R45.5 reuses the already-existing `argent_video_processor_dispatch` five-minute
+WP-Cron event instead of creating a second PeerTube-specific schedule. `Plugin`
+registers `PeerTube_Task_Worker_Launcher::launch()` as a second callback on that
+event beside the legacy FFmpeg dispatcher. The launcher checks only due queued
+or stale processing rows for the three reviewed PeerTube task types and returns
+idle when no work is eligible. A positive probe can only start the detached
+`wp argent-video peertube-task-worker --drain --quiet` process; atomic claims in
+that process remain authoritative.
+
+The cron callback does not construct the R43 upload service, R44 reconciliation
+service, task coordinator, or task worker. Those remain behind the `WP_CLI`
+guard. No admin/AJAX/REST upload-launch action is introduced, and capability
+advertisement remained unchanged through R45.5; R45.6 later activated only the
+separately qualified map without adding a request surface.
+For example a cURL timeout retains `curl_28`, the bounded last-request size, and
+a controlled timeout summary rather than the raw cURL diagnostic. The message
+may therefore point toward a stalled or insufficient-throughput network path and
+suggest a smaller configured upload segment after the uncertain state is safely
+reconciled, without persisting arbitrary transport text.
+The existing `upload_indeterminate` no-replay fence remains authoritative.
+
+
+## R46 publication lifecycle refinement
+
+The R46 contract separates editorial metadata readiness from remote media
+readiness. PeerTube tags are independent of WordPress tags and require explicit
+review. Early or scheduled remote preparation stays private; the actual
+WordPress publication transition authorizes a durable visibility change. The
+WordPress/local copy remains playable until remote readiness and final intended
+privacy are verified, so PeerTube processing does not block post publication.
+See `VIDEO-DESTINATION-PUBLICATION.md`.
+
+R46.2 adds only local WordPress-side defaults/presets. It performs no PeerTube
+HTTP. Provider privacy/licence/category values and backend channel overrides are
+editor prefills and must be validated against the selected active PeerTube backend
+before a later dispatch checkpoint freezes an operation manifest.
+
+R46.3a supplies that later editor work with an explicit read-only publication
+catalog. An administrator refresh authenticates the configured local account,
+discovers only its owned channels, then reads the instance's public privacy,
+licence, category, language, version, and conservative moderation/privacy signals.
+Only the bounded non-secret projection is cached, including the canonical origin
+and managed-secret generation under which it was observed. The settings-page GET
+never refreshes implicitly; failed refreshes preserve the previous valid provider
+data and persistently mark it stale. This discovery boundary has no remote-video
+mutation authority.
+
+## R46.5b publication execution through the detached drain worker
+
+R46.5a's WordPress-authoritative lifecycle intent is qualified at commit `7b639d8`,
+tree `867a13ba23495bfacb7e2e065061c2ce34637842`, Forgejo CI run 131. R46.5b adds
+`peertube_publication_sync` and `peertube_publication_finalize` to the detached
+launcher/`--drain` owned set. `--once` deliberately remains the earlier
+upload/reconciliation diagnostic set; publication execution is not added to it.
+The existing five-minute launcher is reused and no additional schedule is created.
+
+Publication sync freezes reviewed provider metadata into a non-secret execution
+manifest and resolves the selected support preset and optional thumbnail identity.
+It stages/reuses a confined MP4 and creates or recovers the same resumable-upload
+operation for the selected channel. Resumable initialization remains hard-coded to
+privacy `3`, so remote processing can occur while WordPress is draft/future without
+premature reveal.
+
+Publication finalize waits on the existing staged-upload/reconciliation journal's
+`ready_verified` phase. It then revalidates the current lifecycle generation, plan
+commitment, destination/backend/channel, current managed-secret generation, fresh
+provider catalog, frozen manifest, and actual WordPress anchor status. The bounded
+PeerTube `PUT /api/v1/videos/{uuid}` applies only reviewed metadata and target
+privacy; a subsequent status GET must verify ready state, UUID, owned channel, and
+privacy. After any non-private PUT, WordPress is checked again and a lost reveal
+authority causes one immediate privacy-only correction to `3` plus verification.
+
+Mutation acceptance uncertainty is held rather than automatically replayed. Edits
+that would require an undocumented clear representation for already-applied
+provider values are refused. Even after a verified publication, frontend serving
+remains local until R46.6 explicitly verifies and switches serving authority.
+
+
+### R45.6 / RC capability activation
+
+The RC capability map now advertises the already-qualified AWVP-staged ingest,
+server-push transport, PeerTube processing/reconciliation, managed embed, and
+verified privacy-mutation paths. This is descriptive eligibility only: media and
+publication HTTP remain in the reviewed durable detached-worker boundaries. No
+direct-browser ingest, account-video selection, provider-native scheduling,
+backend source-retention guarantee, remote delete, new REST/AJAX/admin upload
+action, or cron-inline PeerTube HTTP is authorized by this change.

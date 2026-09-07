@@ -36,6 +36,16 @@ interface PeerTube_Staged_Upload_Api
     ): array;
 
     /** @return array{ok:bool,data:array<string,mixed>|null,error:array<string,mixed>|null} */
+    public function upload_resumable_slice(
+        string $access_token,
+        string $session_id,
+        int $start,
+        int $total_bytes,
+        string $content_type,
+        PeerTube_Upload_Slice $slice
+    ): array;
+
+    /** @return array{ok:bool,data:array<string,mixed>|null,error:array<string,mixed>|null} */
     public function probe_resumable_upload(
         string $access_token,
         string $session_id,

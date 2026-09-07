@@ -610,11 +610,73 @@ change.
 
 ## R44 remote reconciliation still does not grant backend capability
 
-The R44 relational repository and read-only remote reconciliation service are
-class-loaded for qualification but are not constructed by `Plugin`,
-`PeerTube_Connection_Admin`, the common backend adapter, or a task/worker path.
+At the R44 checkpoint, the relational repository and read-only remote
+reconciliation service were class-loaded for qualification but were not constructed
+by `Plugin`, `PeerTube_Connection_Admin`, the common backend adapter, or a
+task/worker path.
 `PeerTube_Backend_Adapter` therefore still does not advertise
 `ingest.awvp_staging`, `ingest.server_push`, or `processing.video`. The R44 service
 can only persist an already-positive R43 `remote_created` identity and observe its
 private/non-live PeerTube processing/readiness state; it cannot originate upload,
 publication, cleanup, retention, or delete operations.
+
+## R45 task execution and upload policy still do not grant backend capability
+
+R45 now constructs the R43/R44 operational services only behind the explicit
+WP-CLI task-worker boundary. This does not add upload/create/update/delete methods
+to the common `Backend_Adapter` interface, and `PeerTube_Backend_Adapter` still
+advertises staged ingest, server push, and video processing as false. The task
+worker is an execution consumer for already-authorized staged operations, not
+backend eligibility evidence.
+
+The backend-scoped `PeerTube_Upload_Policy_Store` is deliberately separate from
+the backend descriptor. Its `chunk_mib` value tunes resumable transfer
+segmentation only: default 128 MiB; 0–8192 MiB accepted; `0` means all remaining
+bytes in one streamed resumable segment. Updating that policy must not rewrite
+backend identity, origin, destination, secret generation, capability, or health
+state and must not start a transfer.
+
+A separate detached PeerTube task launcher also exists. R45.4b3 makes it invoke
+the bounded `--drain` worker mode, and R45.5 registers that launcher on the
+existing five-minute AWVP dispatch event. The cron callback performs only the
+due/stale task probe and detached launch; it does not call the backend adapter or
+PeerTube media APIs inline and is not exposed as an administrator transfer
+launch. Drain follows only one logical operation across immediate durable
+boundaries and uses size-derived one-hour-to-six-hour process/request guards.
+The drain path is qualified at exact commit
+`33bdd109da2f452afb2058ce0d044d10a729c669` / tree
+`a89963f3e9def2ba65bd43589c87e13a3f4a9b57` with Forgejo CI run 122 and its
+retained Docker matrices. R45.4b4 failure notification is qualified at
+`96fe661682accaa63e2860dc236cb9c1f4733950` / tree
+`7f938a05c446e000b0d45db76e03e703432a10dc` with CI run 123. Capability
+advertisement remained unchanged through R45.5; R45.6 later activated only the
+separately qualified RC capability map described below.
+
+
+## R46 destination/publication note
+
+Backend eligibility/defaults do not constitute an existing video's destination.
+R46 resolves missing legacy per-video destination metadata to `local`; future
+site defaults apply only when authoring a new video. Provider publication
+vocabularies (channel/privacy/licence/category and later capability-dependent
+fields) are resolved against the selected backend, while the per-video plan
+retains exact provider IDs. See `VIDEO-DESTINATION-PUBLICATION.md`.
+
+
+## R45.6 / RC capability activation
+
+After R45.5 made the reviewed upload/reconciliation worker production-reachable
+through the existing detached scheduler path, R45.6 may truthfully advertise
+`ingest.awvp_staging`, `ingest.server_push`, and `processing.video`. R46.5 also
+provides the separately qualified `publication.privacy` mutation/verification
+path, so the RC map advertises that capability as well. `delivery.embed` remains
+true from R40.
+
+The grant is exact, not a general PeerTube enable switch.
+`ingest.wordpress_attachment`, `ingest.direct_browser`,
+`library.account_videos`, `asset.select_existing`, `publication.schedule`,
+`source.backend_retention`, and `asset.remote_delete` remain false. Capability
+advertisement does not create a browser/admin upload action, move PeerTube HTTP
+into cron, add a common-adapter mutation method, or weaken task/journal/no-replay
+fences. `Backend_Registry::eligible()` still requires an active canonical
+descriptor and non-blocking credential health.

@@ -1,0 +1,16 @@
+GET /api/v1/oauth-clients/local auth=none body=none
+POST /api/v1/users/token scenario=success otp=none form=password
+GET /api/v1/users/me auth=bearer body=none
+GET /api/v1/accounts/awvp_service/video-channels start=0 count=100 sort=id auth=none body=none
+GET /api/v1/accounts/awvp_service/video-channels start=100 count=100 sort=id auth=none body=none
+GET /api/v1/users/me auth=bearer body=none
+GET /api/v1/accounts/awvp_service/video-channels start=0 count=100 sort=id auth=none body=none
+GET /api/v1/accounts/awvp_service/video-channels start=100 count=100 sort=id auth=none body=none
+GET /api/v1/users/me auth=bearer body=none
+GET /api/v1/accounts/awvp_service/video-channels start=0 count=100 sort=id auth=none body=none
+GET /api/v1/accounts/awvp_service/video-channels start=100 count=100 sort=id auth=none body=none
+GET /api/v1/users/me auth=bearer body=none
+GET /api/v1/accounts/awvp_service/video-channels start=0 count=100 sort=id auth=none body=none
+GET /api/v1/accounts/awvp_service/video-channels start=100 count=100 sort=id auth=none body=none
+POST /api/v1/videos/upload-resumable auth=bearer privacy=private bytes=16 body=metadata
+PUT /api/v1/videos/upload-resumable upload_id=r43fixture0001 auth=bearer range=bytes=0-15/16 bytes=16 body_sha256=9945ffa5f7037a4a5de4c330f9773720e5880ab4de9b6ed6a72ac19b47fc2867 outcome=transport-drop

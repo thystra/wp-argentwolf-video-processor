@@ -8,13 +8,14 @@ Stable tag: 1.0.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-Queues WordPress videos and creates local adaptive HLS and progressive derivatives with a detached FFmpeg worker.
+Processes WordPress video locally or publishes reviewed videos to configured PeerTube backends through detached workers.
 
 == Description ==
 
-ArgentWolf Video Processor preserves each original WordPress video attachment
-and creates smaller derivatives suitable for browser playback on connections
-ranging from slow DSL to broadband.
+ArgentWolf Video Processor keeps WordPress video sources by default and creates
+smaller derivatives suitable for browser playback on connections ranging from
+slow DSL to broadband. The 2.0 release candidate can also publish explicitly
+reviewed videos to a configured PeerTube backend.
 
 The default configuration creates:
 
@@ -23,9 +24,9 @@ The default configuration creates:
 * an H.264/AAC MP4 progressive fallback with fast-start indexing.
 
 Generated outputs strip embedded GPS, device, chapter, and other metadata by
-default and normalize rotation metadata into the encoded pixels. The original
-attachment is not modified. Generated derivatives are stored under the active
-WordPress uploads directory in the plugin-owned
+default and normalize rotation metadata into the encoded pixels. Local processing
+does not modify the original source. Generated derivatives are stored under the
+active WordPress uploads directory in the plugin-owned
 `argentwolf-video-processor/<attachment-id>/` subtree.
 
 Native HLS is used where the browser supports it. Other compatible browsers use
@@ -36,17 +37,16 @@ The plugin stores work in a database queue and processes one video at a time.
 Its recurring WordPress event only starts a detached WP-CLI worker; FFmpeg does
 not run inside the WP-Cron callback or an administrator web request.
 
-Stable 1.0 processing is local. The unreleased 2.0 development line adds an
-opt-in connection to an operator-configured PeerTube service. Public instance
-detection sends no credentials. A separate PeerTube Connection settings page
-lets authenticated administrators with `manage_options` explicitly start,
-advance, or reconcile a durable operation and authorize one password-grant
-attempt per explicit submission. Its actions are POST-only and nonce-protected;
-loading the page is read-only, and no AJAX, REST, WP-CLI, cron, activation, or
-automatic connection action is registered. Credential submission requires
-explicit authorization of the displayed external service. An allowlisted
-development-only plaintext HTTP origin requires a second transport-risk
-acknowledgement.
+The public WordPress.org 1.0 release processes video locally. The 2.0 release
+candidate retains that local destination and adds opt-in publishing to an
+operator-configured PeerTube service. Public instance detection sends no
+credentials. A separate PeerTube Connection settings page lets authenticated
+administrators with `manage_options` explicitly start, advance, or reconcile a
+durable connection operation and authorize one password-grant attempt per
+explicit submission. Its connection actions are POST-only and nonce-protected;
+loading the page is read-only. Credential submission requires explicit
+authorization of the displayed external service. An allowlisted development-only
+plaintext HTTP origin requires a second transport-risk acknowledgement.
 
 The authorized bootstrap sends the entered PeerTube username and password plus
 an optional six-digit OTP only to that exact origin. The password, OTP, and
@@ -73,8 +73,12 @@ shared hosting.
 
 = Are original videos deleted or changed? =
 
-No. The original WordPress attachment is preserved. Processing creates separate
-derivatives.
+Local processing does not modify the original source, and retention defaults to
+keeping all local copies. In the 2.0 release candidate an administrator may
+separately opt into delayed post-cutover cleanup. Deleting the physical WordPress
+source requires an explicit non-WordPress master-authority decision, a 1-365 day
+grace period, and current verified PeerTube serving; the WordPress attachment
+record itself is preserved.
 
 = Does metadata stripping sanitize the original? =
 
@@ -118,38 +122,43 @@ Automatic detached dispatch is unavailable. An operator may invoke
 
 = Does the plugin use an external service? =
 
-Stable 1.0 does not: video processing occurs on the WordPress server and the
-pinned hls.js runtime is served locally. The unreleased 2.0 development line can
-contact only an operator-configured PeerTube origin. Public instance detection
-sends no credentials. The explicitly administrator-authorized connection
-bootstrap exchanges an entered PeerTube username/password and optional OTP for
-reusable tokens at that same origin; it retains only authenticated-encrypted
-access/refresh tokens.
-Connection bootstrap sends no media, media metadata, or telemetry. Future
-opt-in upload features will send media and selected metadata to that service,
-whose operator terms and privacy policy apply. PeerTube is self-hostable
-software; the administrator must review the terms and privacy information
-published by the operator of the chosen instance.
+The public WordPress.org 1.0 release does not use a remote processing service:
+video processing occurs on the WordPress server and the pinned hls.js runtime is
+served locally. The 2.0 release candidate can contact only an
+operator-configured PeerTube origin. Public instance detection sends no
+credentials. The explicitly administrator-authorized connection bootstrap
+exchanges an entered PeerTube username/password and optional OTP for reusable
+tokens at that same origin; it retains only authenticated-encrypted
+access/refresh tokens. Connection bootstrap sends no media, media metadata, or
+telemetry. Videos explicitly configured for PeerTube may later send source or
+AWVP-managed media plus the reviewed publication metadata to that service from
+the detached worker. PeerTube is self-hostable software; the administrator must
+review the terms and privacy information published by the operator of the chosen
+instance.
 
 == Privacy ==
 
 The plugin creates derivative media files and stores queue state, processing
 status, output paths, and error information in the local WordPress installation.
 
-Generated derivatives strip source metadata when that setting is enabled. The
-original attachment remains unchanged and may retain its original metadata.
+Generated derivatives strip source metadata when that setting is enabled. Local
+processing leaves the source unchanged and it may retain its original metadata.
+If an administrator explicitly enables the 2.0 post-cutover `delete_all` retention
+policy, the physical source may later be deleted only after the documented
+master-authority, grace-period, serving, identity, and quiescence checks pass.
 
-The plugin contains no telemetry. Stable 1.0 sends no media or usage information
-to a remote processing service. Unreleased 2.0 public instance detection reads
-only public configuration from the exact operator-configured PeerTube origin.
-Its explicitly administrator-authorized bootstrap sends the entered PeerTube
-username/password and optional OTP only to that origin. The password, OTP, and
-transient local OAuth client response are not stored or reflected into the page,
-redirect, or notice; returned access/refresh tokens are stored
-authenticated-encrypted in a non-autoloaded server-side option. Bootstrap sends
-no media, media metadata, or telemetry. That operator can observe the requesting
-server network address and plugin/version User-Agent. Future opt-in uploads will
-send media and selected metadata to that configured service.
+The plugin contains no telemetry. The public WordPress.org 1.0 release sends no
+media or usage information to a remote processing service. The 2.0 release
+candidate reads public configuration only from the exact operator-configured
+PeerTube origin. Its explicitly administrator-authorized bootstrap sends the
+entered PeerTube username/password and optional OTP only to that origin. The
+password, OTP, and transient local OAuth client response are not stored or
+reflected into the page, redirect, or notice; returned access/refresh tokens are
+stored authenticated-encrypted in a non-autoloaded server-side option. Bootstrap
+sends no media, media metadata, or telemetry. Videos explicitly configured for
+PeerTube may send media and reviewed publication metadata to that configured
+service through the detached task worker. That operator can observe the
+requesting server network address and plugin/version User-Agent.
 
 Worker diagnostic history is stored locally in the WordPress database with bounded retention. Detached-process capture files are temporary and removed after their useful output has been persisted.
 
@@ -162,8 +171,8 @@ paths.
 
 The release bundles a pinned hls.js browser runtime under its Apache-2.0 license.
 
-PeerTube is optional, self-hostable video-platform software. The unreleased 2.0
-connection work targets an exact service origin selected by the administrator:
+PeerTube is optional, self-hostable video-platform software. The 2.0 release
+candidate targets an exact service origin selected by the administrator:
 https://joinpeertube.org/. Service terms, privacy practices, and data location
 are controlled by the operator of that selected instance.
 
@@ -173,11 +182,19 @@ The existing settings keys, queue table, attachment metadata, hook names, cron
 identifiers, Settings page slug, and `wp argent-video` command are retained for
 upgrade compatibility.
 
+This Forgejo release-candidate package identifies itself as `2.0.0-rc1` in the
+plugin header while `Stable tag: 1.0.0` deliberately continues to identify the
+public WordPress.org release. RC packages are not published to WordPress.org SVN.
+The Stable tag moves to `2.0.0` only when the final release is promoted.
+
 The public plugin directory and main-file basename change in version 0.3.0.
 Administrators upgrading from version 0.2.3 should use the normal WordPress
 plugin-update workflow and confirm the plugin remains active.
 
 == Upgrade Notice ==
+
+= 2.0.0-rc1 =
+Release candidate for controlled 2.0 validation. Keep WordPress.org production users on 1.0.0 until the final 2.0.0 release is published.
 
 = 1.0.0 =
 First stable WordPress.org release; no functional or runtime behavior changes from 0.3.3.
@@ -201,6 +218,11 @@ Renames the public plugin and package to ArgentWolf Video Processor and prepares
 the project for WordPress.org review while retaining existing data identifiers.
 
 == Changelog ==
+
+= 2.0.0-rc1 =
+* Begin the controlled 2.0 release-candidate line while WordPress.org Stable tag remains 1.0.0.
+* Add opt-in PeerTube connection, reviewed per-video publication, detached resumable upload/reconciliation, verified serving cutover, migration planning/promotion, and fail-closed post-cutover local retention.
+* Retain the local 1.x processing backend and existing WordPress data identifiers for upgrade compatibility.
 
 = 1.0.0 =
 * Promoted the WordPress.org-approved 0.3.3 codebase to the first stable 1.0.0 release.

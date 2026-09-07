@@ -2,8 +2,8 @@
 /**
  * Plugin Name: ArgentWolf Video Processor
  * Plugin URI: https://github.com/thystra/wp-argentwolf-video-processor
- * Description: Queues WordPress videos and creates adaptive and progressive streaming derivatives with a detached FFmpeg worker while preserving the original attachment.
- * Version: 1.0.0
+ * Description: Processes WordPress video locally or publishes reviewed videos to configured PeerTube backends through detached workers.
+ * Version: 2.0.0-rc1
  * Requires at least: 6.4
  * Requires PHP: 8.1
  * Author: Alan Johnson
@@ -19,7 +19,7 @@ if (! defined('ABSPATH')) {
     exit;
 }
 
-define('ARGENT_VIDEO_VERSION', '1.0.0');
+define('ARGENT_VIDEO_VERSION', '2.0.0-rc1');
 define('ARGENT_VIDEO_FILE', __FILE__);
 define('ARGENT_VIDEO_DIR', plugin_dir_path(__FILE__));
 define('ARGENT_VIDEO_URL', plugin_dir_url(__FILE__));
@@ -42,6 +42,10 @@ require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Identity_Destination_Api.php'
 require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Token_Lifecycle_Api.php';
 require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Staged_Upload_Api.php';
 require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Remote_Reconciliation_Api.php';
+require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Publication_Catalog_Api.php';
+require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Publication_Mutation_Api.php';
+require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Publication_Catalog.php';
+require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Publication_Thumbnail.php';
 require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Api_Client.php';
 require_once ARGENT_VIDEO_DIR . 'includes/Backend_Secret_Store.php';
 require_once ARGENT_VIDEO_DIR . 'includes/Backend_Secret_Crypto.php';
@@ -58,18 +62,62 @@ require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Backend_Activation_Service.ph
 require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Token_Lifecycle_Store.php';
 require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Token_Lifecycle_Service.php';
 require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Staged_Source_Identity.php';
+require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Upload_Slice.php';
+require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Upload_Runtime_Budget.php';
+require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Upload_Policy.php';
+require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Upload_Policy_Store.php';
 require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Staged_Upload_State_Machine.php';
 require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Staged_Upload_Guard.php';
 require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Staged_Upload_Operation_Store.php';
 require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Staged_Upload_Service.php';
 require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Remote_Asset_Store.php';
+require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Publication_Asset_Store.php';
 require_once ARGENT_VIDEO_DIR . 'includes/Remote_Asset_Repository.php';
 require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Remote_Asset_Reconciliation_Service.php';
 require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Connection_Admin_Actions.php';
 require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Connection_Admin_Service.php';
 require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Connection_Admin.php';
 require_once ARGENT_VIDEO_DIR . 'includes/Model_Activator.php';
+require_once ARGENT_VIDEO_DIR . 'includes/Task_Repository.php';
+require_once ARGENT_VIDEO_DIR . 'includes/Local_Retention_Policy.php';
+require_once ARGENT_VIDEO_DIR . 'includes/Local_Retention_Execution.php';
+require_once ARGENT_VIDEO_DIR . 'includes/WordPress_Source_File.php';
+require_once ARGENT_VIDEO_DIR . 'includes/Local_Retention_Service.php';
+require_once ARGENT_VIDEO_DIR . 'includes/Local_Retention_Admin.php';
+require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Upload_Failure_Notification.php';
+require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Upload_Task_Coordinator.php';
+require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Task_Worker.php';
+require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Task_Worker_Launcher.php';
 require_once ARGENT_VIDEO_DIR . 'includes/Video_Post_Type.php';
+require_once ARGENT_VIDEO_DIR . 'includes/Video_Destination.php';
+require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Publication_Plan.php';
+require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Migration_Plan.php';
+require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Migration_Execution.php';
+require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Publication_Lifecycle.php';
+require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Publication_Manifest.php';
+require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Publication_Execution.php';
+require_once ARGENT_VIDEO_DIR . 'includes/Video_Serving_Authority.php';
+require_once ARGENT_VIDEO_DIR . 'includes/Video_Serving_Resolver.php';
+require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Serving_Cutover_Service.php';
+require_once ARGENT_VIDEO_DIR . 'includes/Video_Serving_Service.php';
+require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Publication_Staging_Service.php';
+require_once ARGENT_VIDEO_DIR . 'includes/Video_Publishing_Defaults.php';
+require_once ARGENT_VIDEO_DIR . 'includes/Video_Publishing_Defaults_Store.php';
+require_once ARGENT_VIDEO_DIR . 'includes/Video_Block_Editor_Service.php';
+require_once ARGENT_VIDEO_DIR . 'includes/Video_Block_Editor_Rest.php';
+require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Publication_Editor_Service.php';
+require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Publication_Editor_Rest.php';
+require_once ARGENT_VIDEO_DIR . 'includes/Editorial_Publish_Validator.php';
+require_once ARGENT_VIDEO_DIR . 'includes/Editorial_Publish_Gate.php';
+require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Publication_Synchronizer.php';
+require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Publication_Task_Coordinator.php';
+require_once ARGENT_VIDEO_DIR . 'includes/Video_Block.php';
+require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Publication_Catalog_Store.php';
+require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Publication_Catalog_Service.php';
+require_once ARGENT_VIDEO_DIR . 'includes/Video_Publishing_Admin.php';
+require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Migration_Planner.php';
+require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Migration_Executor.php';
+require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Migration_Admin.php';
 require_once ARGENT_VIDEO_DIR . 'includes/Video_Meta.php';
 require_once ARGENT_VIDEO_DIR . 'includes/Activator.php';
 require_once ARGENT_VIDEO_DIR . 'includes/Job_Repository.php';

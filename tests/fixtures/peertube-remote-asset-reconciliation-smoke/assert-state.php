@@ -89,8 +89,8 @@ if (! is_file($source) || file_get_contents($source) !== $source_bytes) {
 
 $factory = new Backend_Adapter_Factory(new PeerTube_Backend_Adapter(new Managed_Backend_Secret_Store()));
 foreach (array(Backend_Capabilities::INGEST_AWVP_STAGING, Backend_Capabilities::INGEST_SERVER_PUSH, Backend_Capabilities::PROCESSING_VIDEO) as $capability) {
-    if ((new Backend_Registry())->eligible('r38-admin', $capability, $factory)) {
-        throw new RuntimeException('R44 prematurely enabled a production PeerTube ingest/processing capability.');
+    if (! (new Backend_Registry())->eligible('r38-admin', $capability, $factory)) {
+        throw new RuntimeException('R44/R45 regression lost an R45.6-qualified PeerTube ingest/processing capability.');
     }
 }
 

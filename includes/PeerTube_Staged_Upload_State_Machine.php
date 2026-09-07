@@ -21,6 +21,7 @@ final class PeerTube_Staged_Upload_State_Machine
 {
     public const VERSION = 2;
     public const MAX_UPLOAD_ATTEMPTS = 65535;
+    /** Legacy buffered-transport bound; R45 streamed requests are policy-sized. */
     public const MAX_CHUNK_BYTES = 1048576;
     public const PRIVATE_PRIVACY = 3;
 
@@ -328,7 +329,7 @@ final class PeerTube_Staged_Upload_State_Machine
             || ! is_int($record['upload_started_at'] ?? null) || $record['upload_started_at'] < 0
             || ! is_string($record['request_kind'] ?? null) || ! in_array($record['request_kind'], array(self::REQUEST_NONE, self::REQUEST_INIT, self::REQUEST_CHUNK), true)
             || ! is_int($record['request_start'] ?? null) || $record['request_start'] < 0
-            || ! is_int($record['request_bytes'] ?? null) || $record['request_bytes'] < 0 || $record['request_bytes'] > self::MAX_CHUNK_BYTES
+            || ! is_int($record['request_bytes'] ?? null) || $record['request_bytes'] < 0 || $record['request_bytes'] > $record['source']['bytes']
             || ! is_string($record['upload_session_id'] ?? null) || ('' !== $record['upload_session_id'] && '' === self::session_id($record['upload_session_id']))
             || ! is_int($record['confirmed_bytes'] ?? null) || $record['confirmed_bytes'] < 0 || $record['confirmed_bytes'] > $record['source']['bytes']
             || ! self::valid_remote_identity($record['remote_identity'] ?? null, true)
@@ -436,8 +437,10 @@ final class PeerTube_Staged_Upload_State_Machine
         }
         if (self::REQUEST_CHUNK !== $payload['request_kind'] || '' === $record['upload_session_id']) return false;
         $remaining = $record['source']['bytes'] - $record['confirmed_bytes'];
-        $expected = min(self::MAX_CHUNK_BYTES, $remaining);
-        return $remaining > 0 && $payload['request_start'] === $record['confirmed_bytes'] && $payload['request_bytes'] === $expected;
+        return $remaining > 0
+            && $payload['request_start'] === $record['confirmed_bytes']
+            && $payload['request_bytes'] > 0
+            && $payload['request_bytes'] <= $remaining;
     }
 
     /** @param array<string,mixed> $record */
