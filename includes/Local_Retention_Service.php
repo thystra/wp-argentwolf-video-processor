@@ -19,6 +19,7 @@ final class Local_Retention_Service
     public const STATUS_FAILED='failed';
     private const PRIORITY=130;
     private const MAX_ATTEMPTS=5;
+    private const MAX_ATTACHMENT_REFERENCES=20;
 
     public function __construct(private readonly Task_Repository $tasks,private readonly Video_Serving_Resolver $serving,private readonly Job_Repository $jobs){}
 
@@ -54,7 +55,7 @@ final class Local_Retention_Service
         $state=Video_Meta::sanitize_source_state(get_post_meta($video_id,Video_Meta::SOURCE_STATE,true));
         if(!in_array($state,array('present','verified_remote'),true))return self::schedule_result(self::REFUSED);
         $attachment_id=Video_Meta::sanitize_positive_id(get_post_meta($video_id,Video_Meta::ATTACHMENT_ID,true));
-        if($attachment_id<1)return self::schedule_result(self::REFUSED);
+        if($attachment_id<1||!self::video_context_valid($video_id,$attachment_id)||!self::attachment_exclusive_to_video($attachment_id,$video_id))return self::schedule_result(self::REFUSED);
         if($this->local_job_active($attachment_id))return self::schedule_result(self::REFUSED);
         $authority=Video_Serving_Authority::sanitize(get_post_meta($video_id,Video_Meta::SERVING_AUTHORITY,true));
         if(array()===$authority||''===$this->serving->peertube_embed_url($video_id))return self::schedule_result(self::REFUSED);
@@ -87,6 +88,7 @@ final class Local_Retention_Service
         if(array()===$policy||array()===$execution||!hash_equals($payload['policy_sha256'],Local_Retention_Policy::sha256($policy))||!hash_equals($payload['execution_sha256'],Local_Retention_Execution::immutable_sha256($execution))){
             return self::worker_result(self::STATUS_COMPLETE,$id,$type,$this->tasks->complete($id,$lock,$now),0,'stale');
         }
+        if(!self::video_context_valid($video,(int)$execution['attachment_id'])||!self::attachment_exclusive_to_video((int)$execution['attachment_id'],$video))return $this->block($id,$lock,$execution,$now,'AWVP Video or attachment ownership changed before cleanup.');
         if($now<(int)$execution['eligible_at'])return self::worker_result(self::STATUS_REQUEUED,$id,$type,$this->tasks->reschedule($id,$lock,(int)$execution['eligible_at'],'Retention grace period has not elapsed.',$now),(int)$execution['eligible_at'],'waiting');
         $master=Video_Meta::sanitize_master_authority(get_post_meta($video,Video_Meta::MASTER_AUTHORITY,true));
         if(Local_Retention_Policy::deletes_source($policy)&&!in_array($master,array('backend_source','external_archive'),true))return $this->block($id,$lock,$execution,$now,'Master authority no longer permits source deletion.');
@@ -98,6 +100,7 @@ final class Local_Retention_Service
         if(in_array($execution['status'],array(Local_Retention_Execution::STATUS_BLOCKED,Local_Retention_Execution::STATUS_FAILED),true))return self::worker_result(self::STATUS_COMPLETE,$id,$type,$this->tasks->complete($id,$lock,$now),0,'terminal_keep');
         $running=Local_Retention_Execution::transition($execution,Local_Retention_Execution::STATUS_RUNNING,$now);if(array()===$running||!$this->save_execution($video,$running,'running'))return self::worker_result(self::STATUS_FAILED,$id,$type,$this->tasks->fail($id,$lock,'Cleanup journal could not enter running state.',$now),0,'journal_indeterminate');
         if($this->local_job_active((int)$running['attachment_id']))return $this->block($id,$lock,$running,$now,'A local processing job raced with cleanup and local bytes were kept.');
+        if(!self::video_context_valid($video,(int)$running['attachment_id'])||!self::attachment_exclusive_to_video((int)$running['attachment_id'],$video))return $this->block($id,$lock,$running,$now,'AWVP Video or attachment ownership changed after the cleanup fence.');
         try{
             $directory=Storage::attachment_directory((int)$running['attachment_id']);if(is_dir($directory))Storage::remove_tree($directory);
             if(metadata_exists('post',(int)$running['attachment_id'],'_argent_video_outputs'))delete_post_meta((int)$running['attachment_id'],'_argent_video_outputs');
@@ -123,10 +126,26 @@ final class Local_Retention_Service
     public static function attachment_local_processing_blocked(int $attachment_id):bool
     {
         if($attachment_id<1)return true;
-        $ids=get_posts(array('post_type'=>Video_Post_Type::POST_TYPE,'post_status'=>'any','numberposts'=>20,'fields'=>'ids','meta_key'=>Video_Meta::ATTACHMENT_ID,'meta_value'=>$attachment_id,'meta_compare'=>'='));
+        $ids=get_posts(array(
+            'post_type'=>Video_Post_Type::POST_TYPE,
+            'post_status'=>array('publish','future','draft','pending','private','trash'),
+            'numberposts'=>self::MAX_ATTACHMENT_REFERENCES+1,
+            'fields'=>'ids',
+            'meta_key'=>Video_Meta::ATTACHMENT_ID,
+            'meta_value'=>$attachment_id,
+            'meta_compare'=>'=',
+        ));
         if(!is_array($ids))return true;
+        if(count($ids)>self::MAX_ATTACHMENT_REFERENCES)return true;
         foreach($ids as $raw){$video_id=Video_Meta::sanitize_positive_id($raw);if($video_id<1)continue;$state=Video_Meta::sanitize_source_state(get_post_meta($video_id,Video_Meta::SOURCE_STATE,true));$cleanup=Video_Meta::sanitize_cleanup_state(get_post_meta($video_id,Video_Meta::CLEANUP_STATE,true));$policy=Local_Retention_Policy::sanitize(get_post_meta($video_id,Video_Meta::LOCAL_RETENTION_POLICY,true));if('removed'===$state||'running'===$cleanup||('complete'===$cleanup&&array()!==$policy&&Local_Retention_Policy::destructive($policy)))return true;}
         return false;
+    }
+    private static function video_context_valid(int $video_id,int $attachment_id=0):bool{$post=$video_id>0?get_post($video_id):null;if(!is_object($post)||Video_Post_Type::POST_TYPE!==($post->post_type??null)||'trash'===($post->post_status??null))return false;return $attachment_id<1||$attachment_id===Video_Meta::sanitize_positive_id(get_post_meta($video_id,Video_Meta::ATTACHMENT_ID,true));}
+    private static function attachment_exclusive_to_video(int $attachment_id,int $video_id):bool
+    {
+        if($attachment_id<1||$video_id<1)return false;
+        $ids=get_posts(array('post_type'=>Video_Post_Type::POST_TYPE,'post_status'=>array('publish','future','draft','pending','private','trash'),'numberposts'=>2,'fields'=>'ids','meta_key'=>Video_Meta::ATTACHMENT_ID,'meta_value'=>$attachment_id,'meta_compare'=>'='));
+        if(!is_array($ids))return false;$found=array();foreach($ids as $raw){$id=Video_Meta::sanitize_positive_id($raw);if($id>0)$found[$id]=true;}return 1===count($found)&&isset($found[$video_id]);
     }
     private function local_job_active(int $attachment_id):bool{$job=$attachment_id>0?$this->jobs->find_by_attachment($attachment_id):null;return is_array($job)&&in_array((string)($job['status']??''),array('queued','processing'),true);}
     private function block(int $task_id,string $lock,array $execution,int $now,string $reason):array{$blocked=Local_Retention_Execution::transition($execution,Local_Retention_Execution::STATUS_BLOCKED,$now,$reason);if(array()!==$blocked)$this->save_execution((int)$execution['video_id'],$blocked,'blocked');update_post_meta((int)$execution['video_id'],Video_Meta::CLEANUP_STATE,'blocked');return self::worker_result(self::STATUS_COMPLETE,$task_id,self::TASK_TYPE,$this->tasks->complete($task_id,$lock,$now),0,'blocked_keep');}

@@ -1,8 +1,9 @@
 # ArgentWolf Video Processor 2.0 Architecture Foundation
 
-Status: proposed 2.0 development contract
+Status: 2.0 release-candidate contract
 Target branch: `develop-2.0`
-Stable baseline: WordPress.org-published `1.0.0`; `v1.0.0` identifies the released source, while later stable-main documentation/closure commits do not change the released artifact.
+Stable baseline: WordPress.org-published `1.0.0`; `v1.0.0` identifies the released source, while later stable-main documentation/closure commits do not change the released artifact. The permanent `release/1.x` maintenance branch is rooted at that exact tag.
+Current controlled candidate: `2.0.0-rc1`; RC packages are Forgejo-only and WordPress.org `Stable tag` remains `1.0.0` until final promotion.
 
 ## 1. Product direction
 
@@ -691,6 +692,23 @@ The foundation tranche does not:
 
 Those require separately reviewed implementation tranches.
 
+### 2.0 release-candidate version boundary
+
+After completion of the reviewed R46 implementation slices, the assembled 2.0
+line enters controlled release-candidate testing as `2.0.0-rcN`. The plugin
+header and `ARGENT_VIDEO_VERSION` carry that RC identity, while `readme.txt`
+continues to declare the currently public numeric WordPress.org Stable tag
+(`1.0.0` during RC1). RC packages are canonical Forgejo artifacts only and must
+not be published to WordPress.org SVN.
+
+The permanent `release/1.x` branch preserves the exact `v1.0.0` public lineage
+for any necessary 1.0.x maintenance. Final 2.0 promotion must be functionally
+frozen from the last accepted RC: change release/version metadata to `2.0.0`,
+set `Stable tag: 2.0.0`, rebuild from the reviewed promotion commit, and rerun
+the package/VM gates. WordPress/PHP version ordering must prove both
+`1.0.0 < 2.0.0` and `2.0.0-rcN < 2.0.0`; live RC -> final upgrade on the
+controlled production validation site is an explicit release gate.
+
 ## Stable 1.0 synchronization
 
 The stable 1.0 line was forward-ported into `develop-2.0` after the first public
@@ -993,14 +1011,17 @@ A destructive policy is not deletion authority by itself. The operator must
 confirm the exact per-video policy, choose a 1-365 day grace period, and the
 video must still have current R46.6 public/unlisted serving authority. The
 cleanup journal freezes that serving generation/plan/manifest/remote asset and,
-for source deletion, a confined uploads-relative device/inode/size/mtime source
+for source deletion, a confined uploads-relative size/device/inode/mtime/ctime source
 identity. Cleanup runs only as `peertube_local_retention_cleanup` in the existing
 detached `--drain` worker; `--once` is not expanded.
 
-Immediately before deletion the worker re-proves serving authority, master
-policy, grace expiry, source identity, and absence of queued/processing local
-FFmpeg work. Entering cleanup `running` fences the ordinary local queue, then the
-job repository is checked a second time to close the enqueue race. Managed tree
+Immediately before deletion the worker re-proves the live non-trash AWVP Video,
+its exact attachment binding and exclusive ownership of that attachment, serving
+authority, master policy, grace expiry, source identity, and absence of queued/
+processing local FFmpeg work. Duplicate or ambiguous attachment references fail
+closed because managed outputs are attachment-scoped. Entering cleanup `running`
+fences the ordinary local queue, including trash references, then the job
+repository is checked a second time to close the enqueue race. Managed tree
 deletion uses the existing confined `Storage` boundary. Physical source deletion
 uses `wp_delete_file()` only after an immediate stat identity recheck and verifies
 actual absence. A recovered `running` journal may confirm an exact already-absent

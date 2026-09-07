@@ -521,7 +521,7 @@ final class PeerTube_Connection_Admin
         ?>
         <div class="wrap">
             <h1><?php esc_html_e('PeerTube Connection — ArgentWolf Video Processor', 'argentwolf-video-processor'); ?></h1>
-            <div class="notice notice-warning inline"><p><?php esc_html_e('This unreleased 2.0 development branch now has an explicit one-shot WP-CLI path for private staged PeerTube upload and read-only remote readiness reconciliation. This administrator page does not start media transfers; the detached PeerTube launcher is not yet wired to cron. Publication, library management, retention, source cleanup, remote deletion, and PeerTube ingest/processing capability advertisement remain disabled.', 'argentwolf-video-processor'); ?></p></div>
+            <div class="notice notice-warning inline"><p><?php esc_html_e('The 2.0 release candidate can publish explicitly reviewed videos to a configured PeerTube backend through the detached task worker. This connection page manages backend authorization only and does not itself start media transfers. Frontend serving remains local until current remote readiness and intended public/unlisted visibility are verified; post-cutover local deletion remains separately opt-in, delayed, and fail-closed.', 'argentwolf-video-processor'); ?></p></div>
 
             <h2><?php esc_html_e('Start a connection operation', 'argentwolf-video-processor'); ?></h2>
             <p><?php esc_html_e('Use an exact canonical HTTPS origin with no path, query, fragment, credentials, or trailing slash. A backend ID is a permanent lowercase identifier.', 'argentwolf-video-processor'); ?></p>
@@ -1926,7 +1926,7 @@ final class PeerTube_Connection_Admin
             'identity_verified' => __('The authenticated identity and at least one owned local channel were verified. Select a current destination explicitly.', 'argentwolf-video-processor'),
             'destination_verified' => __('The selected owned channel and authenticated identity were re-verified. The backend remains disabled until an explicit local activation request is completed.', 'argentwolf-video-processor'),
             'activation_advanced' => __('Backend activation advanced by one local persistence step. No PeerTube HTTP request or media mutation was performed.', 'argentwolf-video-processor'),
-            'backend_activated' => __('The verified PeerTube backend descriptor is active. The unreleased R45 one-shot task path may use it for private staged upload, but automatic scheduling and PeerTube ingest/processing capability advertisement remain disabled.', 'argentwolf-video-processor'),
+            'backend_activated' => __('The verified PeerTube backend descriptor is active. Explicitly reviewed per-video publication may use it through the detached task worker; activation itself does not transfer media or change frontend serving.', 'argentwolf-video-processor'),
             'lifecycle_advanced' => __('The PeerTube credential lifecycle advanced one reviewed step. Continue explicitly if another step remains.', 'argentwolf-video-processor'),
             'token_refreshed' => __('The managed PeerTube token pair was refreshed and stored as a new encrypted generation.', 'argentwolf-video-processor'),
             'backend_disconnected' => __('The PeerTube backend is locally retired and its managed credential has been removed.', 'argentwolf-video-processor'),

@@ -8,6 +8,8 @@ ArgentWolf Video Processor 2.0 development.
 - `main` is the stable/public line. The stable 1.0 release remains identified by
   `v1.0.0`; later `main` commits are documentation/maintenance history unless a
   new release is deliberately prepared.
+- `release/1.x` is the permanent 1.0 maintenance line, recreated directly from
+  `v1.0.0` before the 2.0 RC transition so emergency 1.0.x fixes remain isolated.
 - `develop-2.0` is the next-major integration line and contains the validated
   R39 identity/destination checkpoint plus the qualified prebuilt FFmpeg CI
   toolchain.
@@ -43,8 +45,19 @@ That line contains the existing 2.0 architecture, persistence skeleton, backend
 registry/local adapter, PeerTube connection contract, and the deliberate stable
 1.0 synchronization.
 
-The runtime version is intentionally still `1.0.0`; synchronizing the foundation
-did not itself create a 2.0 release.
+That historical synchronization did not itself create a 2.0 release. The assembled
+R46 line now enters controlled release-candidate testing as `2.0.0-rc1`: the
+plugin header and runtime constant carry the RC version, while `readme.txt` keeps
+`Stable tag: 1.0.0` because WordPress.org remains on the public 1.0 line until
+final promotion. RC packages are Forgejo-only and must not be pushed to the
+WordPress.org SVN.
+
+Final promotion is `2.0.0-rcN -> 2.0.0` with no functional changes after the
+last accepted RC. The promotion commit updates release/version metadata, changes
+`Stable tag` to `2.0.0`, rebuilds and requalifies the exact package, then publishes
+the final release to WordPress.org. The controlled live validation site must prove
+the ordinary WordPress update path from its installed RC to final 2.0.0; a
+separate controlled installation must prove the public `1.0.0 -> 2.0.0` path.
 
 ## Preserved PeerTube connection-foundation checkpoint
 
@@ -1907,8 +1920,14 @@ attachment post itself must never be deleted by retention.
 
 The worker must require current R46.6 serving evidence, exact policy/execution
 hashes, grace expiry, quiescent local processing, and immediately revalidated
-filesystem ownership. Fence normal local enqueue once cleanup enters `running`
-and recheck the local job repository after that fence. A source-delete crash may
+filesystem ownership. The journal's attachment must remain the current attachment
+of the live non-trash AWVP Video and must be exclusively owned by that video;
+duplicate/ambiguous attachment references are a KEEP condition because managed
+output storage is attachment-scoped. Fence normal local enqueue once cleanup
+enters `running`, include trash in the reference fence, fail closed when a bounded
+reference scan overflows, and recheck the local job repository after that fence.
+Physical source identity includes relative path, size, device, inode, mtime, and
+ctime and is checked again immediately before deletion. A source-delete crash may
 converge from an existing `running` journal plus exact confined absence; generic
 missing-source observations never authorize success. Use no PeerTube HTTP,
 remote-delete API, editor/browser deletion, new scheduler, or `--once` expansion.

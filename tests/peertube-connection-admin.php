@@ -1264,9 +1264,11 @@ awvp_admin_assert(
     'R45 upload-policy tuning or operator guidance is missing from the active backend page.'
 );
 awvp_admin_assert(
-    str_contains($policy_html, 'one-shot WP-CLI path')
-        && str_contains($policy_html, 'does not start media transfers'),
-    'PeerTube administrator checkpoint disclosure is stale about R45 upload reachability.'
+    str_contains($policy_html, 'detached task worker')
+        && str_contains($policy_html, 'does not itself start media transfers')
+        && str_contains($policy_html, 'serving remains local')
+        && str_contains($policy_html, 'local deletion remains separately opt-in'),
+    'PeerTube administrator RC disclosure does not preserve transfer/serving/retention boundaries.'
 );
 
 awvp_admin_reset_request();

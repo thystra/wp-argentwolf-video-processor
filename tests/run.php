@@ -333,9 +333,20 @@ $assert(
     'Plugin header version must use the supported release format.'
 );
 $assert(
-    null !== $plugin_version && $plugin_version === $stable_tag,
-    'Plugin header version and Stable tag must match.'
+    null !== $stable_tag
+        && 1 === preg_match('/^[0-9]+\.[0-9]+\.[0-9]+$/', $stable_tag),
+    'WordPress.org Stable tag must identify a numeric public release.'
 );
+if (null !== $plugin_version && null !== $stable_tag) {
+    if (1 === preg_match('/^[0-9]+\.[0-9]+\.[0-9]+$/', $plugin_version)) {
+        $assert($plugin_version === $stable_tag, 'Final plugin version and Stable tag must match.');
+    } else {
+        $assert(
+            version_compare($stable_tag, $plugin_version, '<'),
+            'Prerelease plugin version must compare newer than the public Stable tag.'
+        );
+    }
+}
 
 if ([] !== $failures) {
     foreach ($failures as $failure) {

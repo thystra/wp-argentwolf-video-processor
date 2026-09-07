@@ -1,8 +1,14 @@
+<!-- File: CHANGELOG.md -->
+# Changelog
+
+## 2.0.0-rc1 - 2026-09-07
+
 - Add R46.9 explicit post-cutover local retention. KEEP remains the default;
   destructive per-video policies require a 1-365 day grace period and current
   verified PeerTube serving. Cleanup is journaled and detached, fences local
-  processing, revalidates source identity before deletion, preserves the WordPress
-  attachment object, and treats uncertainty as KEEP. R46.8 is qualified at commit
+  processing, requires exclusive/current attachment ownership, revalidates a
+  confined stat identity through ctime before source deletion, preserves the
+  WordPress attachment object, and treats uncertainty as KEEP. R46.8 is qualified at commit
   `9485ebb`, tree `3ed54e0c5cd7c436b54f63da49b3dcf76305cfc6`, Forgejo CI 135 green.
 
 - Add R46.6 verified local-first serving cutover. A strict non-secret serving
@@ -28,11 +34,8 @@
   state that may authorize final privacy; reschedule/revert/private/trash intent
   supersedes older reveal generations with a private target.
 
-<!-- File: CHANGELOG.md -->
-# Changelog
-
-## 2.0.0 - Unreleased
-
+- Enter the controlled 2.0 release-candidate line. The plugin/runtime version is `2.0.0-rc1` while WordPress.org `Stable tag` deliberately remains `1.0.0`; RC packages stay on Forgejo and are not published to WordPress.org SVN.
+- Preserve the exact public `v1.0.0` lineage on the permanent `release/1.x` maintenance branch before final 2.0 promotion.
 - Add R46.8 explicit one-way local-to-PeerTube migration promotion. A fresh execution revalidates the ready migration plan against current source/provider/default/thumbnail state, creates a crash-recoverable local commitment journal, promotes the exact reviewed publication plan and concrete destination, and hands off only through the existing publication synchronizer. No second uploader, provider HTTP path, serving cutover, or cleanup authority is introduced; committed migration targets cannot be rolled back or retargeted by ordinary editor destination controls.
 - Add the R46.7 existing-video PeerTube migration planner and Needs Review workflow. Planning is isolated from live destination/publication/lifecycle/execution/serving state, supports bounded selected/select-all batches, preserves completed same-target review, and keeps WordPress tags as explicitly-reviewed suggestions without truncating more than five. No upload, task dispatch, provider HTTP, or serving cutover is added.
 - Add an origin-bound WordPress safe-HTTP client and bounded PeerTube instance

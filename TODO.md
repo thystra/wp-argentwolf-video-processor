@@ -102,6 +102,8 @@
 - [x] Publish `trunk`, `tags/1.0.0`, and directory assets to WordPress.org SVN.
 - [x] Merge the completed `release/1.x` line into `main`.
 - [x] Forward-port the stable 1.0 baseline into `develop-2.0`.
+- [x] Recreate permanent `release/1.x` directly from `v1.0.0` before entering
+  the 2.0 RC line, preserving an isolated maintenance path for public 1.0.x.
 
 ## 2.0 development status
 
@@ -373,5 +375,30 @@
   after an explicit non-WordPress master-authority decision, all local video copies.
   Destructive policies require a 1-365 day grace period and current verified
   PeerTube serving evidence. Cleanup is a durable detached-worker task, rechecks
-  serving/file identity and local-job quiescence immediately before deletion,
-  preserves the WordPress attachment object, and treats every uncertainty as KEEP.
+  serving/file identity, current exclusive attachment ownership, and local-job
+  quiescence immediately before deletion, preserves the WordPress attachment
+  object, and treats every uncertainty as KEEP.
+
+### 2.0 release-candidate and final-release gates
+
+- [x] Enter the controlled RC line as `2.0.0-rc1` while leaving WordPress.org
+  `Stable tag: 1.0.0`; enforce that split in normal CI and canonical builds.
+- [x] Add regression coverage proving PHP/WordPress ordering for `1.0.0 < 2.0.0`,
+  increasing `2.0.0-rcN`, and `2.0.0-rcN < 2.0.0`.
+- [ ] Qualify R46.9 hardening on exact Forgejo source/CI and close the final R46
+  implementation checkpoint.
+- [ ] Merge the qualified R46 line into the reviewed 2.0 integration branch and
+  cut/preserve the exact RC1 candidate commit and canonical Forgejo package.
+- [ ] Pass the full isolated WordPress VM/Docker upgrade, regression, security,
+  destructive-boundary, Plugin Check, and package-identity gates on the exact RC.
+- [ ] Install the accepted RC on the controlled live WordPress site and validate
+  real PeerTube connection/upload/publication/serving/migration/retention behavior.
+- [ ] If defects require code changes, increment `2.0.0-rcN`, rebuild, and rerun
+  the affected gates; never mutate or reuse an existing RC version/tag.
+- [ ] Freeze the last accepted RC and promote to `2.0.0` with release/version
+  metadata changes only; set `Stable tag: 2.0.0` and rerun the exact package gates.
+- [ ] Publish final `2.0.0` through WordPress.org SVN only after final package
+  qualification, then prove the controlled live `2.0.0-rcN -> 2.0.0` automatic
+  WordPress update path.
+- [ ] Separately prove a clean public `1.0.0 -> 2.0.0` WordPress upgrade before
+  declaring the 2.0 release closed.

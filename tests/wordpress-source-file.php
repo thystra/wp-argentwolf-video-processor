@@ -14,8 +14,9 @@ namespace ArgentVideo {
 namespace {
 require_once dirname(__DIR__).'/includes/WordPress_Source_File.php';use ArgentVideo\WordPress_Source_File as S;
 $f=0;$a=function(bool $v,string $m)use(&$f){if(!$v){fwrite(STDERR,"FAIL: $m\n");$f++;}};
-$id=S::capture(20);$a('2026/09/video.mp4'===($id['relative_path']??''),'Relative uploads identity mismatch.');$a(S::matches(20,$id),'Exact source identity should match before deletion.');
+$id=S::capture(20);$a('2026/09/video.mp4'===($id['relative_path']??'')&&isset($id['ctime']),'Relative uploads/stat identity mismatch.');$a(S::matches(20,$id),'Exact source identity should match before deletion.');
 $bad=$id;$bad['inode']++;$a(!S::delete(20,$bad)&&is_file($GLOBALS['r469_path']),'Changed identity must not delete source.');
+$bad=$id;$bad['ctime']++;$a(!S::delete(20,$bad)&&is_file($GLOBALS['r469_path']),'Changed ctime identity must not delete source.');
 $a(S::delete(20,$id),'Exact confined source deletion should verify absence.');$a(!file_exists($GLOBALS['r469_path']),'Source still exists after verified delete.');$a(is_object(ArgentVideo\get_post(20)),'Physical cleanup must not delete WordPress attachment object.');$a(S::absent(20,$id),'Running-journal absence confirmation should accept exact missing path.');
 file_put_contents($GLOBALS['r469_root'].'/outside.mp4','outside');$GLOBALS['r469_path']=$GLOBALS['r469_root'].'/outside.mp4';$a(array()===S::capture(20),'Source outside uploads must fail closed.');
 @unlink($GLOBALS['r469_root'].'/outside.mp4');@rmdir($GLOBALS['r469_root'].'/uploads/2026/09');@rmdir($GLOBALS['r469_root'].'/uploads/2026');@rmdir($GLOBALS['r469_root'].'/uploads');@rmdir($GLOBALS['r469_root']);

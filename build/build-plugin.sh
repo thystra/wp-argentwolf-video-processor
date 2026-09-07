@@ -26,20 +26,7 @@ if [[ ! "${VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
     exit 2
 fi
 
-PLUGIN_VERSION="$(
-    sed -n 's/^ \* Version: //p' "${ROOT_DIR}/${MAIN_FILE}" |
-        head -n 1
-)"
-STABLE_TAG="$(
-    sed -n 's/^Stable tag: //p' "${ROOT_DIR}/readme.txt" |
-        head -n 1
-)"
-
-if [[ "${PLUGIN_VERSION}" != "${VERSION}" ||
-      "${STABLE_TAG}" != "${VERSION}" ]]; then
-    echo "Plugin/readme version does not match ${VERSION}." >&2
-    exit 1
-fi
+bash "${ROOT_DIR}/build/validate-version.sh" "${VERSION}"
 
 if [[ "${ARGENT_VIDEO_SKIP_HLS_FETCH:-0}" != '1' ]]; then
     if ! bash "${ROOT_DIR}/build/fetch-hls-js.sh"; then

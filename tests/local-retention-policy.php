@@ -19,7 +19,7 @@ $a(array()===P::create(P::MODE_DELETE_ALL,0,7,1000),'Destructive policy must req
 $a(array()===P::create(P::MODE_DELETE_ALL,366,7,1000),'Grace must be bounded at 365 days.');
 $a(64===strlen(P::sha256($all)),'Policy hash must be bounded SHA-256.');
 $authority=array('generation'=>3,'plan_sha256'=>str_repeat('a',64),'manifest_sha256'=>str_repeat('b',64),'remote_asset_id'=>4,'remote_uuid'=>'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');
-$source=array('relative_path'=>'2026/09/video.mp4','bytes'=>10,'device'=>1,'inode'=>2,'mtime'=>3);
+$source=array('relative_path'=>'2026/09/video.mp4','bytes'=>10,'device'=>1,'inode'=>2,'mtime'=>3,'ctime'=>4);
 $exec=E::create(10,20,$all,$authority,$source,1,2000,1000);$a(array()!==$exec&&E::STATUS_QUEUED===$exec['status'],'Execution journal create failed.');
 $a(64===strlen(E::immutable_sha256($exec)),'Execution immutable hash missing.');
 $with=E::with_task($exec,44);$a(44===($with['task_id']??0)&&E::immutable_sha256($with)===E::immutable_sha256($exec),'Task ID must not alter immutable execution identity.');

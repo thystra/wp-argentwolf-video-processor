@@ -295,9 +295,15 @@ WordPress.org reviewer findings are durable engineering lessons, not one-line co
   provenance immediately after the approved build, then promote those exact
   bytes unchanged to the Forgejo Release, GitHub Release, and WordPress.org
   surfaces as their separate gates permit.
-- Every code release increments the plugin version. Keep the main plugin header,
-  `readme.txt` Stable Tag, changelog, Git tag, release artifact name, and
-  WordPress.org SVN tag aligned.
+- Every code release increments the plugin version. Final WordPress.org releases
+  keep the main plugin header, `ARGENT_VIDEO_VERSION`, `readme.txt` Stable Tag,
+  changelog, Git tag, release artifact name, and WordPress.org SVN tag aligned.
+  Controlled Forgejo prereleases are the exception: use `X.Y.Z-rcN` consistently
+  for the plugin/runtime version, changelog, Git tag, and artifact while leaving
+  `readme.txt` Stable Tag on the current numeric WordPress.org release. Never
+  publish an RC to WordPress.org SVN. Final promotion must change the runtime and
+  Stable Tag to the numeric release and then prove both public-stable -> final and
+  RC -> final update ordering/upgrade behavior.
 - Tag only after the reviewed commit is pushed, native CI passes, and the exact
   canonical release-candidate bytes pass the required package/WordPress gates.
 - The downstream GitHub mirror must not auto-build release bytes from a tag.
@@ -358,7 +364,10 @@ WordPress.org reviewer findings are durable engineering lessons, not one-line co
 
 ## Stable 1.0 and shared engineering baseline
 
-Current stable release: `1.0.0`.
+Current public stable release: `1.0.0`. The permanent `release/1.x` maintenance
+branch is rooted at exact tag `v1.0.0` so emergency 1.0.x work remains possible
+while 2.0 advances independently. Current controlled candidate: `2.0.0-rc1`; it
+must remain off WordPress.org SVN until final 2.0.0 promotion.
 
 Cross-project release, validator, partial-mutation, shared-host, and ZFS lessons
 are centralized in `wp-plugin-template`. AWVP keeps project-specific behavior,
@@ -404,5 +413,12 @@ deletion must preserve the WordPress attachment object, use a confined uploads
 path, reject symlinks/escapes, compare exact file identity immediately before
 `wp_delete_file()`, and verify absence afterward. The normal local FFmpeg queue
 must be fenced while cleanup is running, with active jobs checked on both sides
-of that fence. Any mismatch means KEEP. Do not add provider HTTP, remote deletion,
-a new scheduler, or retention work to the qualified `--once` task set.
+of that fence. The cleanup journal's attachment must still be the video's current
+attachment and must be exclusively owned by that one AWVP Video; duplicate or
+ambiguous attachment references fail closed because managed output storage is
+attachment-scoped. Bounded attachment-reference scans must fail closed when the
+bound is exceeded, and trash must not bypass the fence. Source-file identity
+includes relative path plus size/device/inode/mtime/ctime and is revalidated
+immediately before physical deletion. Any mismatch means KEEP. Do not add
+provider HTTP, remote deletion, a new scheduler, or retention work to the
+qualified `--once` task set.

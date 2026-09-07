@@ -1404,10 +1404,12 @@ older queued cleanup task becomes stale rather than inheriting new authority.
 cleanup attempt. It freezes video/attachment identity, policy hash, serving-
 authority hash/generation, plan and manifest commitments, remote asset/UUID,
 eligibility time, attempt number, and (for `delete_all`) the exact confined
-WordPress source identity. Mutable fields track task ID, queued/running/terminal
+WordPress source identity: uploads-relative path plus size, device, inode, mtime,
+and ctime. Mutable fields track task ID, queued/running/terminal
 status, completion time, and a bounded local error. The generic task row is not
 sole deletion authority; the worker must re-read and match current policy,
-execution journal, serving authority, source/master state, and local job state.
+execution journal, the video's still-current attachment binding and exclusive
+attachment ownership, serving authority, source/master state, and local job state.
 
 `_argent_video_cleanup_state` remains a projection (`none`, `pending`, `eligible`,
 `running`, `complete`, `blocked`, `failed`) and cannot authorize deletion by

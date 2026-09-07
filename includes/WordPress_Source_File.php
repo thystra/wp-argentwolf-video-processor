@@ -18,14 +18,15 @@ final class WordPress_Source_File
         try { [$path,$relative]=self::confined($path); } catch (RuntimeException) { return array(); }
         if(is_link($path)||!is_file($path))return array();
         $stat=@stat($path);if(!is_array($stat))return array();
-        return self::sanitize_identity(array('relative_path'=>$relative,'bytes'=>(int)$stat['size'],'device'=>(int)$stat['dev'],'inode'=>(int)$stat['ino'],'mtime'=>(int)$stat['mtime']));
+        return self::sanitize_identity(array('relative_path'=>$relative,'bytes'=>(int)$stat['size'],'device'=>(int)$stat['dev'],'inode'=>(int)$stat['ino'],'mtime'=>(int)$stat['mtime'],'ctime'=>(int)$stat['ctime']));
     }
 
     /** @return array<string,mixed> */
     public static function sanitize_identity(mixed $v):array
     {
-        if(!is_array($v)||array('relative_path','bytes','device','inode','mtime')!==array_keys($v)||!is_string($v['relative_path'])||''===$v['relative_path']||str_contains($v['relative_path'],"\0")||str_starts_with($v['relative_path'],'/')||str_contains('/'.$v['relative_path'].'/','/../'))return array();
-        foreach(array('bytes','device','inode','mtime') as $k){if(!is_int($v[$k])||$v[$k]<0)return array();}
+        if(!is_array($v)||array('relative_path','bytes','device','inode','mtime','ctime')!==array_keys($v)||!is_string($v['relative_path'])||''===$v['relative_path']||str_contains($v['relative_path'],"\0")||str_starts_with($v['relative_path'],'/'))return array();
+        foreach(explode('/',$v['relative_path']) as $part){if(''===$part||'.'===$part||'..'===$part)return array();}
+        foreach(array('bytes','device','inode','mtime','ctime') as $k){if(!is_int($v[$k])||$v[$k]<0)return array();}
         if($v['inode']<1)return array();
         return $v;
     }
@@ -48,7 +49,7 @@ final class WordPress_Source_File
         try{[$path,$relative]=self::confined($path);}catch(RuntimeException){return false;}
         if($relative!==$identity['relative_path']||is_link($path)||!is_file($path))return false;
         $stat=@stat($path);if(!is_array($stat))return false;
-        $immediate=self::sanitize_identity(array('relative_path'=>$relative,'bytes'=>(int)$stat['size'],'device'=>(int)$stat['dev'],'inode'=>(int)$stat['ino'],'mtime'=>(int)$stat['mtime']));
+        $immediate=self::sanitize_identity(array('relative_path'=>$relative,'bytes'=>(int)$stat['size'],'device'=>(int)$stat['dev'],'inode'=>(int)$stat['ino'],'mtime'=>(int)$stat['mtime'],'ctime'=>(int)$stat['ctime']));
         if($immediate!==$identity)return false;
         wp_delete_file($path);clearstatcache(true,$path);return !file_exists($path)&&!is_link($path);
     }

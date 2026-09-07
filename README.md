@@ -83,7 +83,7 @@ shared hosting.
 - a link to the GitHub project for support and development;
 - bounded database-backed worker diagnostic history and retention controls.
 
-The unreleased 2.0 development line also adds a separate **Settings > PeerTube
+The 2.0 release-candidate line adds a separate **Settings > PeerTube
 Connection** page. It is available only to authenticated administrators with
 `manage_options`; loading it is read-only, while its explicit connection/lifecycle
 POST actions are nonce-protected and advance at most one reviewed step. Active
@@ -151,7 +151,7 @@ wp argent-video worker --limit=3
 
 The `argent-video` command name is retained for compatibility.
 
-The unreleased 2.0 development line also has an explicit PeerTube task worker
+The 2.0 release-candidate line also has an explicit PeerTube task worker
 boundary:
 
 ```bash
@@ -177,20 +177,23 @@ notification/no-replay, drain, one-shot, and R44 matrices.
 
 ## Privacy
 
-Metadata removal applies to generated derivatives and adaptive renditions. The
-original uploaded attachment is preserved and may retain its original metadata.
+Metadata removal applies to generated derivatives and adaptive renditions. Local
+processing does not alter the original source, which may retain its original
+metadata. R46.9 retention defaults to keeping all local copies; physical source
+deletion is available only after an explicit non-WordPress master-authority
+decision, delayed verified PeerTube cutover, and the fail-closed cleanup checks.
+The WordPress attachment record itself is preserved.
 
-Stable 1.0 processing remains local and the plugin contains no telemetry. The
-unreleased 2.0 development line adds an opt-in, operator-configured PeerTube
-connection. Public instance detection contacts only that configured origin and
+The public WordPress.org 1.0 release remains local and the plugin contains no
+telemetry. The 2.0 release-candidate line adds an opt-in, operator-configured
+PeerTube connection. Public instance detection contacts only that configured origin and
 sends no credentials. An authenticated administrator with `manage_options` may
 explicitly start, advance, or reconcile a durable connection operation and may
 authorize one password-grant attempt per explicit submission from the separate
 PeerTube Connection page. Each connection/lifecycle action is POST-only and
 nonce-protected; loading the page is read-only, and there is no AJAX, REST, cron,
 activation, or automatic
-connection invocation. The separate unreleased R45 media-task path is explicit
-WP-CLI-only and does not bootstrap or refresh credentials. Before credentials are
+connection invocation. The detached PeerTube media-task path does not bootstrap or refresh credentials. Before credentials are
 sent, the administrator must explicitly authorize the displayed external
 service. An allowlisted development-only plaintext HTTP origin requires a second
 transport-risk acknowledgement.
@@ -201,8 +204,7 @@ client is used transiently; the password, OTP, and OAuth client response are not
 retained or reflected into the page, redirect, or notice. Returned access and
 refresh tokens are authenticated-encrypted in a non-autoloaded server-side
 option before the operation can advance. No media, selected media metadata, or
-telemetry is sent by the connection bootstrap itself. The unreleased R45
-one-shot media-task path can send an
+telemetry is sent by the connection bootstrap itself. The detached PeerTube media-task path can send an
 explicitly staged source plus the selected private upload metadata only to the
 configured PeerTube origin. Source bytes are transferred through PeerTube's
 resumable protocol using the backend's configured segment policy; no telemetry
@@ -258,13 +260,17 @@ backported release lines, reports the CVE explicitly in Diagnostics and WordPres
 Site Health, and links to the NVD record. Future FFmpeg CVEs should be added to
 the same advisory registry with their own capability and NVD link.
 
-## Current stable release
+## Current release lines
 
-Current stable release: `1.0.0`, published through WordPress.org.
+Public WordPress.org stable release: `1.0.0`.
 
-Install from WordPress.org or use the exact ZIP attached to the tagged Forgejo
-release. Automatically generated source archives are not the canonical
-installable release artifact.
+Current controlled development candidate: `2.0.0-rc1`. RC packages are built
+from reviewed Forgejo commits and are not published to WordPress.org SVN. The
+public Stable tag remains `1.0.0` until final `2.0.0` promotion.
+
+Install public releases from WordPress.org or use the exact canonical ZIP
+attached to the corresponding Forgejo release. Automatically generated source
+archives are not canonical installable artifacts.
 
 ### R46.3c PeerTube publication review (development)
 
