@@ -1,3 +1,9 @@
+- Add R46.6 verified local-first serving cutover. A strict non-secret serving
+  authority is written only from positively verified current publication evidence;
+  the AWVP block independently revalidates lifecycle/plan/execution/remote-asset
+  state on render and otherwise falls back to the local WordPress player. Only
+  public/unlisted PeerTube targets cut over in this checkpoint; private/internal
+  audience semantics remain local.
 
 - Add the R46.5b detached publication executor. Generation-fenced publication
   tasks now freeze a non-secret reviewed manifest, stage/reuse an immutable MP4,

@@ -322,5 +322,18 @@ if publication authority changed during the network request, it immediately send
 privacy-only correction to Private and positively verifies that correction. A
 per-video execution lock serializes adjacent lifecycle generations' remote work.
 Indeterminate mutation is held rather than replayed, and provider edits requiring
-an ambiguous destructive clear fail closed. Frontend serving remains local until
-the separate R46.6 verified-cutover checkpoint.
+an ambiguous destructive clear fail closed. R46.5b is qualified at commit `8a7685b`, tree
+`c6b0db36226bf17738840b3474afdb05af3529c5`; Forgejo CI run 132 is green.
+
+### R46.6 verified serving cutover (development)
+
+R46.6 adds no remote mutation. After publication finalization has already verified
+an exact ready PeerTube asset in its intended public/unlisted privacy, a local-only
+cutover writer freezes serving evidence on the AWVP Video. The frontend resolver
+then independently re-checks the current lifecycle generation and plan hash,
+concrete destination/channel, applied publication execution, actually published
+anchor post, remote asset identity/state/privacy/verification timestamp, and exact
+embed URL before rendering a PeerTube iframe. Any mismatch immediately uses the
+existing local WordPress shortcode/Renderer path. Private and PeerTube-internal
+privacy remain local because AWVP cannot assume WordPress viewers share PeerTube
+authentication/audience membership. No provider HTTP occurs while rendering.

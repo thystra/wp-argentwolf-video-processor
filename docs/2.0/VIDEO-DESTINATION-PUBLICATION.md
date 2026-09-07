@@ -369,3 +369,8 @@ PUTs could obscure what the provider actually accepted. Edits requiring ambiguou
 provider clear semantics fail closed. R46.5b does not switch the block/player to
 PeerTube even after successful publication; verified local-first serving cutover
 is the separate R46.6 checkpoint.
+### R46.6 verified serving cutover
+
+R46.5b is qualified at commit `8a7685b`, tree `c6b0db36226bf17738840b3474afdb05af3529c5`, Forgejo CI run 132. R46.6 changes serving authority only after that executor has positively verified the exact ready remote asset and intended publication privacy. The local cutover record is evidence, not authority by itself: every frontend render revalidates the current lifecycle generation and plan, destination/channel, applied execution, published anchor, and durable remote-asset row. If any evidence is missing, stale, malformed, or no longer verified, the local WordPress video remains authoritative.
+
+This initial PeerTube embed cutover is limited to public and unlisted privacy. PeerTube private/internal audiences may depend on PeerTube authentication that WordPress cannot infer, so those targets continue serving locally. No render-time PeerTube HTTP is permitted. R46.9 alone may make local files eligible for retention cleanup after separately reviewed policy.

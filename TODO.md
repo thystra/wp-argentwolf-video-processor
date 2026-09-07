@@ -343,22 +343,21 @@
   targets PeerTube private, actual WordPress `publish` alone authorizes final
   privacy, and later generations supersede stale reveal intent. This checkpoint
   performs no PeerTube HTTP and did not give the worker ownership of the task.
-- [ ] R46.5b: implementation candidate gives the detached `--drain` worker explicit
-  ownership of `peertube_publication_sync` and `peertube_publication_finalize`,
-  freezes current reviewed provider metadata/support/thumbnail identity into a
-  non-secret execution manifest, stages/reuses an immutable MP4 source, and reuses
-  the existing resumable uploader whose initialization is always privacy `3`.
-  Finalization waits for `ready_verified`, re-checks lifecycle generation/plan/
-  destination/provider authority and the actual WordPress anchor status, applies
-  and verifies reviewed metadata/final privacy, then re-checks WordPress after any
-  non-private PUT and immediately re-privates + verifies if reveal authority was
-  superseded during the request. A per-video execution lock serializes remote
-  publication workers, ambiguous destructive provider clears fail closed, and an
-  indeterminate mutation is not replayed automatically. The qualified diagnostic
-  `--once` task set remains upload/reconcile only; no new scheduler, inline post-
-  hook HTTP, remote deletion, cleanup, or serving cutover is added. Exact-byte
-  qualification and Forgejo CI remain before completion.
-- [ ] R46.6: local-first serving and verified remote cutover.
+- [x] R46.5b: detached PeerTube publication execution is qualified at commit
+  `8a7685b`, tree `c6b0db36226bf17738840b3474afdb05af3529c5`; Forgejo CI run
+  132 is green. The detached `--drain` worker owns publication sync/finalize,
+  reuses the private resumable uploader, positively verifies final publication,
+  rechecks WordPress after non-private PUTs, and immediately re-privates if reveal
+  authority changed. `--once` remains upload/reconcile only and serving cutover
+  remains separate.
+- [ ] R46.6: implementation candidate adds a strict non-secret per-video serving-
+  authority record plus a local-only cutover service and fail-closed frontend
+  resolver. Public/unlisted PeerTube serving is enabled only after the current
+  lifecycle generation/plan/destination/applied manifest, actual published anchor,
+  remote asset identity, ready state, final privacy, verification timestamp, and
+  exact embed URL all agree. Private/internal targets remain local. Any stale or
+  malformed evidence renders through the existing local WordPress shortcode path;
+  no frontend/provider HTTP, cleanup, migration, or deletion authority is added.
 - [ ] R46.7: existing-video migration planner / Needs Review workflow.
 - [ ] R46.8: one-way local-to-PeerTube migration execution.
 - [ ] R46.9: post-cutover local retention/cleanup policy.

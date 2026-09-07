@@ -49,6 +49,14 @@ namespace ArgentVideo {
         public const PEERTUBE_PUBLICATION_LIFECYCLE='_argent_video_peertube_publication_lifecycle';
         public const PEERTUBE_PUBLICATION_EXECUTION='_argent_video_peertube_publication_execution';
     }
+    final class Video_Serving_Authority {
+        public static function privacy_name(string $id): string { return match($id){'1'=>'public','2'=>'unlisted','3'=>'private','4'=>'internal',default=>''}; }
+    }
+    final class PeerTube_Serving_Cutover_Service {
+        public const APPLIED='applied'; public const PRESENT='present'; public const LOCAL='local'; public const REFUSED='refused'; public const INDETERMINATE='indeterminate';
+        public array $calls=array(); public string $status=self::PRESENT;
+        public function reconcile(int $video,int $now): string { $this->calls[]=array($video,$now); return $this->status; }
+    }
     final class Task_Repository {
         public const APPLIED='applied'; public const PRESENT='present'; public const CONFLICT='conflict'; public const INDETERMINATE='indeterminate';
         public array $transitions=array(); public array $enqueues=array(); public string $enqueue_status=self::APPLIED;
@@ -86,8 +94,8 @@ namespace ArgentVideo {
     }
     final class PeerTube_Remote_Asset_Store { public const APPLIED='applied'; public const PRESENT='present'; }
     final class FakePublicationAssetStore implements PeerTube_Publication_Asset_Store {
-        public array $calls=array(); public string $status='applied';
-        public function find(int $id): ?array { return null; }
+        public array $calls=array(); public array $rows=array(); public string $status='applied';
+        public function find(int $id): ?array { return $this->rows[$id]??null; }
         public function record_publication_observation(int $id,int $video,string $backend,string $uuid,string $channel,string $privacy,int $now): string {$this->calls[]=compact('id','video','backend','uuid','channel','privacy','now');return $this->status;}
     }
     interface PeerTube_Publication_Mutation_Api {
@@ -133,10 +141,10 @@ namespace {
     $makeLife=static function(int $generation,string $status,string $target,bool $upload,bool $reveal) use($planHash,$anchor): array { return array('version'=>1,'generation'=>$generation,'backend_id'=>'pt-primary','anchor_post_id'=>$anchor,'plan_sha256'=>$planHash,'dispatch_policy'=>Plan::DISPATCH_SEND_NOW,'wordpress_status'=>$status,'upload_authorized'=>$upload,'reveal_authorized'=>$reveal,'target_privacy_id'=>$target,'task_pending'=>true,'updated_at'=>1900+$generation); };
     $task=static function(int $id,string $type,int $generation=1) use($video,$planHash): array { return array('id'=>$id,'task_type'=>$type,'video_post_id'=>$video,'lock_token'=>sprintf('00000000-0000-4000-8000-%012d',$id),'payload_json'=>json_encode(array('version'=>1,'generation'=>$generation,'plan_sha256'=>$planHash),JSON_THROW_ON_ERROR)); };
     $reset=static function(array $life,string $postStatus='draft') use($video,$anchor,$plan): void { $GLOBALS['awvp_pub_meta']=array($video=>array(Video_Meta::PEERTUBE_PUBLICATION_PLAN=>$plan,Video_Meta::DESTINATION=>array('version'=>1,'backend_id'=>'pt-primary','channel_id'=>'41'),Video_Meta::PEERTUBE_PUBLICATION_LIFECYCLE=>$life)); $GLOBALS['awvp_pub_posts']=array($video=>(object)array('ID'=>$video,'post_author'=>9,'post_status'=>'publish'),$anchor=>(object)array('ID'=>$anchor,'post_author'=>7,'post_status'=>$postStatus)); $GLOBALS['awvp_pub_options']=array(); $GLOBALS['awvp_pub_current_user']=0; };
-    $factory=static function(?array $catalogOverride=null) use($descriptor,$secret,$catalog): array {
-        $tasks=new Task_Repository(); $operations=new PeerTube_Staged_Upload_Operation_Store(); $upload=new PeerTube_Staged_Upload_Service(); $uploadTasks=new PeerTube_Upload_Task_Coordinator(); $staging=new PeerTube_Publication_Staging_Service(); $assets=new FakePublicationAssetStore(); $api=new FakePublicationApi();
-        $coord=new Coordinator($tasks,$operations,$upload,$uploadTasks,$staging,$assets,new Backend_Registry($descriptor),new Managed_Backend_Secret_Store($secret),new PeerTube_Publication_Catalog_Store(func_num_args()? $catalogOverride:$catalog),new Video_Publishing_Defaults_Store(array()),static fn(string $origin)=>$api);
-        return compact('coord','tasks','operations','upload','uploadTasks','staging','assets','api');
+    $factory=static function(?array $catalogOverride=null,bool $withCutover=false) use($descriptor,$secret,$catalog): array {
+        $tasks=new Task_Repository(); $operations=new PeerTube_Staged_Upload_Operation_Store(); $upload=new PeerTube_Staged_Upload_Service(); $uploadTasks=new PeerTube_Upload_Task_Coordinator(); $staging=new PeerTube_Publication_Staging_Service(); $assets=new FakePublicationAssetStore(); $api=new FakePublicationApi(); $cutover=$withCutover?new \ArgentVideo\PeerTube_Serving_Cutover_Service():null;
+        $coord=new Coordinator($tasks,$operations,$upload,$uploadTasks,$staging,$assets,new Backend_Registry($descriptor),new Managed_Backend_Secret_Store($secret),new PeerTube_Publication_Catalog_Store(func_num_args()? $catalogOverride:$catalog),new Video_Publishing_Defaults_Store(array()),static fn(string $origin)=>$api,$cutover);
+        return compact('coord','tasks','operations','upload','uploadTasks','staging','assets','api','cutover');
     };
 
     // Sync: durable private upload handoff; post author is used, never invented user 1.
@@ -172,6 +180,16 @@ namespace {
     $reset($makeLife(1,'publish','1',true,true),'publish'); $GLOBALS['awvp_pub_meta'][$video][Video_Meta::PEERTUBE_PUBLICATION_EXECUTION]=$exec; $x=$factory(); $x['operations']->records[$exec['operation_id']]=array('phase'=>'ready','remote_asset_id'=>0,'remote_identity'=>array('uuid'=>'')); $wait=$x['coord']->advance_claimed($task(7,Coordinator::TASK_FINALIZE),$now); $assert(Coordinator::STATUS_REQUEUED===$wait['status']&&0===count($x['api']->publication_calls),'Finalizer mutated before upload readiness.');
     $reset($makeLife(1,'publish','1',true,true),'publish'); $GLOBALS['awvp_pub_meta'][$video][Video_Meta::PEERTUBE_PUBLICATION_EXECUTION]=$exec; $x=$factory(); $x['operations']->records[$exec['operation_id']]=$ready; $x['api']->mutate_ok=false; $uncertain=$x['coord']->advance_claimed($task(8,Coordinator::TASK_FINALIZE),$now); $assert(Coordinator::STATUS_FAILED===$uncertain['status']&&'mutation_indeterminate'===$uncertain['service_status']&&1===count($x['api']->publication_calls),'Indeterminate publication mutation was automatically replayed or misclassified.');
 
-    $source=(string)file_get_contents(dirname(__DIR__).'/includes/PeerTube_Publication_Task_Coordinator.php'); foreach(array('wp_update_post(','wp_publish_post(','transition_post_status(','Renderer','SERVING','cutover') as $needle){$assert(!str_contains($source,$needle),'R46.5b coordinator acquired forbidden WordPress publish/serving authority: '.$needle);}
+    // R46.6: already-verified public publication may converge local cutover without provider/API authority.
+    $reset($makeLife(1,'publish','1',true,true),'publish'); $applied=Execution::with_remote($exec,55,$uuid,1920); $applied=Execution::mark_applied($applied,$manifest,1930); $GLOBALS['awvp_pub_meta'][$video][Video_Meta::PEERTUBE_PUBLICATION_EXECUTION]=$applied; $x=$factory($catalog,true); $x['assets']->rows[55]=array('id'=>55,'backend_id'=>'pt-primary','channel_id'=>'41','remote_id'=>$uuid,'state'=>'ready','desired_privacy'=>'public','actual_privacy'=>'public','remote_processing_state'=>'1:published','last_verified_at'=>'2026-09-07 13:00:00');
+    $retry=$x['coord']->advance_claimed($task(9,Coordinator::TASK_FINALIZE),$now); $assert(Coordinator::STATUS_COMPLETE===$retry['status']&&str_starts_with($retry['service_status'],'cutover_retry:')&&0===count($x['api']->publication_calls)&&1===count($x['cutover']->calls),'Verified cutover retry unnecessarily required/replayed provider mutation.');
+
+    // A later private generation must not let cutover-local short-circuit the required remote privacy correction.
+    $reset($makeLife(2,'draft','3',true,false),'draft'); $GLOBALS['awvp_pub_meta'][$video][Video_Meta::PEERTUBE_PUBLICATION_EXECUTION]=$applied; $x=$factory($catalog,true); $x['operations']->records[$applied['operation_id']]=$ready; $x['assets']->rows[55]=array('id'=>55,'backend_id'=>'pt-primary','channel_id'=>'41','remote_id'=>$uuid,'state'=>'ready','desired_privacy'=>'public','actual_privacy'=>'public','remote_processing_state'=>'1:published','last_verified_at'=>'2026-09-07 13:00:00'); $x['api']->remote_privacy='1'; $privateTask=$task(10,Coordinator::TASK_FINALIZE,2);
+    $privateDone=$x['coord']->advance_claimed($privateTask,$now); $assert(Coordinator::STATUS_COMPLETE===$privateDone['status']&&1===count($x['api']->publication_calls)&&'3'===$x['api']->publication_calls[0]['privacy']&&1===count($x['cutover']->calls),'Private superseding generation was incorrectly short-circuited by local cutover cleanup.');
+
+    $source=(string)file_get_contents(dirname(__DIR__).'/includes/PeerTube_Publication_Task_Coordinator.php');
+    foreach(array('wp_update_post(','wp_publish_post(','transition_post_status(','Renderer') as $needle){$assert(!str_contains($source,$needle),'Publication coordinator acquired forbidden inline WordPress publish/render authority: '.$needle);}
+    $assert(str_contains($source,'PeerTube_Serving_Cutover_Service'),'R46.6 finalizer does not hand verified publication evidence to the local cutover service.');
     fwrite(STDOUT,"R46.5b publication task coordinator tests passed.\n");
 }

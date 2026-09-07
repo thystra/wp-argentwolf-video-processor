@@ -1868,3 +1868,8 @@ indeterminate metadata PUT. The per-video execution option lock serializes remot
 publication workers but intentionally does not block the local WordPress lifecycle
 writer. R46.6 remains responsible for switching frontend serving authority only
 after remote publication/readiness is independently verified.
+### R46.5b qualification and R46.6 continuation
+
+R46.5b is qualified at commit `8a7685b`, tree `c6b0db36226bf17738840b3474afdb05af3529c5`; Forgejo CI run 132 is green. Preserve its detached-only remote execution, post-PUT WordPress recheck/private correction, per-video execution lock, and the diagnostic `--once` upload/reconcile-only boundary.
+
+R46.6 may change frontend serving only from already-verified local evidence. The cutover writer must not call PeerTube. The render resolver must distrust the cutover record unless current lifecycle generation/plan, destination/channel, applied execution, published anchor, and remote-asset identity/state/privacy/verification still agree. Public/unlisted may render the verified PeerTube embed; private/internal remain local. Any uncertainty must use the local shortcode/Renderer path. Do not add cleanup, remote deletion, migration, post-status network I/O, or frontend HTTP.

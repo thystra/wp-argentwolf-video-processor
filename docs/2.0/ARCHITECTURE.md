@@ -957,3 +957,8 @@ than automatically replayed. Provider edits that would require an undocumented
 clear encoding (for example removing an applied thumbnail or clearing an applied
 non-empty tag list) fail closed. R46.5b still grants no serving cutover, source
 cleanup, retention, remote deletion, or migration authority.
+### R46.6 verified local-first serving cutover
+
+R46.6 adds a local-only serving cutover after the qualified R46.5b publication executor. `_argent_video_serving_authority` is a strict version-1 non-secret evidence record, never a provider credential or remote mutation command. The detached finalizer may write it only after the current lifecycle/plan/destination/applied execution and durable remote-asset row agree that the exact asset is ready, verified, and at the intended public/unlisted privacy. A retry after publication is already applied may converge the local cutover without fresh provider credentials or HTTP.
+
+Frontend rendering does not trust the cutover record alone. `Video_Serving_Service` re-reads lifecycle generation/plan hash, destination/channel, applied execution, published anchor state, and the remote-asset row. Any mismatch, stale generation, malformed record, changed remote state/privacy, or missing verification returns an empty remote resolution and the dynamic block follows the existing local `wp_video_shortcode()`/Renderer path. Private/internal PeerTube targets deliberately remain local because WordPress audience membership does not prove PeerTube authentication. No frontend network call, cleanup, deletion, or migration is introduced.

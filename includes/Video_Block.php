@@ -12,6 +12,10 @@ final class Video_Block
 {
     public const NAME = 'argentwolf-video-processor/video';
 
+    public function __construct(private readonly ?Video_Serving_Resolver $serving = null)
+    {
+    }
+
     public function register(): void
     {
         register_block_type(
@@ -53,15 +57,25 @@ final class Video_Block
             return '';
         }
 
-        // Destination selection deliberately does not alter serving authority
-        // at R46.3b. wp_video_shortcode() keeps the established local Renderer
-        // compatibility path, including existing processed derivatives.
-        $player = wp_video_shortcode(
-            array(
-                'src'     => $url,
-                'preload' => 'metadata',
-            )
-        );
+        $embed_url = null !== $this->serving ? $this->serving->peertube_embed_url($video_id) : '';
+        if ('' !== $embed_url) {
+            $title = get_the_title($video_id);
+            $title = is_string($title) && '' !== $title ? $title : __('Video', 'argentwolf-video-processor');
+            $player = sprintf(
+                '<div class="awvp-peertube-embed"><iframe src="%s" title="%s" loading="lazy" allow="fullscreen; picture-in-picture" allowfullscreen></iframe></div>',
+                esc_url($embed_url),
+                esc_attr($title)
+            );
+        } else {
+            // Missing, stale, or uncertain remote serving evidence always keeps
+            // the established local WordPress/Renderer path authoritative.
+            $player = wp_video_shortcode(
+                array(
+                    'src'     => $url,
+                    'preload' => 'metadata',
+                )
+            );
+        }
         if (! is_string($player) || '' === $player) {
             return '';
         }

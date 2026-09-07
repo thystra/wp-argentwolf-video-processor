@@ -1373,3 +1373,8 @@ execution record was not, replay can adopt that same valid operation. It does no
 make fuzzy/source-only matches and does not overwrite malformed journal state.
 The existing remote-asset row remains the durable remote identity; finalization
 updates its observed desired/actual privacy only after positive remote verification.
+### `_argent_video_serving_authority`
+
+R46.6 adds a strict version-1 non-secret serving evidence record on the hidden AWVP Video. It stores mode `peertube`, backend/channel/anchor identity, lifecycle generation, plan and applied-manifest SHA-256 commitments, remote-asset ID/UUID, exact verified embed URL, public/unlisted privacy ID, and verification time. Missing metadata means local serving. Malformed or stale-present metadata never falls through to another remote asset; the frontend resolves it as local.
+
+The record is only eligible after the durable remote-asset row is `ready`, desired and actual privacy agree with the current public/unlisted target, processing state is `1:published`, `last_verified_at` is present, and the execution's applied manifest equals its desired manifest. Draft/reschedule/private/internal or later-generation intent clears or invalidates remote serving without deleting local media. R46.9 remains the only cleanup/retention authority.

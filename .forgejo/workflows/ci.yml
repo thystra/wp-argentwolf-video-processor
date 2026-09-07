@@ -62,6 +62,8 @@ jobs:
           php tests/peertube-publication-execution.php
           php tests/peertube-publication-staging.php
           php tests/peertube-publication-task-coordinator.php
+          php tests/video-serving-authority.php
+          php tests/video-serving-cutover.php
           php tests/video-block-editor-service.php
           php tests/video-block-editor-rest.php
           php tests/video-block.php

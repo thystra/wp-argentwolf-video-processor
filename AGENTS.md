@@ -375,3 +375,7 @@ line, applies the shared template guidance together with `AGENTS-TESTING.md`,
   state must never be inputs. Reused blocks do not transfer publication authority
   away from the immutable origin post. Validation filters must not enqueue remote
   work, register reveal transitions, or publish-then-revert content.
+
+## R46.6 serving-cutover boundary
+
+Treat `_argent_video_serving_authority` as revocable evidence, not a destination selector. Public/unlisted remote rendering requires current lifecycle/plan/execution/remote-asset agreement; any uncertainty stays local. Do not add render-time PeerTube HTTP or cleanup authority while working in R46.6.

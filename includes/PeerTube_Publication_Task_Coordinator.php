@@ -46,7 +46,8 @@ final class PeerTube_Publication_Task_Coordinator
         private readonly Managed_Backend_Secret_Store $secrets,
         private readonly PeerTube_Publication_Catalog_Store $catalogs,
         private readonly Video_Publishing_Defaults_Store $defaults,
-        callable $api_factory
+        callable $api_factory,
+        private readonly ?PeerTube_Serving_Cutover_Service $cutover = null
     ) {
         $this->api_factory = Closure::fromCallable($api_factory);
     }
@@ -153,6 +154,21 @@ final class PeerTube_Publication_Task_Coordinator
     private function advance_finalize(array $task,array $payload,int $now): array
     {
         $task_id=(int)$task['id']; $video_id=(int)$task['video_post_id']; $lock=(string)$task['lock_token'];
+        $retry_lifecycle=$this->lifecycle_for_payload($video_id,$payload);
+        if (null !== $this->cutover && is_array($retry_lifecycle)) {
+            $existing=$this->load_execution($video_id);
+            if (is_array($existing) && array()!==$existing && ''!==(string)$existing['applied_manifest_sha256']
+                && hash_equals((string)$existing['manifest_sha256'],(string)$existing['applied_manifest_sha256'])
+                && $this->asset_matches_applied($existing,(string)$retry_lifecycle['target_privacy_id'])) {
+                $status=$this->cutover->reconcile($video_id,$now);
+                if (in_array($status,array(PeerTube_Serving_Cutover_Service::APPLIED,PeerTube_Serving_Cutover_Service::PRESENT,PeerTube_Serving_Cutover_Service::LOCAL),true)) {
+                    return $this->complete($task_id,self::TASK_FINALIZE,$lock,$now,'cutover_retry:'.$status);
+                }
+                if (PeerTube_Serving_Cutover_Service::INDETERMINATE===$status) {
+                    return $this->reschedule($task_id,self::TASK_FINALIZE,$lock,$now+60,'Verified publication is waiting for durable local serving cutover.',$now);
+                }
+            }
+        }
         $state=$this->current_authority($video_id,$task,$payload,true,$now);
         if ('stale' === $state['status'] || 'inactive' === $state['status']) return $this->complete($task_id,self::TASK_FINALIZE,$lock,$now,$state['status']);
         if ('ready' !== $state['status']) {
@@ -187,6 +203,12 @@ final class PeerTube_Publication_Task_Coordinator
         if (! is_object($post)) return $this->fail($task_id,self::TASK_FINALIZE,$lock,'WordPress anchor post is unavailable.',$now,'anchor_missing');
         if ('3' !== $target && ('publish' !== ($post->post_status??null) || true !== $state['lifecycle']['reveal_authorized'])) {
             return $this->complete($task_id,self::TASK_FINALIZE,$lock,$now,'reveal_superseded');
+        }
+
+        if ('' !== (string)$execution['applied_manifest_sha256']
+            && hash_equals((string)$execution['manifest_sha256'],(string)$execution['applied_manifest_sha256'])
+            && $this->asset_matches_applied($execution,$target)) {
+            return $this->finish_cutover($task_id,$lock,$video_id,$now,'already_verified');
         }
 
         $api=$state['api']; $secret=$state['secret'];
@@ -227,7 +249,36 @@ final class PeerTube_Publication_Task_Coordinator
         if (! in_array($asset_status,array(PeerTube_Remote_Asset_Store::APPLIED,PeerTube_Remote_Asset_Store::PRESENT),true)) return $this->fail($task_id,self::TASK_FINALIZE,$lock,'Verified PeerTube publication could not be recorded locally.',$now,'asset_indeterminate');
         $execution=PeerTube_Publication_Execution::mark_applied($execution,$manifest,$now);
         if (array()===$execution || ! $this->save_execution($video_id,$execution)) return $this->fail($task_id,self::TASK_FINALIZE,$lock,'Applied publication manifest could not be durably recorded.',$now,'execution_indeterminate');
-        return $this->complete($task_id,self::TASK_FINALIZE,$lock,$now,'verified');
+        return $this->finish_cutover($task_id,$lock,$video_id,$now,'verified');
+    }
+
+    private function finish_cutover(int $task_id,string $lock,int $video_id,int $now,string $service):array
+    {
+        if (null === $this->cutover) {
+            return $this->complete($task_id,self::TASK_FINALIZE,$lock,$now,$service);
+        }
+        $status=$this->cutover->reconcile($video_id,$now);
+        if (in_array($status,array(PeerTube_Serving_Cutover_Service::APPLIED,PeerTube_Serving_Cutover_Service::PRESENT,PeerTube_Serving_Cutover_Service::LOCAL),true)) {
+            return $this->complete($task_id,self::TASK_FINALIZE,$lock,$now,$service.':'.$status);
+        }
+        if (PeerTube_Serving_Cutover_Service::INDETERMINATE===$status) {
+            return $this->reschedule($task_id,self::TASK_FINALIZE,$lock,$now+60,'Verified publication is waiting for durable local serving cutover.',$now);
+        }
+        return $this->fail($task_id,self::TASK_FINALIZE,$lock,'Verified publication does not satisfy serving-cutover evidence.',$now,'cutover_refused');
+    }
+
+    private function asset_matches_applied(array $execution,string $privacy_id):bool
+    {
+        $asset=$this->assets->find((int)($execution['remote_asset_id']??0));
+        $privacy=Video_Serving_Authority::privacy_name($privacy_id);
+        return is_array($asset)&&''!==$privacy
+            &&(int)$execution['remote_asset_id']===(int)($asset['id']??0)
+            &&$execution['backend_id']===($asset['backend_id']??null)
+            &&$execution['channel_id']===($asset['channel_id']??null)
+            &&$execution['remote_uuid']===strtolower((string)($asset['remote_id']??''))
+            &&'ready'===($asset['state']??null)&&$privacy===($asset['desired_privacy']??null)
+            &&$privacy===($asset['actual_privacy']??null)&&'1:published'===($asset['remote_processing_state']??null)
+            &&is_string($asset['last_verified_at']??null)&&''!==$asset['last_verified_at'];
     }
 
     /** @return array<string,mixed> */
@@ -325,6 +376,17 @@ final class PeerTube_Publication_Task_Coordinator
         return array('version'=>self::PAYLOAD_VERSION,'generation'=>(int)$v['generation'],'plan_sha256'=>$v['plan_sha256']);
     }
 
+
+    /** @return array<string,mixed>|null */
+    private function lifecycle_for_payload(int $video_id,array $payload):?array
+    {
+        $lifecycle=PeerTube_Publication_Lifecycle::sanitize(get_post_meta($video_id,Video_Meta::PEERTUBE_PUBLICATION_LIFECYCLE,true));
+        return array()!==$lifecycle
+            &&(int)$payload['generation']===(int)$lifecycle['generation']
+            &&hash_equals((string)$payload['plan_sha256'],(string)$lifecycle['plan_sha256'])
+            ? $lifecycle
+            : null;
+    }
 
     private static function transient_authority(string $status): bool
     {

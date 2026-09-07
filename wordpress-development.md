@@ -488,3 +488,7 @@ Private) and positively verify it. Do not hold a WordPress database lock across
 network I/O, and do not blindly replay an indeterminate exposure-changing request.
 A short per-resource executor lock can serialize competing remote workers while
 leaving the local authority writer free to supersede the generation.
+
+### R46.6 serving boundary
+
+The AWVP dynamic block may render the verified PeerTube embed only through `Video_Serving_Service`; otherwise it must call the existing local `wp_video_shortcode()` path. Rendering performs local metadata/database reads only and never provider HTTP. The detached cutover writer is fed by R46.5b's positively verified publication state and stores only non-secret evidence.

@@ -40,6 +40,9 @@ function get_block_wrapper_attributes(array $extra = array()): string
     return 'class="wp-block-argentwolf-video-processor-video" data-awvp-video-id="' . htmlspecialchars((string) ($extra['data-awvp-video-id'] ?? ''), ENT_QUOTES) . '"';
 }
 function esc_attr(string $value): string { return htmlspecialchars($value, ENT_QUOTES); }
+function esc_url(string $value): string { return htmlspecialchars($value, ENT_QUOTES); }
+function __(string $value, string $domain = ''): string { unset($domain); return $value; }
+function get_the_title(int $id): string { return 'Video ' . $id; }
 function sanitize_key(mixed $value): string
 {
     return preg_replace('/[^a-z0-9_\-]/', '', strtolower((string) $value)) ?? '';
@@ -49,11 +52,13 @@ function sanitize_text_field(mixed $value): string { return trim(strip_tags((str
 require_once dirname(__DIR__) . '/includes/Backend_Identity.php';
 require_once dirname(__DIR__) . '/includes/Video_Post_Type.php';
 require_once dirname(__DIR__) . '/includes/Video_Meta.php';
+require_once dirname(__DIR__) . '/includes/Video_Serving_Resolver.php';
 require_once dirname(__DIR__) . '/includes/Video_Block.php';
 
 use ArgentVideo\Video_Block;
 use ArgentVideo\Video_Meta;
 use ArgentVideo\Video_Post_Type;
+use ArgentVideo\Video_Serving_Resolver;
 
 $assert = static function (bool $ok, string $message): void {
     if (! $ok) { fwrite(STDERR, "FAIL: {$message}\n"); exit(1); }
@@ -78,6 +83,12 @@ $assert(str_contains($html, 'data-awvp-video-id="101"'), 'Rendered AWVP block lo
 $assert(str_contains($html, 'https://example.test/uploads/local.mp4'), 'Remote destination changed the local serving source prematurely.');
 $assert(1 === count($GLOBALS['awvp_block_shortcode_calls']), 'Dynamic block bypassed the established WordPress video shortcode compatibility path.');
 $assert('metadata' === ($GLOBALS['awvp_block_shortcode_calls'][0]['preload'] ?? ''), 'AWVP block local player preload policy drifted.');
+
+final class Awvp_Block_Remote_Serving implements Video_Serving_Resolver { public function peertube_embed_url(int $video_id): string { return 101 === $video_id ? 'https://video.example.org/videos/embed/123e4567-e89b-42d3-a456-426614174000' : ''; } }
+$remote_block = new Video_Block(new Awvp_Block_Remote_Serving());
+$remote_html = $remote_block->render(array('videoId'=>101));
+$assert(str_contains($remote_html, '<iframe') && str_contains($remote_html, 'video.example.org/videos/embed/123e4567-e89b-42d3-a456-426614174000'), 'Verified serving resolver did not switch the AWVP block to PeerTube embed output.');
+$assert(1 === count($GLOBALS['awvp_block_shortcode_calls']), 'PeerTube cutover still rendered the local shortcode path.');
 
 $assert('' === $block->render(array()), 'Unbound block unexpectedly rendered frontend output.');
 $assert('' === $block->render(array('videoId'=>999)), 'Unknown AWVP Video unexpectedly rendered frontend output.');
@@ -117,6 +128,11 @@ $build = (string) file_get_contents(dirname(__DIR__) . '/build/build-plugin.sh')
 $assert(str_contains($bootstrap, "includes/Video_Block.php") && str_contains($bootstrap, "includes/Video_Block_Editor_Rest.php"), 'Block/editor REST classes are not loaded by plugin bootstrap.');
 $assert(str_contains($bootstrap, "includes/PeerTube_Publication_Editor_Service.php") && str_contains($bootstrap, "includes/PeerTube_Publication_Editor_Rest.php"), 'Publication editor classes are not loaded by plugin bootstrap.');
 $assert(str_contains($bootstrap, "includes/Editorial_Publish_Validator.php") && str_contains($bootstrap, "includes/Editorial_Publish_Gate.php"), 'Editorial publication gate classes are not loaded by plugin bootstrap.');
+$assert(str_contains($bootstrap, "includes/Video_Serving_Authority.php") && str_contains($bootstrap, "includes/Video_Serving_Service.php") && str_contains($bootstrap, "includes/PeerTube_Serving_Cutover_Service.php"), 'R46.6 serving/cutover classes are not loaded by plugin bootstrap.');
+$block_source = (string) file_get_contents(dirname(__DIR__) . '/includes/Video_Block.php');
+$assert(str_contains($block_source, 'peertube_embed_url') && str_contains($block_source, '<iframe'), 'AWVP block has no verified PeerTube serving path.');
+$assert(str_contains($block_source, 'wp_video_shortcode'), 'AWVP block lost local fallback serving path.');
+foreach (array('wp_remote_', 'PeerTube_Api_Client', 'update_publication', 'update_privacy') as $forbidden) { $assert(! str_contains($block_source, $forbidden), 'Frontend block acquired provider-network/mutation authority: ' . $forbidden); }
 $assert(str_contains($plugin, "add_action('init', array(\$video_block, 'register'), 7)"), 'Dynamic AWVP block is not registered from Plugin boot.');
 $assert(str_contains($plugin, "add_action('rest_api_init', array(\$video_block_editor_rest, 'register'))"), 'AWVP block REST boundary is not registered from Plugin boot.');
 $assert(str_contains($plugin, "add_action('rest_api_init', array(\$peertube_publication_editor_rest, 'register'))"), 'PeerTube publication editor REST boundary is not registered from Plugin boot.');

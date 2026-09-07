@@ -46,7 +46,9 @@ final class Plugin
         $video_publishing_defaults = new Video_Publishing_Defaults_Store($this->backend_registry);
         $video_block_editor_service = new Video_Block_Editor_Service($this->backend_registry, $video_publishing_defaults);
         $video_block_editor_rest = new Video_Block_Editor_Rest($video_block_editor_service);
-        $video_block = new Video_Block();
+        $frontend_remote_assets = new Remote_Asset_Repository();
+        $video_serving = new Video_Serving_Service($frontend_remote_assets);
+        $video_block = new Video_Block($video_serving);
         $peertube_publication_catalogs = new PeerTube_Publication_Catalog_Store();
         $peertube_publication_editor = new PeerTube_Publication_Editor_Service(
             $this->backend_registry,
@@ -231,6 +233,7 @@ final class Plugin
                 array($peertube_reconciliation, 'advance'),
                 $peertube_failure_notification
             );
+            $peertube_cutover = new PeerTube_Serving_Cutover_Service($peertube_remote_assets);
             $peertube_publication_tasks = new PeerTube_Publication_Task_Coordinator(
                 $peertube_tasks,
                 $peertube_upload_operations,
@@ -242,7 +245,8 @@ final class Plugin
                 $peertube_secrets,
                 $peertube_publication_catalogs,
                 $video_publishing_defaults,
-                $peertube_api_factory
+                $peertube_api_factory,
+                $peertube_cutover
             );
             $peertube_task_worker = new PeerTube_Task_Worker(
                 $peertube_tasks,
