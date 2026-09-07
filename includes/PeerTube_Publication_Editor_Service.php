@@ -198,6 +198,18 @@ final class PeerTube_Publication_Editor_Service
             return self::result(self::REFUSED);
         }
 
+        if (metadata_exists('post', $video_id, Video_Meta::PEERTUBE_MIGRATION_EXECUTION)) {
+            $migration_execution = PeerTube_Migration_Execution::sanitize(
+                get_post_meta($video_id, Video_Meta::PEERTUBE_MIGRATION_EXECUTION, true)
+            );
+            if (array() === $migration_execution
+                || (string)$migration_execution['backend_id'] !== $backend_id
+                || (string)$migration_execution['channel_id'] !== (string)$destination_candidate['channel_id']
+                || $destination_candidate !== $destination) {
+                return self::result(self::REFUSED);
+            }
+        }
+
         $before_destination = $destination;
         if ($before === $candidate && $before_destination === $destination_candidate) {
             if (function_exists('do_action')) {

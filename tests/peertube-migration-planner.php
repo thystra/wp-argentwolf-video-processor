@@ -53,6 +53,7 @@ require_once dirname(__DIR__) . '/includes/PeerTube_Publication_Catalog.php';
 require_once dirname(__DIR__) . '/includes/PeerTube_Publication_Catalog_Store.php';
 require_once dirname(__DIR__) . '/includes/Video_Post_Type.php';
 require_once dirname(__DIR__) . '/includes/PeerTube_Migration_Plan.php';
+require_once dirname(__DIR__) . '/includes/PeerTube_Migration_Execution.php';
 require_once dirname(__DIR__) . '/includes/Video_Meta.php';
 require_once dirname(__DIR__) . '/includes/PeerTube_Migration_Planner.php';
 
@@ -134,6 +135,16 @@ $preserved=PeerTube_Migration_Plan::sanitize($GLOBALS['awvp_migration_meta'][100
 $assert(PeerTube_Migration_Plan::STATUS_READY===$preserved['status'],'Same-target replan reset completed review.');
 $assert(array()===$ready['issues'],'Ready migration plan retained Needs Review issues.');
 $assert(!metadata_exists('post',100,Video_Meta::PEERTUBE_PUBLICATION_PLAN),'Review promoted migration plan prematurely.');
+
+// Once R46.8 execution is committed, planning/review state is frozen one-way.
+$GLOBALS['awvp_migration_meta'][100][Video_Meta::PEERTUBE_MIGRATION_EXECUTION]=array(
+    'version'=>1,'video_id'=>100,'migration_plan_sha256'=>str_repeat('a',64),'backend_id'=>'pt-primary','channel_id'=>'77','anchor_post_id'=>10,
+    'status'=>'prepared','lifecycle_generation'=>0,'task_id'=>0,'started_at'=>2000000250,'updated_at'=>2000000250,'promoted_at'=>0,'dispatched_at'=>0,
+);
+$frozen=$planner->review(100,$review,2000000260);
+$assert(PeerTube_Migration_Planner::REFUSED===$frozen['status'] && array('migration_execution_started')===$frozen['issues'],'Committed migration execution did not freeze planner review.');
+$assert(null===$planner->candidate(100),'Committed migration execution remained a planning candidate.');
+unset($GLOBALS['awvp_migration_meta'][100][Video_Meta::PEERTUBE_MIGRATION_EXECUTION]);
 
 // Provider/context drift fails closed.
 $bad=$review; $bad['channel_id']='999';

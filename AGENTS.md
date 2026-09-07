@@ -383,3 +383,10 @@ line, applies the shared template guidance together with `AGENTS-TESTING.md`,
 ## R46.6 serving-cutover boundary
 
 Treat `_argent_video_serving_authority` as revocable evidence, not a destination selector. Public/unlisted remote rendering requires current lifecycle/plan/execution/remote-asset agreement; any uncertainty stays local. Do not add render-time PeerTube HTTP or cleanup authority while working in R46.6.
+
+
+## R46.8 migration execution boundary
+
+`PeerTube_Migration_Executor` is a local promotion coordinator, not a provider executor. A fresh Start migration action must require a strict `ready` R46.7 plan and revalidate the hidden video/attachment/anchor identity, canonical-local destination, active PeerTube backend/origin, a non-stale current-secret-generation publication catalog, provider vocabulary, support preset resolution, and immutable thumbnail identity by successfully building the existing `PeerTube_Publication_Manifest`. It writes `_argent_video_peertube_migration_execution` before live promotion, then converges only forward: exact publication plan first, exact PeerTube destination second, journal `promoted`, and finally `PeerTube_Publication_Synchronizer::sync_video()`.
+
+Do not add PeerTube HTTP, upload session creation, task enqueueing, remote-asset mutation, serving cutover, cleanup, or deletion to the migration executor. The synchronizer remains the sole handoff to R46.5. A present migration-execution journal is the one-way commitment boundary: planner review is frozen and ordinary destination/publication editor operations may not change backend/channel. Malformed/future journal state must be preserved and fail closed; prepared/promoted retries must be idempotent and crash-recoverable.

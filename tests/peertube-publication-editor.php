@@ -11,10 +11,11 @@ namespace ArgentVideo {
     final class Video_Post_Type { public const POST_TYPE='argent_video'; }
     final class Video_Meta {
         public const ATTACHMENT_ID='_argent_video_attachment_id'; public const ORIGIN_POST_ID='_argent_video_origin_post_id';
-        public const DESTINATION='_argent_video_destination'; public const PEERTUBE_PUBLICATION_PLAN='_argent_video_peertube_publication_plan';
+        public const DESTINATION='_argent_video_destination'; public const PEERTUBE_PUBLICATION_PLAN='_argent_video_peertube_publication_plan'; public const PEERTUBE_MIGRATION_EXECUTION='_argent_video_peertube_migration_execution';
         public static function sanitize_positive_id(mixed $v): int { return is_int($v)&&$v>0?$v:(is_string($v)&&1===preg_match('/^[1-9][0-9]*$/D',$v)?(int)$v:0); }
     }
     final class PeerTube_Origin { public static function sanitize(mixed $v): string { return is_string($v)&&str_starts_with($v,'https://')?rtrim($v,'/'):''; } }
+    final class PeerTube_Migration_Execution { public static function sanitize(mixed $v): array { return is_array($v)&&isset($v['backend_id'],$v['channel_id'])?$v:array(); } }
     final class Video_Publishing_Defaults_Store { public ?array $value=null; public function get(): ?array { return $this->value; } }
     final class PeerTube_Publication_Catalog_Store { public ?array $value=null; public function get(string $id): ?array { return $this->value; } }
     final class Video_Publishing_Defaults {
@@ -87,13 +88,20 @@ namespace {
     $assert(true===$mismatch['plan']['review']['channel'],'Read-only stored plan was mutated while projecting a mismatch draft.');
     $GLOBALS['awvp_pub_meta'][100][Video_Meta::DESTINATION]=array('version'=>1,'backend_id'=>'pt-primary','channel_id'=>'42');
 
-    $bad=$plan; $bad['final_privacy_id']='5';
+    // R46.8 committed migration freezes backend/channel while still allowing same-target metadata edits.
+    $GLOBALS['awvp_pub_meta'][100][Video_Meta::PEERTUBE_MIGRATION_EXECUTION]=array('backend_id'=>'pt-primary','channel_id'=>'42');
+    $same=$plan; $same['title']='Updated Legacy Clip';
+    $assert(PeerTube_Publication_Editor_Service::APPLIED===$service->save(100,$same,false)['status'],'Committed migration blocked same-target metadata edit.');
+    $retarget=$same; $retarget['channel_id']='41';
+    $assert(PeerTube_Publication_Editor_Service::REFUSED===$service->save(100,$retarget,false)['status'],'Committed migration allowed target-channel replacement.');
+
+    $bad=$same; $bad['final_privacy_id']='5';
     $assert(PeerTube_Publication_Editor_Service::REFUSED===$service->save(100,$bad,false)['status'],'Password privacy was authorable without a password lifecycle.');
     $catalogs->value['stale']=true; $catalogs->value['stale_reason']='remote_failed';
     $assert(true===$service->editor_state(100)['catalog']['usable'],'Same-context last-known-good stale catalog should remain editable.');
     $catalogs->value['stale_reason']='backend_context_changed';
     $assert(false===$service->editor_state(100)['catalog']['usable'],'Backend-context-changed catalog must not authorize authoring choices.');
-    $assert(PeerTube_Publication_Editor_Service::REFUSED===$service->save(100,$plan,false)['status'],'Context-changed catalog accepted a save.');
+    $assert(PeerTube_Publication_Editor_Service::REFUSED===$service->save(100,$same,false)['status'],'Context-changed catalog accepted a save.');
 
     $source=(string)file_get_contents(dirname(__DIR__).'/includes/PeerTube_Publication_Editor_Service.php');
     foreach(array('wp_remote_','PeerTube_Api_Client','PeerTube_Task','wp_schedule_','transition_post_status','wp_publish_post') as $forbidden){$assert(!str_contains($source,$forbidden),'Publication editor acquired forbidden authority: '.$forbidden);}

@@ -793,3 +793,8 @@ names, scalar sizes, tag count, multipart size, and thumbnail path/MIME/bytes ar
 bounded before `wp_safe_remote_request()`. Emergency re-private is a dedicated
 privacy-only projection through the same PUT boundary. No direct cURL publication
 request, arbitrary URL, browser-supplied bearer, or raw provider body is persisted.
+
+
+### R46.8 explicit migration action
+
+One-way migration execution is exposed only through the administrator Tools workflow and a capability/nonce-protected `admin-post.php` action. The first Start migration requires an explicit one-way acknowledgement. The request performs only bounded local validation/meta writes and calls the local publication synchronizer; it performs no provider HTTP in the browser/admin request. Resume uses the same per-video nonce and crash journal rather than creating a second migration. Ordinary Gutenberg destination editing is prevented from rolling back or retargeting a committed migration.

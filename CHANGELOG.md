@@ -26,6 +26,7 @@
 
 ## 2.0.0 - Unreleased
 
+- Add R46.8 explicit one-way local-to-PeerTube migration promotion. A fresh execution revalidates the ready migration plan against current source/provider/default/thumbnail state, creates a crash-recoverable local commitment journal, promotes the exact reviewed publication plan and concrete destination, and hands off only through the existing publication synchronizer. No second uploader, provider HTTP path, serving cutover, or cleanup authority is introduced; committed migration targets cannot be rolled back or retargeted by ordinary editor destination controls.
 - Add the R46.7 existing-video PeerTube migration planner and Needs Review workflow. Planning is isolated from live destination/publication/lifecycle/execution/serving state, supports bounded selected/select-all batches, preserves completed same-target review, and keeps WordPress tags as explicitly-reviewed suggestions without truncating more than five. No upload, task dispatch, provider HTTP, or serving cutover is added.
 - Add an origin-bound WordPress safe-HTTP client and bounded PeerTube instance
   detection through `GET /api/v1/config`, followed by authenticated identity and

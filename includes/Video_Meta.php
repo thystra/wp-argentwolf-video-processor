@@ -21,6 +21,7 @@ final class Video_Meta
     public const PEERTUBE_PUBLICATION_EXECUTION = '_argent_video_peertube_publication_execution';
     public const SERVING_AUTHORITY = '_argent_video_serving_authority';
     public const PEERTUBE_MIGRATION_PLAN = '_argent_video_peertube_migration_plan';
+    public const PEERTUBE_MIGRATION_EXECUTION = '_argent_video_peertube_migration_execution';
     public const PROFILE_SNAPSHOT = '_argent_video_profile_snapshot';
     public const PUBLICATION_POLICY = '_argent_video_publication_policy';
     public const METADATA_ORIGIN = '_argent_video_metadata_origin';
@@ -91,6 +92,10 @@ final class Video_Meta
             self::PEERTUBE_MIGRATION_PLAN => $base + array(
                 'type'              => 'array',
                 'sanitize_callback' => array(self::class, 'sanitize_peertube_migration_plan'),
+            ),
+            self::PEERTUBE_MIGRATION_EXECUTION => $base + array(
+                'type'              => 'array',
+                'sanitize_callback' => array(self::class, 'sanitize_peertube_migration_execution'),
             ),
             self::PROFILE_SNAPSHOT => $base + array(
                 'type'              => 'array',
@@ -208,6 +213,11 @@ final class Video_Meta
     public static function sanitize_peertube_migration_plan(mixed $value): array
     {
         return PeerTube_Migration_Plan::sanitize($value);
+    }
+
+    public static function sanitize_peertube_migration_execution(mixed $value): array
+    {
+        return PeerTube_Migration_Execution::sanitize($value);
     }
 
     public static function sanitize_serving_authority(mixed $value): array

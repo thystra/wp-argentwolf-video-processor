@@ -496,3 +496,8 @@ The AWVP dynamic block may render the verified PeerTube embed only through `Vide
 ### R46.7 migration planner development rule
 
 Migration planning is an administrator-only, local-state operation. Use `Tools > AWVP Video Migration`; refresh PeerTube publication choices separately if the target channel/catalog is unavailable. A migration plan is intentionally inert and does not trigger the R46.5 executor. Treat `ready` as an editorial planning state only; remote execution remains R46.8.
+
+
+### R46.8 migration execution development rule
+
+Treat **Start migration** as a local one-way promotion transaction, not a remote upload button. Before creating its journal, revalidate the current local source/anchor, fresh current-secret-generation backend-bound publication catalog, reviewed provider choices, support preset, and thumbnail bytes. Once `_argent_video_peertube_migration_execution` exists, only converge forward: recover partial local promotion, preserve the selected backend/channel, and hand the promoted plan to `PeerTube_Publication_Synchronizer`. Do not call PeerTube, create an upload operation, switch serving, or delete local media from the migration admin/executor path.

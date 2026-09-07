@@ -356,12 +356,18 @@
   lifecycle/plan/destination/execution/asset evidence; any uncertainty, private
   target, or superseding WordPress state immediately retains the local shortcode
   path with no frontend PeerTube HTTP.
-- [ ] R46.7: implementation candidate adds the existing-video migration planner and
-  explicit Needs Review workflow. It scans only locally-destined AWVP Videos,
-  supports selected or bounded 500-item select-all planning, stores an inert
-  `_argent_video_peertube_migration_plan`, offers WordPress tags only as suggestions
-  (never silently truncating >5), and permits explicit per-video publication review.
-  It does not write live destination/publication/lifecycle/execution/serving state,
-  enqueue tasks, or call PeerTube; R46.8 remains the sole promotion/execution step.
-- [ ] R46.8: one-way local-to-PeerTube migration execution.
+- [x] R46.7: existing-video migration planning and Needs Review are qualified at
+  commit `15b5dec`, tree `0eb6728c2a39a6a00440153dae54fb215eee26da`; Forgejo CI
+  run 134 is green. The bounded planner writes only inert migration state, preserves
+  same-target review, and never silently truncates more than five WordPress tag
+  suggestions or wakes publication execution.
+- [ ] R46.8: implementation candidate adds explicit one-way migration promotion.
+  `ready` plans are revalidated against current source identity, active backend,
+  fresh current-secret-generation catalog, provider choices, support preset, and thumbnail bytes before a
+  crash-recoverable `_argent_video_peertube_migration_execution` journal commits
+  the operation. Promotion writes the exact reviewed publication plan first and
+  concrete PeerTube destination second, verifies both, then hands off only through
+  the qualified R46.5 publication synchronizer. The migration executor performs no
+  PeerTube HTTP/upload/serving work; committed migration freezes backend/channel
+  rollback or retargeting in ordinary editor surfaces.
 - [ ] R46.9: post-cutover local retention/cleanup policy.

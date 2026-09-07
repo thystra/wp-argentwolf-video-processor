@@ -116,6 +116,8 @@ require_once dirname(__DIR__) . '/includes/Atomic_Option_Store.php';
 require_once dirname(__DIR__) . '/includes/Backend_Registry.php';
 require_once dirname(__DIR__) . '/includes/Video_Destination.php';
 require_once dirname(__DIR__) . '/includes/PeerTube_Publication_Plan.php';
+require_once dirname(__DIR__) . '/includes/PeerTube_Migration_Plan.php';
+require_once dirname(__DIR__) . '/includes/PeerTube_Migration_Execution.php';
 require_once dirname(__DIR__) . '/includes/Video_Publishing_Defaults.php';
 require_once dirname(__DIR__) . '/includes/Video_Publishing_Defaults_Store.php';
 require_once dirname(__DIR__) . '/includes/Video_Post_Type.php';
@@ -222,6 +224,14 @@ $set_remote = $service->set_destination($video_id, 'backend', 'pt-primary');
 $assert(Video_Block_Editor_Service::APPLIED === $set_remote['status'], 'Explicit PeerTube backend destination was not stored.');
 $assert('77' === (($GLOBALS['awvp_editor_meta'][$video_id][Video_Meta::DESTINATION]['channel_id'] ?? '')), 'Backend destination did not use the current qualified publication-channel override.');
 $assert(Video_Block_Editor_Service::REFUSED === $service->set_destination($video_id, 'backend', '../bad')['status'], 'Malformed backend selector was accepted.');
+
+// R46.8 one-way migration commitment freezes the concrete destination target.
+$GLOBALS['awvp_editor_meta'][$video_id][Video_Meta::PEERTUBE_MIGRATION_EXECUTION] = array(
+    'version'=>1,'video_id'=>$video_id,'migration_plan_sha256'=>str_repeat('a',64),'backend_id'=>'pt-primary','channel_id'=>'77','anchor_post_id'=>10,
+    'status'=>'dispatched','lifecycle_generation'=>1,'task_id'=>9,'started_at'=>$now+30,'updated_at'=>$now+30,'promoted_at'=>$now+30,'dispatched_at'=>$now+30,
+);
+$assert(Video_Block_Editor_Service::REFUSED === $service->set_destination($video_id, 'local')['status'], 'Committed migration was allowed to return to Local.');
+$assert(Video_Block_Editor_Service::PRESENT === $service->set_destination($video_id, 'backend', 'pt-primary')['status'], 'Committed migration did not permit idempotent same-target destination selection.');
 
 $state = $service->editor_state($video_id);
 $assert(is_array($state), 'Editor state unavailable for valid bound AWVP Video.');

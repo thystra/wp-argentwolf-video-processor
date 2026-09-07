@@ -131,6 +131,8 @@ authority. The detailed PeerTube publication/review wizard follows separately.
 
 R46.7 adds **Tools > AWVP Video Migration** for planning existing local AWVP Videos. The planner can select individual videos or a bounded select-all batch, choose an owned PeerTube channel from the last-known-good catalog, and review per-video publication metadata. WordPress tags are suggestions only and more than five are never silently truncated. Planning writes only inert migration state; it does not change the live destination/publication plan, enqueue PeerTube work, or switch frontend serving.
 
+R46.8 adds the explicit **Start migration** step for a `ready` plan. Starting is a one-way local commitment: AWVP revalidates current source/provider/default/thumbnail evidence, journals the exact migration plan, promotes its publication plan and target destination, and then invokes the existing durable publication synchronizer. Remote upload/publication and verified serving cutover continue through the already-qualified R46.5/R46.6 paths; R46.8 adds no parallel uploader or frontend path.
+
 ## WP-CLI
 
 ```bash

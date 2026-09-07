@@ -89,6 +89,9 @@ final class PeerTube_Migration_Planner
     /** @return array<string,mixed>|null */
     public function candidate(int $video_id): ?array
     {
+        if (metadata_exists('post', $video_id, Video_Meta::PEERTUBE_MIGRATION_EXECUTION)) {
+            return null;
+        }
         $video = $this->video_post($video_id);
         if (null === $video || ! $this->is_local_destination($video_id)) {
             return null;
@@ -170,6 +173,9 @@ final class PeerTube_Migration_Planner
      */
     public function review(int $video_id, array $publication_plan, int $now): array
     {
+        if (metadata_exists('post', $video_id, Video_Meta::PEERTUBE_MIGRATION_EXECUTION)) {
+            return array('status'=>self::REFUSED,'issues'=>array('migration_execution_started'));
+        }
         $candidate = $this->candidate($video_id);
         if (null === $candidate || $now < 1) {
             return array('status'=>self::REFUSED,'issues'=>array('video_ineligible'));

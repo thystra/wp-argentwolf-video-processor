@@ -134,8 +134,30 @@ final class Plugin
                 $video_publishing_defaults,
                 $peertube_publication_catalogs
             );
+            $peertube_migration_executor = new PeerTube_Migration_Executor(
+                $this->backend_registry,
+                $peertube_publication_catalogs,
+                $video_publishing_defaults,
+                $peertube_publication_synchronizer,
+                static function (array $descriptor, string $backend_id) use ($peertube_secrets): int {
+                    $secret_ref = is_string($descriptor['secret_ref'] ?? null) ? $descriptor['secret_ref'] : '';
+                    if ('' === $secret_ref) {
+                        return 0;
+                    }
+                    try {
+                        $secret = $peertube_secrets->read($secret_ref, $backend_id);
+                    } catch (\Throwable) {
+                        $secret = null;
+                    }
+                    $generation = is_array($secret) && is_int($secret['generation'] ?? null)
+                        ? $secret['generation'] : 0;
+                    unset($secret);
+                    return $generation > 0 ? $generation : 0;
+                }
+            );
             $peertube_migration_admin = new PeerTube_Migration_Admin(
                 $peertube_migration_planner,
+                $peertube_migration_executor,
                 $this->backend_registry,
                 $peertube_publication_catalogs
             );
@@ -219,6 +241,10 @@ final class Plugin
             add_action(
                 'admin_post_' . PeerTube_Migration_Admin::ACTION_REVIEW,
                 array($peertube_migration_admin, 'review_action')
+            );
+            add_action(
+                'admin_post_' . PeerTube_Migration_Admin::ACTION_EXECUTE,
+                array($peertube_migration_admin, 'execute_action')
             );
             add_action('admin_notices', array($admin, 'notices'));
             add_action('admin_notices', array($peertube_admin, 'notices'));

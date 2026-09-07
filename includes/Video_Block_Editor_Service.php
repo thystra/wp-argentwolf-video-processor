@@ -226,6 +226,23 @@ final class Video_Block_Editor_Service
             return array('status' => self::REFUSED);
         }
 
+        if (metadata_exists('post', $video_id, Video_Meta::PEERTUBE_MIGRATION_EXECUTION)) {
+            $migration_execution = PeerTube_Migration_Execution::sanitize(
+                get_post_meta($video_id, Video_Meta::PEERTUBE_MIGRATION_EXECUTION, true)
+            );
+            if (array() === $migration_execution) {
+                return array('status' => self::REFUSED);
+            }
+            $current_exists = metadata_exists('post', $video_id, Video_Meta::DESTINATION);
+            $current = Video_Destination::resolve(
+                get_post_meta($video_id, Video_Meta::DESTINATION, true),
+                $current_exists
+            );
+            if (array() === $current || $current !== $destination) {
+                return array('status' => self::REFUSED);
+            }
+        }
+
         $before_exists = metadata_exists('post', $video_id, Video_Meta::DESTINATION);
         $before = $before_exists
             ? Video_Destination::sanitize(get_post_meta($video_id, Video_Meta::DESTINATION, true))
