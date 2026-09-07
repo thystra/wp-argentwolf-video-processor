@@ -407,13 +407,16 @@
   green. PeerTube publication staging now captures only a real WordPress video
   attachment confined beneath the current uploads root and copies only into the
   validated AWVP-managed staging subtree.
-- [ ] Complete the remaining 2.0 filesystem delta audit against the
-  WordPress.org-approved 1.0 confinement model before RC1: PeerTube staging and
-  AWVP-managed derivatives stay beneath `wp_upload_dir()['basedir']` (prefer the
-  plugin-managed subtree), managed tree deletion remains behind `Storage`, physical
-  source deletion remains behind confined attachment-derived identity plus
-  `wp_delete_file()`, attachment-object deletion uses WordPress attachment lifecycle
-  APIs, and no stored/arbitrary path becomes deletion authority.
+- [x] Complete the remaining 2.0 filesystem delta audit against the
+  WordPress.org-approved 1.0 confinement model. The video-source blocker was closed
+  at `eef5c31` / Forgejo CI 145; the remaining custom-thumbnail escape was closed at
+  `0dd5189b55f5b2634fe4dd9dfbb2327a5a79fd99` / Forgejo CI 147. PeerTube staging
+  and AWVP-managed derivatives remain beneath `wp_upload_dir()['basedir']`, managed
+  deletion remains behind `Storage`, physical source deletion remains behind confined
+  attachment-derived identity plus `wp_delete_file()`, and publication thumbnails are
+  captured from confined WordPress image attachments into bounded in-memory bytes
+  before HTTP so arbitrary/stored filesystem paths never become outbound or deletion
+  authority.
 - [ ] Cut/preserve the exact RC1 candidate commit and canonical Forgejo package
   only after the integrated source and release-validation gates are ready.
 - [ ] Run the reusable 2.0 RC release-validation payload from exact public 1.0.0:

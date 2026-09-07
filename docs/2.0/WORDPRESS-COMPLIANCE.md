@@ -843,3 +843,23 @@ baseline; do not weaken confinement, escaping, nonce/capability, or lifecycle
 boundaries merely to make a scanner quiet. The already-reviewed bundled hls.js
 model need not be reopened unless 2.0 changes its vendoring, licensing, source
 provenance, or runtime behavior.
+
+The pre-RC1 filesystem delta audit is complete after two concrete 2.0 corrections.
+At `eef5c31` (Forgejo CI 145), publication staging stopped accepting an attachment
+source outside the current WordPress uploads root and now stages only from a confined
+`WordPress_Source_File` identity into AWVP-managed uploads storage. At
+`0dd5189b55f5b2634fe4dd9dfbb2327a5a79fd99` (Forgejo CI 147), custom PeerTube
+thumbnails were brought under the same authority: capture requires a real confined
+WordPress image attachment, validates stable file identity while reading, bounds the
+payload to the reviewed image contract, and hands the HTTP layer only filename, MIME,
+and exact in-memory bytes. The HTTP client no longer receives a host filesystem path
+for publication thumbnails.
+
+The remaining 2.0 media/filesystem delta was reviewed against the 1.0 confinement
+model: resumable upload reads originate from already-confined AWVP-managed staging;
+managed-tree removal remains inside `Storage`; physical source removal remains behind
+attachment-derived identity/revalidation plus `wp_delete_file()`; and the unchanged
+worker diagnostic temporary-file path continues to use the WordPress temporary-file
+mechanism. No additional PeerTube media path is accepted as arbitrary database/path
+authority. Any future code that weakens one of these statements reopens this release
+gate.

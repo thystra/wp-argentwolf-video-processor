@@ -1962,10 +1962,18 @@ The qualified map advertises `ingest.awvp_staging`, `ingest.server_push`, and
 existing `delivery.embed=true`. All other PeerTube capability keys remain false.
 The exact-map regression is `tests/peertube-capability-activation.php`.
 
-This qualification is a development checkpoint, not the 2.0 release gate. Next
-integrate the qualified R45/R46 feature line into `develop-2.0`, then run the full
-RC1 package/upgrade/WordPress-compliance matrix on the exact integration commit.
-The RC filesystem audit must preserve the WordPress.org-approved 1.0 confinement
-model: PeerTube staging/managed outputs stay beneath WordPress uploads, arbitrary
-stored paths never become deletion authority, and WordPress file/attachment
-lifecycle APIs remain authoritative at destructive boundaries.
+This qualification was a development checkpoint, not the 2.0 release gate. The
+qualified R45/R46 line is now integrated into `develop-2.0` at `f7165ae`; Forgejo CI
+144 is green. The RC filesystem delta audit is also closed: video-source staging was
+confined at `eef5c31` / CI 145, and the remaining custom-thumbnail filesystem escape
+was confined at `0dd5189b55f5b2634fe4dd9dfbb2327a5a79fd99` / CI 147. PeerTube
+staging/managed outputs stay beneath WordPress uploads, publication HTTP receives no
+thumbnail host path, arbitrary stored paths never become deletion authority, and
+WordPress file/attachment lifecycle APIs remain authoritative at destructive
+boundaries.
+
+The next release step is therefore to make the documentation-only audit closure green,
+freeze that exact `develop-2.0` commit as the RC1 candidate source, dispatch the
+one-time canonical `2.0.0-rc1` Forgejo build, preserve its ZIP/SHA/provenance bytes,
+and run the reusable `2.0.0-rc1` clean-install and public-1.0.0 upgrade/Plugin Check
+matrix against that exact package before tagging or live deployment.
