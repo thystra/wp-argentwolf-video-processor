@@ -171,9 +171,14 @@ final class Video_Block_Editor_Service
 
         $site_default = $this->resolved_site_default();
 
+        $origin_post_id = Video_Meta::sanitize_positive_id(
+            get_post_meta($video_id, Video_Meta::ORIGIN_POST_ID, true)
+        );
+
         return array(
             'video' => array(
                 'id'                => $video_id,
+                'origin_post_id'    => $origin_post_id,
                 'attachment_id'     => $attachment_id,
                 'attachment_url'    => esc_url_raw($url),
                 'attachment_title'  => sanitize_text_field((string) get_the_title($attachment_id)),

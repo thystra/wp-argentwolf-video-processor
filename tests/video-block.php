@@ -104,6 +104,9 @@ $assert(str_contains($js, "value: '',\n                disabled: true"), 'Invali
 $assert(str_contains($js, "videoId < 1 || saving || value === ''"), 'Unresolved selector value can trigger a destination mutation.');
 $assert(str_contains($js, "const draftDirty = JSON.stringify(publicationDraft) !== JSON.stringify(persistedDraft)"), 'Unsaved publication edits can masquerade as persisted ready state.');
 $assert(str_contains($js, "publication.plan_status === 'channel_mismatch'"), 'Publication wizard does not surface destination/plan channel mismatch.');
+$assert(str_contains($js, "lockPostSaving(editorialLockName)") && str_contains($js, "unlockPostSaving(editorialLockName)"), 'Editor does not lock only the publicational save boundary while review is unresolved.');
+$assert(str_contains($js, "['publish', 'future', 'private']"), 'Editor publication lock does not cover publish/schedule/private transitions.');
+$assert(str_contains($js, "origin_post_id"), 'Editor publication lock cannot distinguish the original anchor from reused blocks.');
 foreach (array('access_token','refresh_token','secret_ref','PeerTube_Api_Client','peertube_upload_advance',"wp.data.dispatch('core/editor').savePost") as $forbidden) {
     $assert(! str_contains($js, $forbidden), 'Block editor acquired forbidden secret/dispatch/editor-publish authority: ' . $forbidden);
 }
@@ -113,9 +116,11 @@ $plugin = (string) file_get_contents(dirname(__DIR__) . '/includes/Plugin.php');
 $build = (string) file_get_contents(dirname(__DIR__) . '/build/build-plugin.sh');
 $assert(str_contains($bootstrap, "includes/Video_Block.php") && str_contains($bootstrap, "includes/Video_Block_Editor_Rest.php"), 'Block/editor REST classes are not loaded by plugin bootstrap.');
 $assert(str_contains($bootstrap, "includes/PeerTube_Publication_Editor_Service.php") && str_contains($bootstrap, "includes/PeerTube_Publication_Editor_Rest.php"), 'Publication editor classes are not loaded by plugin bootstrap.');
+$assert(str_contains($bootstrap, "includes/Editorial_Publish_Validator.php") && str_contains($bootstrap, "includes/Editorial_Publish_Gate.php"), 'Editorial publication gate classes are not loaded by plugin bootstrap.');
 $assert(str_contains($plugin, "add_action('init', array(\$video_block, 'register'), 7)"), 'Dynamic AWVP block is not registered from Plugin boot.');
 $assert(str_contains($plugin, "add_action('rest_api_init', array(\$video_block_editor_rest, 'register'))"), 'AWVP block REST boundary is not registered from Plugin boot.');
 $assert(str_contains($plugin, "add_action('rest_api_init', array(\$peertube_publication_editor_rest, 'register'))"), 'PeerTube publication editor REST boundary is not registered from Plugin boot.');
+$assert(str_contains($plugin, "\$editorial_publish_gate->register();"), 'Editorial publication gate is not registered from Plugin boot.');
 $assert(str_contains($build, 'rsync -a "${ROOT_DIR}/blocks/" "${STAGE_DIR}/blocks/"'), 'Release builder does not ship Gutenberg block assets.');
 
 fwrite(STDOUT, "R46 dynamic AWVP Video block tests passed.\n");

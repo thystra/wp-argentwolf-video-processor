@@ -89,6 +89,8 @@ require_once ARGENT_VIDEO_DIR . 'includes/Video_Block_Editor_Service.php';
 require_once ARGENT_VIDEO_DIR . 'includes/Video_Block_Editor_Rest.php';
 require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Publication_Editor_Service.php';
 require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Publication_Editor_Rest.php';
+require_once ARGENT_VIDEO_DIR . 'includes/Editorial_Publish_Validator.php';
+require_once ARGENT_VIDEO_DIR . 'includes/Editorial_Publish_Gate.php';
 require_once ARGENT_VIDEO_DIR . 'includes/Video_Block.php';
 require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Publication_Catalog_Store.php';
 require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Publication_Catalog_Service.php';

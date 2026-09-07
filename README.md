@@ -276,3 +276,22 @@ download policy, optional original-publication time, sensitive-content review, a
 persists editorial intent only. It performs no PeerTube HTTP, starts no upload,
 changes no WordPress post status, reveals no remote video, and does not change
 frontend serving authority.
+
+### R46.4 editorial publication gate (development)
+
+R46.3c is qualified at exact tree
+`67444badccb625a458f3436cc596557cfce16817`; Forgejo CI run 129 is green. R46.4
+uses only local WordPress/AWVP state to decide whether an anchored AWVP block has
+completed the required editorial decisions. A local or legacy-missing destination
+does not add a PeerTube review requirement. A concrete PeerTube destination must
+have a valid, matching publication plan with explicit title, channel, independent
+tags, final privacy, and moderation review.
+
+Gutenberg locks only publication-oriented saves (`publish`, `future`, `private`)
+while those decisions are unresolved; ordinary draft editing remains saveable. The
+server independently enforces the same rule at the REST pre-insert boundary and
+uses a conservative pre-write fallback for non-REST status changes. Reused AWVP
+blocks remain display-only on non-origin posts. This gate never checks PeerTube
+reachability, cached catalog freshness, upload/task/transcoding state, or remote
+readiness, so a reviewed post may publish while PeerTube is unavailable and the
+local video remains the serving fallback.

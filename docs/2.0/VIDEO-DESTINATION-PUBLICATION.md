@@ -181,7 +181,7 @@ migration.
 - **R46.8** — one-way local-to-PeerTube migration execution.
 - **R46.9** — post-cutover local retention/cleanup policy.
 
-## 9. Current R46.1-R46.3c implementation boundary
+## 9. Current R46.1-R46.4 implementation boundary
 
 R46.1 introduces the per-video model foundation:
 
@@ -291,3 +291,34 @@ destination/stored-plan channel mismatch clears channel review. Saving may make 
 plan `ready_for_dispatch`, but this is editorial readiness only: R46.3c does not
 start an upload, call PeerTube, queue a task, alter post status/remote visibility,
 or change local serving authority.
+
+### R46.4 implemented editorial gate
+
+R46.3c is qualified at tree
+`67444badccb625a458f3436cc596557cfce16817`; Forgejo CI run 129 is green. R46.4
+turns the already-defined review contract into a WordPress publication boundary
+without turning remote readiness into a publication dependency.
+
+For each AWVP Video block whose immutable origin is the post being published:
+
+- an unbound/unavailable AWVP Video blocks publication;
+- missing legacy destination metadata resolves local and does not block;
+- an explicit local destination does not require PeerTube metadata;
+- malformed present destination state blocks;
+- a PeerTube destination requires a valid plan for the same backend, anchor post,
+  and concrete channel;
+- title, channel, independent tags (including reviewed zero tags), final privacy,
+  and sensitive-content/moderation must each be explicitly reviewed.
+
+A block reused on a different post remains display-only for publication authority;
+its original anchor post owns the plan/release decision. The validator is local
+only and deliberately ignores the R46.3a catalog, credential state, remote HTTP,
+upload/task/transcoding progress, remote readiness, and serving-cutover state. A
+fully reviewed WordPress post can therefore publish while PeerTube is offline,
+with the local copy continuing to serve.
+
+Gutenberg supplies an immediate save lock only for `publish`, `future`, and
+`private` targets while review is incomplete. The server independently enforces
+the same protected statuses at REST pre-insert, with a conservative non-REST
+pre-write fallback. R46.4 does not execute the later scheduled transition or
+remote reveal; those WordPress-authoritative lifecycle actions remain R46.5.

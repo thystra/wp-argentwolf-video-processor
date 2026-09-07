@@ -54,6 +54,8 @@ final class Plugin
             $peertube_publication_catalogs
         );
         $peertube_publication_editor_rest = new PeerTube_Publication_Editor_Rest($peertube_publication_editor);
+        $editorial_publish_validator = new Editorial_Publish_Validator();
+        $editorial_publish_gate = new Editorial_Publish_Gate($editorial_publish_validator);
         $peertube_api_factory = static fn (string $origin): PeerTube_Api_Client =>
             new PeerTube_Api_Client(new PeerTube_Http_Client($origin));
         $this->backend_factory = new Backend_Adapter_Factory(
@@ -70,6 +72,7 @@ final class Plugin
         add_action('init', array($video_block, 'register'), 7);
         add_action('rest_api_init', array($video_block_editor_rest, 'register'));
         add_action('rest_api_init', array($peertube_publication_editor_rest, 'register'));
+        $editorial_publish_gate->register();
         add_action('init', array(Activator::class, 'schedule_dispatch'));
         add_action('add_attachment', array($queue, 'maybe_enqueue_attachment'));
         add_action('delete_attachment', array($queue, 'delete_attachment'));

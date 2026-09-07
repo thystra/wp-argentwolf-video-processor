@@ -1293,3 +1293,19 @@ values and explicit review. Support preset mode stores the stable preset ID with
 blank inline Markdown; a later consequential operation must resolve/freeze the
 preset value and revalidate provider vocabulary. No token, secret reference, raw
 remote response, task ID, or serving-cutover state is added by R46.3c.
+
+### R46.4 publication validation adds no persistence
+
+R46.4 introduces no new option, post-meta key, task row, journal, or remote-state
+record. Publication validation is a pure read/projection over candidate block
+content plus the already-qualified AWVP Video identity,
+`_argent_video_destination`, `_argent_video_origin_post_id`, and
+`_argent_video_peertube_publication_plan` records.
+
+The server gate does not persist a readiness bit because such a bit could become
+stale when a reviewed field, destination, block binding, or anchor changes. It
+recomputes editorial readiness at each protected publication attempt. Provider
+catalog freshness, tasks, upload/transcoding progress, and remote assets are not
+inputs to this projection and therefore cannot accidentally become publication
+authority. Reused blocks on non-origin posts are display references only for this
+validation decision.

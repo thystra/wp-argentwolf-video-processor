@@ -456,3 +456,22 @@ need explicit per-video confirmation. If a required reviewed field changes, clea
 its confirmation immediately. `send_now` and `send_on_schedule_or_publish` are
 stored dispatch policies at this checkpoint; neither causes editor/REST code to
 perform PeerTube HTTP, enqueue a task, or change WordPress publication state.
+
+### R46.4: gate editorial intent, never remote readiness
+
+When a remote media workflow has a local serving fallback, publication validation
+should answer only whether the editor has completed the decisions that WordPress
+needs to authorize publication. Recompute that state from durable local model data
+at the publication boundary; do not persist a generic “ready” flag and do not
+query the remote service, task queue, upload journal, transcoder, or observational
+provider cache. Otherwise transient infrastructure failure can incorrectly become
+a CMS publication outage.
+
+Use editor save locks for immediate UX, but enforce the rule server-side before
+write as well. Keep draft authoring saveable. For shared/reused media, retain one
+immutable publication anchor so embedding the same block elsewhere cannot grant a
+second post authority over its release plan. Preserve legacy semantics explicitly:
+missing destination metadata still means local, while malformed present state
+fails closed. Separate the later scheduled/publication transition and remote reveal
+lifecycle into its own checkpoint rather than smuggling those side effects into a
+validation filter.

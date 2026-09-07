@@ -866,3 +866,32 @@ moderation clears the associated review flag; destination/plan channel drift als
 clears channel review in the projected draft. A fully reviewed plan may store a
 dispatch policy, but R46.3c has no PeerTube HTTP, credential lifecycle, task queue,
 post-status, reveal, migration, cleanup, or serving-cutover authority.
+
+### R46.4 local editorial publication gate
+
+R46.4 separates **editorial readiness** from **remote readiness** at the WordPress
+publication boundary. `Editorial_Publish_Validator` parses the candidate post
+content, including bounded nested/reusable block expansion, and validates only
+AWVP Videos whose immutable origin post is the post being published. A reused
+AWVP block therefore does not grant a second post authority over the original
+video publication plan.
+
+A missing legacy destination still resolves local and an explicit local
+destination requires no PeerTube publication review. A concrete PeerTube
+destination must have a valid versioned `PeerTube_Publication_Plan`, matching
+backend/anchor/channel state, and explicit title/channel/tags/privacy/moderation
+review. The validator does not read the provider catalog, managed secrets, tasks,
+upload journals, remote assets, transcoding state, or PeerTube HTTP. Those are
+execution/readiness concerns and cannot block WordPress publication once editorial
+intent is locally complete.
+
+`Editorial_Publish_Gate` provides two defenses. Gutenberg receives a block-level
+`core/editor` save lock only while the edited post is targeting `publish`,
+`future`, or `private`, leaving draft work saveable. Server-side public REST post
+types receive a `rest_pre_insert_<post_type>` filter that can return a bounded
+`WP_Error` naming the exact unresolved decisions. A conservative
+`wp_insert_post_data` fallback prevents non-REST transitions from exposing
+unresolved AWVP content without publishing and then reverting; for already
+publicational content it retains the prior live content rather than silently
+making unresolved edits live. R46.4 adds no post-transition/reveal hook: actual
+scheduled publication and remote visibility synchronization remain R46.5 work.

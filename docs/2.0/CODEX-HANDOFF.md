@@ -1781,3 +1781,31 @@ or cleanup. `send_now` is only persisted editorial policy here. R46.4 remains th
 separate WordPress editorial publish-validation checkpoint, and later execution
 must re-resolve/revalidate provider state before freezing consequential remote
 work.
+
+### R46.3c qualification and R46.4 continuation
+
+R46.3c is qualified at exact tree
+`67444badccb625a458f3436cc596557cfce16817`; Forgejo CI run 129 is green. The
+resulting commit hash was not supplied in the conversation, so the tree + CI run
+are the retained qualification identity. The qualified wizard persists reviewed
+editorial intent only and still has no PeerTube HTTP/task/post-status authority.
+
+R46.4 adds only WordPress editorial publication validation. The local validator
+walks the candidate post's AWVP blocks (including bounded reusable-block
+references), ignores reused videos whose immutable origin belongs to another post,
+preserves the missing-legacy-destination => local rule, and requires a concrete
+PeerTube destination to have a valid plan matching backend, anchor, and channel
+plus explicit title/channel/tags/privacy/moderation review.
+
+The publication decision must not consult PeerTube HTTP, managed credentials, the
+R46.3a catalog or its stale flag, upload/task/transcoding/remote-asset state, or
+serving readiness. Gutenberg may lock protected-status saves for immediate UX,
+but the server is authoritative: REST pre-insert returns a bounded review-required
+error and non-REST pre-write handling refuses to expose unresolved content.
+Protected statuses at this checkpoint are `publish`, `future`, and `private`;
+draft/pending authoring remains saveable.
+
+R46.4 must not enqueue upload/reveal work, call `wp_publish_post()`, register a
+post-status transition handler, mutate PeerTube visibility, or change serving
+authority. In particular, WordPress cron's later transition of a scheduled post
+and the durable WordPress-authoritative remote reveal lifecycle remain R46.5.

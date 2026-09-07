@@ -121,6 +121,13 @@
   fields, and dispatch timing. Unsupported provider privacy values remain
   discoverable but unselectable; defaults never satisfy required review. Saving
   remains editor-only state and performs no PeerTube HTTP or task/post-status work.
+- Add the R46.4 local-only editorial publication gate. Anchored AWVP blocks with
+  concrete PeerTube destinations must have coherent destination/plan state and
+  explicit title/channel/tags/privacy/moderation review before WordPress may enter
+  `publish`, `future`, or `private`. Gutenberg provides an editor lock and the
+  server independently enforces REST/pre-write boundaries. PeerTube HTTP, catalog
+  freshness, upload/task/transcoding state, and remote readiness are intentionally
+  excluded, so reviewed posts remain publishable while remote work is unavailable.
 - Expand focused PeerTube security/state tests and isolated real-WordPress Docker
   development matrices through the R39 identity/destination checkpoint, with an
   R40 activation continuation that proves activation performs no additional

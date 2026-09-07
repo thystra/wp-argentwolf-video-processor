@@ -367,3 +367,11 @@ line, applies the shared template guidance together with `AGENTS-TESTING.md`,
   revalidated before plan persistence; explicit review is per-video and must never
   be inferred from site defaults. The editor/REST path must not perform PeerTube
   HTTP, enqueue tasks, publish posts, or alter serving authority.
+
+- R46.4 editorial publication validation is local-only. Protected WordPress status
+  attempts (`publish`, `future`, `private`) may be refused for incomplete/coherence-
+  broken AWVP editorial state, but PeerTube catalog freshness, HTTP availability,
+  credentials, upload/task/transcoding progress, remote readiness, and serving
+  state must never be inputs. Reused blocks do not transfer publication authority
+  away from the immutable origin post. Validation filters must not enqueue remote
+  work, register reveal transitions, or publish-then-revert content.

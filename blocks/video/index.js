@@ -13,7 +13,7 @@
     } = wp.components;
     const { InspectorControls, MediaUpload, MediaUploadCheck, useBlockProps } = wp.blockEditor;
     const { __ } = wp.i18n;
-    const { select } = wp.data;
+    const { select, useSelect } = wp.data;
     const apiFetch = wp.apiFetch;
     const API_ROOT = '/argentwolf-video-processor/v1/editor/videos';
 
@@ -84,6 +84,51 @@
         return String(text || '').split(/\r?\n/).map(function (tag) { return tag.trim(); }).filter(Boolean);
     }
 
+    function protectedEditorStatus(status) {
+        return ['publish', 'future', 'private'].indexOf(String(status || '')) !== -1;
+    }
+
+    function editorialGateState(videoId, state, publication, publicationDraft, editorPostId) {
+        if (videoId < 1) {
+            return { applicable: true, ready: false, detail: __('Choose a WordPress video for this block.', 'argentwolf-video-processor') };
+        }
+        if (!state || !state.video) {
+            return { applicable: true, ready: false, detail: __('AWVP is still validating this video.', 'argentwolf-video-processor') };
+        }
+        const originPostId = Number(state.video.origin_post_id || 0);
+        if (originPostId > 0 && editorPostId > 0 && originPostId !== editorPostId) {
+            return { applicable: false, ready: true, detail: '' };
+        }
+        if (originPostId < 1 || editorPostId < 1) {
+            return { applicable: true, ready: false, detail: __('The video has no valid publication anchor.', 'argentwolf-video-processor') };
+        }
+        if (!state.video.destination_valid || !state.video.destination) {
+            return { applicable: true, ready: false, detail: __('Choose or repair the final destination.', 'argentwolf-video-processor') };
+        }
+        if (state.video.destination.backend_id === 'local') {
+            return { applicable: true, ready: true, detail: '' };
+        }
+        if (!publication || !publicationDraft) {
+            return { applicable: true, ready: false, detail: __('Save and review the PeerTube publication plan.', 'argentwolf-video-processor') };
+        }
+        const persistedDraft = publication.draft || null;
+        const dirty = JSON.stringify(publicationDraft) !== JSON.stringify(persistedDraft);
+        if (dirty) {
+            return { applicable: true, ready: false, detail: __('Save the pending PeerTube publication-plan edits before publishing.', 'argentwolf-video-processor') };
+        }
+        if (publication.plan_status !== 'present' || publication.ready_for_dispatch !== true) {
+            const missing = Array.isArray(publication.missing_review) ? publication.missing_review.join(', ') : '';
+            return {
+                applicable: true,
+                ready: false,
+                detail: missing
+                    ? __('Needs review:', 'argentwolf-video-processor') + ' ' + missing
+                    : __('Complete the required PeerTube publication review.', 'argentwolf-video-processor')
+            };
+        }
+        return { applicable: true, ready: true, detail: '' };
+    }
+
     function Edit(props) {
         const { attributes, setAttributes } = props;
         const videoId = Number(attributes.videoId || 0);
@@ -98,6 +143,14 @@
         const [publicationSaving, setPublicationSaving] = useState(false);
         const [publicationError, setPublicationError] = useState('');
         const [replaceExisting, setReplaceExisting] = useState(false);
+
+        const editorPost = useSelect(function (selectStore) {
+            const editor = selectStore('core/editor');
+            return {
+                id: Number(editor && editor.getCurrentPostId ? editor.getCurrentPostId() || 0 : 0),
+                status: String(editor && editor.getEditedPostAttribute ? editor.getEditedPostAttribute('status') || '' : '')
+            };
+        }, []);
 
         useEffect(function () {
             let active = true;
@@ -141,6 +194,26 @@
                 .finally(function () { if (active) setPublicationLoading(false); });
             return function () { active = false; };
         }, [videoId, publicationBackend]);
+
+        const editorialGate = editorialGateState(
+            videoId, state, publication, publicationDraft, Number(editorPost.id || 0)
+        );
+        const publicationStatusProtected = protectedEditorStatus(editorPost.status);
+        const editorialLockName = 'awvp-publication-review-' + String(props.clientId || videoId || 'video-block');
+
+        useEffect(function () {
+            const editorDispatch = wp.data.dispatch('core/editor');
+            if (!editorDispatch || !editorDispatch.lockPostSaving || !editorDispatch.unlockPostSaving) {
+                return function () {};
+            }
+            const shouldLock = publicationStatusProtected && editorialGate.applicable && !editorialGate.ready;
+            if (shouldLock) {
+                editorDispatch.lockPostSaving(editorialLockName);
+            } else {
+                editorDispatch.unlockPostSaving(editorialLockName);
+            }
+            return function () { editorDispatch.unlockPostSaving(editorialLockName); };
+        }, [editorialLockName, publicationStatusProtected, editorialGate.applicable, editorialGate.ready]);
 
         function bindMedia(media) {
             const attachmentId = Number(media && media.id ? media.id : 0);
@@ -463,7 +536,7 @@
                     help: __('R46.3c stores this choice only. No PeerTube upload is started by saving the wizard.', 'argentwolf-video-processor')
                 }),
                 draftReady
-                    ? el(Notice, { status: 'success', isDismissible: false }, __('All required publication decisions are reviewed. This stored plan is ready for a later dispatch checkpoint; no remote work has started.', 'argentwolf-video-processor'))
+                    ? el(Notice, { status: 'success', isDismissible: false }, __('All required publication decisions are reviewed. WordPress publication may proceed; no remote work has started.', 'argentwolf-video-processor'))
                     : el(Notice, { status: 'info', isDismissible: false }, missing
                         ? __('Needs review:', 'argentwolf-video-processor') + ' ' + missing
                         : draftDirty
@@ -497,6 +570,10 @@
         const options = destinationOptions(state);
         const current = destinationValue(state);
         return el('div', blockProps,
+            editorialGate.applicable && !editorialGate.ready
+                ? el(Notice, { status: 'warning', isDismissible: false },
+                    __('WordPress publication is blocked until AWVP editorial review is complete. Draft saving remains allowed. ', 'argentwolf-video-processor') + editorialGate.detail)
+                : null,
             el(InspectorControls, null,
                 el(PanelBody, { title: __('AWVP destination', 'argentwolf-video-processor'), initialOpen: true },
                     state && !state.video.destination_valid

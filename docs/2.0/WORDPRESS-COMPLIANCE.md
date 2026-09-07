@@ -750,3 +750,24 @@ credentials, enqueue PeerTube work, save/publish the enclosing WordPress post, o
 alter frontend serving. The Gutenberg block continues to serialize only the stable
 `videoId`. Required publication-review confirmations are server-persisted inside
 the strict per-video plan, not inferred from WordPress post tags or site defaults.
+
+### R46.4 WordPress publication-validation boundary
+
+R46.4 keeps Gutenberg UX advisory and makes the server publication boundary
+authoritative. The block editor uses `core/editor` save locks only while the
+current edited status is `publish`, `future`, or `private` and an anchored AWVP
+Video has unresolved local editorial review. Draft/pending editing is not locked.
+
+For public REST-enabled post types, AWVP registers the dynamic
+`rest_pre_insert_<post_type>` filter and returns `WP_Error` with bounded issue data
+before a protected status can be persisted. The generic `wp_insert_post_data`
+filter is a non-REST defense-in-depth fallback: it retains a non-public status for
+new transitions and, for already publicational content, retains the prior live
+content rather than exposing unresolved edits. The gate does not publish and then
+revert content.
+
+The validation path performs no external HTTP and does not read PeerTube catalog
+freshness, secrets, task/upload/transcoding state, or remote readiness. It does
+not register a post-status transition callback, call `wp_publish_post()`, enqueue
+remote work, or mutate remote visibility. Scheduled-post execution and durable
+WordPress-authoritative PeerTube reveal remain a separate R46.5 lifecycle.

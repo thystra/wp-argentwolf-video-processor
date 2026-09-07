@@ -321,15 +321,23 @@
   Stable AWVP Video ID binding, idempotent WordPress-video adoption, one-time
   default resolution, explicit local/active-PeerTube destination planning, and
   local frontend serving are now the qualified editor foundation.
-- [ ] R46.3c: implementation candidate adds the PeerTube publication wizard and
-  explicit review UX over the qualified block. It edits the strict per-video plan,
-  revalidates provider IDs against the cached backend catalog, preserves independent
-  reviewed PeerTube tags including explicit zero tags, exposes channel/support/
-  privacy/licence/category/language/thumbnail/comments/downloads/moderation and
-  dispatch timing, and grants no PeerTube HTTP, task dispatch, post-status, reveal,
-  migration, or serving-cutover authority. Exact-byte qualification and Forgejo CI
-  remain before completion.
-- [ ] R46.4: editorial publish validation for unresolved required metadata only.
+- [x] R46.3c: the PeerTube publication wizard and explicit review UX are
+  qualified at tree `67444badccb625a458f3436cc596557cfce16817`; Forgejo CI run
+  129 is green. The resulting commit hash was not captured in this handoff. The
+  wizard edits the strict per-video plan, revalidates provider IDs against the
+  cached backend catalog, preserves independent reviewed PeerTube tags including
+  explicit zero tags, exposes channel/support/privacy/licence/category/language/
+  thumbnail/comments/downloads/moderation and dispatch timing, and grants no
+  PeerTube HTTP, task dispatch, post-status, reveal, migration, or serving-cutover
+  authority.
+- [ ] R46.4: implementation candidate adds local-only WordPress editorial publish
+  validation for anchored AWVP blocks. `publish`, `future`, and `private` are
+  blocked when a bound PeerTube destination lacks coherent destination/anchor/
+  backend/channel state or explicit title/channel/tags/privacy/moderation review.
+  Local and missing-legacy destinations remain publishable; reused blocks do not
+  make the second post a publication authority; PeerTube HTTP/catalog/task/upload/
+  transcoding/readiness state is deliberately outside the decision. Exact-byte
+  qualification and Forgejo CI remain before completion.
 - [ ] R46.5: private prepublication visibility and durable WordPress-authoritative
   reveal/schedule synchronization.
 - [ ] R46.6: local-first serving and verified remote cutover.
