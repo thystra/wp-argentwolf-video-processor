@@ -182,7 +182,7 @@ The existing settings keys, queue table, attachment metadata, hook names, cron
 identifiers, Settings page slug, and `wp argent-video` command are retained for
 upgrade compatibility.
 
-This Forgejo release-candidate package identifies itself as `2.0.0-rc1` in the
+This Forgejo release-candidate package identifies itself as `2.0.0-rc2` in the
 plugin header while `Stable tag: 1.0.0` deliberately continues to identify the
 public WordPress.org release. RC packages are not published to WordPress.org SVN.
 The Stable tag moves to `2.0.0` only when the final release is promoted.
@@ -192,6 +192,9 @@ Administrators upgrading from version 0.2.3 should use the normal WordPress
 plugin-update workflow and confirm the plugin remains active.
 
 == Upgrade Notice ==
+
+= 2.0.0-rc2 =
+Second controlled 2.0 release candidate. Resolves WordPress Plugin Check findings found in canonical RC1 while retaining the same 2.0 feature scope; keep WordPress.org production users on 1.0.0 until final 2.0.0 publication.
 
 = 2.0.0-rc1 =
 Release candidate for controlled 2.0 validation. Keep WordPress.org production users on 1.0.0 until the final 2.0.0 release is published.
@@ -218,6 +221,11 @@ Renames the public plugin and package to ArgentWolf Video Processor and prepares
 the project for WordPress.org review while retaining existing data identifiers.
 
 == Changelog ==
+
+= 2.0.0-rc2 =
+* Resolve WordPress Plugin Check 2.1.0 findings discovered by the first canonical RC1 release-validation pass without relaxing the established WordPress uploads/filesystem or PeerTube streaming boundaries.
+* Keep RC validation reports inside the AWVP project tree and permit only the intentional prerelease Stable-tag mismatch while all other Plugin Check ERROR/WARNING findings remain blocking.
+* Preserve the failed canonical RC1 bytes as release evidence; RC2 is a new candidate identity and package.
 
 = 2.0.0-rc1 =
 * Begin the controlled 2.0 release-candidate line while WordPress.org Stable tag remains 1.0.0.

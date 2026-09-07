@@ -1,6 +1,12 @@
 <!-- File: CHANGELOG.md -->
 # Changelog
 
+## 2.0.0-rc2 - 2026-09-07
+
+- Address WordPress Plugin Check 2.1.0 findings discovered by the first canonical RC1 release-validation pass without weakening the 1.0-derived filesystem, atomic-state, or streaming safety boundaries. Normalize request input handling, add translator context, prefer WordPress URL/tag helpers, remove the WordPress-6.5-only `array_is_list()` dependency, and narrowly document reviewed direct-SQL/cURL boundaries where WordPress APIs do not provide equivalent semantics.
+- Keep release-validation reports beneath the AWVP project parent and allow only the intentional prerelease `stable_tag_mismatch` finding while WordPress.org Stable tag remains `1.0.0`; every other Plugin Check ERROR/WARNING remains release-blocking.
+- Preserve canonical RC1 as failed release evidence: Forgejo run 150 built commit `8c91274db7c38786878c69083c99522944df1d65`, tree `352a36fda45937873ea21cc5ae6534b117ebab04`, package SHA-256 `ee15a748a2fcda27dea2339888b570a85d848718a01947c56f581bfd39e18ab0`. Exact package identity passed, but Plugin Check static-new failed before tagging or live deployment.
+
 ## 2.0.0-rc1 - 2026-09-07
 
 - Address findings from the first canonical RC1 WordPress Plugin Check 2.1.0 pass:

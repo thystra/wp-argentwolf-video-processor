@@ -1977,3 +1977,23 @@ freeze that exact `develop-2.0` commit as the RC1 candidate source, dispatch the
 one-time canonical `2.0.0-rc1` Forgejo build, preserve its ZIP/SHA/provenance bytes,
 and run the reusable `2.0.0-rc1` clean-install and public-1.0.0 upgrade/Plugin Check
 matrix against that exact package before tagging or live deployment.
+
+### RC1 release-validation failure and RC2 transition
+
+Canonical Forgejo run 150 built `2.0.0-rc1` from commit
+`8c91274db7c38786878c69083c99522944df1d65`, tree
+`352a36fda45937873ea21cc5ae6534b117ebab04`, package SHA-256
+`ee15a748a2fcda27dea2339888b570a85d848718a01947c56f581bfd39e18ab0`.
+The reusable release harness proved the exact installed-package bytes, then the
+Plugin Check 2.1.0 static-new gate failed before upgrade/legacy-block phases. No RC1
+tag was created and those exact bytes were never live-distributed; preserve them as
+failed release evidence rather than rebuilding a different package under RC1.
+
+The findings were remediated at `1dacb4a`; authoritative Forgejo CI run 151 is green.
+The remediation keeps the WordPress-uploads confinement, atomic-option, and
+descriptor-backed PeerTube streaming boundaries intact, moves validation reports
+beneath the AWVP project parent, and allows only the intentional prerelease
+`stable_tag_mismatch` finding. The controlled candidate now advances to
+`2.0.0-rc2`. Build one canonical RC2 package from the reviewed/green RC2 commit and
+rerun the complete clean-install/public-1.0.0-upgrade/package-identity/Plugin-Check
+matrix before any tag or live deployment.

@@ -417,9 +417,20 @@
   captured from confined WordPress image attachments into bounded in-memory bytes
   before HTTP so arbitrary/stored filesystem paths never become outbound or deletion
   authority.
-- [ ] Cut/preserve the exact RC1 candidate commit and canonical Forgejo package
-  only after the integrated source and release-validation gates are ready.
-- [ ] Run the reusable 2.0 RC release-validation payload from exact public 1.0.0:
+- [x] Cut and preserve the first canonical RC1 candidate before tagging: Forgejo run 150
+  built commit `8c91274db7c38786878c69083c99522944df1d65`, tree
+  `352a36fda45937873ea21cc5ae6534b117ebab04`, ZIP SHA-256
+  `ee15a748a2fcda27dea2339888b570a85d848718a01947c56f581bfd39e18ab0`.
+  Exact installed-package identity passed, but Plugin Check 2.1.0 static-new failed;
+  RC1 was not tagged or live-distributed and those exact bytes remain failed evidence.
+- [x] Remediate the RC1 Plugin Check findings at `1dacb4a`; Forgejo CI run 151 is green.
+  Keep the existing filesystem/atomic/streaming safety boundaries intact, move release
+  reports beneath the AWVP project parent, and permit only the intentional prerelease
+  `stable_tag_mismatch` while every other Plugin Check ERROR/WARNING remains blocking.
+- [ ] Advance the remediated source to `2.0.0-rc2`, obtain green Forgejo CI, and build
+  one new canonical RC2 package from that reviewed commit; never overwrite or reuse
+  the preserved RC1 package identity.
+- [ ] Run the reusable `2.0.0-rc2` release-validation payload from exact public 1.0.0:
   seed a real processed WordPress `core/video` block under 1.0, prove the 2.0
   upgrade leaves its stored block markup, attachment relationship/metadata,
   source/managed bytes, and completed local job unchanged, and separately prove
