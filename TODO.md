@@ -401,16 +401,26 @@
   integration: `a73739e5bd051e708f1616a207bf579e6f2abb93` / tree
   `0098986b489a29099c4215fb804cf21f10aff632` / Forgejo CI run 142 plus all eight
   retained real-WordPress/mock-PeerTube Docker matrices.
-- [ ] Merge the qualified R45/R46 feature line into the reviewed 2.0 integration
-  branch and cut/preserve the exact RC1 candidate commit and canonical Forgejo
-  package.
-- [ ] Audit the 2.0 filesystem delta against the WordPress.org-approved 1.0
-  confinement model before RC1: PeerTube staging and AWVP-managed derivatives stay
-  beneath `wp_upload_dir()['basedir']` (prefer the plugin-managed subtree), managed
-  tree deletion remains behind `Storage`, physical source deletion remains behind
-  confined attachment-derived identity plus `wp_delete_file()`, attachment-object
-  deletion uses WordPress attachment lifecycle APIs, and no stored/arbitrary path
-  becomes deletion authority.
+- [x] Merge the qualified R45/R46 feature line into `develop-2.0` at
+  `f7165ae`; Forgejo CI run 144 is green.
+- [x] Close the first RC filesystem blocker at `eef5c31`; Forgejo CI run 145 is
+  green. PeerTube publication staging now captures only a real WordPress video
+  attachment confined beneath the current uploads root and copies only into the
+  validated AWVP-managed staging subtree.
+- [ ] Complete the remaining 2.0 filesystem delta audit against the
+  WordPress.org-approved 1.0 confinement model before RC1: PeerTube staging and
+  AWVP-managed derivatives stay beneath `wp_upload_dir()['basedir']` (prefer the
+  plugin-managed subtree), managed tree deletion remains behind `Storage`, physical
+  source deletion remains behind confined attachment-derived identity plus
+  `wp_delete_file()`, attachment-object deletion uses WordPress attachment lifecycle
+  APIs, and no stored/arbitrary path becomes deletion authority.
+- [ ] Cut/preserve the exact RC1 candidate commit and canonical Forgejo package
+  only after the integrated source and release-validation gates are ready.
+- [ ] Run the reusable 2.0 RC release-validation payload from exact public 1.0.0:
+  seed a real processed WordPress `core/video` block under 1.0, prove the 2.0
+  upgrade leaves its stored block markup, attachment relationship/metadata,
+  source/managed bytes, and completed local job unchanged, and separately prove
+  the new 2.0 `argentwolf-video-processor/video` block registers and renders locally.
 - [ ] Run the official WordPress Plugin Check against the exact canonical RC ZIP
   and compare new findings with the accepted 1.0 remediation baseline, especially
   commits `82f095bf40`, `937969c190`, and `5d43ea346c`; resolve or explicitly
