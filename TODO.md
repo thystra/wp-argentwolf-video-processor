@@ -464,12 +464,21 @@
   behind `Storage`, and repository-only/vendor-metadata files are absent from the ZIP.
 - [x] Pass the exact-package isolated Docker upgrade/clean-install, regression,
   Plugin Check, database-repair, and package-identity release gate for canonical RC3.
-- [ ] Re-run the self-contained exact-package RC3 release-validation bundle on the
-  preferred disposable `ubuntuzfstest` VM, preserving the no-production/no-PeerTube
-  isolation contract and exact candidate/base/Plugin-Check identities as independent
-  clean-room evidence.
-- [ ] Install the accepted RC on the controlled live WordPress site and validate
-  real PeerTube connection/upload/publication/serving/migration/retention behavior.
+- [x] Re-run the self-contained exact-package RC3 release-validation bundle on the
+  preferred disposable `ubuntuzfstest` VM with the no-production/no-PeerTube
+  isolation contract. The exact run-158 candidate, public 1.0.0 base, pinned Plugin
+  Check 2.1.0 package, and validation harness identities were preserved; the VM gate
+  passed and RC3 remained byte-for-byte unchanged.
+- [ ] Complete the RC4 administrator-UI remediation identified during the controlled
+  RC3 live walkthrough: consolidate all AWVP settings under one tabbed settings page,
+  clarify PeerTube server setup/credentials/phases/actions and Backend ID validation,
+  use release-facing copy, and render administrator times in the WordPress timezone.
+  These are package-visible changes, so RC3 remains immutable and RC4 must receive a
+  new canonical artifact identity.
+- [ ] Resume the controlled live WordPress/PeerTube gate with canonical RC4 after
+  its exact-package and disposable-VM qualification. RC3 live installation/preflight
+  reached the administrator workflow and exposed the UI blockers above before the
+  full connection/upload/publication/serving/migration/retention sequence completed.
 - [ ] If defects require code changes, increment `2.0.0-rcN`, rebuild, and rerun
   the affected gates; never mutate or reuse an existing RC version/tag.
 - [ ] Freeze the last accepted RC and promote to `2.0.0` with release/version

@@ -1,6 +1,13 @@
 <!-- File: CHANGELOG.md -->
 # Changelog
 
+## 2.0.0-rc4 - 2026-09-08
+
+- Consolidate ArgentWolf Video Processor administration under one tabbed **Settings > ArgentWolf Video Processor** page with Local Processing, PeerTube Servers, Publishing, Video Migration, and Local Retention tabs. The existing nonce/capability/action handlers remain authoritative; this change replaces the split menu surfaces rather than creating a second control path.
+- Rework PeerTube server setup as a guided release-facing workflow: **Connect a PeerTube Instance**, **PeerTube URL**, constrained permanent **Backend ID**, friendly **Connection Label**, **Add PeerTube Server**, human-readable setup phases, explicit credential/channel/activation guidance, and field-specific validation errors. PeerTube username/password plus optional six-digit OTP are exchanged for managed encrypted tokens; no manually generated API key is required.
+- Render administrator-facing timestamps through the configured WordPress timezone/date/time preferences and replace raw credential-lifecycle/internal-state wording with administrator-facing status labels. Improve publishing, migration, retention, and WordPress.org/README navigation copy to match the consolidated UI.
+- Preserve RC3 as immutable qualification evidence. RC3 passed the exact-package Docker matrix, Plugin Check 2.1.0 gate, and disposable `ubuntuzfstest` qualification; controlled live testing then exposed the administrator-UX blockers corrected in RC4.
+
 ## 2.0.0-rc3 - 2026-09-07
 
 - Correct the narrow PHPCS suppression scopes revealed by canonical RC2 Plugin Check 2.1.0 static-new: action-specific nonce seed reads, read-only query selectors, and the already-prefixed `argentwolf_video_processor_publication_plan_saved` hook are now covered at the exact multi-line expression/call sites that the sniffs inspect. This is a scanner-scope correction only and does not change runtime behavior or relax nonce enforcement.

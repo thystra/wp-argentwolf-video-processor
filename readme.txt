@@ -181,7 +181,7 @@ The existing settings keys, queue table, attachment metadata, hook names, cron
 identifiers, Settings page slug, and `wp argent-video` command are retained for
 upgrade compatibility.
 
-This Forgejo release-candidate package identifies itself as `2.0.0-rc3` in the
+This Forgejo release-candidate package identifies itself as `2.0.0-rc4` in the
 plugin header while `Stable tag: 1.0.0` deliberately continues to identify the
 public WordPress.org release. RC packages are not published to WordPress.org SVN.
 The Stable tag moves to `2.0.0` only when the final release is promoted.
@@ -191,6 +191,9 @@ Administrators upgrading from version 0.2.3 should use the normal WordPress
 plugin-update workflow and confirm the plugin remains active.
 
 == Upgrade Notice ==
+
+= 2.0.0-rc4 =
+Fourth controlled 2.0 release candidate. Consolidates ArgentWolf Video Processor administration into one tabbed settings page, clarifies PeerTube connection setup and validation errors, and displays administrator-facing times in the WordPress-configured timezone. Keep WordPress.org production users on 1.0.0 until final 2.0.0 publication.
 
 = 2.0.0-rc3 =
 Third controlled 2.0 release candidate. Corrects Plugin Check suppression scope for reviewed nonce/query/hook cases found by canonical RC2; no runtime behavior change. Keep WordPress.org production users on 1.0.0 until final 2.0.0 publication.
@@ -223,6 +226,12 @@ Renames the public plugin and package to ArgentWolf Video Processor and prepares
 the project for WordPress.org review while retaining existing data identifiers.
 
 == Changelog ==
+
+= 2.0.0-rc4 =
+* Consolidate Local Processing, PeerTube Servers, Publishing, Video Migration, and Local Retention under one ArgentWolf Video Processor settings page.
+* Clarify PeerTube server setup, Backend ID requirements, sign-in/OTP/token behavior, channel selection, activation phases, and field-specific validation messages; no manually generated API key is required.
+* Display administrator-facing timestamps with WordPress timezone/date/time preferences and replace raw internal connection/lifecycle wording with friendly status labels.
+* Preserve canonical RC3 qualification evidence; RC4 is a new candidate because the live RC3 administrator walkthrough identified user-interface defects requiring package changes.
 
 = 2.0.0-rc3 =
 * Correct narrow PHPCS suppression scopes for action-specific nonce seed reads, read-only query selectors, and the already-prefixed publication-plan hook; runtime behavior and nonce enforcement are unchanged.

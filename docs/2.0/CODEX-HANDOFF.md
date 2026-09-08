@@ -2020,3 +2020,26 @@ behavior and nonce enforcement remain unchanged. Authoritative Forgejo CI run 15
 green. Advance to `2.0.0-rc3`, build one new canonical package, and rerun the complete
 Plugin Check / clean-install / public-1.0.0-upgrade matrix before any tag or live
 deployment.
+
+
+### RC3 qualification and RC4 administrator-UI transition
+
+Canonical RC3 is immutable release evidence: Forgejo run 158 built commit
+`e9a8e6c42c04e81b3d7d1c3b92c78568c1f8ee49`, package SHA-256
+`a5e8e51edf71f41be65cb6d4d2c456aa3f3505cdc73bd82dc5350611de4709ac`.
+The exact package passed Plugin Check 2.1.0, all clean-install/public-1.0.0 upgrade
+matrices, and the preferred disposable `ubuntuzfstest` qualification. Controlled
+live testing then identified administrator-facing defects rather than backend
+qualification defects: PeerTube connection/publishing/migration/retention controls
+were split across separate menu surfaces, connection phases/actions were exposed in
+internal terminology, Backend ID validation errors were not actionable, credentials
+and next steps were insufficiently explained, and status timestamps were displayed
+in UTC rather than the configured WordPress timezone.
+
+Those package-visible UI changes require a new immutable candidate. RC4 consolidates
+the administrator surfaces under one tabbed ArgentWolf Video Processor settings page
+and corrects the release-facing copy, validation feedback, setup guidance, and
+timezone display without changing the already-qualified PeerTube HTTP/upload/serving/
+retention authority boundaries. Build RC4 only after this source is green, then rerun
+the exact-package Plugin Check, clean/upgrade matrix, disposable-VM gate, and the
+controlled live PeerTube workflow.

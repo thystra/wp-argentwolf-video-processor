@@ -76,16 +76,19 @@ immediately before completion and then survives database persistence.
 
 ## 2.0 RC validation
 
-The active `2.0.0-rc3` payload upgrades from the exact public `1.0.0` package and
+The active `2.0.0-rc4` payload upgrades from the exact public `1.0.0` package and
 requires the exact candidate SHA-256 at invocation time until the canonical
-Forgejo RC artifact is selected. The `2.0.0-rc1` and `2.0.0-rc2` payloads are retained as historical
-reproduction evidence for canonical candidates that failed the static Plugin Check
+Forgejo RC artifact is selected. RC4 reuses the qualified RC3 clean/upgrade
+compatibility contract because its product changes are administrator UI, wording,
+validation feedback, and timezone presentation. The `2.0.0-rc3` payload is retained
+as accepted qualification evidence, while `2.0.0-rc1` and `2.0.0-rc2` remain
+historical reproduction evidence for candidates that failed the static Plugin Check
 gate before upgrade phases ran.
 
 ```bash
 AWVP_RC_CANDIDATE_SHA256=<sha256-of-exact-candidate-zip> \
 ARTIFACT_DIR=/path/to/release-zips \
-bash tests/release-validation/run.sh 2.0.0-rc3
+bash tests/release-validation/run.sh 2.0.0-rc4
 ```
 
 The upgrade fixture creates a real WordPress `core/video` block while 1.0 is
