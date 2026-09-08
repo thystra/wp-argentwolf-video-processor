@@ -1,6 +1,12 @@
 <!-- File: CHANGELOG.md -->
 # Changelog
 
+## 2.0.0-rc8 - 2026-09-08
+
+- Preserve canonical RC7 as immutable qualification/live-test evidence. Forgejo CI 171 built validation-fix source commit `8f6e54c`, tree `e148985c3a37111c36d30fa52c0a58fbf5aaf67e`; the exact installable package SHA-256 `89bf6d73eb0e6466eb587eabbb01d822d980e1ecd84492475033aa7c27b2e10a` passed Plugin Check 2.1.0, exact installed-package identity, three clean-install fixtures, and three public-1.0.0 upgrade fixtures on the disposable VM. The normal WordPress web-UI upgrade on `wolfandraven.blog` also proved restored local HLS video+audio/non-autoplay and the RC6 upload-indeterminate finalizer fence.
+- Fix the fresh-publication blocker exposed by RC7 live testing: WordPress created revision `7952` with `post_status=inherit` while published anchor post `7948` remained `publish`; the revision transition incorrectly advanced video `7950` to lifecycle generation 3 with upload/reveal authorization disabled. Publication synchronization now ignores WordPress revisions/autosaves and requires the transitioning post to be the video’s immutable origin anchor before it may advance or revoke PeerTube lifecycle authority. Copied/reused blocks on non-anchor posts remain display-only.
+- Present PeerTube categories alphabetically by their human-readable labels in the block publication editor and Publishing settings while retaining provider IDs and cached provider ordering as non-authoritative data.
+
 ## 2.0.0-rc7 - 2026-09-08
 
 - Preserve canonical RC6 as immutable live-test evidence: Forgejo run 169 (internal run ID 444) built commit `7f8f7da2647d56a458d33367b36e4fe622281afd`, tree `d70134d0486fea81553f2dfe6e06b52dfc4c1ed4`, package SHA-256 `56800942972df47970208d2a14f93650252a9702abce747c1d45ce1304430324`. Controlled live testing on `wolfandraven.blog` reached the real PeerTube setup/publication path and exposed the RC7 defects; do not rebuild or reuse RC6 bytes.

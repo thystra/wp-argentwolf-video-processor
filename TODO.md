@@ -514,15 +514,28 @@
   then exposed stock UploadX protocol-relative `Location` rejection, an
   upload-indeterminate finalizer loop, local hls.js/MediaElement player conflict,
   and release-facing authoring/setup usability defects.
-- [ ] Advance the corrected source to `2.0.0-rc7`, obtain green Forgejo CI, build one
-  new canonical RC7 package, and rerun Plugin Check plus the complete exact-package
+- [x] Advance to canonical `2.0.0-rc7`. Forgejo CI 171 built source commit
+  `8f6e54c`, tree `e148985c3a37111c36d30fa52c0a58fbf5aaf67e`; exact package SHA-256
+  `89bf6d73eb0e6466eb587eabbb01d822d980e1ecd84492475033aa7c27b2e10a` passed
+  Plugin Check 2.1.0, exact installed-package identity, the complete three-clean /
+  three-public-1.0.0-upgrade matrix, and disposable `ubuntuzfstest` qualification.
+- [x] Install canonical RC7 through the normal WordPress web UI on
+  `wolfandraven.blog`. Existing local video playback now renders picture+sound
+  without autoplay, the RC6 indeterminate upload remains untouched at attempt 1,
+  and its finalizer stops at the explicit intervention boundary instead of polling.
+- [x] Diagnose the fresh RC7 publication blocker: revision `7952` (`inherit`) was
+  created while anchor post `7948` remained `publish`, and its transition superseded
+  video `7950` lifecycle generation 3 to `upload_authorized=false`. Fix by ignoring
+  revisions/autosaves and requiring immutable origin-anchor ownership for transition
+  authority; add regression coverage. Alphabetize category presentation while cutting
+  the required next candidate.
+- [ ] Advance the corrected source to `2.0.0-rc8`, obtain green Forgejo CI, build one
+  new canonical RC8 package, and rerun Plugin Check plus the complete exact-package
   clean-install/public-1.0.0-upgrade matrix and disposable `ubuntuzfstest` gate.
-- [ ] Install canonical RC7 through the WordPress web UI on `wolfandraven.blog` and
-  resume the controlled live gate with a fresh publication/upload operation. Do not
-  replay or manually rewrite the RC6 `upload_indeterminate` journal. Verify stock
-  PeerTube resumable init/chunking, remote processing, publication finalization,
-  serving cutover, HLS video+audio playback, non-autoplay, and the corrected
-  authoring/setup workflow before promotion.
+- [ ] Install canonical RC8 through the WordPress web UI on `wolfandraven.blog` and
+  retry with a fresh publication. Verify the published anchor remains authoritative
+  across revision creation, then prove stock PeerTube resumable init/chunking, remote
+  processing, publication finalization, serving cutover, and normal embedded playback.
 - [ ] If defects require code changes, increment `2.0.0-rcN`, rebuild, and rerun
   the affected gates; never mutate or reuse an existing RC version/tag.
 - [ ] Freeze the last accepted RC and promote to `2.0.0` with release/version

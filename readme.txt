@@ -181,7 +181,7 @@ The existing settings keys, queue table, attachment metadata, hook names, cron
 identifiers, Settings page slug, and `wp argent-video` command are retained for
 upgrade compatibility.
 
-This Forgejo release-candidate package identifies itself as `2.0.0-rc7` in the
+This Forgejo release-candidate package identifies itself as `2.0.0-rc8` in the
 plugin header while `Stable tag: 1.0.0` deliberately continues to identify the
 public WordPress.org release. RC packages are not published to WordPress.org SVN.
 The Stable tag moves to `2.0.0` only when the final release is promoted.
@@ -191,6 +191,9 @@ Administrators upgrading from version 0.2.3 should use the normal WordPress
 plugin-update workflow and confirm the plugin remains active.
 
 == Upgrade Notice ==
+
+= 2.0.0-rc8 =
+Eighth controlled 2.0 release candidate. Prevents WordPress revisions/autosaves or copied non-anchor blocks from revoking PeerTube publication authority, and alphabetizes PeerTube category choices. WordPress.org remains on 1.0.0 until final 2.0.0.
 
 = 2.0.0-rc7 =
 Seventh controlled 2.0 release candidate. Fixes stock PeerTube resumable-upload Location handling, local HLS player integration, publishing-option labels, tag entry, review flow, and setup guidance found in RC6 live testing. WordPress.org remains on 1.0.0 until final 2.0.0.
@@ -235,6 +238,11 @@ Renames the public plugin and package to ArgentWolf Video Processor and prepares
 the project for WordPress.org review while retaining existing data identifiers.
 
 == Changelog ==
+
+= 2.0.0-rc8 =
+* Preserve canonical RC7 package SHA-256 `89bf6d73eb0e6466eb587eabbb01d822d980e1ecd84492475033aa7c27b2e10a` after its exact-package matrix and live web-UI player/finalizer gates passed.
+* Ignore WordPress revision/autosave status transitions and require immutable origin-anchor ownership before a post transition may advance or revoke PeerTube publication lifecycle state; copied/reused non-anchor blocks remain display-only.
+* Sort PeerTube category choices alphabetically by human-readable label without changing provider identifiers or cached catalog authority.
 
 = 2.0.0-rc7 =
 * Preserve canonical RC6 run 169 (internal ID 444), commit `7f8f7da2647d56a458d33367b36e4fe622281afd`, tree `d70134d0486fea81553f2dfe6e06b52dfc4c1ed4`, package SHA-256 `56800942972df47970208d2a14f93650252a9702abce747c1d45ce1304430324`; controlled live testing exposed the RC7 fixes below.

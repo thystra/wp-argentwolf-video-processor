@@ -2135,3 +2135,31 @@ and the complete exact-package clean-install/public-1.0.0-upgrade/disposable-VM
 qualification, install that exact package through the WordPress web UI, and resume
 live validation with a fresh publication operation. Do not mutate/replay the RC6
 indeterminate journal.
+
+### RC7 qualification/live revision race and RC8 transition
+
+Canonical RC7 is immutable qualification/live-test evidence. Forgejo CI 171 built
+validation-fix source commit `8f6e54c`, tree
+`e148985c3a37111c36d30fa52c0a58fbf5aaf67e`; exact installable ZIP SHA-256
+`89bf6d73eb0e6466eb587eabbb01d822d980e1ecd84492475033aa7c27b2e10a` passed
+Plugin Check 2.1.0, installed-package byte identity, three clean-install fixtures,
+three exact public-1.0.0 upgrade fixtures, and disposable `ubuntuzfstest` validation.
+The ordinary WordPress web-UI upgrade on `wolfandraven.blog` then proved restored
+local HLS picture+sound without autoplay and proved the historical RC6
+`upload_indeterminate` operation remained attempt 1 while its publication finalizer
+terminated at the explicit intervention boundary.
+
+A fresh RC7 publication exposed a separate WordPress lifecycle race before PeerTube
+HTTP began. Published anchor post `7948` remained `publish`, but WordPress revision
+`7952` was created at `2026-09-08 19:15:03Z` with `post_status=inherit`. The generic
+`transition_post_status` hook scanned that revision's copied block content and
+advanced video `7950` to lifecycle generation 3 using `inherit`, disabling upload and
+reveal authorization. No upload operation or PeerTube runner job was created.
+
+RC8 treats revisions/autosaves as non-authoritative and additionally requires the
+transitioning post ID to equal each video's immutable origin anchor before the hook
+may advance or revoke publication state. This aligns synchronization with the
+existing editorial rule that copied/reused blocks are display-only outside their
+origin post. Focused regression coverage reproduces the revision and non-anchor reuse
+cases. RC8 also alphabetizes PeerTube category presentation by human-readable label
+without modifying provider IDs or the stored provider catalog.

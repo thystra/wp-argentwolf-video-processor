@@ -78,20 +78,19 @@ immediately before completion and then survives database persistence.
 
 ## 2.0 RC validation
 
-The active `2.0.0-rc7` payload upgrades from the exact public `1.0.0` package and
+The active `2.0.0-rc8` payload upgrades from the exact public `1.0.0` package and
 requires the exact candidate SHA-256 at invocation time until the canonical
-Forgejo RC artifact is selected. RC7 retains the qualified clean/upgrade contract
-while correcting defects found during controlled canonical-RC6 live testing: stock
-PeerTube resumable `Location` interoperability, local HLS player ownership, and
-release-facing authoring/setup workflow. The `2.0.0-rc6` payload is retained as
-immutable prior-candidate evidence; RC5/RC4 remain failed-candidate evidence, RC3
-remains accepted qualification evidence, and RC1/RC2 remain historical failed-
-candidate evidence.
+Forgejo RC artifact is selected. RC8 retains the qualified clean/upgrade contract
+while correcting the WordPress-revision publication-authority defect found during
+controlled canonical-RC7 live testing. RC7 is retained as immutable prior-candidate
+qualification/live evidence; RC6 is retained as earlier live-test evidence;
+RC5/RC4 remain failed-candidate evidence, RC3 remains accepted qualification
+evidence, and RC1/RC2 remain historical failed-candidate evidence.
 
 ```bash
 AWVP_RC_CANDIDATE_SHA256=<sha256-of-exact-candidate-zip> \
 ARTIFACT_DIR=/path/to/release-zips \
-bash tests/release-validation/run.sh 2.0.0-rc7
+bash tests/release-validation/run.sh 2.0.0-rc8
 ```
 
 The upgrade fixture creates a real WordPress `core/video` block while 1.0 is
