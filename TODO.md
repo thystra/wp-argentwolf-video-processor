@@ -469,16 +469,31 @@
   isolation contract. The exact run-158 candidate, public 1.0.0 base, pinned Plugin
   Check 2.1.0 package, and validation harness identities were preserved; the VM gate
   passed and RC3 remained byte-for-byte unchanged.
-- [ ] Complete the RC4 administrator-UI remediation identified during the controlled
+- [x] Complete the RC4 administrator-UI remediation identified during the controlled
   RC3 live walkthrough: consolidate all AWVP settings under one tabbed settings page,
   clarify PeerTube server setup/credentials/phases/actions and Backend ID validation,
   use release-facing copy, and render administrator times in the WordPress timezone.
-  These are package-visible changes, so RC3 remains immutable and RC4 must receive a
-  new canonical artifact identity.
-- [ ] Resume the controlled live WordPress/PeerTube gate with canonical RC4 after
-  its exact-package and disposable-VM qualification. RC3 live installation/preflight
-  reached the administrator workflow and exposed the UI blockers above before the
-  full connection/upload/publication/serving/migration/retention sequence completed.
+  Forgejo CI 161 qualified the UI commit and CI 162/163 qualified the RC4 transition/
+  canonical source line. Canonical run 163 (internal run ID 438) built commit
+  `7bac80f43fdc91bdedff01d52615cf14a658878d`, tree
+  `992fa89ba60059466f8589ab8bed3744552407f2`, ZIP SHA-256
+  `544d16307eb8e087a5b11dcfe024b11c2157be48731f0a7b585d84c593ec6f22`.
+- [x] Preserve canonical RC4 as failed release evidence. Exact package identity passed,
+  but Plugin Check 2.1.0 static-new stopped before upgrade/clean-install phases on
+  `upgrade_notice_limit` and one `WordPress.Security.NonceVerification.Recommended`
+  finding; only the intentional prerelease `stable_tag_mismatch` was allowed. Do not
+  rebuild or reuse RC4 bytes.
+- [x] Resolve the two RC4 Plugin Check findings at remediation commit `4beda89`: keep
+  every WordPress.org upgrade notice at or below 300 characters with regression
+  coverage, and narrowly cover the already-sanitized read-only Local Retention notice
+  selector without weakening nonce enforcement. Forgejo CI run 164 is green.
+- [ ] Advance the corrected source to `2.0.0-rc5`, obtain green Forgejo CI, build one
+  new canonical RC5 package, and rerun Plugin Check plus the complete exact-package
+  clean-install/public-1.0.0-upgrade matrix and disposable `ubuntuzfstest` gate.
+- [ ] Resume the controlled live WordPress/PeerTube gate with canonical RC5 after
+  exact-package and disposable-VM qualification. RC3 live installation/preflight
+  reached the administrator workflow and exposed the UI blockers corrected in RC4;
+  RC4 itself stopped at Plugin Check before returning to live validation.
 - [ ] If defects require code changes, increment `2.0.0-rcN`, rebuild, and rerun
   the affected gates; never mutate or reuse an existing RC version/tag.
 - [ ] Freeze the last accepted RC and promote to `2.0.0` with release/version

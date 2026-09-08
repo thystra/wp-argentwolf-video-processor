@@ -2043,3 +2043,21 @@ timezone display without changing the already-qualified PeerTube HTTP/upload/ser
 retention authority boundaries. Build RC4 only after this source is green, then rerun
 the exact-package Plugin Check, clean/upgrade matrix, disposable-VM gate, and the
 controlled live PeerTube workflow.
+
+### RC4 Plugin Check failure and RC5 transition
+
+Canonical RC4 is immutable failed release evidence. Forgejo run 163 (internal run
+ID 438) built commit `7bac80f43fdc91bdedff01d52615cf14a658878d`, tree
+`992fa89ba60059466f8589ab8bed3744552407f2`, package SHA-256
+`544d16307eb8e087a5b11dcfe024b11c2157be48731f0a7b585d84c593ec6f22`.
+Exact installed-package identity passed, but Plugin Check 2.1.0 static-new stopped
+before upgrade/clean-install phases on the WordPress.org 300-character upgrade-notice
+limit and one nonce-analysis warning for the read-only Local Retention notice selector.
+The intentional prerelease `stable_tag_mismatch` remained the only allowlisted finding.
+
+Remediation commit `4beda89` shortens the upgrade notice, adds a regression covering
+every upgrade notice, and narrowly extends PHPCS suppression around the same sanitized
+read-only selector without changing runtime behavior or nonce enforcement. Forgejo CI
+164 is green. Advance to `2.0.0-rc5`, build one new canonical package, and rerun the
+complete Plugin Check / clean-install / public-1.0.0-upgrade / disposable-VM gates.
+Never rebuild, relabel, or reuse canonical RC4 bytes.

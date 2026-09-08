@@ -192,6 +192,9 @@ plugin-update workflow and confirm the plugin remains active.
 
 == Upgrade Notice ==
 
+= 2.0.0-rc5 =
+Fifth controlled 2.0 release candidate. Resolves the two Plugin Check findings from canonical RC4: the WordPress.org upgrade-notice length limit and a reviewed Local Retention nonce-analysis warning. WordPress.org remains on 1.0.0 until final 2.0.0.
+
 = 2.0.0-rc4 =
 Fourth controlled 2.0 release candidate. Consolidates AWVP administration into one tabbed settings page, clarifies PeerTube setup and validation errors, and uses the WordPress-configured timezone for administrator-facing times. WordPress.org remains on 1.0.0 until final 2.0.0.
 
@@ -226,6 +229,11 @@ Renames the public plugin and package to ArgentWolf Video Processor and prepares
 the project for WordPress.org review while retaining existing data identifiers.
 
 == Changelog ==
+
+= 2.0.0-rc5 =
+* Preserve canonical RC4 run 163, commit `7bac80f43fdc91bdedff01d52615cf14a658878d`, package SHA-256 `544d16307eb8e087a5b11dcfe024b11c2157be48731f0a7b585d84c593ec6f22` as immutable failed release evidence.
+* Keep every WordPress.org upgrade notice within the 300-character limit and add regression coverage for the limit.
+* Narrowly cover the already-sanitized read-only Local Retention notice selector for Plugin Check without changing nonce enforcement or runtime behavior; remediation CI 164 is green.
 
 = 2.0.0-rc4 =
 * Consolidate Local Processing, PeerTube Servers, Publishing, Video Migration, and Local Retention under one ArgentWolf Video Processor settings page.

@@ -1,6 +1,12 @@
 <!-- File: CHANGELOG.md -->
 # Changelog
 
+## 2.0.0-rc5 - 2026-09-08
+
+- Preserve canonical RC4 as immutable failed release evidence: Forgejo run 163 (internal run ID 438) built commit `7bac80f43fdc91bdedff01d52615cf14a658878d`, tree `992fa89ba60059466f8589ab8bed3744552407f2`, package SHA-256 `544d16307eb8e087a5b11dcfe024b11c2157be48731f0a7b585d84c593ec6f22`. Exact installed-package identity passed, but Plugin Check 2.1.0 static-new stopped before upgrade/clean-install phases on `upgrade_notice_limit` and one `WordPress.Security.NonceVerification.Recommended` finding; the intentional prerelease `stable_tag_mismatch` remained allowlisted.
+- Shorten the RC upgrade notice to the WordPress.org 300-character limit and add a regression that checks every upgrade notice. Narrowly extend PHPCS suppression around the already-sanitized read-only Local Retention notice selector without changing nonce enforcement or runtime behavior.
+- Forgejo CI run 164 is green for remediation commit `4beda89`. RC5 is a new candidate identity; RC4 bytes are never rebuilt, relabeled, or reused.
+
 ## 2.0.0-rc4 - 2026-09-08
 
 - Consolidate ArgentWolf Video Processor administration under one tabbed **Settings > ArgentWolf Video Processor** page with Local Processing, PeerTube Servers, Publishing, Video Migration, and Local Retention tabs. The existing nonce/capability/action handlers remain authoritative; this change replaces the split menu surfaces rather than creating a second control path.
