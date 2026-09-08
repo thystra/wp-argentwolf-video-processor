@@ -487,13 +487,30 @@
   every WordPress.org upgrade notice at or below 300 characters with regression
   coverage, and narrowly cover the already-sanitized read-only Local Retention notice
   selector without weakening nonce enforcement. Forgejo CI run 164 is green.
-- [ ] Advance the corrected source to `2.0.0-rc5`, obtain green Forgejo CI, build one
-  new canonical RC5 package, and rerun Plugin Check plus the complete exact-package
+- [x] Advance the corrected source to `2.0.0-rc5` and preserve its one canonical
+  package. Forgejo CI 165 qualified the RC5 transition. Canonical run 166 (internal
+  run ID 441) built commit `e9b2f725b3f06c20550b59044d58456774e7f8a3`,
+  tree `026c32e3f5ddf4af79828412a1a0ed82eaf36a1b`, ZIP SHA-256
+  `b68212fdedf25d190535b3e9a65d26cd1a7cfe18c07792eaef50208f5cb83c08`.
+- [x] Preserve canonical RC5 as failed release evidence. Exact package identity passed,
+  but Plugin Check 2.1.0 static-new stopped before upgrade/clean-install phases on
+  `WordPress.Security.ValidatedSanitizedInput.MissingUnslash` and
+  `WordPress.Security.ValidatedSanitizedInput.InputNotSanitized` for the read-only
+  Local Retention notice selector; only the intentional prerelease
+  `stable_tag_mismatch` was allowed. Do not rebuild or reuse RC5 bytes.
+- [x] Resolve the RC5 input-sanitization findings at remediation commit
+  `1a108800145f53230ba57fc0c954eeb892035b90`, tree
+  `c6d1c0b53e0313cc358e194591b6f5f91799e555`: unslash and sanitize the read-only
+  Local Retention notice directly at the request boundary while preserving the
+  reviewed nonce-verification suppression and retention behavior. Forgejo CI 167 is
+  green.
+- [ ] Advance the corrected source to `2.0.0-rc6`, obtain green Forgejo CI, build one
+  new canonical RC6 package, and rerun Plugin Check plus the complete exact-package
   clean-install/public-1.0.0-upgrade matrix and disposable `ubuntuzfstest` gate.
-- [ ] Resume the controlled live WordPress/PeerTube gate with canonical RC5 after
+- [ ] Resume the controlled live WordPress/PeerTube gate with canonical RC6 after
   exact-package and disposable-VM qualification. RC3 live installation/preflight
   reached the administrator workflow and exposed the UI blockers corrected in RC4;
-  RC4 itself stopped at Plugin Check before returning to live validation.
+  RC4 and RC5 both stopped at Plugin Check before returning to live validation.
 - [ ] If defects require code changes, increment `2.0.0-rcN`, rebuild, and rerun
   the affected gates; never mutate or reuse an existing RC version/tag.
 - [ ] Freeze the last accepted RC and promote to `2.0.0` with release/version

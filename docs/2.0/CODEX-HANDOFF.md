@@ -2061,3 +2061,26 @@ read-only selector without changing runtime behavior or nonce enforcement. Forge
 164 is green. Advance to `2.0.0-rc5`, build one new canonical package, and rerun the
 complete Plugin Check / clean-install / public-1.0.0-upgrade / disposable-VM gates.
 Never rebuild, relabel, or reuse canonical RC4 bytes.
+
+### RC5 Plugin Check input-sanitization failure and RC6 transition
+
+Canonical RC5 is immutable failed release evidence. Forgejo run 166 (internal run
+ID 441) built commit `e9b2f725b3f06c20550b59044d58456774e7f8a3`, tree
+`026c32e3f5ddf4af79828412a1a0ed82eaf36a1b`, package SHA-256
+`b68212fdedf25d190535b3e9a65d26cd1a7cfe18c07792eaef50208f5cb83c08`.
+Exact installed-package identity passed, and the RC4 `upgrade_notice_limit` / nonce
+findings did not recur. Plugin Check 2.1.0 static-new instead stopped before
+upgrade/clean-install phases on `WordPress.Security.ValidatedSanitizedInput.MissingUnslash`
+and `WordPress.Security.ValidatedSanitizedInput.InputNotSanitized` for the read-only
+Local Retention redirect notice. The intentional prerelease `stable_tag_mismatch`
+remained the only allowlisted finding.
+
+Remediation commit `1a108800145f53230ba57fc0c954eeb892035b90`, tree
+`c6d1c0b53e0313cc358e194591b6f5f91799e555`, unslashes and sanitizes that notice
+directly at the superglobal boundary with `wp_unslash()`, `sanitize_text_field()`, and
+`sanitize_key()` while preserving the reviewed read-only nonce-verification suppression
+and existing retention behavior. Focused regression coverage requires this exact
+input-boundary structure. Forgejo CI 167 is green. Advance to `2.0.0-rc6`, build one
+new canonical package, and rerun the complete Plugin Check / clean-install /
+public-1.0.0-upgrade / disposable-VM gates. Never rebuild, relabel, or reuse
+canonical RC5 bytes.

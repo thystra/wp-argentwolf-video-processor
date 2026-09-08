@@ -1,6 +1,12 @@
 <!-- File: CHANGELOG.md -->
 # Changelog
 
+## 2.0.0-rc6 - 2026-09-08
+
+- Preserve canonical RC5 as immutable failed release evidence: Forgejo run 166 (internal run ID 441) built commit `e9b2f725b3f06c20550b59044d58456774e7f8a3`, tree `026c32e3f5ddf4af79828412a1a0ed82eaf36a1b`, package SHA-256 `b68212fdedf25d190535b3e9a65d26cd1a7cfe18c07792eaef50208f5cb83c08`. Exact installed-package identity passed, but Plugin Check 2.1.0 static-new stopped before upgrade/clean-install phases on `WordPress.Security.ValidatedSanitizedInput.MissingUnslash` and `WordPress.Security.ValidatedSanitizedInput.InputNotSanitized` for the read-only Local Retention notice selector; the intentional prerelease `stable_tag_mismatch` remained allowlisted.
+- Sanitize the Local Retention redirect notice directly at the request boundary with `wp_unslash()`, `sanitize_text_field()`, and `sanitize_key()` while preserving the reviewed read-only nonce-verification suppression and existing retention behavior. Add focused regression coverage for the input-boundary sanitization structure.
+- Forgejo CI run 167 is green for remediation commit `1a108800145f53230ba57fc0c954eeb892035b90`, tree `c6d1c0b53e0313cc358e194591b6f5f91799e555`. RC6 is a new candidate identity; RC5 bytes are never rebuilt, relabeled, or reused.
+
 ## 2.0.0-rc5 - 2026-09-08
 
 - Preserve canonical RC4 as immutable failed release evidence: Forgejo run 163 (internal run ID 438) built commit `7bac80f43fdc91bdedff01d52615cf14a658878d`, tree `992fa89ba60059466f8589ab8bed3744552407f2`, package SHA-256 `544d16307eb8e087a5b11dcfe024b11c2157be48731f0a7b585d84c593ec6f22`. Exact installed-package identity passed, but Plugin Check 2.1.0 static-new stopped before upgrade/clean-install phases on `upgrade_notice_limit` and one `WordPress.Security.NonceVerification.Recommended` finding; the intentional prerelease `stable_tag_mismatch` remained allowlisted.

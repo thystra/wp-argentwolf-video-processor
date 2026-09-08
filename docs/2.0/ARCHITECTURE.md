@@ -3,7 +3,7 @@
 Status: 2.0 release-candidate contract
 Target branch: `develop-2.0`
 Stable baseline: WordPress.org-published `1.0.0`; `v1.0.0` identifies the released source, while later stable-main documentation/closure commits do not change the released artifact. The permanent `release/1.x` maintenance branch is rooted at that exact tag.
-Current controlled candidate: `2.0.0-rc5`; RC packages are Forgejo-only and WordPress.org `Stable tag` remains `1.0.0` until final promotion.
+Current controlled candidate: `2.0.0-rc6`; RC packages are Forgejo-only and WordPress.org `Stable tag` remains `1.0.0` until final promotion.
 
 ## 1. Product direction
 

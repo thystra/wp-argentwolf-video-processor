@@ -192,6 +192,9 @@ plugin-update workflow and confirm the plugin remains active.
 
 == Upgrade Notice ==
 
+= 2.0.0-rc6 =
+Sixth controlled 2.0 release candidate. Sanitizes the read-only Local Retention notice at the request boundary to satisfy Plugin Check while preserving existing nonce and retention behavior. WordPress.org remains on 1.0.0 until final 2.0.0.
+
 = 2.0.0-rc5 =
 Fifth controlled 2.0 release candidate. Resolves the two Plugin Check findings from canonical RC4: the WordPress.org upgrade-notice length limit and a reviewed Local Retention nonce-analysis warning. WordPress.org remains on 1.0.0 until final 2.0.0.
 
@@ -229,6 +232,11 @@ Renames the public plugin and package to ArgentWolf Video Processor and prepares
 the project for WordPress.org review while retaining existing data identifiers.
 
 == Changelog ==
+
+= 2.0.0-rc6 =
+* Preserve canonical RC5 run 166, commit `e9b2f725b3f06c20550b59044d58456774e7f8a3`, package SHA-256 `b68212fdedf25d190535b3e9a65d26cd1a7cfe18c07792eaef50208f5cb83c08` as immutable failed release evidence.
+* Unslash and sanitize the read-only Local Retention notice directly at the request boundary while preserving nonce and retention behavior.
+* Add focused regression coverage for that input-boundary sanitization; remediation commit `1a108800145f53230ba57fc0c954eeb892035b90` is green in Forgejo CI 167.
 
 = 2.0.0-rc5 =
 * Preserve canonical RC4 run 163, commit `7bac80f43fdc91bdedff01d52615cf14a658878d`, package SHA-256 `544d16307eb8e087a5b11dcfe024b11c2157be48731f0a7b585d84c593ec6f22` as immutable failed release evidence.
