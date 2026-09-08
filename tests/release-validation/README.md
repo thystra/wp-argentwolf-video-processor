@@ -11,7 +11,9 @@ bash tests/release-validation/run.sh 0.3.2
 Reports default to `<AWVP project parent>/release-evidence/awvp/<payload-id>/`, never directly under the operator home directory.
 
 The bundle root must contain `artifacts/` with the exact filenames and hashes
-declared by the payload.
+declared by the payload. `build-bundle.sh` pins the already-verified canonical RC
+candidate identity into the bundled payload, so the disposable VM does not need
+the repository-only `AWVP_RC_CANDIDATE_SHA256` environment variable.
 
 ## Run from a repository checkout
 

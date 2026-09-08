@@ -24,6 +24,15 @@ bash -n "$PAYLOAD_DIR/payload.sh"
 # shellcheck disable=SC1090
 source "$PAYLOAD_DIR/payload.sh"
 
+# A self-contained bundle must carry every phase declared by its payload.
+for phase in \
+    "${UPGRADE_PRE_PHASES[@]}" \
+    "${UPGRADE_POST_PHASES[@]}" \
+    "${CLEAN_PHASES[@]}"; do
+    [[ "$phase" != */* ]] || fail "Payload phase must be a basename: $phase"
+    [[ -f "$PAYLOAD_DIR/$phase" ]] || fail "Payload phase missing: $phase"
+done
+
 [[ -f "$CANDIDATE_SOURCE" ]] || fail "Candidate source missing: $CANDIDATE_SOURCE"
 [[ -f "$BASE_SOURCE" ]] || fail "Base source missing: $BASE_SOURCE"
 
@@ -57,6 +66,18 @@ for file in "$PAYLOAD_DIR"/*; do
     install -m "$mode" "$file" \
         "$BUNDLE/tests/release-validation/payloads/$PAYLOAD_ID/$(basename "$file")"
 done
+
+# Repository RC payloads deliberately accept the canonical candidate hash from
+# the operator. Once exact bytes have been selected and verified above, pin that
+# authority into the bundled payload so the VM bundle is truly self-contained.
+{
+    echo
+    echo '# Exact candidate authority pinned by build-bundle.sh.'
+    printf 'CANDIDATE_ARTIFACT=%q\n' "$CANDIDATE_ARTIFACT"
+    printf 'CANDIDATE_SHA256=%q\n' "$candidate_sha"
+} >> "$BUNDLE/tests/release-validation/payloads/$PAYLOAD_ID/payload.sh"
+
+bash -n "$BUNDLE/tests/release-validation/payloads/$PAYLOAD_ID/payload.sh"
 
 install -m 0644 "$CANDIDATE_SOURCE" "$BUNDLE/artifacts/$CANDIDATE_ARTIFACT"
 install -m 0644 "$BASE_SOURCE" "$BUNDLE/artifacts/$BASE_ARTIFACT"
