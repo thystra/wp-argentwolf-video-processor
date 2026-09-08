@@ -89,6 +89,14 @@
 - [ ] Safe cancellation of an active FFmpeg process.
 - [ ] Optional additional adaptive codecs after compatibility review.
 - [ ] Multisite-specific administration and queue behavior.
+- [ ] Future schema normalization (target 3.0): normalize AWVP custom tables to
+      `{$wpdb->prefix}argentwolf_video_processor_jobs`,
+      `{$wpdb->prefix}argentwolf_video_processor_remote_assets`,
+      `{$wpdb->prefix}argentwolf_video_processor_tasks`, and
+      `{$wpdb->prefix}argentwolf_video_processor_logs`. Implement this only as an
+      explicit versioned, resumable, idempotent, fail-closed migration with
+      old/new-table state verification; do not rename physical tables in the 2.0
+      release line.
 
 ## 1.0 release closure
 
@@ -438,19 +446,28 @@
   upgrade phases ran. Preserve the exact run-154 report/package as failed evidence.
 - [x] Correct those seven PHPCS suppression-scope findings without changing runtime
   behavior or weakening nonce enforcement; Forgejo CI run 155 is green.
-- [ ] Advance the corrected source to `2.0.0-rc3`, obtain green Forgejo CI, build one
-  canonical RC3 package, and run the reusable `2.0.0-rc3` validation payload from
-  exact public 1.0.0: seed a real processed WordPress `core/video` block under 1.0,
-  prove the upgrade leaves its stored block markup, attachment relationship/metadata,
-  source/managed bytes, and completed local job unchanged, and separately prove the
-  new 2.0 `argentwolf-video-processor/video` block registers and renders locally.
-- [ ] Run the official WordPress Plugin Check against the exact canonical RC ZIP
-  and compare new findings with the accepted 1.0 remediation baseline, especially
-  commits `82f095bf40`, `937969c190`, and `5d43ea346c`; resolve or explicitly
-  document every new result rather than weakening the approved filesystem/API
-  boundaries merely to silence a scanner.
-- [ ] Pass the full isolated WordPress VM/Docker upgrade, regression, security,
-  destructive-boundary, Plugin Check, and package-identity gates on the exact RC.
+- [x] Advance the corrected source to `2.0.0-rc3`, obtain green Forgejo CI, and
+  preserve one canonical package. Canonical run 158 built commit
+  `e9a8e6c42c04e81b3d7d1c3b92c78568c1f8ee49`; exact ZIP SHA-256
+  `a5e8e51edf71f41be65cb6d4d2c456aa3f3505cdc73bd82dc5350611de4709ac`.
+  The corrected reusable RC3 release-validation payload passed from exact public
+  1.0.0 across WordPress 6.4/PHP 8.1/MariaDB 10.6, WordPress 7.1/PHP 8.3/
+  MariaDB 10.11, and WordPress 7.1/PHP 8.3/MySQL 8.0. The upgrade fixtures prove
+  stored legacy `core/video` markup, attachment relationship/metadata, source/managed
+  bytes, and completed local job remain unchanged, while the explicit 2.0
+  `argentwolf-video-processor/video` block registers and renders locally.
+- [x] Run the official WordPress Plugin Check 2.1.0 against the exact canonical RC3
+  ZIP. Static `new`, runtime `new`, and runtime `update` passed with only the
+  intentional prerelease `stable_tag_mismatch` allowed; all other ERROR/WARNING
+  findings remain blocking. Historical 1.0 filesystem/package-review parity was also
+  rechecked: generated media remains uploads-confined, raw writes/renames remain
+  behind `Storage`, and repository-only/vendor-metadata files are absent from the ZIP.
+- [x] Pass the exact-package isolated Docker upgrade/clean-install, regression,
+  Plugin Check, database-repair, and package-identity release gate for canonical RC3.
+- [ ] Re-run the self-contained exact-package RC3 release-validation bundle on the
+  preferred disposable `ubuntuzfstest` VM, preserving the no-production/no-PeerTube
+  isolation contract and exact candidate/base/Plugin-Check identities as independent
+  clean-room evidence.
 - [ ] Install the accepted RC on the controlled live WordPress site and validate
   real PeerTube connection/upload/publication/serving/migration/retention behavior.
 - [ ] If defects require code changes, increment `2.0.0-rcN`, rebuild, and rerun
