@@ -366,7 +366,7 @@ WordPress.org reviewer findings are durable engineering lessons, not one-line co
 
 Current public stable release: `1.0.0`. The permanent `release/1.x` maintenance
 branch is rooted at exact tag `v1.0.0` so emergency 1.0.x work remains possible
-while 2.0 advances independently. Current controlled candidate: `2.0.0-rc6`; it
+while 2.0 advances independently. Current controlled candidate: `2.0.0-rc7`; it
 must remain off WordPress.org SVN until final 2.0.0 promotion.
 
 Cross-project release, validator, partial-mutation, shared-host, and ZFS lessons

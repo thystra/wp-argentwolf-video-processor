@@ -60,6 +60,7 @@ $assert(version_compare('2.0.0-rc2', '2.0.0-rc3', '<'), 'RC3 must compare newer 
 $assert(version_compare('2.0.0-rc3', '2.0.0-rc4', '<'), 'RC4 must compare newer than RC3.');
 $assert(version_compare('2.0.0-rc4', '2.0.0-rc5', '<'), 'RC5 must compare newer than RC4.');
 $assert(version_compare('2.0.0-rc5', '2.0.0-rc6', '<'), 'RC6 must compare newer than RC5.');
+$assert(version_compare('2.0.0-rc6', '2.0.0-rc7', '<'), 'RC7 must compare newer than RC6.');
 $assert(version_compare('2.0.0-rc99', '2.0.0', '<'), 'Final 2.0.0 must compare newer than every numbered 2.0.0 RC.');
 $assert(version_compare('1.0.0', '2.0.0', '<'), 'Public 1.0.0 must compare older than final 2.0.0.');
 

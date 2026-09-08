@@ -181,7 +181,7 @@ The existing settings keys, queue table, attachment metadata, hook names, cron
 identifiers, Settings page slug, and `wp argent-video` command are retained for
 upgrade compatibility.
 
-This Forgejo release-candidate package identifies itself as `2.0.0-rc4` in the
+This Forgejo release-candidate package identifies itself as `2.0.0-rc7` in the
 plugin header while `Stable tag: 1.0.0` deliberately continues to identify the
 public WordPress.org release. RC packages are not published to WordPress.org SVN.
 The Stable tag moves to `2.0.0` only when the final release is promoted.
@@ -191,6 +191,9 @@ Administrators upgrading from version 0.2.3 should use the normal WordPress
 plugin-update workflow and confirm the plugin remains active.
 
 == Upgrade Notice ==
+
+= 2.0.0-rc7 =
+Seventh controlled 2.0 release candidate. Fixes stock PeerTube resumable-upload Location handling, local HLS player integration, publishing-option labels, tag entry, review flow, and setup guidance found in RC6 live testing. WordPress.org remains on 1.0.0 until final 2.0.0.
 
 = 2.0.0-rc6 =
 Sixth controlled 2.0 release candidate. Sanitizes the read-only Local Retention notice at the request boundary to satisfy Plugin Check while preserving existing nonce and retention behavior. WordPress.org remains on 1.0.0 until final 2.0.0.
@@ -232,6 +235,12 @@ Renames the public plugin and package to ArgentWolf Video Processor and prepares
 the project for WordPress.org review while retaining existing data identifiers.
 
 == Changelog ==
+
+= 2.0.0-rc7 =
+* Preserve canonical RC6 run 169 (internal ID 444), commit `7f8f7da2647d56a458d33367b36e4fe622281afd`, tree `d70134d0486fea81553f2dfe6e06b52dfc4c1ed4`, package SHA-256 `56800942972df47970208d2a14f93650252a9702abce747c1d45ce1304430324`; controlled live testing exposed the RC7 fixes below.
+* Accept stock PeerTube/UploadX protocol-relative resumable `Location` responses without weakening same-origin/path/query validation; normalize default ports, classify rejected locations safely, and stop finalization polling at an explicit upload-indeterminate intervention boundary.
+* Restore AWVP-owned native HLS playback for the dynamic video block, keep adaptive HLS primary, use generated MP4 only as an emergency compatibility fallback, and explicitly prohibit autoplay.
+* Make PeerTube setup/publishing progress and next steps clearer, show provider choices by name, preserve free-form tag entry while editing, and condense explicit publication review to one user-facing checkbox.
 
 = 2.0.0-rc6 =
 * Preserve canonical RC5 run 166, commit `e9b2f725b3f06c20550b59044d58456774e7f8a3`, package SHA-256 `b68212fdedf25d190535b3e9a65d26cd1a7cfe18c07792eaef50208f5cb83c08` as immutable failed release evidence.

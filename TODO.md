@@ -504,13 +504,25 @@
   Local Retention notice directly at the request boundary while preserving the
   reviewed nonce-verification suppression and retention behavior. Forgejo CI 167 is
   green.
-- [ ] Advance the corrected source to `2.0.0-rc6`, obtain green Forgejo CI, build one
-  new canonical RC6 package, and rerun Plugin Check plus the complete exact-package
+- [x] Advance to canonical `2.0.0-rc6`: Forgejo run 169 (internal run ID 444)
+  built commit `7f8f7da2647d56a458d33367b36e4fe622281afd`, tree
+  `d70134d0486fea81553f2dfe6e06b52dfc4c1ed4`, ZIP SHA-256
+  `56800942972df47970208d2a14f93650252a9702abce747c1d45ce1304430324`. Preserve
+  those bytes as immutable RC6 evidence.
+- [x] Resume controlled live WordPress/PeerTube testing with canonical RC6 on
+  `wolfandraven.blog`. The walkthrough reached real provider setup and publication,
+  then exposed stock UploadX protocol-relative `Location` rejection, an
+  upload-indeterminate finalizer loop, local hls.js/MediaElement player conflict,
+  and release-facing authoring/setup usability defects.
+- [ ] Advance the corrected source to `2.0.0-rc7`, obtain green Forgejo CI, build one
+  new canonical RC7 package, and rerun Plugin Check plus the complete exact-package
   clean-install/public-1.0.0-upgrade matrix and disposable `ubuntuzfstest` gate.
-- [ ] Resume the controlled live WordPress/PeerTube gate with canonical RC6 after
-  exact-package and disposable-VM qualification. RC3 live installation/preflight
-  reached the administrator workflow and exposed the UI blockers corrected in RC4;
-  RC4 and RC5 both stopped at Plugin Check before returning to live validation.
+- [ ] Install canonical RC7 through the WordPress web UI on `wolfandraven.blog` and
+  resume the controlled live gate with a fresh publication/upload operation. Do not
+  replay or manually rewrite the RC6 `upload_indeterminate` journal. Verify stock
+  PeerTube resumable init/chunking, remote processing, publication finalization,
+  serving cutover, HLS video+audio playback, non-autoplay, and the corrected
+  authoring/setup workflow before promotion.
 - [ ] If defects require code changes, increment `2.0.0-rcN`, rebuild, and rerun
   the affected gates; never mutate or reuse an existing RC version/tag.
 - [ ] Freeze the last accepted RC and promote to `2.0.0` with release/version

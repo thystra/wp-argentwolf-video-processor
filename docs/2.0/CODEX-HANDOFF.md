@@ -2084,3 +2084,54 @@ input-boundary structure. Forgejo CI 167 is green. Advance to `2.0.0-rc6`, build
 new canonical package, and rerun the complete Plugin Check / clean-install /
 public-1.0.0-upgrade / disposable-VM gates. Never rebuild, relabel, or reuse
 canonical RC5 bytes.
+
+
+### RC6 controlled-live findings and RC7 transition
+
+Canonical RC6 is immutable live-test evidence: Forgejo run 169 (internal run ID 444)
+built commit `7f8f7da2647d56a458d33367b36e4fe622281afd`, tree
+`d70134d0486fea81553f2dfe6e06b52dfc4c1ed4`, package SHA-256
+`56800942972df47970208d2a14f93650252a9702abce747c1d45ce1304430324`. Controlled
+live testing on `wolfandraven.blog` reached the actual PeerTube setup and publication
+path. Same-host HTTPS connectivity is valid when the exact private/split-DNS PeerTube
+origin is explicitly allowed by the existing private-origin policy; the real AWVP
+OAuth-client request passed with TLS verification enabled.
+
+The first publication upload then stopped safely before any media bytes were sent.
+PeerTube 8.2.4 / UploadX 6.2.1 accepted the resumable-init POST with HTTP 201, but
+stock reverse-proxy behavior caused UploadX to emit a protocol-relative network-path
+`Location` (`//video.argentwolf.org/...`). RC6 treated every leading slash as a
+path-absolute reference, malformed the network-path reference, and fenced the upload
+as `upload_indeterminate` / `upload_init_location_invalid`. RC7 distinguishes
+network-path, path-absolute, and absolute references, inherits only the configured
+scheme for `//host/...`, canonicalizes default ports, and retains strict same-origin,
+exact-path/query, userinfo/fragment, and upload-session validation. The RC6 operation
+remains untouched; live RC7 validation must create a fresh operation. Finalization
+now treats `upload_indeterminate` as an explicit intervention boundary instead of
+polling indefinitely.
+
+The live local-player gate independently proved the generated HLS tree is valid: all
+renditions contain H.264/AAC, public HTTPS remote decode succeeds, and nginx returns
+the master manifest correctly. The new dynamic AWVP block nevertheless produced
+browser MediaSource/blob failures because it layered hls.js on the same element
+managed by `wp_video_shortcode()`/MediaElement. RC7 renders an AWVP-owned native
+`<video>` for the dynamic block so hls.js owns adaptive playback deterministically.
+Adaptive HLS remains primary; generated MP4 is an emergency compatibility fallback
+only; inherited autoplay is stripped and both local and PeerTube paths must never
+autoplay. The generated VP9/WebM fixture is structurally decodable but displayed
+audio-only in the tested Chrome/Linux client, so successful normal playback must not
+depend on that fallback.
+
+The same live walkthrough identified release-facing workflow defects now included in
+RC7: preserve raw PeerTube tag textarea input while typing; show channel/licence/
+category/language choices by provider label rather than raw IDs; collapse five
+explicit-review checkboxes into one user-facing confirmation while retaining the
+internal fail-closed review fields; distinguish initial **Load publishing options**
+from refresh; and display clear setup progress, completed actions, and next steps
+instead of exposing HTTP/token implementation language.
+
+Next gate: make RC7 green, build exactly one canonical RC7 package, rerun Plugin Check
+and the complete exact-package clean-install/public-1.0.0-upgrade/disposable-VM
+qualification, install that exact package through the WordPress web UI, and resume
+live validation with a fresh publication operation. Do not mutate/replay the RC6
+indeterminate journal.

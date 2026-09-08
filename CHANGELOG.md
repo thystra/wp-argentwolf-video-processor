@@ -1,6 +1,14 @@
 <!-- File: CHANGELOG.md -->
 # Changelog
 
+## 2.0.0-rc7 - 2026-09-08
+
+- Preserve canonical RC6 as immutable live-test evidence: Forgejo run 169 (internal run ID 444) built commit `7f8f7da2647d56a458d33367b36e4fe622281afd`, tree `d70134d0486fea81553f2dfe6e06b52dfc4c1ed4`, package SHA-256 `56800942972df47970208d2a14f93650252a9702abce747c1d45ce1304430324`. Controlled live testing on `wolfandraven.blog` reached the real PeerTube setup/publication path and exposed the RC7 defects; do not rebuild or reuse RC6 bytes.
+- Interoperate with stock PeerTube 8.2.4 / UploadX 6.2.1 resumable initialization when `Location` is a protocol-relative network-path reference (`//host/...`). The parser now distinguishes network-path, path-absolute, and absolute references; inherits only the configured scheme for network-path references; canonicalizes default HTTP/HTTPS ports; and retains strict origin, path, query, userinfo, fragment, and upload-session validation. Rejected locations receive bounded safe reason codes rather than persisting the capability-bearing header.
+- Treat `upload_indeterminate` as an explicit publication-finalization intervention boundary instead of polling indefinitely. The failed RC6 init sent zero media bytes and remains untouched; RC7 live validation must start a fresh upload operation rather than replaying or mutating the old journal.
+- Restore deterministic local playback for the dynamic AWVP Video block by rendering an AWVP-owned native `<video>` element instead of layering hls.js over WordPress MediaElement. Adaptive HLS remains primary; the verified generated MP4 is an emergency compatibility fallback only; inherited autoplay is stripped and PeerTube/local rendering must never autoplay. Add browser/player regression coverage alongside the existing FFmpeg/HLS validation.
+- Improve the live authoring workflow: preserve raw PeerTube tag textarea input while typing, condense five explicit-review controls into one user-facing review checkbox while retaining internal fail-closed review fields, render channels/licences/categories/languages by provider label rather than raw IDs, distinguish initial **Load publishing options** from refresh, and add visible connection progress/next-step guidance with administrator-facing copy.
+
 ## 2.0.0-rc6 - 2026-09-08
 
 - Preserve canonical RC5 as immutable failed release evidence: Forgejo run 166 (internal run ID 441) built commit `e9b2f725b3f06c20550b59044d58456774e7f8a3`, tree `026c32e3f5ddf4af79828412a1a0ed82eaf36a1b`, package SHA-256 `b68212fdedf25d190535b3e9a65d26cd1a7cfe18c07792eaef50208f5cb83c08`. Exact installed-package identity passed, but Plugin Check 2.1.0 static-new stopped before upgrade/clean-install phases on `WordPress.Security.ValidatedSanitizedInput.MissingUnslash` and `WordPress.Security.ValidatedSanitizedInput.InputNotSanitized` for the read-only Local Retention notice selector; the intentional prerelease `stable_tag_mismatch` remained allowlisted.
