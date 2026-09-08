@@ -719,6 +719,12 @@ final class PeerTube_Connection_Admin
             <tr><th><?php esc_html_e('Backend ID', 'argentwolf-video-processor'); ?></th><td><code><?php echo esc_html($operation['backend_id']); ?></code></td></tr>
             <tr><th><?php esc_html_e('PeerTube URL', 'argentwolf-video-processor'); ?></th><td><code><?php echo esc_html($operation['origin']); ?></code></td></tr>
             <tr><th><?php esc_html_e('Status', 'argentwolf-video-processor'); ?></th><td><?php echo esc_html(self::phase_label($phase)); ?></td></tr>
+            <tr><th><?php esc_html_e('Progress', 'argentwolf-video-processor'); ?></th><td><?php echo esc_html(sprintf(
+                /* translators: 1: current setup step number, 2: total setup steps. */
+                __('Step %1$d of %2$d', 'argentwolf-video-processor'),
+                self::phase_step($phase),
+                6
+            )); ?></td></tr>
             <tr><th><?php esc_html_e('Next step', 'argentwolf-video-processor'); ?></th><td><?php echo esc_html(self::phase_help($phase)); ?></td></tr>
             <tr><th><?php esc_html_e('Sign-in attempts', 'argentwolf-video-processor'); ?></th><td><?php echo esc_html((string) $operation['grant_attempt_no']); ?> / <?php echo esc_html((string) PeerTube_Connection_Input::MAX_GRANT_ATTEMPTS); ?></td></tr>
         </tbody></table>
@@ -806,13 +812,7 @@ final class PeerTube_Connection_Admin
 
             if (PeerTube_Connection_State_Machine::PHASE_VERIFICATION_IN_FLIGHT === $phase) {
                 echo '<div class="notice notice-info inline"><p>'
-                    . esc_html(
-                        sprintf(
-                            /* translators: %s: exact configured PeerTube origin. */
-                            __('This explicit read sends the stored bearer token only to %s for /users/me. Channel pages are then read publicly without the bearer. No upload or remote mutation occurs.', 'argentwolf-video-processor'),
-                            $operation['origin']
-                        )
-                    )
+                    . esc_html__('This step uses your saved PeerTube sign-in to confirm your account. Your channel list is then read publicly, without authentication. No videos are uploaded and no changes are made to your PeerTube account or server.', 'argentwolf-video-processor')
                     . '</p></div>';
             } else {
                 echo '<p>'
@@ -851,7 +851,7 @@ final class PeerTube_Connection_Admin
                 PeerTube_Connection_State_Machine::PHASE_ACTIVATION_PLANNED =>
                     __('Activation has started. Continue setup to finish enabling this PeerTube server for publishing. No video is uploaded by this step.', 'argentwolf-video-processor'),
                 default =>
-                    __('The PeerTube server has been enabled. Finish setup to confirm the saved connection and close the setup process.', 'argentwolf-video-processor'),
+                    __('The PeerTube server has been enabled. Finish setup to close the connection process; then go to Publishing and load this server’s publishing options.', 'argentwolf-video-processor'),
             };
             echo '<div class="notice notice-info inline"><p>' . esc_html($message) . '</p></div>';
 
@@ -1956,7 +1956,7 @@ final class PeerTube_Connection_Admin
             'identity_verified' => __('The PeerTube account and its owned channels were verified. Choose the channel this connection should use.', 'argentwolf-video-processor'),
             'destination_verified' => __('The selected PeerTube channel was verified. Activate the connection to finish setup.', 'argentwolf-video-processor'),
             'activation_advanced' => __('Activation advanced to the next step. Continue activation to finish connecting this PeerTube server.', 'argentwolf-video-processor'),
-            'backend_activated' => __('The PeerTube server is connected and available for publishing. No video was uploaded during connection setup.', 'argentwolf-video-processor'),
+            'backend_activated' => __('The PeerTube server is connected. Next, open the Publishing tab and load this server’s publishing options before configuring videos. No video was uploaded during connection setup.', 'argentwolf-video-processor'),
             'lifecycle_advanced' => __('The PeerTube credential update advanced to the next step. Continue if another action is offered.', 'argentwolf-video-processor'),
             'token_refreshed' => __('The PeerTube connection credentials were refreshed successfully.', 'argentwolf-video-processor'),
             'backend_disconnected' => __('The PeerTube server was disconnected and its stored connection credentials were removed.', 'argentwolf-video-processor'),
@@ -2038,8 +2038,35 @@ final class PeerTube_Connection_Admin
             PeerTube_Connection_State_Machine::PHASE_ACTIVATION_READY => __('Activate the PeerTube server to make it available for publishing.', 'argentwolf-video-processor'),
             PeerTube_Connection_State_Machine::PHASE_ACTIVATION_PLANNED,
             PeerTube_Connection_State_Machine::PHASE_ACTIVE_PENDING_CLOSE => __('Continue activation until setup is complete.', 'argentwolf-video-processor'),
-            PeerTube_Connection_State_Machine::PHASE_COMPLETE => __('Setup is complete. Configure publishing defaults on the Publishing tab.', 'argentwolf-video-processor'),
+            PeerTube_Connection_State_Machine::PHASE_COMPLETE => __('Connection complete. Go to the Publishing tab and load this server’s publishing options before configuring videos for PeerTube.', 'argentwolf-video-processor'),
             default => __('Review the current status before taking another action.', 'argentwolf-video-processor'),
+        };
+    }
+
+    private static function phase_step(string $phase): int
+    {
+        return match ($phase) {
+            PeerTube_Connection_State_Machine::PHASE_PREPARED,
+            PeerTube_Connection_State_Machine::PHASE_SECRET_RESERVE_PLANNED,
+            PeerTube_Connection_State_Machine::PHASE_SECRET_RESERVED,
+            PeerTube_Connection_State_Machine::PHASE_LINK_PLANNED => 1,
+            PeerTube_Connection_State_Machine::PHASE_DISABLED,
+            PeerTube_Connection_State_Machine::PHASE_AWAITING_CREDENTIALS,
+            PeerTube_Connection_State_Machine::PHASE_AWAITING_OTP,
+            PeerTube_Connection_State_Machine::PHASE_GRANT_IN_FLIGHT,
+            PeerTube_Connection_State_Machine::PHASE_OTP_RESULT_PENDING,
+            PeerTube_Connection_State_Machine::PHASE_CREDENTIAL_RESULT_PENDING,
+            PeerTube_Connection_State_Machine::PHASE_GRANT_INDETERMINATE,
+            PeerTube_Connection_State_Machine::PHASE_SECRET_WRITE_PLANNED => 2,
+            PeerTube_Connection_State_Machine::PHASE_SECRET_STORED,
+            PeerTube_Connection_State_Machine::PHASE_VERIFICATION_IN_FLIGHT,
+            PeerTube_Connection_State_Machine::PHASE_VERIFICATION_FAILED => 3,
+            PeerTube_Connection_State_Machine::PHASE_AWAITING_DESTINATION => 4,
+            PeerTube_Connection_State_Machine::PHASE_ACTIVATION_READY,
+            PeerTube_Connection_State_Machine::PHASE_ACTIVATION_PLANNED,
+            PeerTube_Connection_State_Machine::PHASE_ACTIVE_PENDING_CLOSE => 5,
+            PeerTube_Connection_State_Machine::PHASE_COMPLETE => 6,
+            default => 1,
         };
     }
 

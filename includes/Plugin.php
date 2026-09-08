@@ -49,7 +49,7 @@ final class Plugin
         $frontend_remote_assets = new Remote_Asset_Repository();
         $video_serving = new Video_Serving_Service($frontend_remote_assets);
         $local_retention_service = new Local_Retention_Service($peertube_tasks, $video_serving, $jobs);
-        $video_block = new Video_Block($video_serving);
+        $video_block = new Video_Block($video_serving, $renderer);
         $peertube_publication_catalogs = new PeerTube_Publication_Catalog_Store();
         $peertube_publication_editor = new PeerTube_Publication_Editor_Service(
             $this->backend_registry,

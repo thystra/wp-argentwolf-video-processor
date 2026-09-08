@@ -182,6 +182,9 @@ final class PeerTube_Publication_Task_Coordinator
         if (! is_array($execution) || array()===$execution || ''===$execution['operation_id']) return $this->fail($task_id,self::TASK_FINALIZE,$lock,'Publication execution/upload identity is unavailable.',$now,'execution_refused');
         $operation=$this->operations->get((string)$execution['operation_id']);
         if (! is_array($operation) || ! PeerTube_Staged_Upload_State_Machine::valid($operation)) return $this->fail($task_id,self::TASK_FINALIZE,$lock,'Staged upload journal is unavailable.',$now,'operation_refused');
+        if (PeerTube_Staged_Upload_State_Machine::PHASE_UPLOAD_INDETERMINATE === $operation['phase']) {
+            return $this->fail($task_id,self::TASK_FINALIZE,$lock,'PeerTube upload is waiting at an explicit intervention boundary; publication finalization will not poll or replay it automatically.',$now,'upload_intervention_required');
+        }
         if (PeerTube_Staged_Upload_State_Machine::PHASE_FAILED === $operation['phase']) return $this->fail($task_id,self::TASK_FINALIZE,$lock,'PeerTube upload/reconciliation failed before publication finalization.',$now,'upload_failed');
         if (PeerTube_Staged_Upload_State_Machine::PHASE_READY_VERIFIED !== $operation['phase']) {
             return $this->reschedule($task_id,self::TASK_FINALIZE,$lock,$now+60,'Waiting for the private PeerTube copy to become ready and verified.',$now);

@@ -302,11 +302,11 @@ final class PeerTube_Api_Client implements PeerTube_Password_Grant_Api, PeerTube
             return self::failure(PeerTube_Api_Error::invalid_response('upload_init_status_invalid', $status));
         }
         $headers = is_array($response['headers'] ?? null) ? $response['headers'] : array();
-        $session_id = self::upload_session_id_from_location($headers['location'] ?? '', $this->origin());
-        if ('' === $session_id) {
-            return self::failure(PeerTube_Api_Error::invalid_response('upload_init_location_invalid', $status));
+        $location = self::upload_session_from_location($headers['location'] ?? '', $this->origin());
+        if ('' === $location['session_id']) {
+            return self::failure(PeerTube_Api_Error::invalid_response($location['error_code'], $status));
         }
-        return self::success(array('session_id' => $session_id));
+        return self::success(array('session_id' => $location['session_id']));
     }
 
     /** @return array{ok:bool,data:array<string,mixed>|null,error:array<string,mixed>|null} */
@@ -825,32 +825,67 @@ final class PeerTube_Api_Client implements PeerTube_Password_Grant_Api, PeerTube
         ));
     }
 
-    private static function upload_session_id_from_location(mixed $location, string $origin): string
+    /** @return array{session_id:string,error_code:string} */
+    private static function upload_session_from_location(mixed $location, string $origin): array
     {
         if (! is_string($location) || '' === $location || strlen($location) > 1024) {
-            return '';
+            return array('session_id'=>'','error_code'=>'upload_init_location_missing');
         }
-        $absolute = str_starts_with($location, '/') ? $origin . $location : $location;
+        $origin_parts = wp_parse_url($origin);
+        if (! is_array($origin_parts)) {
+            return array('session_id'=>'','error_code'=>'upload_init_location_malformed');
+        }
+        if (str_starts_with($location, '//')) {
+            $origin_scheme = strtolower((string) ($origin_parts['scheme'] ?? ''));
+            if ('' === $origin_scheme) {
+                return array('session_id'=>'','error_code'=>'upload_init_location_malformed');
+            }
+            $absolute = $origin_scheme . ':' . $location;
+        } elseif (str_starts_with($location, '/')) {
+            $absolute = $origin . $location;
+        } else {
+            $absolute = $location;
+        }
         $parts = wp_parse_url($absolute);
         if (! is_array($parts) || isset($parts['user']) || isset($parts['pass']) || isset($parts['fragment'])) {
-            return '';
+            return array('session_id'=>'','error_code'=>'upload_init_location_malformed');
         }
-        $scheme = strtolower((string) ($parts['scheme'] ?? ''));
-        $host = strtolower((string) ($parts['host'] ?? ''));
-        $host_output = false !== filter_var(trim($host, '[]'), FILTER_VALIDATE_IP, FILTER_FLAG_IPV6)
-            ? '[' . trim($host, '[]') . ']'
-            : $host;
-        $port = $parts['port'] ?? null;
-        $candidate_origin = $scheme . '://' . $host_output . (is_int($port) ? ':' . $port : '');
-        if (! hash_equals($origin, $candidate_origin) || '/api/v1/videos/upload-resumable' !== ($parts['path'] ?? '')) {
-            return '';
+        if (! self::same_origin($origin_parts, $parts)) {
+            return array('session_id'=>'','error_code'=>'upload_init_location_origin_mismatch');
         }
-        $query = array();
-        parse_str((string) ($parts['query'] ?? ''), $query);
-        if (array('upload_id') !== array_keys($query) || ! is_string($query['upload_id'])) {
-            return '';
+        if ('/api/v1/videos/upload-resumable' !== ($parts['path'] ?? '')) {
+            return array('session_id'=>'','error_code'=>'upload_init_location_path_invalid');
         }
-        return self::valid_upload_session_id($query['upload_id']) ? $query['upload_id'] : '';
+        $query = (string) ($parts['query'] ?? '');
+        if (1 !== preg_match('/^upload_id=([^&;]+)$/D', $query, $matches)) {
+            return array('session_id'=>'','error_code'=>'upload_init_location_query_invalid');
+        }
+        $session_id = rawurldecode($matches[1]);
+        if (! self::valid_upload_session_id($session_id)) {
+            return array('session_id'=>'','error_code'=>'upload_init_location_query_invalid');
+        }
+        return array('session_id'=>$session_id,'error_code'=>'');
+    }
+
+    /** @param array<string,mixed> $expected @param array<string,mixed> $candidate */
+    private static function same_origin(array $expected, array $candidate): bool
+    {
+        $expected_scheme = strtolower((string) ($expected['scheme'] ?? ''));
+        $candidate_scheme = strtolower((string) ($candidate['scheme'] ?? ''));
+        $expected_host = strtolower(trim((string) ($expected['host'] ?? ''), '[]'));
+        $candidate_host = strtolower(trim((string) ($candidate['host'] ?? ''), '[]'));
+        if ('' === $expected_scheme || '' === $candidate_scheme || '' === $expected_host || '' === $candidate_host
+            || ! hash_equals($expected_scheme, $candidate_scheme) || ! hash_equals($expected_host, $candidate_host)) {
+            return false;
+        }
+        $expected_default = 'https' === $expected_scheme ? 443 : ('http' === $expected_scheme ? 80 : 0);
+        $candidate_default = 'https' === $candidate_scheme ? 443 : ('http' === $candidate_scheme ? 80 : 0);
+        if ($expected_default < 1 || $candidate_default < 1) {
+            return false;
+        }
+        $expected_port = is_int($expected['port'] ?? null) ? $expected['port'] : $expected_default;
+        $candidate_port = is_int($candidate['port'] ?? null) ? $candidate['port'] : $candidate_default;
+        return $expected_port === $candidate_port;
     }
 
     private static function confirmed_bytes_from_range(mixed $range, int $total_bytes): ?int

@@ -12,8 +12,10 @@ final class Video_Block
 {
     public const NAME = 'argentwolf-video-processor/video';
 
-    public function __construct(private readonly ?Video_Serving_Resolver $serving = null)
-    {
+    public function __construct(
+        private readonly ?Video_Serving_Resolver $serving = null,
+        private readonly ?Renderer $renderer = null
+    ) {
     }
 
     public function register(): void
@@ -68,13 +70,15 @@ final class Video_Block
             );
         } else {
             // Missing, stale, or uncertain remote serving evidence always keeps
-            // the established local WordPress/Renderer path authoritative.
-            $player = wp_video_shortcode(
-                array(
-                    'src'     => $url,
-                    'preload' => 'metadata',
-                )
-            );
+            // local WordPress/AWVP playback authoritative. The AWVP block owns
+            // a native media element so hls.js never competes with MediaElement.
+            $player = null !== $this->renderer
+                ? $this->renderer->render_attachment_player($attachment_id)
+                : sprintf(
+                    '<video controls playsinline preload="metadata"><source src="%s" type="%s"></video>',
+                    esc_url($url),
+                    esc_attr($mime)
+                );
         }
         if (! is_string($player) || '' === $player) {
             return '';

@@ -69,7 +69,7 @@ namespace ArgentVideo {
         }
     }
     final class PeerTube_Staged_Upload_State_Machine {
-        public const PHASE_FAILED='failed'; public const PHASE_READY_VERIFIED='ready_verified'; public const PHASE_READY='ready';
+        public const PHASE_FAILED='failed'; public const PHASE_UPLOAD_INDETERMINATE='upload_indeterminate'; public const PHASE_READY_VERIFIED='ready_verified'; public const PHASE_READY='ready';
         public static function valid(mixed $r): bool { return is_array($r)&&isset($r['phase'],$r['remote_asset_id'],$r['remote_identity'])&&is_array($r['remote_identity']); }
     }
     final class PeerTube_Staged_Upload_Operation_Store {
@@ -178,6 +178,7 @@ namespace {
 
     // Finalizer waits for upload readiness and refuses uncertain mutation replay.
     $reset($makeLife(1,'publish','1',true,true),'publish'); $GLOBALS['awvp_pub_meta'][$video][Video_Meta::PEERTUBE_PUBLICATION_EXECUTION]=$exec; $x=$factory(); $x['operations']->records[$exec['operation_id']]=array('phase'=>'ready','remote_asset_id'=>0,'remote_identity'=>array('uuid'=>'')); $wait=$x['coord']->advance_claimed($task(7,Coordinator::TASK_FINALIZE),$now); $assert(Coordinator::STATUS_REQUEUED===$wait['status']&&0===count($x['api']->publication_calls),'Finalizer mutated before upload readiness.');
+    $reset($makeLife(1,'publish','1',true,true),'publish'); $GLOBALS['awvp_pub_meta'][$video][Video_Meta::PEERTUBE_PUBLICATION_EXECUTION]=$exec; $x=$factory(); $x['operations']->records[$exec['operation_id']]=array('phase'=>'upload_indeterminate','remote_asset_id'=>0,'remote_identity'=>array('uuid'=>'')); $blocked=$x['coord']->advance_claimed($task(71,Coordinator::TASK_FINALIZE),$now); $assert(Coordinator::STATUS_FAILED===$blocked['status']&&'upload_intervention_required'===$blocked['service_status']&&0===count($x['api']->publication_calls),'Finalizer polled or mutated across an explicit upload intervention boundary.');
     $reset($makeLife(1,'publish','1',true,true),'publish'); $GLOBALS['awvp_pub_meta'][$video][Video_Meta::PEERTUBE_PUBLICATION_EXECUTION]=$exec; $x=$factory(); $x['operations']->records[$exec['operation_id']]=$ready; $x['api']->mutate_ok=false; $uncertain=$x['coord']->advance_claimed($task(8,Coordinator::TASK_FINALIZE),$now); $assert(Coordinator::STATUS_FAILED===$uncertain['status']&&'mutation_indeterminate'===$uncertain['service_status']&&1===count($x['api']->publication_calls),'Indeterminate publication mutation was automatically replayed or misclassified.');
 
     // R46.6: already-verified public publication may converge local cutover without provider/API authority.

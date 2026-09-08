@@ -143,6 +143,7 @@
         const [publicationSaving, setPublicationSaving] = useState(false);
         const [publicationError, setPublicationError] = useState('');
         const [replaceExisting, setReplaceExisting] = useState(false);
+        const [tagsDraftText, setTagsDraftText] = useState('');
 
         const editorPost = useSelect(function (selectStore) {
             const editor = selectStore('core/editor');
@@ -176,6 +177,7 @@
             let active = true;
             setPublication(null);
             setPublicationDraft(null);
+            setTagsDraftText('');
             setPublicationError('');
             setReplaceExisting(false);
             if (videoId < 1 || !publicationBackend) {
@@ -188,6 +190,7 @@
                     if (active) {
                         setPublication(response);
                         setPublicationDraft(clone(response.draft));
+                        setTagsDraftText(tagsText(response.draft && response.draft.tags));
                     }
                 })
                 .catch(function (requestError) { if (active) setPublicationError(boundedError(requestError)); })
@@ -277,15 +280,15 @@
             });
         }
 
-        function setReview(field, value) {
+        function setAllReview(value) {
             setPublicationDraft(function (previous) {
                 const next = clone(previous) || {};
                 next.review = next.review || {};
-                next.review[field] = !!value;
-                if ('moderation' === field) {
-                    next.moderation = next.moderation || {};
-                    next.moderation.reviewed = !!value;
-                }
+                ['title', 'channel', 'tags', 'privacy', 'moderation'].forEach(function (field) {
+                    next.review[field] = !!value;
+                });
+                next.moderation = next.moderation || {};
+                next.moderation.reviewed = !!value;
                 return next;
             });
         }
@@ -302,6 +305,7 @@
                 .then(function (response) {
                     setPublication(response);
                     setPublicationDraft(clone(response.draft));
+                    setTagsDraftText(tagsText(response.draft && response.draft.tags));
                     setReplaceExisting(false);
                     // The publication service also freezes the selected channel
                     // into the concrete destination; reload the summary label.
@@ -336,13 +340,15 @@
             const persistedMissing = Array.isArray(publication.missing_review) ? publication.missing_review : [];
             const missing = (draftDirty ? draftMissingReview : persistedMissing).join(', ');
             const draftReady = !draftDirty && publication.ready_for_dispatch === true;
+            const allReviewed = requiredReview.every(function (field) { return review[field] === true; })
+                && moderation.reviewed === true;
 
             return el(PanelBody, { title: __('PeerTube publication', 'argentwolf-video-processor'), initialOpen: true },
                 catalog.status === 'stale'
                     ? el(Notice, { status: 'warning', isDismissible: false }, __('Provider choices are from the last-known-good cache and are marked stale. Refresh them in Settings → AWVP Video Publishing when possible.', 'argentwolf-video-processor'))
                     : null,
                 !catalog.usable
-                    ? el(Notice, { status: 'error', isDismissible: false }, __('PeerTube provider choices are unavailable for safe authoring. Refresh this backend’s publication choices before saving a plan.', 'argentwolf-video-processor'))
+                    ? el(Notice, { status: 'error', isDismissible: false }, __('Publishing options have not been loaded from this PeerTube server yet. Go to Settings → ArgentWolf Video Processor → Publishing and load this server’s publishing options before configuring the video.', 'argentwolf-video-processor'))
                     : null,
                 publication.plan_status === 'invalid'
                     ? el(Notice, { status: 'error', isDismissible: false }, __('A malformed or future publication plan already exists. AWVP will preserve it rather than overwrite it implicitly.', 'argentwolf-video-processor'))
@@ -379,9 +385,12 @@
                 }),
                 el(TextareaControl, {
                     label: __('PeerTube tags — one per line, maximum five', 'argentwolf-video-processor'),
-                    value: tagsText(publicationDraft.tags),
+                    value: tagsDraftText,
                     rows: 5,
-                    onChange: function (value) { setDraftField('tags', parseTags(value), 'tags'); },
+                    onChange: function (value) {
+                        setTagsDraftText(value);
+                        setDraftField('tags', parseTags(value), 'tags');
+                    },
                     help: __('These are independent from WordPress post tags. Zero tags is valid only after you explicitly review the tag choice.', 'argentwolf-video-processor')
                 }),
                 el(SelectControl, {
@@ -520,11 +529,12 @@
                     ) : null,
                 el('hr'),
                 el('strong', null, __('Explicit review', 'argentwolf-video-processor')),
-                el(CheckboxControl, { label: __('I reviewed the PeerTube title', 'argentwolf-video-processor'), checked: !!publicationDraft.review.title, onChange: function (v) { setReview('title', v); } }),
-                el(CheckboxControl, { label: __('I reviewed the channel', 'argentwolf-video-processor'), checked: !!publicationDraft.review.channel, onChange: function (v) { setReview('channel', v); } }),
-                el(CheckboxControl, { label: __('I reviewed the PeerTube tags, including choosing zero tags if applicable', 'argentwolf-video-processor'), checked: !!publicationDraft.review.tags, onChange: function (v) { setReview('tags', v); } }),
-                el(CheckboxControl, { label: __('I reviewed the final privacy', 'argentwolf-video-processor'), checked: !!publicationDraft.review.privacy, onChange: function (v) { setReview('privacy', v); } }),
-                el(CheckboxControl, { label: __('I reviewed the sensitive-content declaration', 'argentwolf-video-processor'), checked: !!publicationDraft.review.moderation, onChange: function (v) { setReview('moderation', v); } }),
+                el(CheckboxControl, {
+                    label: __('I reviewed these PeerTube publishing settings', 'argentwolf-video-processor'),
+                    checked: allReviewed,
+                    onChange: setAllReview,
+                    help: __('Confirms the title, channel, tags, final privacy, and sensitive-content declaration shown above. Changing any reviewed item requires review again.', 'argentwolf-video-processor')
+                }),
                 el(SelectControl, {
                     label: __('Dispatch timing', 'argentwolf-video-processor'),
                     value: publicationDraft.dispatch_policy || 'send_on_schedule_or_publish',

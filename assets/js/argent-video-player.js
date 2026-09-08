@@ -5,7 +5,11 @@
     'use strict';
 
     function restoreProgressive(video) {
+        var fallback = video.getAttribute('data-argent-fallback');
         video.removeAttribute('src');
+        if (fallback) {
+            video.src = fallback;
+        }
         video.dataset.argentHlsInitialized = 'fallback';
         video.load();
     }

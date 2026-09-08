@@ -7,7 +7,6 @@ const ARGENT_VIDEO_DIR = __DIR__ . '/../';
 $GLOBALS['awvp_block_registered'] = array();
 $GLOBALS['awvp_block_posts'] = array();
 $GLOBALS['awvp_block_meta'] = array();
-$GLOBALS['awvp_block_shortcode_calls'] = array();
 
 function register_block_type(string $path, array $args = array()): object|false
 {
@@ -29,11 +28,6 @@ function wp_get_attachment_url(int $id): string|false
 {
     $post = $GLOBALS['awvp_block_posts'][$id] ?? null;
     return is_object($post) ? (string) ($post->url ?? '') : false;
-}
-function wp_video_shortcode(array $atts): string
-{
-    $GLOBALS['awvp_block_shortcode_calls'][] = $atts;
-    return '<video src="' . htmlspecialchars((string) ($atts['src'] ?? ''), ENT_QUOTES) . '"></video>';
 }
 function get_block_wrapper_attributes(array $extra = array()): string
 {
@@ -81,14 +75,15 @@ $GLOBALS['awvp_block_meta'][101][Video_Meta::DESTINATION] = array('version'=>1,'
 $html = $block->render(array('videoId'=>101));
 $assert(str_contains($html, 'data-awvp-video-id="101"'), 'Rendered AWVP block lost stable AWVP Video ID.');
 $assert(str_contains($html, 'https://example.test/uploads/local.mp4'), 'Remote destination changed the local serving source prematurely.');
-$assert(1 === count($GLOBALS['awvp_block_shortcode_calls']), 'Dynamic block bypassed the established WordPress video shortcode compatibility path.');
-$assert('metadata' === ($GLOBALS['awvp_block_shortcode_calls'][0]['preload'] ?? ''), 'AWVP block local player preload policy drifted.');
+$assert(str_contains($html, '<video controls playsinline preload="metadata">'), 'Dynamic block did not render the AWVP-owned native local player.');
+$assert(! str_contains(strtolower($html), 'autoplay'), 'AWVP local player unexpectedly enables autoplay.');
 
 final class Awvp_Block_Remote_Serving implements Video_Serving_Resolver { public function peertube_embed_url(int $video_id): string { return 101 === $video_id ? 'https://video.example.org/videos/embed/123e4567-e89b-42d3-a456-426614174000' : ''; } }
 $remote_block = new Video_Block(new Awvp_Block_Remote_Serving());
 $remote_html = $remote_block->render(array('videoId'=>101));
 $assert(str_contains($remote_html, '<iframe') && str_contains($remote_html, 'video.example.org/videos/embed/123e4567-e89b-42d3-a456-426614174000'), 'Verified serving resolver did not switch the AWVP block to PeerTube embed output.');
-$assert(1 === count($GLOBALS['awvp_block_shortcode_calls']), 'PeerTube cutover still rendered the local shortcode path.');
+$assert(! str_contains(strtolower($remote_html), 'autoplay'), 'PeerTube embed unexpectedly enables autoplay.');
+$assert(! str_contains($remote_html, 'allow="autoplay'), 'PeerTube iframe grants autoplay capability.');
 
 $assert('' === $block->render(array()), 'Unbound block unexpectedly rendered frontend output.');
 $assert('' === $block->render(array('videoId'=>999)), 'Unknown AWVP Video unexpectedly rendered frontend output.');
@@ -118,6 +113,12 @@ $assert(str_contains($js, "publication.plan_status === 'channel_mismatch'"), 'Pu
 $assert(str_contains($js, "lockPostSaving(editorialLockName)") && str_contains($js, "unlockPostSaving(editorialLockName)"), 'Editor does not lock only the publicational save boundary while review is unresolved.');
 $assert(str_contains($js, "['publish', 'future', 'private']"), 'Editor publication lock does not cover publish/schedule/private transitions.');
 $assert(str_contains($js, "origin_post_id"), 'Editor publication lock cannot distinguish the original anchor from reused blocks.');
+$assert(str_contains($js, 'tagsDraftText') && str_contains($js, 'setTagsDraftText(value)'), 'PeerTube tag textarea does not preserve raw in-progress spaces/newlines.');
+$assert(1 === substr_count($js, "label: __('I reviewed these PeerTube publishing settings'"), 'Publication wizard does not expose one consolidated explicit-review checkbox.');
+foreach (array('I reviewed the PeerTube title','I reviewed the channel','I reviewed the PeerTube tags','I reviewed the final privacy','I reviewed the sensitive-content declaration') as $old_review_label) {
+    $assert(! str_contains($js, $old_review_label), 'Publication wizard retained a superseded per-field explicit-review checkbox: ' . $old_review_label);
+}
+$assert(str_contains($js, 'Publishing options have not been loaded from this PeerTube server yet.'), 'Missing-provider-catalog editor notice is not actionable/user-facing.');
 foreach (array('access_token','refresh_token','secret_ref','PeerTube_Api_Client','peertube_upload_advance',"wp.data.dispatch('core/editor').savePost") as $forbidden) {
     $assert(! str_contains($js, $forbidden), 'Block editor acquired forbidden secret/dispatch/editor-publish authority: ' . $forbidden);
 }
@@ -131,8 +132,14 @@ $assert(str_contains($bootstrap, "includes/Editorial_Publish_Validator.php") && 
 $assert(str_contains($bootstrap, "includes/Video_Serving_Authority.php") && str_contains($bootstrap, "includes/Video_Serving_Service.php") && str_contains($bootstrap, "includes/PeerTube_Serving_Cutover_Service.php"), 'R46.6 serving/cutover classes are not loaded by plugin bootstrap.');
 $block_source = (string) file_get_contents(dirname(__DIR__) . '/includes/Video_Block.php');
 $assert(str_contains($block_source, 'peertube_embed_url') && str_contains($block_source, '<iframe'), 'AWVP block has no verified PeerTube serving path.');
-$assert(str_contains($block_source, 'wp_video_shortcode'), 'AWVP block lost local fallback serving path.');
+$assert(! str_contains($block_source, 'wp_video_shortcode'), 'AWVP block still layers hls.js on WordPress MediaElement shortcode output.');
+$assert(str_contains($block_source, 'render_attachment_player'), 'AWVP block does not use the shared AWVP native local-player renderer.');
 foreach (array('wp_remote_', 'PeerTube_Api_Client', 'update_publication', 'update_privacy') as $forbidden) { $assert(! str_contains($block_source, $forbidden), 'Frontend block acquired provider-network/mutation authority: ' . $forbidden); }
+$renderer_source = (string) file_get_contents(dirname(__DIR__) . '/includes/Renderer.php');
+$player_source = (string) file_get_contents(dirname(__DIR__) . '/assets/js/argent-video-player.js');
+$assert(str_contains($renderer_source, 'data-argent-fallback') && str_contains($player_source, "getAttribute('data-argent-fallback')"), 'HLS player lacks an explicit generated progressive fallback after fatal adaptive playback failure.');
+$assert(str_contains($renderer_source, 'autoplay'), 'Renderer does not explicitly remove inherited autoplay attributes.');
+$assert(str_contains($plugin, 'new Video_Block($video_serving, $renderer)'), 'Production block wiring does not inject the AWVP native renderer.');
 $assert(str_contains($plugin, "add_action('init', array(\$video_block, 'register'), 7)"), 'Dynamic AWVP block is not registered from Plugin boot.');
 $assert(str_contains($plugin, "add_action('rest_api_init', array(\$video_block_editor_rest, 'register'))"), 'AWVP block REST boundary is not registered from Plugin boot.');
 $assert(str_contains($plugin, "add_action('rest_api_init', array(\$peertube_publication_editor_rest, 'register'))"), 'PeerTube publication editor REST boundary is not registered from Plugin boot.');

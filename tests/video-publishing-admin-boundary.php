@@ -42,5 +42,11 @@ $page_body = substr($admin, $page_start, $page_end - $page_start);
 $assert(! str_contains($page_body, '->refresh('), 'Publishing page GET must not refresh PeerTube choices.');
 $assert(str_contains($admin, 'Stale since %s; refresh must succeed before these choices can be treated as current.'), 'Stale publication-choice state is not surfaced to administrators.');
 $assert(str_contains($admin, "(int) \$catalog['secret_generation']"), 'Publication-choice page stopped identifying the observed credential generation.');
+$assert(str_contains($admin, 'Load publishing options') && str_contains($admin, 'Refresh publishing options'), 'Publishing options use ambiguous refresh-only administrator wording.');
+$assert(str_contains($admin, 'Use activated channel: %s'), 'Backend channel choice is not rendered by human-readable provider label.');
+$assert(str_contains($admin, 'Previously selected option is no longer available'), 'Provider dropdowns do not preserve unavailable stored selections safely.');
+$assert(! str_contains($admin, "esc_html_e('Licence ID'"), 'Publishing settings still ask administrators for a raw licence ID.');
+$assert(! str_contains($admin, "esc_html_e('Category ID'"), 'Publishing settings still ask administrators for a raw category ID.');
+$assert(! str_contains($admin, "esc_html_e('Channel ID'"), 'Publishing settings still ask administrators for a raw channel ID.');
 
 fwrite(STDOUT, "R46 video publishing admin-boundary tests passed.\n");

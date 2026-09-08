@@ -32,6 +32,25 @@ final class Renderer
         return $this->replace($output, $attachment_id);
     }
 
+    /** Render one AWVP-owned native player without WordPress MediaElement wrapping. */
+    public function render_attachment_player(int $attachment_id): string
+    {
+        if ($attachment_id < 1) {
+            return '';
+        }
+        $url = wp_get_attachment_url($attachment_id);
+        $mime = (string) get_post_mime_type($attachment_id);
+        if (! is_string($url) || '' === $url || ! str_starts_with($mime, 'video/')) {
+            return '';
+        }
+        $html = sprintf(
+            '<video controls playsinline preload="metadata"><source src="%s" type="%s"></video>',
+            esc_url($url),
+            esc_attr($mime)
+        );
+        return $this->replace($html, $attachment_id);
+    }
+
     private function replace(string $html, int $attachment_id): string
     {
         if ($attachment_id < 1) {
@@ -52,6 +71,8 @@ final class Renderer
                 $attributes = preg_replace('/\s+src\s*=\s*("[^"]*"|\'[^\']*\'|[^\s>]+)/i', '', (string) $matches[1]);
                 $attributes = preg_replace('/\s+preload\s*=\s*("[^"]*"|\'[^\']*\'|[^\s>]+)/i', '', (string) $attributes);
                 $attributes = preg_replace('/\s+data-argent-hls\s*=\s*("[^"]*"|\'[^\']*\'|[^\s>]+)/i', '', (string) $attributes);
+                $attributes = preg_replace('/\s+data-argent-fallback\s*=\s*("[^"]*"|\'[^\']*\'|[^\s>]+)/i', '', (string) $attributes);
+                $attributes = preg_replace('/\s+autoplay(?:\s*=\s*("[^"]*"|\'[^\']*\'|[^\s>]+))?/i', '', (string) $attributes);
                 $inner = preg_replace('~<source\b[^>]*>~i', '', (string) $matches[2]);
                 $sources = '';
 
@@ -76,8 +97,14 @@ final class Renderer
                 $hls_attribute = ! empty($outputs['hls']['url'])
                     ? ' data-argent-hls="' . esc_url((string) $outputs['hls']['url']) . '"'
                     : '';
+                $fallback = ! empty($outputs['mp4']['url'])
+                    ? (string) $outputs['mp4']['url']
+                    : wp_get_attachment_url($attachment_id);
+                $fallback_attribute = is_string($fallback) && '' !== $fallback
+                    ? ' data-argent-fallback="' . esc_url($fallback) . '"'
+                    : '';
 
-                return '<video' . $attributes . $hls_attribute . ' preload="metadata">' . $sources . $inner . '</video>';
+                return '<video' . $attributes . $hls_attribute . $fallback_attribute . ' preload="metadata">' . $sources . $inner . '</video>';
             },
             $html,
             1

@@ -114,6 +114,12 @@ final class Video_Publishing_Admin
 
         $settings = $this->store->get();
         $backends = $this->active_peertube_backends();
+        $selected_backend = is_array($settings)
+            ? (string) ($settings['default_destination']['backend_id'] ?? Backend_Registry::LOCAL_ID)
+            : Backend_Registry::LOCAL_ID;
+        $site_catalog = Backend_Registry::LOCAL_ID !== $selected_backend && null !== $this->catalogs
+            ? $this->catalogs->get($selected_backend)
+            : null;
         ?>
         <h2><?php esc_html_e('Publishing', 'argentwolf-video-processor'); ?></h2>
             <?php $this->render_notice(); ?>
@@ -132,7 +138,6 @@ final class Video_Publishing_Admin
                         <tr>
                             <th scope="row"><label for="awvp-default-destination"><?php esc_html_e('Default video destination', 'argentwolf-video-processor'); ?></label></th>
                             <td>
-                                <?php $selected_backend = (string) ($settings['default_destination']['backend_id'] ?? Backend_Registry::LOCAL_ID); ?>
                                 <select id="awvp-default-destination" name="awvp_publishing[default_backend_id]">
                                     <option value="<?php echo esc_attr(Backend_Registry::LOCAL_ID); ?>" <?php selected($selected_backend, Backend_Registry::LOCAL_ID); ?>><?php esc_html_e('WordPress / local', 'argentwolf-video-processor'); ?></option>
                                     <?php foreach ($backends as $backend_id => $backend) : ?>
@@ -143,7 +148,7 @@ final class Video_Publishing_Admin
                                         <option value="<?php echo esc_attr($selected_backend); ?>" selected disabled><?php echo esc_html(sprintf(__('Unavailable PeerTube server: %s', 'argentwolf-video-processor'), $selected_backend)); ?></option>
                                     <?php endif; ?>
                                 </select>
-                                <p class="description"><?php esc_html_e('Changing this affects only newly-created, unfrozen videos. It never migrates existing videos.', 'argentwolf-video-processor'); ?></p>
+                                <p class="description"><?php esc_html_e('Changing this affects only newly-created, unfrozen videos. It never migrates existing videos. If you switch to a different PeerTube server, save and reload before choosing the provider defaults below so AWVP can show that server’s option names.', 'argentwolf-video-processor'); ?></p>
                             </td>
                         </tr>
                         <?php $site = $settings['site']; ?>
@@ -161,12 +166,19 @@ final class Video_Publishing_Admin
                         <tr>
                             <th scope="row"><?php esc_html_e('PeerTube provider defaults', 'argentwolf-video-processor'); ?></th>
                             <td>
-                                <label><?php esc_html_e('Licence ID', 'argentwolf-video-processor'); ?> <input name="awvp_publishing[site][licence_id]" type="number" min="1" step="1" value="<?php echo esc_attr((string) $site['licence_id']); ?>" style="width:7em"></label>
-                                &nbsp;
-                                <label><?php esc_html_e('Category ID', 'argentwolf-video-processor'); ?> <input name="awvp_publishing[site][category_id]" type="number" min="1" step="1" value="<?php echo esc_attr((string) $site['category_id']); ?>" style="width:7em"></label>
-                                &nbsp;
-                                <label><?php esc_html_e('Language', 'argentwolf-video-processor'); ?> <input name="awvp_publishing[site][language]" type="text" maxlength="35" value="<?php echo esc_attr((string) $site['language']); ?>" placeholder="en" style="width:8em"></label>
-                                <p class="description"><?php esc_html_e('Licence and category may be left blank. The values available depend on the selected PeerTube server. Server-specific overrides below take precedence.', 'argentwolf-video-processor'); ?></p>
+                                <?php if (null !== $site_catalog) : ?>
+                                    <?php $this->site_provider_select('licence_id', __('Licence', 'argentwolf-video-processor'), (string) $site['licence_id'], $site_catalog['licences']); ?>
+                                    &nbsp;
+                                    <?php $this->site_provider_select('category_id', __('Category', 'argentwolf-video-processor'), (string) $site['category_id'], $site_catalog['categories']); ?>
+                                    &nbsp;
+                                    <?php $this->site_provider_select('language', __('Language', 'argentwolf-video-processor'), (string) $site['language'], $site_catalog['languages']); ?>
+                                    <p class="description"><?php esc_html_e('These names come from the currently selected default PeerTube server. Server-specific overrides below take precedence.', 'argentwolf-video-processor'); ?></p>
+                                <?php else : ?>
+                                    <input type="hidden" name="awvp_publishing[site][licence_id]" value="<?php echo esc_attr((string) $site['licence_id']); ?>">
+                                    <input type="hidden" name="awvp_publishing[site][category_id]" value="<?php echo esc_attr((string) $site['category_id']); ?>">
+                                    <input type="hidden" name="awvp_publishing[site][language]" value="<?php echo esc_attr((string) $site['language']); ?>">
+                                    <p><?php esc_html_e('Choose a PeerTube default destination and load that server’s publishing options before selecting site-wide provider defaults.', 'argentwolf-video-processor'); ?></p>
+                                <?php endif; ?>
                             </td>
                         </tr>
                         <tr>
@@ -220,19 +232,20 @@ final class Video_Publishing_Admin
                         <p><?php esc_html_e('No connected PeerTube servers are available. Connect and activate a PeerTube server before configuring server-specific publishing defaults.', 'argentwolf-video-processor'); ?></p>
                     <?php else : ?>
                         <table class="widefat striped" style="max-width:1100px">
-                            <thead><tr><th><?php esc_html_e('PeerTube server', 'argentwolf-video-processor'); ?></th><th><?php esc_html_e('Channel ID', 'argentwolf-video-processor'); ?></th><th><?php esc_html_e('Final privacy', 'argentwolf-video-processor'); ?></th><th><?php esc_html_e('Licence', 'argentwolf-video-processor'); ?></th><th><?php esc_html_e('Category', 'argentwolf-video-processor'); ?></th></tr></thead>
+                            <thead><tr><th><?php esc_html_e('PeerTube server', 'argentwolf-video-processor'); ?></th><th><?php esc_html_e('Channel', 'argentwolf-video-processor'); ?></th><th><?php esc_html_e('Final privacy', 'argentwolf-video-processor'); ?></th><th><?php esc_html_e('Licence', 'argentwolf-video-processor'); ?></th><th><?php esc_html_e('Category', 'argentwolf-video-processor'); ?></th></tr></thead>
                             <tbody>
                             <?php foreach ($backends as $backend_id => $backend) : ?>
                                 <?php $override = $settings['backend_overrides'][$backend_id] ?? array('channel_id'=>'','final_privacy_id'=>null,'licence_id'=>null,'category_id'=>null); ?>
+                                <?php $catalog = null !== $this->catalogs ? $this->catalogs->get($backend_id) : null; ?>
                                 <tr>
                                     <td><strong><?php echo esc_html($this->backend_label($backend)); ?></strong></td>
-                                    <td><input name="awvp_publishing[backend_overrides][<?php echo esc_attr($backend_id); ?>][channel_id]" type="number" min="1" step="1" value="<?php echo esc_attr((string) ($override['channel_id'] ?? '')); ?>" placeholder="<?php echo esc_attr((string) ($backend['default_destination'] ?? '')); ?>" style="width:8em"><br><span class="description"><?php esc_html_e('Blank uses the channel selected when this backend was activated.', 'argentwolf-video-processor'); ?></span></td>
+                                    <td><?php $this->channel_override_select($backend_id, $backend, $override['channel_id'] ?? '', $catalog); ?></td>
                                     <td><select name="awvp_publishing[backend_overrides][<?php echo esc_attr($backend_id); ?>][final_privacy_id]">
                                         <option value="inherit" <?php selected($override['final_privacy_id'] ?? null, null); ?>><?php esc_html_e('Inherit site', 'argentwolf-video-processor'); ?></option>
                                         <?php foreach ($this->privacy_choices() as $id => $label) : ?><option value="<?php echo esc_attr($id); ?>" <?php selected($override['final_privacy_id'] ?? null, $id); ?>><?php echo esc_html($label); ?></option><?php endforeach; ?>
                                     </select></td>
-                                    <td><?php $this->provider_override_select($backend_id, 'licence_id', $override['licence_id'] ?? null); ?></td>
-                                    <td><?php $this->provider_override_select($backend_id, 'category_id', $override['category_id'] ?? null); ?></td>
+                                    <td><?php $this->provider_override_select($backend_id, 'licence_id', $override['licence_id'] ?? null, is_array($catalog) ? $catalog['licences'] : array()); ?></td>
+                                    <td><?php $this->provider_override_select($backend_id, 'category_id', $override['category_id'] ?? null, is_array($catalog) ? $catalog['categories'] : array()); ?></td>
                                 </tr>
                             <?php endforeach; ?>
                             </tbody>
@@ -269,8 +282,8 @@ final class Video_Publishing_Admin
             return;
         }
         ?>
-        <h2><?php esc_html_e('PeerTube publication choices', 'argentwolf-video-processor'); ?></h2>
-        <p><?php esc_html_e('Refresh the available channels, visibility levels, licences, categories, and languages from each connected PeerTube server. If a refresh fails, the last successfully retrieved choices are preserved and marked stale.', 'argentwolf-video-processor'); ?></p>
+        <h2><?php esc_html_e('PeerTube publishing options', 'argentwolf-video-processor'); ?></h2>
+        <p><?php esc_html_e('Load the channel, visibility, licence, category, and language names from each connected PeerTube server. AWVP stores the provider identifiers internally so you can choose by name. If a refresh fails, the last successfully retrieved options are preserved and marked stale.', 'argentwolf-video-processor'); ?></p>
         <table class="widefat striped" style="max-width:1100px">
             <thead><tr><th><?php esc_html_e('PeerTube server', 'argentwolf-video-processor'); ?></th><th><?php esc_html_e('Cached choices', 'argentwolf-video-processor'); ?></th><th><?php esc_html_e('Refresh', 'argentwolf-video-processor'); ?></th></tr></thead>
             <tbody>
@@ -280,7 +293,7 @@ final class Video_Publishing_Admin
                     <td><strong><?php echo esc_html($this->backend_label($backend)); ?></strong></td>
                     <td>
                         <?php if (null === $catalog) : ?>
-                            <?php esc_html_e('No valid cached publication catalog yet.', 'argentwolf-video-processor'); ?>
+                            <?php esc_html_e('Publishing options have not been loaded from this server yet.', 'argentwolf-video-processor'); ?>
                         <?php else : ?>
                             <?php echo esc_html(sprintf(
                                 /* translators: 1: PeerTube version, 2: channels, 3: privacy choices, 4: licences, 5: categories, 6: languages, 7: refresh date/time, 8: credential generation. */
@@ -308,7 +321,7 @@ final class Video_Publishing_Admin
                             <input type="hidden" name="action" value="<?php echo esc_attr(self::ACTION_REFRESH_CHOICES); ?>">
                             <input type="hidden" name="backend_id" value="<?php echo esc_attr($backend_id); ?>">
                             <?php wp_nonce_field(self::NONCE_REFRESH . ':' . $backend_id); ?>
-                            <?php submit_button(__('Refresh choices', 'argentwolf-video-processor'), 'secondary', 'submit', false); ?>
+                            <?php submit_button(null === $catalog ? __('Load publishing options', 'argentwolf-video-processor') : __('Refresh publishing options', 'argentwolf-video-processor'), 'secondary', 'submit', false); ?>
                         </form>
                     </td>
                 </tr>
@@ -439,22 +452,85 @@ final class Video_Publishing_Admin
         );
     }
 
-    private function provider_override_select(string $backend_id, string $field, mixed $value): void
+    /** @param array<string,string> $choices */
+    private function site_provider_select(string $field, string $label, string $value, array $choices): void
+    {
+        ?>
+        <label><?php echo esc_html($label); ?>
+            <select name="awvp_publishing[site][<?php echo esc_attr($field); ?>]">
+                <option value="" <?php selected($value, ''); ?>><?php esc_html_e('No default', 'argentwolf-video-processor'); ?></option>
+                <?php foreach ($choices as $id => $choice_label) : ?>
+                    <option value="<?php echo esc_attr((string) $id); ?>" <?php selected($value, (string) $id); ?>><?php echo esc_html($choice_label); ?></option>
+                <?php endforeach; ?>
+                <?php if ('' !== $value && ! array_key_exists($value, $choices)) : ?>
+                    <option value="<?php echo esc_attr($value); ?>" selected><?php esc_html_e('Previously selected option is no longer available', 'argentwolf-video-processor'); ?></option>
+                <?php endif; ?>
+            </select>
+        </label>
+        <?php
+    }
+
+    /** @param array<string,mixed>|null $catalog */
+    private function channel_override_select(string $backend_id, array $backend, mixed $value, ?array $catalog): void
+    {
+        $selected = is_string($value) ? $value : '';
+        $activated = PeerTube_Connection_Input::destination_id($backend['default_destination'] ?? null);
+        $choices = array();
+        if (is_array($catalog)) {
+            foreach ($catalog['channels'] as $channel) {
+                if (! is_array($channel)) {
+                    continue;
+                }
+                $id = is_string($channel['id'] ?? null) ? $channel['id'] : '';
+                $display = is_string($channel['display_name'] ?? null) ? $channel['display_name'] : '';
+                $name = is_string($channel['name'] ?? null) ? $channel['name'] : '';
+                if ('' === $id || '' === $display) {
+                    continue;
+                }
+                $choices[$id] = '' !== $name && $name !== $display ? $display . ' (@' . $name . ')' : $display;
+            }
+        }
+        $activated_label = '' !== $activated && isset($choices[$activated])
+            ? sprintf(
+                /* translators: %s: activated PeerTube channel label. */
+                __('Use activated channel: %s', 'argentwolf-video-processor'),
+                $choices[$activated]
+            )
+            : __('Use the channel selected when this server was activated', 'argentwolf-video-processor');
+        ?>
+        <select name="awvp_publishing[backend_overrides][<?php echo esc_attr($backend_id); ?>][channel_id]">
+            <option value="" <?php selected($selected, ''); ?>><?php echo esc_html($activated_label); ?></option>
+            <?php foreach ($choices as $id => $choice_label) : ?>
+                <option value="<?php echo esc_attr($id); ?>" <?php selected($selected, $id); ?>><?php echo esc_html($choice_label); ?></option>
+            <?php endforeach; ?>
+            <?php if ('' !== $selected && ! isset($choices[$selected])) : ?>
+                <option value="<?php echo esc_attr($selected); ?>" selected><?php esc_html_e('Previously selected channel is no longer available', 'argentwolf-video-processor'); ?></option>
+            <?php endif; ?>
+        </select>
+        <?php if (array() === $choices) : ?>
+            <br><span class="description"><?php esc_html_e('Load this server’s publishing options above to choose a channel by name.', 'argentwolf-video-processor'); ?></span>
+        <?php endif; ?>
+        <?php
+    }
+
+    /** @param array<string,string> $choices */
+    private function provider_override_select(string $backend_id, string $field, mixed $value, array $choices): void
     {
         $selected = null === $value ? 'inherit' : ('' === $value ? 'none' : (string) $value);
         ?>
-        <input
-            name="awvp_publishing[backend_overrides][<?php echo esc_attr($backend_id); ?>][<?php echo esc_attr($field); ?>]"
-            type="text"
-            value="<?php echo esc_attr($selected); ?>"
-            pattern="(?:inherit|none|[1-9][0-9]*)"
-            style="width:8em"
-            aria-label="<?php echo esc_attr(sprintf(
-                /* translators: %s: publication field name. */
-                __('%s override', 'argentwolf-video-processor'),
-                $field
-            )); ?>"
-        ><br><span class="description"><?php esc_html_e('Use inherit, none, or a numeric provider ID.', 'argentwolf-video-processor'); ?></span>
+        <select name="awvp_publishing[backend_overrides][<?php echo esc_attr($backend_id); ?>][<?php echo esc_attr($field); ?>]">
+            <option value="inherit" <?php selected($selected, 'inherit'); ?>><?php esc_html_e('Inherit site default', 'argentwolf-video-processor'); ?></option>
+            <option value="none" <?php selected($selected, 'none'); ?>><?php esc_html_e('None', 'argentwolf-video-processor'); ?></option>
+            <?php foreach ($choices as $id => $choice_label) : ?>
+                <option value="<?php echo esc_attr((string) $id); ?>" <?php selected($selected, (string) $id); ?>><?php echo esc_html($choice_label); ?></option>
+            <?php endforeach; ?>
+            <?php if (! in_array($selected, array('inherit','none'), true) && ! array_key_exists($selected, $choices)) : ?>
+                <option value="<?php echo esc_attr($selected); ?>" selected><?php esc_html_e('Previously selected option is no longer available', 'argentwolf-video-processor'); ?></option>
+            <?php endif; ?>
+        </select>
+        <?php if (array() === $choices) : ?>
+            <br><span class="description"><?php esc_html_e('Load this server’s publishing options above to choose by name.', 'argentwolf-video-processor'); ?></span>
+        <?php endif; ?>
         <?php
     }
 

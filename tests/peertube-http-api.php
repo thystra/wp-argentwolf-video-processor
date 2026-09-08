@@ -1440,31 +1440,66 @@ namespace ArgentVideo {
         'R43 resumable-upload initialization result retained bearer authority.'
     );
 
-    $before_bad_location = count($GLOBALS['awvp_http_requests']);
-    $queue(
-        $response(
-            201,
-            '',
-            array('Location' => 'https://attacker.example/api/v1/videos/upload-resumable?upload_id=' . $upload_session)
-        )
-    );
-    $bad_location = $api->begin_resumable_upload(
-        $upload_access,
-        '41',
-        'R43 staged source',
-        'r43-source.mp4',
-        'video/mp4',
-        10
-    );
-    $assert(false === $bad_location['ok'], 'Cross-origin resumable-upload Location was accepted.');
-    $assert(
-        'upload_init_location_invalid' === ($bad_location['error']['code'] ?? ''),
-        'Cross-origin resumable-upload Location did not fail with the reviewed local code.'
-    );
-    $assert(
-        $before_bad_location + 1 === count($GLOBALS['awvp_http_requests']),
-        'Cross-origin Location validation performed an extra request.'
-    );
+    foreach (
+        array(
+            '//video.example.org/api/v1/videos/upload-resumable?upload_id=' . $upload_session,
+            'https://video.example.org/api/v1/videos/upload-resumable?upload_id=' . $upload_session,
+            'https://video.example.org:443/api/v1/videos/upload-resumable?upload_id=' . $upload_session,
+        ) as $accepted_location
+    ) {
+        $before = count($GLOBALS['awvp_http_requests']);
+        $queue($response(201, '', array('Location' => $accepted_location)));
+        $accepted = $api->begin_resumable_upload(
+            $upload_access,
+            '41',
+            'R43 staged source',
+            'r43-source.mp4',
+            'video/mp4',
+            10
+        );
+        $assert(
+            true === $accepted['ok'] && array('session_id' => $upload_session) === $accepted['data'],
+            'Valid same-origin resumable-upload Location form was rejected: ' . $accepted_location
+        );
+        $assert($before + 1 === count($GLOBALS['awvp_http_requests']), 'Accepted Location performed an extra request.');
+    }
+
+    foreach (
+        array(
+            array('', 'upload_init_location_missing'),
+            array('//attacker.example/api/v1/videos/upload-resumable?upload_id=' . $upload_session, 'upload_init_location_origin_mismatch'),
+            array('https://attacker.example/api/v1/videos/upload-resumable?upload_id=' . $upload_session, 'upload_init_location_origin_mismatch'),
+            array('http://video.example.org/api/v1/videos/upload-resumable?upload_id=' . $upload_session, 'upload_init_location_origin_mismatch'),
+            array('https://video.example.org:444/api/v1/videos/upload-resumable?upload_id=' . $upload_session, 'upload_init_location_origin_mismatch'),
+            array('/api/v1/videos/not-upload-resumable?upload_id=' . $upload_session, 'upload_init_location_path_invalid'),
+            array('/api/v1/videos/upload-resumable?upload_id=' . $upload_session . '&extra=1', 'upload_init_location_query_invalid'),
+            array('/api/v1/videos/upload-resumable?upload_id=' . $upload_session . '&upload_id=' . $upload_session, 'upload_init_location_query_invalid'),
+            array('/api/v1/videos/upload-resumable?upload_id=bad%2Fsession', 'upload_init_location_query_invalid'),
+            array('https://user@video.example.org/api/v1/videos/upload-resumable?upload_id=' . $upload_session, 'upload_init_location_malformed'),
+            array('https://video.example.org/api/v1/videos/upload-resumable?upload_id=' . $upload_session . '#fragment', 'upload_init_location_malformed'),
+        ) as $bad_case
+    ) {
+        [$bad_value, $expected_code] = $bad_case;
+        $before_bad_location = count($GLOBALS['awvp_http_requests']);
+        $queue($response(201, '', array('Location' => $bad_value)));
+        $bad_location = $api->begin_resumable_upload(
+            $upload_access,
+            '41',
+            'R43 staged source',
+            'r43-source.mp4',
+            'video/mp4',
+            10
+        );
+        $assert(false === $bad_location['ok'], 'Invalid resumable-upload Location was accepted: ' . $bad_value);
+        $assert(
+            $expected_code === ($bad_location['error']['code'] ?? ''),
+            'Invalid resumable-upload Location did not fail with the expected reviewed local code: ' . $bad_value
+        );
+        $assert(
+            $before_bad_location + 1 === count($GLOBALS['awvp_http_requests']),
+            'Invalid Location validation performed an extra request.'
+        );
+    }
 
     $chunk_bytes = "abcde";
     $before_chunk = count($GLOBALS['awvp_http_requests']);
