@@ -2,7 +2,7 @@
 /**
  * Plugin Name: ArgentWolf Video Processor
  * Plugin URI: https://github.com/thystra/wp-argentwolf-video-processor
- * Description: Processes WordPress video locally or publishes reviewed videos to configured PeerTube backends through detached workers.
+ * Description: Processes WordPress video locally or publishes selected videos to configured PeerTube servers.
  * Version: 2.0.0-rc3
  * Requires at least: 6.4
  * Requires PHP: 8.1
@@ -141,6 +141,7 @@ require_once ARGENT_VIDEO_DIR . 'includes/Diagnostics.php';
 require_once ARGENT_VIDEO_DIR . 'includes/Backend_Adapter_Factory.php';
 require_once ARGENT_VIDEO_DIR . 'includes/Local_Backend_Adapter.php';
 require_once ARGENT_VIDEO_DIR . 'includes/Admin.php';
+require_once ARGENT_VIDEO_DIR . 'includes/Settings_Hub.php';
 require_once ARGENT_VIDEO_DIR . 'includes/CLI_Command.php';
 require_once ARGENT_VIDEO_DIR . 'includes/Plugin.php';
 

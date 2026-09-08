@@ -58,7 +58,7 @@ final class Video_Publishing_Admin
 
         wp_safe_redirect(
             add_query_arg(
-                array('page' => self::PAGE_SLUG, 'awvp_publishing_notice' => $notice),
+                array('page' => Settings_Hub::PAGE_SLUG, 'tab' => Settings_Hub::TAB_PUBLISHING, 'awvp_publishing_notice' => $notice),
                 admin_url('options-general.php')
             )
         );
@@ -87,7 +87,7 @@ final class Video_Publishing_Admin
             default => 'choices-refused',
         };
         wp_safe_redirect(add_query_arg(
-            array('page'=>self::PAGE_SLUG,'awvp_publishing_notice'=>$notice),
+            array('page'=>Settings_Hub::PAGE_SLUG,'tab'=>Settings_Hub::TAB_PUBLISHING,'awvp_publishing_notice'=>$notice),
             admin_url('options-general.php')
         ));
         exit;
@@ -98,15 +98,27 @@ final class Video_Publishing_Admin
         if (! current_user_can('manage_options')) {
             wp_die(esc_html__('You are not allowed to manage video publishing defaults.', 'argentwolf-video-processor'));
         }
+        ?>
+        <div class="wrap">
+            <h1><?php esc_html_e('ArgentWolf Video Processor', 'argentwolf-video-processor'); ?></h1>
+            <?php $this->render_tab(); ?>
+        </div>
+        <?php
+    }
+
+    public function render_tab(): void
+    {
+        if (! current_user_can('manage_options')) {
+            wp_die(esc_html__('You are not allowed to manage video publishing defaults.', 'argentwolf-video-processor'));
+        }
 
         $settings = $this->store->get();
         $backends = $this->active_peertube_backends();
         ?>
-        <div class="wrap">
-            <h1><?php esc_html_e('ArgentWolf Video Publishing', 'argentwolf-video-processor'); ?></h1>
+        <h2><?php esc_html_e('Publishing', 'argentwolf-video-processor'); ?></h2>
             <?php $this->render_notice(); ?>
-            <p><?php esc_html_e('These defaults prefill new videos only. Existing and legacy videos keep their stored destination; missing legacy destination metadata always means WordPress/local.', 'argentwolf-video-processor'); ?></p>
-            <p><?php esc_html_e('PeerTube-bound posts remain locally playable while the remote copy uploads and processes. Early PeerTube uploads remain private until the WordPress post is actually published, and each video still requires explicit metadata/moderation review before remote dispatch.', 'argentwolf-video-processor'); ?></p>
+            <p><?php esc_html_e('Choose the default destination and PeerTube publishing options for new videos. Existing videos keep their current destination and are not migrated automatically.', 'argentwolf-video-processor'); ?></p>
+            <p><?php esc_html_e('Videos sent to PeerTube remain locally playable while they upload and process. The PeerTube copy is kept private until its publication settings are ready, and each video can still be reviewed before it is published remotely.', 'argentwolf-video-processor'); ?></p>
             <?php if (null === $settings) : ?>
                 <div class="notice notice-error"><p><?php esc_html_e('The stored publishing-defaults record is malformed or from a future schema. AWVP preserved it and will not overwrite it from this page.', 'argentwolf-video-processor'); ?></p></div>
             <?php else : ?>
@@ -128,7 +140,7 @@ final class Video_Publishing_Admin
                                     <?php endforeach; ?>
                                     <?php if (Backend_Registry::LOCAL_ID !== $selected_backend && ! isset($backends[$selected_backend])) : ?>
                                         <?php /* translators: %s: unavailable backend identifier. */ ?>
-                                        <option value="<?php echo esc_attr($selected_backend); ?>" selected disabled><?php echo esc_html(sprintf(__('Unavailable backend: %s', 'argentwolf-video-processor'), $selected_backend)); ?></option>
+                                        <option value="<?php echo esc_attr($selected_backend); ?>" selected disabled><?php echo esc_html(sprintf(__('Unavailable PeerTube server: %s', 'argentwolf-video-processor'), $selected_backend)); ?></option>
                                     <?php endif; ?>
                                 </select>
                                 <p class="description"><?php esc_html_e('Changing this affects only newly-created, unfrozen videos. It never migrates existing videos.', 'argentwolf-video-processor'); ?></p>
@@ -154,7 +166,7 @@ final class Video_Publishing_Admin
                                 <label><?php esc_html_e('Category ID', 'argentwolf-video-processor'); ?> <input name="awvp_publishing[site][category_id]" type="number" min="1" step="1" value="<?php echo esc_attr((string) $site['category_id']); ?>" style="width:7em"></label>
                                 &nbsp;
                                 <label><?php esc_html_e('Language', 'argentwolf-video-processor'); ?> <input name="awvp_publishing[site][language]" type="text" maxlength="35" value="<?php echo esc_attr((string) $site['language']); ?>" placeholder="en" style="width:8em"></label>
-                                <p class="description"><?php esc_html_e('Licence/category may be left blank. Provider IDs are instance vocabulary values; backend-specific overrides below take precedence. The block/editor checkpoint will validate discovered vocabularies against the selected PeerTube instance.', 'argentwolf-video-processor'); ?></p>
+                                <p class="description"><?php esc_html_e('Licence and category may be left blank. The values available depend on the selected PeerTube server. Server-specific overrides below take precedence.', 'argentwolf-video-processor'); ?></p>
                             </td>
                         </tr>
                         <tr>
@@ -203,12 +215,12 @@ final class Video_Publishing_Admin
                         </tr>
                     </table>
 
-                    <h2><?php esc_html_e('PeerTube backend defaults', 'argentwolf-video-processor'); ?></h2>
+                    <h2><?php esc_html_e('PeerTube server defaults', 'argentwolf-video-processor'); ?></h2>
                     <?php if (array() === $backends) : ?>
-                        <p><?php esc_html_e('No active PeerTube backends are available. Connect and activate one before configuring backend-specific publication defaults.', 'argentwolf-video-processor'); ?></p>
+                        <p><?php esc_html_e('No connected PeerTube servers are available. Connect and activate a PeerTube server before configuring server-specific publishing defaults.', 'argentwolf-video-processor'); ?></p>
                     <?php else : ?>
                         <table class="widefat striped" style="max-width:1100px">
-                            <thead><tr><th><?php esc_html_e('Backend', 'argentwolf-video-processor'); ?></th><th><?php esc_html_e('Channel ID', 'argentwolf-video-processor'); ?></th><th><?php esc_html_e('Final privacy', 'argentwolf-video-processor'); ?></th><th><?php esc_html_e('Licence', 'argentwolf-video-processor'); ?></th><th><?php esc_html_e('Category', 'argentwolf-video-processor'); ?></th></tr></thead>
+                            <thead><tr><th><?php esc_html_e('PeerTube server', 'argentwolf-video-processor'); ?></th><th><?php esc_html_e('Channel ID', 'argentwolf-video-processor'); ?></th><th><?php esc_html_e('Final privacy', 'argentwolf-video-processor'); ?></th><th><?php esc_html_e('Licence', 'argentwolf-video-processor'); ?></th><th><?php esc_html_e('Category', 'argentwolf-video-processor'); ?></th></tr></thead>
                             <tbody>
                             <?php foreach ($backends as $backend_id => $backend) : ?>
                                 <?php $override = $settings['backend_overrides'][$backend_id] ?? array('channel_id'=>'','final_privacy_id'=>null,'licence_id'=>null,'category_id'=>null); ?>
@@ -247,7 +259,6 @@ final class Video_Publishing_Admin
                     <?php submit_button(__('Save video publishing defaults', 'argentwolf-video-processor')); ?>
                 </form>
             <?php endif; ?>
-        </div>
         <?php
     }
 
@@ -259,9 +270,9 @@ final class Video_Publishing_Admin
         }
         ?>
         <h2><?php esc_html_e('PeerTube publication choices', 'argentwolf-video-processor'); ?></h2>
-        <p><?php esc_html_e('Refresh is explicit and read-only with respect to PeerTube videos. Page load performs no PeerTube HTTP request. A failed refresh preserves the last-known-good cached choices; cached choices may be stale until a refresh succeeds.', 'argentwolf-video-processor'); ?></p>
+        <p><?php esc_html_e('Refresh the available channels, visibility levels, licences, categories, and languages from each connected PeerTube server. If a refresh fails, the last successfully retrieved choices are preserved and marked stale.', 'argentwolf-video-processor'); ?></p>
         <table class="widefat striped" style="max-width:1100px">
-            <thead><tr><th><?php esc_html_e('Backend', 'argentwolf-video-processor'); ?></th><th><?php esc_html_e('Cached choices', 'argentwolf-video-processor'); ?></th><th><?php esc_html_e('Refresh', 'argentwolf-video-processor'); ?></th></tr></thead>
+            <thead><tr><th><?php esc_html_e('PeerTube server', 'argentwolf-video-processor'); ?></th><th><?php esc_html_e('Cached choices', 'argentwolf-video-processor'); ?></th><th><?php esc_html_e('Refresh', 'argentwolf-video-processor'); ?></th></tr></thead>
             <tbody>
             <?php foreach ($backends as $backend_id => $backend) : ?>
                 <?php $catalog = $this->catalogs->get($backend_id); ?>
@@ -272,22 +283,22 @@ final class Video_Publishing_Admin
                             <?php esc_html_e('No valid cached publication catalog yet.', 'argentwolf-video-processor'); ?>
                         <?php else : ?>
                             <?php echo esc_html(sprintf(
-                                /* translators: 1: PeerTube version, 2: channels, 3: privacy choices, 4: licences, 5: categories, 6: languages, 7: refresh UTC timestamp, 8: credential generation. */
-                                __('PeerTube %1$s; %2$d channels, %3$d privacy choices, %4$d licences, %5$d categories, %6$d languages. Refreshed %7$s UTC under credential generation %8$d.', 'argentwolf-video-processor'),
+                                /* translators: 1: PeerTube version, 2: channels, 3: privacy choices, 4: licences, 5: categories, 6: languages, 7: refresh date/time, 8: credential generation. */
+                                __('PeerTube %1$s; %2$d channels, %3$d visibility choices, %4$d licences, %5$d categories, %6$d languages. Refreshed %7$s under credential generation %8$d.', 'argentwolf-video-processor'),
                                 (string) $catalog['server_version'],
                                 count($catalog['channels']),
                                 count($catalog['privacies']),
                                 count($catalog['licences']),
                                 count($catalog['categories']),
                                 count($catalog['languages']),
-                                gmdate('Y-m-d H:i:s', (int) $catalog['refreshed_at']),
+                                Settings_Hub::format_datetime((int) $catalog['refreshed_at']),
                                 (int) $catalog['secret_generation']
                             )); ?>
                             <?php if (true === $catalog['stale']) : ?>
                                 <br><strong><?php echo esc_html(sprintf(
-                                    /* translators: %s: UTC timestamp when the cached catalog became stale. */
-                                    __('Stale since %s UTC; refresh must succeed before these choices can be treated as current.', 'argentwolf-video-processor'),
-                                    gmdate('Y-m-d H:i:s', (int) $catalog['stale_since'])
+                                    /* translators: %s: date/time when the cached catalog became stale. */
+                                    __('Stale since %s; refresh must succeed before these choices can be treated as current.', 'argentwolf-video-processor'),
+                                    Settings_Hub::format_datetime((int) $catalog['stale_since'])
                                 )); ?></strong>
                             <?php endif; ?>
                         <?php endif; ?>

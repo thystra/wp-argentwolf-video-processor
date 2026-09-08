@@ -74,14 +74,15 @@ final class PeerTube_Migration_Admin
             $notice = array() !== $result['indeterminate'] ? 'indeterminate' : 'refused';
         }
         $args = array(
-            'page'=>self::PAGE_SLUG,
+            'page'=>Settings_Hub::PAGE_SLUG,
+            'tab'=>Settings_Hub::TAB_MIGRATION,
             'awvp_migration_notice'=>$notice,
             'awvp_migration_count'=>(string) (count($result['applied']) + count($result['present'])),
         );
         if ($truncated) {
             $args['awvp_migration_more'] = '1';
         }
-        wp_safe_redirect(add_query_arg($args, admin_url('tools.php')));
+        wp_safe_redirect(add_query_arg($args, admin_url('options-general.php')));
         exit;
     }
 
@@ -108,8 +109,8 @@ final class PeerTube_Migration_Admin
             default => 'refused',
         };
         wp_safe_redirect(add_query_arg(
-            array('page'=>self::PAGE_SLUG,'review_video_id'=>(string)$video_id,'awvp_migration_notice'=>$notice),
-            admin_url('tools.php')
+            array('page'=>Settings_Hub::PAGE_SLUG,'tab'=>Settings_Hub::TAB_MIGRATION,'review_video_id'=>(string)$video_id,'awvp_migration_notice'=>$notice),
+            admin_url('options-general.php')
         ));
         exit;
     }
@@ -141,8 +142,8 @@ final class PeerTube_Migration_Admin
             default => 'execution_refused',
         };
         wp_safe_redirect(add_query_arg(
-            array('page'=>self::PAGE_SLUG,'awvp_migration_notice'=>$notice,'execution_video_id'=>(string)$video_id),
-            admin_url('tools.php')
+            array('page'=>Settings_Hub::PAGE_SLUG,'tab'=>Settings_Hub::TAB_MIGRATION,'awvp_migration_notice'=>$notice,'execution_video_id'=>(string)$video_id),
+            admin_url('options-general.php')
         ));
         exit;
     }
@@ -150,21 +151,30 @@ final class PeerTube_Migration_Admin
     public function page(): void
     {
         $this->require_admin();
+        ?>
+        <div class="wrap">
+            <h1><?php esc_html_e('ArgentWolf Video Processor', 'argentwolf-video-processor'); ?></h1>
+            <?php $this->render_tab(); ?>
+        </div>
+        <?php
+    }
+
+    public function render_tab(): void
+    {
+        $this->require_admin();
         // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only review selector; no state is changed by rendering the page.
         $review_video_id = isset($_GET['review_video_id']) && is_string($_GET['review_video_id']) ? Video_Meta::sanitize_positive_id(sanitize_text_field(wp_unslash($_GET['review_video_id']))) : 0;
         ?>
-        <div class="wrap">
-            <h1><?php esc_html_e('AWVP PeerTube Migration', 'argentwolf-video-processor'); ?></h1>
+            <h2><?php esc_html_e('Video Migration', 'argentwolf-video-processor'); ?></h2>
             <?php $this->notice(); ?>
-            <p><?php esc_html_e('Planning and review remain inert. R46.8 adds an explicit one-way Start migration action for ready plans. Starting migration promotes the reviewed plan into live destination/publication state and hands it to AWVP’s existing durable PeerTube executor; frontend serving remains local until verified cutover.', 'argentwolf-video-processor'); ?></p>
-            <p><?php esc_html_e('WordPress post tags are suggestions only. PeerTube tags require explicit per-video review, including an intentional zero-tag choice, and no more than five may be selected.', 'argentwolf-video-processor'); ?></p>
+            <p><?php esc_html_e('Use Video Migration to move existing local ArgentWolf videos to a connected PeerTube server. Planning does not change how a video is served. After you review the destination and publication settings, Start migration commits that video to the selected PeerTube server and begins the background publishing workflow. WordPress continues serving the local version until the PeerTube copy is ready and verified.', 'argentwolf-video-processor'); ?></p>
+            <p><?php esc_html_e('WordPress post tags are offered as suggestions. Review the PeerTube tags for each video before migration; zero tags is allowed, and PeerTube accepts no more than five tags per video.', 'argentwolf-video-processor'); ?></p>
             <?php if ($review_video_id > 0) : ?>
                 <?php $this->review_form($review_video_id); ?>
             <?php else : ?>
                 <?php $this->planner_form(); ?>
                 <?php $this->planned_table(); ?>
             <?php endif; ?>
-        </div>
         <?php
     }
 
@@ -175,9 +185,9 @@ final class PeerTube_Migration_Admin
         ?>
         <h2><?php esc_html_e('Plan local videos', 'argentwolf-video-processor'); ?></h2>
         <?php if (array() === $targets) : ?>
-            <div class="notice notice-warning inline"><p><?php esc_html_e('No active PeerTube backend has a usable cached owned-channel catalog. Refresh publication choices in Settings > AWVP Video Publishing first.', 'argentwolf-video-processor'); ?></p></div>
+            <div class="notice notice-warning inline"><p><?php esc_html_e('No connected PeerTube server has current channel information. Refresh the PeerTube publishing choices on the Publishing tab first.', 'argentwolf-video-processor'); ?></p></div>
         <?php elseif (array() === $scan['items']) : ?>
-            <p><?php esc_html_e('No eligible local AWVP Videos were found in this batch.', 'argentwolf-video-processor'); ?></p>
+            <p><?php esc_html_e('No eligible local videos were found in this batch.', 'argentwolf-video-processor'); ?></p>
         <?php else : ?>
             <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
                 <input type="hidden" name="action" value="<?php echo esc_attr(self::ACTION_PLAN); ?>">
@@ -222,7 +232,7 @@ final class PeerTube_Migration_Admin
         <h2><?php esc_html_e('Migration review queue', 'argentwolf-video-processor'); ?></h2>
         <?php if (array() === $plans) : ?><p><?php esc_html_e('No migration plans exist yet.', 'argentwolf-video-processor'); ?></p><?php return; endif; ?>
         <table class="widefat striped">
-            <thead><tr><th><?php esc_html_e('AWVP Video', 'argentwolf-video-processor'); ?></th><th><?php esc_html_e('Target', 'argentwolf-video-processor'); ?></th><th><?php esc_html_e('Status', 'argentwolf-video-processor'); ?></th><th><?php esc_html_e('Issues', 'argentwolf-video-processor'); ?></th><th></th></tr></thead>
+            <thead><tr><th><?php esc_html_e('Video', 'argentwolf-video-processor'); ?></th><th><?php esc_html_e('Target', 'argentwolf-video-processor'); ?></th><th><?php esc_html_e('Status', 'argentwolf-video-processor'); ?></th><th><?php esc_html_e('Issues', 'argentwolf-video-processor'); ?></th><th></th></tr></thead>
             <tbody>
             <?php foreach ($plans as $plan) : ?>
                 <tr>
@@ -257,7 +267,7 @@ final class PeerTube_Migration_Admin
                                 <button class="button button-primary" type="submit"><?php esc_html_e('Start migration', 'argentwolf-video-processor'); ?></button>
                             </form>
                         <?php else : ?>
-                            <a class="button" href="<?php echo esc_url(add_query_arg(array('page'=>self::PAGE_SLUG,'review_video_id'=>(string)$row_video_id),admin_url('tools.php'))); ?>"><?php esc_html_e('Review', 'argentwolf-video-processor'); ?></a>
+                            <a class="button" href="<?php echo esc_url(add_query_arg(array('page'=>Settings_Hub::PAGE_SLUG,'tab'=>Settings_Hub::TAB_MIGRATION,'review_video_id'=>(string)$row_video_id),admin_url('options-general.php'))); ?>"><?php esc_html_e('Review migration', 'argentwolf-video-processor'); ?></a>
                         <?php endif; ?>
                     </td>
                 </tr>
@@ -275,7 +285,7 @@ final class PeerTube_Migration_Admin
         }
         $migration = PeerTube_Migration_Plan::sanitize(get_post_meta($video_id, Video_Meta::PEERTUBE_MIGRATION_PLAN, true));
         if (array() === $migration) {
-            echo '<div class="notice notice-error inline"><p>' . esc_html__('The migration plan is missing, malformed, or from a future schema. AWVP preserved it and will not overwrite it implicitly.', 'argentwolf-video-processor') . '</p></div>';
+            echo '<div class="notice notice-error inline"><p>' . esc_html__('The migration plan is missing, invalid, or from a newer plugin version. ArgentWolf Video Processor preserved it and will not overwrite it automatically.', 'argentwolf-video-processor') . '</p></div>';
             return;
         }
         $plan = is_array($migration['publication_plan'] ?? null) ? $migration['publication_plan'] : null;
@@ -285,10 +295,10 @@ final class PeerTube_Migration_Admin
         }
         $catalog = $this->catalogs->get((string)$migration['backend_id']);
         ?>
-        <p><a href="<?php echo esc_url(add_query_arg(array('page'=>self::PAGE_SLUG),admin_url('tools.php'))); ?>">&larr; <?php esc_html_e('Back to migration queue', 'argentwolf-video-processor'); ?></a></p>
+        <p><a href="<?php echo esc_url(add_query_arg(array('page'=>Settings_Hub::PAGE_SLUG,'tab'=>Settings_Hub::TAB_MIGRATION),admin_url('options-general.php'))); ?>">&larr; <?php esc_html_e('Back to migration queue', 'argentwolf-video-processor'); ?></a></p>
         <h2><?php echo esc_html(sprintf(
             /* translators: %d: AWVP Video post ID. */
-            __('Review AWVP Video #%d', 'argentwolf-video-processor'),
+            __('Review Video #%d', 'argentwolf-video-processor'),
             $video_id
         )); ?></h2>
         <p><strong><?php esc_html_e('Target', 'argentwolf-video-processor'); ?>:</strong> <?php echo esc_html((string)$migration['backend_id']); ?> / <?php echo esc_html((string)$migration['channel_id']); ?></p>
@@ -432,12 +442,12 @@ final class PeerTube_Migration_Admin
                 isset($_GET['awvp_migration_count']) && is_string($_GET['awvp_migration_count']) ? absint(wp_unslash($_GET['awvp_migration_count'])) : 0
             ),
             'reviewed' => __('Migration review saved.', 'argentwolf-video-processor'),
-            'execution_started' => __('Migration was committed one-way and handed to AWVP’s durable publication executor.', 'argentwolf-video-processor'),
-            'execution_present' => __('Migration execution was already committed and its durable handoff is present.', 'argentwolf-video-processor'),
+            'execution_started' => __('Migration started. The video is committed to the selected PeerTube server and will continue through the background publishing workflow.', 'argentwolf-video-processor'),
+            'execution_present' => __('This migration has already started. The existing background publishing workflow will continue.', 'argentwolf-video-processor'),
             'busy' => __('Another migration execution attempt currently owns this video. Retry after it finishes.', 'argentwolf-video-processor'),
-            'execution_indeterminate' => __('AWVP could not verify the migration execution write/handoff. The local journal was preserved; use Resume migration rather than starting another migration.', 'argentwolf-video-processor'),
-            'execution_refused' => __('Migration execution was refused because the reviewed plan or current provider/source context is no longer safe to promote.', 'argentwolf-video-processor'),
-            'indeterminate' => __('AWVP could not verify the migration-plan write. No remote work was started.', 'argentwolf-video-processor'),
+            'execution_indeterminate' => __('ArgentWolf Video Processor could not confirm the migration handoff. The saved migration state was preserved; use Resume migration rather than starting another migration.', 'argentwolf-video-processor'),
+            'execution_refused' => __('Migration could not start because the reviewed plan, source video, or current PeerTube settings have changed. Review the video again before retrying.', 'argentwolf-video-processor'),
+            'indeterminate' => __('ArgentWolf Video Processor could not confirm the migration-plan save. No PeerTube work was started.', 'argentwolf-video-processor'),
             default => __('The migration planning request was refused. No remote work was started.', 'argentwolf-video-processor'),
         };
         echo '<div class="notice ' . (in_array($notice, array('refused','indeterminate','execution_refused','execution_indeterminate','busy'), true) ? 'notice-error' : 'notice-success') . ' is-dismissible"><p>' . esc_html($message) . '</p></div>';

@@ -124,6 +124,26 @@ function wp_safe_redirect(string $url, int $status = 302, string|false $by = 'Wo
     throw new RuntimeException('The injected redirector should own focused test redirects.');
 }
 
+function get_option(string $name, mixed $default = false): mixed
+{
+    return match ($name) {
+        'date_format' => 'F j, Y',
+        'time_format' => 'g:i a',
+        default => $default,
+    };
+}
+
+function wp_timezone(): DateTimeZone
+{
+    return new DateTimeZone('America/New_York');
+}
+
+function wp_date(string $format, ?int $timestamp = null, ?DateTimeZone $timezone = null): string
+{
+    $date = new DateTimeImmutable('@' . (string) ($timestamp ?? time()));
+    return $date->setTimezone($timezone ?? new DateTimeZone('UTC'))->format($format);
+}
+
 function admin_url(string $path = ''): string
 {
     return 'https://wordpress.example/wp-admin/' . ltrim($path, '/');
@@ -182,6 +202,7 @@ require_once dirname(__DIR__) . '/includes/PeerTube_Backend_Activation_Service.p
 require_once dirname(__DIR__) . '/includes/PeerTube_Upload_Policy.php';
 require_once dirname(__DIR__) . '/includes/PeerTube_Upload_Policy_Store.php';
 require_once dirname(__DIR__) . '/includes/PeerTube_Connection_Admin_Actions.php';
+require_once dirname(__DIR__) . '/includes/Settings_Hub.php';
 require_once dirname(__DIR__) . '/includes/PeerTube_Connection_Admin.php';
 
 use ArgentVideo\Atomic_Option_Result;
@@ -736,10 +757,11 @@ awvp_admin_assert([] === $actions->calls, 'Unexpected start field reached an act
 
 foreach (
     array(
-        array('backend_id' => 'local', 'origin' => 'https://video.example.org', 'label' => 'Primary'),
-        array('backend_id' => 'peertube_primary', 'origin' => 'https://video.example.org/', 'label' => 'Primary'),
-        array('backend_id' => 'peertube_primary', 'origin' => 'https://video.example.org', 'label' => '<Primary>'),
-    ) as $invalid_start
+        array(array('backend_id' => 'local', 'origin' => 'https://video.example.org', 'label' => 'Primary'), 'reserved_backend_id'),
+        array(array('backend_id' => 'home peertube', 'origin' => 'https://video.example.org', 'label' => 'Primary'), 'invalid_backend_id'),
+        array(array('backend_id' => 'peertube_primary', 'origin' => 'https://video.example.org/', 'label' => 'Primary'), 'invalid_peertube_url'),
+        array(array('backend_id' => 'peertube_primary', 'origin' => 'https://video.example.org', 'label' => '<Primary>'), 'invalid_connection_label'),
+    ) as [$invalid_start, $expected_notice]
 ) {
     awvp_admin_reset_request();
     awvp_admin_post(
@@ -749,7 +771,7 @@ foreach (
     );
     $result = awvp_admin_invoke(array($controller, 'start_action'));
     awvp_admin_assert($result instanceof Awvp_Admin_Redirect, 'Invalid start did not redirect.');
-    awvp_admin_assert(str_contains($result->url, 'invalid_request'), 'Invalid start got wrong notice.');
+    awvp_admin_assert(str_contains($result->url, $expected_notice), 'Invalid start got wrong field-specific notice.');
 }
 awvp_admin_assert([] === $actions->calls, 'Invalid starts reached an action.');
 
@@ -1076,7 +1098,7 @@ $result = awvp_admin_invoke(array($otp_controller, 'grant_action'));
 awvp_admin_assert(str_contains($result->url, 'invalid_request'), 'Blank required OTP was not rejected.');
 awvp_admin_assert(0 === awvp_admin_call_count($otp_actions, 'grant'), 'Blank required OTP reached grant.');
 $_GET = array(
-    'page' => PeerTube_Connection_Admin::PAGE_SLUG,
+    'page' => \ArgentVideo\Settings_Hub::PAGE_SLUG, 'tab' => \ArgentVideo\Settings_Hub::TAB_PEERTUBE,
     'argentwolf_peertube_operation' => $operation_id,
 );
 ob_start();
@@ -1217,7 +1239,7 @@ $actions->operations = array(awvp_admin_operation());
 $calls_before_page = count($actions->calls);
 awvp_admin_reset_request();
 $_GET = array(
-    'page' => PeerTube_Connection_Admin::PAGE_SLUG,
+    'page' => \ArgentVideo\Settings_Hub::PAGE_SLUG, 'tab' => \ArgentVideo\Settings_Hub::TAB_PEERTUBE,
     'argentwolf_peertube_operation' => $operation_id,
 );
 ob_start();
@@ -1230,8 +1252,8 @@ awvp_admin_assert(str_contains($html, 'Primary &amp; private'), 'Operation label
 awvp_admin_assert(str_contains($html, 'https://video.example.org'), 'Exact origin was not disclosed.');
 awvp_admin_assert(str_contains($html, 'name="password" type="password"'), 'Password field is missing.');
 awvp_admin_assert(! str_contains($html, 'name="password" type="password" value='), 'Password field was repopulated.');
-awvp_admin_assert(str_contains($html, 'No media, media metadata, or telemetry'), 'Required no-media disclosure is missing.');
-awvp_admin_assert(str_contains($html, 'dedicated least-privilege PeerTube account'), 'Dedicated-account guidance is missing.');
+awvp_admin_assert(str_contains($html, 'does not upload videos or video metadata'), 'Required no-media disclosure is missing.');
+awvp_admin_assert(str_contains($html, 'dedicated PeerTube account'), 'Dedicated-account guidance is missing.');
 
 // R45 backend upload segmentation is an explicit administrator-only settings
 // POST. Canonical integer input is preserved exactly; malformed forms never
@@ -1252,22 +1274,21 @@ $policy_actions->backends = array(
 );
 $policy_controller = awvp_admin_controller($policy_actions);
 awvp_admin_reset_request();
-$_GET = array('page' => PeerTube_Connection_Admin::PAGE_SLUG);
+$_GET = array('page' => \ArgentVideo\Settings_Hub::PAGE_SLUG, 'tab' => \ArgentVideo\Settings_Hub::TAB_PEERTUBE);
 ob_start();
 $policy_controller->page();
 $policy_html = (string) ob_get_clean();
 awvp_admin_assert(
     str_contains($policy_html, 'name="upload_chunk_mib"')
         && str_contains($policy_html, 'value="128"')
-        && str_contains($policy_html, 'Use 0 to stream all remaining bytes')
-        && str_contains($policy_html, '0 or 1024 MiB when WordPress and PeerTube are on the same host'),
+        && str_contains($policy_html, 'Use 0 to send all remaining bytes')
+        && str_contains($policy_html, 'Smaller segments can recover from interrupted Internet transfers'),
     'R45 upload-policy tuning or operator guidance is missing from the active backend page.'
 );
 awvp_admin_assert(
-    str_contains($policy_html, 'detached task worker')
-        && str_contains($policy_html, 'does not itself start media transfers')
-        && str_contains($policy_html, 'serving remains local')
-        && str_contains($policy_html, 'local deletion remains separately opt-in'),
+    str_contains($policy_html, 'uploaded in the background')
+        && str_contains($policy_html, 'WordPress continues serving the local copy')
+        && str_contains($policy_html, 'Local-file cleanup is configured separately on the Local Retention tab'),
     'PeerTube administrator RC disclosure does not preserve transfer/serving/retention boundaries.'
 );
 
@@ -1322,7 +1343,7 @@ $lifecycle_backend = array(
 );
 $lifecycle_actions->backends = array($lifecycle_backend);
 awvp_admin_reset_request();
-$_GET = array('page' => PeerTube_Connection_Admin::PAGE_SLUG);
+$_GET = array('page' => \ArgentVideo\Settings_Hub::PAGE_SLUG, 'tab' => \ArgentVideo\Settings_Hub::TAB_PEERTUBE);
 ob_start();
 $lifecycle_controller->page();
 $active_disconnect_html = (string) ob_get_clean();
@@ -1344,7 +1365,7 @@ awvp_admin_assert(
 $lifecycle_backend['state'] = 'retired';
 $lifecycle_actions->backends = array($lifecycle_backend);
 awvp_admin_reset_request();
-$_GET = array('page' => PeerTube_Connection_Admin::PAGE_SLUG);
+$_GET = array('page' => \ArgentVideo\Settings_Hub::PAGE_SLUG, 'tab' => \ArgentVideo\Settings_Hub::TAB_PEERTUBE);
 ob_start();
 $lifecycle_controller->page();
 $retired_disconnect_html = (string) ob_get_clean();
@@ -1367,7 +1388,7 @@ awvp_admin_assert(
 $lifecycle_backend['lifecycle_phase'] = 'disconnect_complete';
 $lifecycle_actions->backends = array($lifecycle_backend);
 awvp_admin_reset_request();
-$_GET = array('page' => PeerTube_Connection_Admin::PAGE_SLUG);
+$_GET = array('page' => \ArgentVideo\Settings_Hub::PAGE_SLUG, 'tab' => \ArgentVideo\Settings_Hub::TAB_PEERTUBE);
 ob_start();
 $lifecycle_controller->page();
 $completed_disconnect_html = (string) ob_get_clean();
@@ -1376,7 +1397,7 @@ awvp_admin_assert(
         $completed_disconnect_html,
         'name="action" value="' . PeerTube_Connection_Admin::ACTION_DISCONNECT . '"'
     )
-        && str_contains($completed_disconnect_html, 'No active remote credential action.'),
+        && str_contains($completed_disconnect_html, 'No credential action is currently available.'),
     'A completed retired disconnect still exposed a remote credential action.'
 );
 
@@ -1395,7 +1416,7 @@ $destination_actions->operations = array(
 $destination_controller = awvp_admin_controller($destination_actions);
 awvp_admin_reset_request();
 $_GET = array(
-    'page' => PeerTube_Connection_Admin::PAGE_SLUG,
+    'page' => \ArgentVideo\Settings_Hub::PAGE_SLUG, 'tab' => \ArgentVideo\Settings_Hub::TAB_PEERTUBE,
     'argentwolf_peertube_operation' => $operation_id,
 );
 ob_start();
@@ -1406,7 +1427,7 @@ awvp_admin_assert(
     'Ordinary page GET contacted PeerTube without the explicit discovery request.'
 );
 awvp_admin_assert(
-    str_contains($destination_local_html, 'Read current owned destinations')
+    str_contains($destination_local_html, 'Load owned channels')
         && str_contains($destination_local_html, 'method="get"'),
     'Awaiting-destination page did not render the explicit read-only discovery form.'
 );
@@ -1415,7 +1436,7 @@ awvp_admin_reset_request();
 $GLOBALS['awvp_admin_expected_nonce_action'] =
     'argentwolf_video_processor_peertube_connection_discover_destinations:' . $operation_id;
 $_GET = array(
-    'page' => PeerTube_Connection_Admin::PAGE_SLUG,
+    'page' => \ArgentVideo\Settings_Hub::PAGE_SLUG, 'tab' => \ArgentVideo\Settings_Hub::TAB_PEERTUBE,
     'argentwolf_peertube_operation' => $operation_id,
     'argentwolf_peertube_discover' => '1',
     PeerTube_Connection_Admin::NONCE_FIELD => 'valid-nonce',
@@ -1460,7 +1481,7 @@ $GLOBALS['awvp_admin_expected_nonce_action'] =
     'argentwolf_video_processor_peertube_connection_discover_destinations:' . $operation_id;
 $GLOBALS['awvp_admin_nonce_valid'] = false;
 $_GET = array(
-    'page' => PeerTube_Connection_Admin::PAGE_SLUG,
+    'page' => \ArgentVideo\Settings_Hub::PAGE_SLUG, 'tab' => \ArgentVideo\Settings_Hub::TAB_PEERTUBE,
     'argentwolf_peertube_operation' => $operation_id,
     'argentwolf_peertube_discover' => '1',
     PeerTube_Connection_Admin::NONCE_FIELD => 'valid-nonce',
@@ -1550,7 +1571,7 @@ $actions->operations = array(
     )
 );
 $_GET = array(
-    'page' => PeerTube_Connection_Admin::PAGE_SLUG,
+    'page' => \ArgentVideo\Settings_Hub::PAGE_SLUG, 'tab' => \ArgentVideo\Settings_Hub::TAB_PEERTUBE,
     'argentwolf_peertube_operation' => $operation_id,
 );
 ob_start();
@@ -1575,7 +1596,7 @@ $actions->operations = array(
     )
 );
 $_GET = array(
-    'page' => PeerTube_Connection_Admin::PAGE_SLUG,
+    'page' => \ArgentVideo\Settings_Hub::PAGE_SLUG, 'tab' => \ArgentVideo\Settings_Hub::TAB_PEERTUBE,
     'argentwolf_peertube_operation' => $operation_id,
 );
 ob_start();
@@ -1613,9 +1634,9 @@ awvp_admin_assert(
 // R40 activation phases render only the explicit local activation action.
 foreach (
     array(
-        Machine::PHASE_ACTIVATION_READY => 'Begin backend activation',
-        Machine::PHASE_ACTIVATION_PLANNED => 'Continue backend activation',
-        Machine::PHASE_ACTIVE_PENDING_CLOSE => 'Finalize backend activation',
+        Machine::PHASE_ACTIVATION_READY => 'Activate PeerTube Server',
+        Machine::PHASE_ACTIVATION_PLANNED => 'Continue activation',
+        Machine::PHASE_ACTIVE_PENDING_CLOSE => 'Finish setup',
     ) as $activation_phase => $activation_label
 ) {
     $activation_actions = new Awvp_Admin_Fake_Actions();
@@ -1625,7 +1646,7 @@ foreach (
     $activation_controller = awvp_admin_controller($activation_actions);
     awvp_admin_reset_request();
     $_GET = array(
-        'page' => PeerTube_Connection_Admin::PAGE_SLUG,
+        'page' => \ArgentVideo\Settings_Hub::PAGE_SLUG, 'tab' => \ArgentVideo\Settings_Hub::TAB_PEERTUBE,
         'argentwolf_peertube_operation' => $operation_id,
     );
     ob_start();
@@ -1652,7 +1673,7 @@ foreach (
 // Notice query tampering cannot introduce arbitrary text or HTML.
 awvp_admin_reset_request();
 $_GET = array(
-    'page' => PeerTube_Connection_Admin::PAGE_SLUG,
+    'page' => \ArgentVideo\Settings_Hub::PAGE_SLUG, 'tab' => \ArgentVideo\Settings_Hub::TAB_PEERTUBE,
     'argentwolf_peertube_notice' => '<script>alert(1)</script>',
     'argentwolf_video_message' => 'NOTICE-SECRET-CANARY',
 );
@@ -1665,7 +1686,7 @@ $_GET['argentwolf_peertube_notice'] = 'credentials_stored';
 ob_start();
 $controller->notices();
 $notice_html = (string) ob_get_clean();
-awvp_admin_assert(str_contains($notice_html, 'Authenticated-encrypted token storage is confirmed.'), 'Fixed notice did not render.');
+awvp_admin_assert(str_contains($notice_html, 'PeerTube sign-in succeeded and the connection credentials were stored securely.'), 'Fixed notice did not render.');
 awvp_admin_assert(! str_contains($notice_html, 'NOTICE-SECRET-CANARY'), 'Arbitrary notice message rendered.');
 
 fwrite(STDOUT, "PeerTube administrator boundary tests passed.\n");

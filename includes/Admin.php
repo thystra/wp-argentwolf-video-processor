@@ -48,7 +48,7 @@ final class Admin
     {
         $settings_link = sprintf(
             '<a href="%s">%s</a>',
-            esc_url(admin_url('options-general.php?page=argent-video-processor')),
+            esc_url(Settings_Hub::tab_url(Settings_Hub::TAB_LOCAL)),
             esc_html__('Settings', 'argentwolf-video-processor')
         );
         $project_link = sprintf(
@@ -213,15 +213,27 @@ final class Admin
         if (! current_user_can('manage_options')) {
             return;
         }
+        ?>
+        <div class="wrap">
+            <h1><?php esc_html_e('ArgentWolf Video Processor', 'argentwolf-video-processor'); ?></h1>
+            <?php $this->render_tab(); ?>
+        </div>
+        <?php
+    }
+
+    public function render_tab(): void
+    {
+        if (! current_user_can('manage_options')) {
+            return;
+        }
         $settings = Settings::all();
         $last_launch = get_option('argent_video_processor_last_launch', array());
         $last_worker = get_option('argent_video_processor_last_worker_run', array());
         $bulk = $this->bulk->summary();
         $worker_logs = $this->worker_logs->list(20);
         ?>
-        <div class="wrap">
-            <h1><?php esc_html_e('ArgentWolf Video Processor', 'argentwolf-video-processor'); ?></h1>
-            <p><?php esc_html_e('Originals are preserved. A detached low-priority worker creates privacy-cleaned progressive derivatives and an adaptive HLS ladder.', 'argentwolf-video-processor'); ?></p>
+        <h2><?php esc_html_e('Local Processing', 'argentwolf-video-processor'); ?></h2>
+            <p><?php esc_html_e('Process WordPress video files locally with the background FFmpeg worker. Originals are preserved while ArgentWolf Video Processor creates privacy-cleaned progressive derivatives and an adaptive HLS ladder.', 'argentwolf-video-processor'); ?></p>
 
             <h2><?php esc_html_e('Queue status', 'argentwolf-video-processor'); ?></h2>
             <table class="widefat striped" style="max-width:900px"><tbody>
@@ -269,7 +281,7 @@ final class Admin
                     );
                     ?>
                     <tr>
-                        <td><?php echo esc_html((string) ($worker_log['created_at'] ?? '')); ?></td>
+                        <td><?php echo esc_html(Settings_Hub::format_mysql_utc((string) ($worker_log['created_at'] ?? ''))); ?></td>
                         <td><?php echo esc_html($trigger_label); ?></td>
                         <td><?php echo esc_html($worker_status_label); ?></td>
                         <td><?php echo esc_html($jobs_summary); ?></td>
@@ -332,7 +344,7 @@ final class Admin
                 <table class="form-table" role="presentation">
                     <tr><th scope="row">Automation</th><td>
                         <label><input type="checkbox" name="<?php echo esc_attr(Settings::OPTION); ?>[auto_queue]" value="1" <?php checked(! empty($settings['auto_queue'])); ?>> Queue newly uploaded videos</label><br>
-                        <label><input type="checkbox" name="<?php echo esc_attr(Settings::OPTION); ?>[auto_dispatch]" value="1" <?php checked(! empty($settings['auto_dispatch'])); ?>> Launch detached worker from the five-minute WP-Cron dispatcher</label><br>
+                        <label><input type="checkbox" name="<?php echo esc_attr(Settings::OPTION); ?>[auto_dispatch]" value="1" <?php checked(! empty($settings['auto_dispatch'])); ?>> Run local processing automatically from the five-minute WordPress schedule</label><br>
                         <label><input type="checkbox" name="<?php echo esc_attr(Settings::OPTION); ?>[strip_metadata]" value="1" <?php checked(! empty($settings['strip_metadata'])); ?>> Strip GPS, device, chapter, and other source metadata from derivatives</label><br>
                         <label><input type="checkbox" name="<?php echo esc_attr(Settings::OPTION); ?>[adaptive_hls]" value="1" <?php checked(! empty($settings['adaptive_hls'])); ?>> Generate adaptive HLS at 360p, 480p, and 720p where source resolution permits</label>
                     </td></tr>
@@ -395,7 +407,6 @@ wp argent-video worker --once</pre>
             <h2><?php esc_html_e('Support development', 'argentwolf-video-processor'); ?></h2>
             <p><?php esc_html_e('ArgentWolf Video Processor is free software. Source code, issue tracking, and ways to support continued development are available on GitHub.', 'argentwolf-video-processor'); ?></p>
             <p><a class="button button-secondary" href="<?php echo esc_url('https://github.com/thystra/wp-argentwolf-video-processor'); ?>" target="_blank" rel="noopener noreferrer"><?php esc_html_e('View project on GitHub', 'argentwolf-video-processor'); ?></a></p>
-        </div>
         <?php
     }
 
@@ -453,7 +464,8 @@ wp argent-video worker --once</pre>
     {
         $url = add_query_arg(
             array(
-                'page'                 => 'argent-video-processor',
+                'page'                 => Settings_Hub::PAGE_SLUG,
+                'tab'                  => Settings_Hub::TAB_LOCAL,
                 'argent_video_notice'  => $notice,
                 'argent_video_message' => $message,
             ),

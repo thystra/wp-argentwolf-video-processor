@@ -127,6 +127,7 @@ foreach (
         ArgentVideo\PeerTube_Connection_Input::class,
         ArgentVideo\PeerTube_Connection_Admin_Service::class,
         ArgentVideo\PeerTube_Connection_Admin::class,
+        ArgentVideo\Settings_Hub::class,
         ArgentVideo\PeerTube_Backend_Adapter::class,
         ArgentVideo\PeerTube_Backend_Activation_Service::class,
         ArgentVideo\PeerTube_Token_Lifecycle_Store::class,

@@ -19,11 +19,11 @@ foreach (array('wp_remote_','PeerTube_Api_Client','wp_publish_post','transition_
 }
 $a(!str_contains($executor,'->enqueue('),'Migration executor created a second direct task enqueue path instead of using the qualified synchronizer.');
 $a(str_contains($executor,'$this->synchronizer->sync_video'),'Migration executor does not hand promoted state to the qualified publication synchronizer.');
-$a(str_contains($plugin,"add_action('admin_menu', array(\$peertube_migration_admin, 'menu'))"),'Migration admin menu is not wired.');
+$a(str_contains($plugin,"add_action('admin_menu', array(\$settings_hub, 'menu'))"),'Unified settings hub is not wired.');
 $a(str_contains($plugin,"'admin_post_' . PeerTube_Migration_Admin::ACTION_PLAN"),'Migration plan action is not wired.');
 $a(str_contains($plugin,"'admin_post_' . PeerTube_Migration_Admin::ACTION_REVIEW"),'Migration review action is not wired.');
 $a(str_contains($plugin,"'admin_post_' . PeerTube_Migration_Admin::ACTION_EXECUTE"),'Migration execute action is not wired.');
-foreach (array('PeerTube_Migration_Plan.php','PeerTube_Migration_Execution.php','PeerTube_Migration_Planner.php','PeerTube_Migration_Executor.php','PeerTube_Migration_Admin.php') as $file) {
+foreach (array('PeerTube_Migration_Plan.php','PeerTube_Migration_Execution.php','PeerTube_Migration_Planner.php','PeerTube_Migration_Executor.php','PeerTube_Migration_Admin.php','Settings_Hub.php') as $file) {
     $a(str_contains($bootstrap,$file),'Bootstrap missing '.$file);
 }
 $a(str_contains($planner,'MAX_SELECT_ALL = 500'),'Select-all planning is not explicitly bounded.');

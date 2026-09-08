@@ -72,7 +72,7 @@ shared hosting.
 
 ## Administration
 
-**Settings > ArgentWolf Video** provides:
+**Settings > ArgentWolf Video Processor** provides:
 
 - queue and worker status;
 - smart, adaptive-only, and force-reprocess backlog operations;
@@ -83,14 +83,15 @@ shared hosting.
 - a link to the GitHub project for support and development;
 - bounded database-backed worker diagnostic history and retention controls.
 
-The 2.0 release-candidate line adds a separate **Settings > PeerTube
-Connection** page. It is available only to authenticated administrators with
-`manage_options`; loading it is read-only, while its explicit connection/lifecycle
-POST actions are nonce-protected and advance at most one reviewed step. Active
-PeerTube backends also expose an upload-segment tuning control: the default is
-128 MiB, `0` means one streamed resumable segment containing all remaining bytes,
-and the accepted range is 0–8192 MiB. Saving this policy does not itself start a
-transfer.
+The 2.0 line consolidates administration into the same **Settings > ArgentWolf
+Video Processor** page with tabs for **Local Processing**, **PeerTube Servers**,
+**Publishing**, **Video Migration**, and **Local Retention**. The PeerTube Servers
+tab is available only to authenticated administrators with `manage_options`; its
+connection and credential actions are nonce-protected and explicitly initiated.
+Active PeerTube servers also expose an upload-segment tuning control: the default
+is 128 MiB, `0` means one streamed resumable segment containing all remaining
+bytes, and the accepted range is 0–8192 MiB. Saving this policy does not itself
+start a transfer.
 
 The R46 development plan treats video destination and PeerTube publication
 metadata as explicit per-video state. Existing/legacy videos with no destination
@@ -101,7 +102,7 @@ from WordPress post tags, and early/scheduled uploads remain private on PeerTube
 until the WordPress post actually reaches its publication state. See
 `docs/2.0/VIDEO-DESTINATION-PUBLICATION.md` for the frozen development contract.
 
-R46.2 adds a separate **Settings > AWVP Video Publishing** page for new-video
+R46.2 publishing defaults are exposed on the **Publishing** tab for new-video
 authoring defaults. Its upgrade-safe default destination is WordPress/local. The
 page can select a default active PeerTube backend, final privacy, licence/category
 IDs, language, comments/download policy, send timing, reusable Markdown support
@@ -129,11 +130,11 @@ planning state. This checkpoint still renders the local WordPress attachment and
 does not start a PeerTube upload, publish a remote video, or switch serving
 authority. The detailed PeerTube publication/review wizard follows separately.
 
-R46.7 adds **Tools > AWVP Video Migration** for planning existing local AWVP Videos. The planner can select individual videos or a bounded select-all batch, choose an owned PeerTube channel from the last-known-good catalog, and review per-video publication metadata. WordPress tags are suggestions only and more than five are never silently truncated. Planning writes only inert migration state; it does not change the live destination/publication plan, enqueue PeerTube work, or switch frontend serving.
+R46.7 migration controls are exposed on the **Video Migration** tab for planning existing local AWVP Videos. The planner can select individual videos or a bounded select-all batch, choose an owned PeerTube channel from the last-known-good catalog, and review per-video publication metadata. WordPress tags are suggestions only and more than five are never silently truncated. Planning writes only inert migration state; it does not change the live destination/publication plan, enqueue PeerTube work, or switch frontend serving.
 
 R46.8 adds the explicit **Start migration** step for a `ready` plan. Starting is a one-way local commitment: AWVP revalidates current source/provider/default/thumbnail evidence, journals the exact migration plan, promotes its publication plan and target destination, and then invokes the existing durable publication synchronizer. Remote upload/publication and verified serving cutover continue through the already-qualified R46.5/R46.6 paths; R46.8 adds no parallel uploader or frontend path.
 
-R46.9 adds **Tools > AWVP Local Retention**. Retention is per-video and defaults to **Keep all local copies**. An operator may explicitly choose delayed cleanup of AWVP-managed copies while preserving the WordPress source, or delayed cleanup of all local video copies after declaring a non-WordPress master authority. Destructive actions require a 1-365 day grace period and run only in the existing detached durable worker after current public/unlisted PeerTube serving evidence, local-job quiescence, and exact filesystem identity are revalidated. Physical-source cleanup never deletes the WordPress attachment record; any uncertainty keeps local data.
+R46.9 retention controls are exposed on the **Local Retention** tab. Retention is per-video and defaults to **Keep all local copies**. An operator may explicitly choose delayed cleanup of AWVP-managed copies while preserving the WordPress source, or delayed cleanup of all local video copies after declaring a non-WordPress master authority. Destructive actions require a 1-365 day grace period and run only in the existing detached durable worker after current public/unlisted PeerTube serving evidence, local-job quiescence, and exact filesystem identity are revalidated. Physical-source cleanup never deletes the WordPress attachment record; any uncertainty keeps local data.
 
 ## WP-CLI
 
@@ -189,8 +190,8 @@ telemetry. The 2.0 release-candidate line adds an opt-in, operator-configured
 PeerTube connection. Public instance detection contacts only that configured origin and
 sends no credentials. An authenticated administrator with `manage_options` may
 explicitly start, advance, or reconcile a durable connection operation and may
-authorize one password-grant attempt per explicit submission from the separate
-PeerTube Connection page. Each connection/lifecycle action is POST-only and
+authorize one password-grant attempt per explicit submission from the
+**PeerTube Servers** tab. Each connection/lifecycle action is POST-only and
 nonce-protected; loading the page is read-only, and there is no AJAX, REST, cron,
 activation, or automatic
 connection invocation. The detached PeerTube media-task path does not bootstrap or refresh credentials. Before credentials are

@@ -54,6 +54,7 @@ jobs:
           php tests/video-destination-publication-plan.php
           php tests/video-publishing-defaults.php
           php tests/video-publishing-admin-boundary.php
+          php tests/settings-hub.php
           php tests/peertube-publication-catalog.php
           php tests/peertube-publication-editor.php
           php tests/peertube-publication-editor-rest.php
@@ -172,6 +173,7 @@ jobs:
           unzip -Z1 "${ZIP}" > "${MANIFEST}"
           test "$(awk -F/ 'NF {print $1}' "${MANIFEST}" | sort -u)" = 'argentwolf-video-processor'
           grep -qx 'argentwolf-video-processor/argentwolf-video-processor.php' "${MANIFEST}"
+          grep -qx 'argentwolf-video-processor/includes/Settings_Hub.php' "${MANIFEST}"
           grep -qx 'argentwolf-video-processor/assets/vendor/hls.min.js' "${MANIFEST}"
           grep -qx 'argentwolf-video-processor/assets/vendor/hls.LICENSE' "${MANIFEST}"
           grep -qx 'argentwolf-video-processor/blocks/video/block.json' "${MANIFEST}"

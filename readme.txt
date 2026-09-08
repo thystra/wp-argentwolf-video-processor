@@ -8,14 +8,14 @@ Stable tag: 1.0.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-Processes WordPress video locally or publishes reviewed videos to configured PeerTube backends through detached workers.
+Processes WordPress video locally or publishes selected videos to configured PeerTube servers.
 
 == Description ==
 
 ArgentWolf Video Processor keeps WordPress video sources by default and creates
 smaller derivatives suitable for browser playback on connections ranging from
-slow DSL to broadband. The 2.0 release candidate can also publish explicitly
-reviewed videos to a configured PeerTube backend.
+slow DSL to broadband. Version 2.0 can also publish selected videos to a
+configured PeerTube server.
 
 The default configuration creates:
 
@@ -37,16 +37,15 @@ The plugin stores work in a database queue and processes one video at a time.
 Its recurring WordPress event only starts a detached WP-CLI worker; FFmpeg does
 not run inside the WP-Cron callback or an administrator web request.
 
-The public WordPress.org 1.0 release processes video locally. The 2.0 release
-candidate retains that local destination and adds opt-in publishing to an
-operator-configured PeerTube service. Public instance detection sends no
-credentials. A separate PeerTube Connection settings page lets authenticated
-administrators with `manage_options` explicitly start, advance, or reconcile a
-durable connection operation and authorize one password-grant attempt per
-explicit submission. Its connection actions are POST-only and nonce-protected;
-loading the page is read-only. Credential submission requires explicit
-authorization of the displayed external service. An allowlisted development-only
-plaintext HTTP origin requires a second transport-risk acknowledgement.
+The public WordPress.org 1.0 release processes video locally. Version 2.0
+retains that local destination and adds opt-in publishing to an administrator-
+configured PeerTube service. Settings > ArgentWolf Video Processor provides one
+tabbed interface for local processing, PeerTube servers, publishing defaults,
+video migration, and local retention. Adding a PeerTube server walks the
+administrator through server setup, PeerTube sign-in, account verification,
+channel selection, and activation. No manually generated API key is required.
+Connection actions are administrator-only, nonce-protected, and do not upload
+video merely by configuring the server.
 
 The authorized bootstrap sends the entered PeerTube username and password plus
 an optional six-digit OTP only to that exact origin. The password, OTP, and
@@ -63,7 +62,7 @@ address and plugin/version User-Agent.
 2. Confirm PHP permits `proc_open()` and, for automatic dispatch, `exec()`.
 3. Upload the release ZIP through Plugins > Add New > Upload Plugin.
 4. Activate ArgentWolf Video Processor.
-5. Open Settings > ArgentWolf Video and review diagnostics and configured paths.
+5. Open Settings > ArgentWolf Video Processor and review Local Processing and PeerTube settings.
 6. Upload a video or use Process existing videos to queue the current Media Library backlog.
 
 This plugin requires server-administration access and may not work on restricted
@@ -74,8 +73,8 @@ shared hosting.
 = Are original videos deleted or changed? =
 
 Local processing does not modify the original source, and retention defaults to
-keeping all local copies. In the 2.0 release candidate an administrator may
-separately opt into delayed post-cutover cleanup. Deleting the physical WordPress
+keeping all local copies. In version 2.0 an administrator may separately opt
+into delayed post-cutover cleanup. Deleting the physical WordPress
 source requires an explicit non-WordPress master-authority decision, a 1-365 day
 grace period, and current verified PeerTube serving; the WordPress attachment
 record itself is preserved.
@@ -92,7 +91,7 @@ The plugin produces multiple HLS renditions. The player can move among available
 
 = Can I process videos already in the Media Library? =
 
-Yes. Settings > ArgentWolf Video provides Smart queue, Add adaptive HLS only,
+Yes. Settings > ArgentWolf Video Processor > Local Processing provides Smart queue, Add adaptive HLS only,
 and Force reprocess all operations, with an optional upload-date range.
 
 = Does the plugin run FFmpeg during a web request? =
@@ -124,7 +123,7 @@ Automatic detached dispatch is unavailable. An operator may invoke
 
 The public WordPress.org 1.0 release does not use a remote processing service:
 video processing occurs on the WordPress server and the pinned hls.js runtime is
-served locally. The 2.0 release candidate can contact only an
+served locally. Version 2.0 can contact only an
 operator-configured PeerTube origin. Public instance detection sends no
 credentials. The explicitly administrator-authorized connection bootstrap
 exchanges an entered PeerTube username/password and optional OTP for reusable

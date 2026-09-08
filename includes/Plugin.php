@@ -174,14 +174,17 @@ final class Plugin
                     $peertube_upload_policy
                 )
             );
+            $settings_hub = new Settings_Hub(
+                $admin,
+                $peertube_admin,
+                $video_publishing_admin,
+                $peertube_migration_admin,
+                $local_retention_admin
+            );
 
             add_action('admin_init', array($admin, 'register'));
             add_filter('plugin_action_links_' . plugin_basename(ARGENT_VIDEO_FILE), array($admin, 'plugin_action_links'));
-            add_action('admin_menu', array($admin, 'menu'));
-            add_action('admin_menu', array($peertube_admin, 'menu'));
-            add_action('admin_menu', array($video_publishing_admin, 'menu'));
-            add_action('admin_menu', array($peertube_migration_admin, 'menu'));
-            add_action('admin_menu', array($local_retention_admin, 'menu'));
+            add_action('admin_menu', array($settings_hub, 'menu'));
             add_filter('manage_media_columns', array($admin, 'media_columns'));
             add_action('manage_media_custom_column', array($admin, 'media_column'), 10, 2);
             add_action('admin_post_argent_video_queue_attachment', array($admin, 'queue_action'));
