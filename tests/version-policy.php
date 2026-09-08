@@ -46,6 +46,13 @@ if (null !== $plugin_version && null !== $stable_tag) {
     }
 }
 
+if (1 === preg_match('/^== Upgrade Notice ==\R(?<notices>.*?)(?=^== |\z)/ms', $readme, $matches)) {
+    preg_match_all('/^= [^\r\n=]+ =\R([^\r\n]*)/m', $matches['notices'], $notice_matches);
+    foreach ($notice_matches[1] as $upgrade_notice) {
+        $assert(strlen($upgrade_notice) <= 300, 'Every WordPress.org upgrade notice must be 300 characters or fewer.');
+    }
+}
+
 // WordPress plugin update checks use PHP version comparison semantics. Preserve
 // the exact promotion ordering required by the live RC -> final validation gate.
 $assert(version_compare('2.0.0-rc1', '2.0.0-rc2', '<'), 'Later RCs must compare newer than earlier RCs.');

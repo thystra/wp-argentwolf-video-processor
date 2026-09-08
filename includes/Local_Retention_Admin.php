@@ -110,9 +110,14 @@ final class Local_Retention_Admin
         ?>
         <h2><?php esc_html_e('Local Retention', 'argentwolf-video-processor'); ?></h2>
         <div class="notice notice-warning inline"><p><?php esc_html_e('Local video files are kept by default. You can choose a delayed cleanup policy for each video after PeerTube serving has been verified. Deleting all local copies can remove the physical WordPress source file, although the Media Library attachment record is preserved. Use that option only when PeerTube or another archive is the authoritative master copy.', 'argentwolf-video-processor'); ?></p></div>
-        <?php // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only redirect notice; it cannot mutate state. ?>
-        <?php if (isset($_GET['awvp_retention_notice']) && is_string($_GET['awvp_retention_notice'])) : ?>
-            <div class="notice notice-info"><p><?php echo esc_html('Retention request: ' . sanitize_key(wp_unslash($_GET['awvp_retention_notice']))); ?></p></div>
+        <?php
+        // phpcs:disable WordPress.Security.NonceVerification.Recommended -- Read-only redirect notice; it cannot mutate state.
+        $retention_notice_raw = $_GET['awvp_retention_notice'] ?? '';
+        // phpcs:enable WordPress.Security.NonceVerification.Recommended
+        $retention_notice = is_string($retention_notice_raw) ? sanitize_key(wp_unslash($retention_notice_raw)) : '';
+        ?>
+        <?php if ('' !== $retention_notice) : ?>
+            <div class="notice notice-info"><p><?php echo esc_html('Retention request: ' . $retention_notice); ?></p></div>
         <?php endif; ?>
         <table class="widefat striped">
             <thead><tr><th><?php esc_html_e('Video', 'argentwolf-video-processor'); ?></th><th><?php esc_html_e('Serving and source', 'argentwolf-video-processor'); ?></th><th><?php esc_html_e('Retention policy', 'argentwolf-video-processor'); ?></th></tr></thead>

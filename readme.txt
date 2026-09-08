@@ -193,7 +193,7 @@ plugin-update workflow and confirm the plugin remains active.
 == Upgrade Notice ==
 
 = 2.0.0-rc4 =
-Fourth controlled 2.0 release candidate. Consolidates ArgentWolf Video Processor administration into one tabbed settings page, clarifies PeerTube connection setup and validation errors, and displays administrator-facing times in the WordPress-configured timezone. Keep WordPress.org production users on 1.0.0 until final 2.0.0 publication.
+Fourth controlled 2.0 release candidate. Consolidates AWVP administration into one tabbed settings page, clarifies PeerTube setup and validation errors, and uses the WordPress-configured timezone for administrator-facing times. WordPress.org remains on 1.0.0 until final 2.0.0.
 
 = 2.0.0-rc3 =
 Third controlled 2.0 release candidate. Corrects Plugin Check suppression scope for reviewed nonce/query/hook cases found by canonical RC2; no runtime behavior change. Keep WordPress.org production users on 1.0.0 until final 2.0.0 publication.
