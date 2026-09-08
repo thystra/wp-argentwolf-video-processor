@@ -1997,3 +1997,26 @@ beneath the AWVP project parent, and allows only the intentional prerelease
 `2.0.0-rc2`. Build one canonical RC2 package from the reviewed/green RC2 commit and
 rerun the complete clean-install/public-1.0.0-upgrade/package-identity/Plugin-Check
 matrix before any tag or live deployment.
+
+### RC2 Plugin Check scope failure and RC3 transition
+
+Canonical Forgejo run 154 built `2.0.0-rc2` from commit
+`865a36190478c3f92c5fc69a09e1260cd7eb75ca`, tree
+`de4d422d065a0a4a9c067df31924dfb98d11863b`, package SHA-256
+`d5d8296b0299e3d09fd2cf2a097054c56a9a39bbfd889ea848b946184813b29d`.
+The release harness again proved exact installed-package identity. The intentional
+prerelease `stable_tag_mismatch` was accepted, but Plugin Check 2.1.0 static-new
+reported five nonce-analysis warnings and two hook-prefix warnings, so the harness
+stopped before clean/upgrade runtime phases. Preserve run 154 and its package as
+failed evidence; do not rebuild different RC2 bytes.
+
+Inspection showed the seven residual findings were PHPCS suppression-scope misses,
+not unprotected mutations: three POST values are sanitized only to derive the
+action-specific nonce that callers immediately verify, two GET values are read-only
+selectors/notices, and both hook findings target the already-prefixed
+`argentwolf_video_processor_publication_plan_saved` hook. The correction expands only
+the scanner suppression scope across the exact multi-line expressions/calls; runtime
+behavior and nonce enforcement remain unchanged. Authoritative Forgejo CI run 155 is
+green. Advance to `2.0.0-rc3`, build one new canonical package, and rerun the complete
+Plugin Check / clean-install / public-1.0.0-upgrade matrix before any tag or live
+deployment.

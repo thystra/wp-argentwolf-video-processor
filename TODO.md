@@ -427,14 +427,23 @@
   Keep the existing filesystem/atomic/streaming safety boundaries intact, move release
   reports beneath the AWVP project parent, and permit only the intentional prerelease
   `stable_tag_mismatch` while every other Plugin Check ERROR/WARNING remains blocking.
-- [ ] Advance the remediated source to `2.0.0-rc2`, obtain green Forgejo CI, and build
-  one new canonical RC2 package from that reviewed commit; never overwrite or reuse
-  the preserved RC1 package identity.
-- [ ] Run the reusable `2.0.0-rc2` release-validation payload from exact public 1.0.0:
-  seed a real processed WordPress `core/video` block under 1.0, prove the 2.0
-  upgrade leaves its stored block markup, attachment relationship/metadata,
-  source/managed bytes, and completed local job unchanged, and separately prove
-  the new 2.0 `argentwolf-video-processor/video` block registers and renders locally.
+- [x] Advance to `2.0.0-rc2` and preserve one canonical package: Forgejo run 154
+  built commit `865a36190478c3f92c5fc69a09e1260cd7eb75ca`, tree
+  `de4d422d065a0a4a9c067df31924dfb98d11863b`, ZIP SHA-256
+  `d5d8296b0299e3d09fd2cf2a097054c56a9a39bbfd889ea848b946184813b29d`.
+  Exact package identity passed; RC2 was not tagged or live-distributed.
+- [x] Run the canonical RC2 Plugin Check entry gate. The intentional prerelease
+  `stable_tag_mismatch` was accepted, but static-new stopped on five nonce-analysis
+  warnings plus two false-positive hook-prefix warnings before the public-1.0.0
+  upgrade phases ran. Preserve the exact run-154 report/package as failed evidence.
+- [x] Correct those seven PHPCS suppression-scope findings without changing runtime
+  behavior or weakening nonce enforcement; Forgejo CI run 155 is green.
+- [ ] Advance the corrected source to `2.0.0-rc3`, obtain green Forgejo CI, build one
+  canonical RC3 package, and run the reusable `2.0.0-rc3` validation payload from
+  exact public 1.0.0: seed a real processed WordPress `core/video` block under 1.0,
+  prove the upgrade leaves its stored block markup, attachment relationship/metadata,
+  source/managed bytes, and completed local job unchanged, and separately prove the
+  new 2.0 `argentwolf-video-processor/video` block registers and renders locally.
 - [ ] Run the official WordPress Plugin Check against the exact canonical RC ZIP
   and compare new findings with the accepted 1.0 remediation baseline, especially
   commits `82f095bf40`, `937969c190`, and `5d43ea346c`; resolve or explicitly

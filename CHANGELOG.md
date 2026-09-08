@@ -1,6 +1,12 @@
 <!-- File: CHANGELOG.md -->
 # Changelog
 
+## 2.0.0-rc3 - 2026-09-07
+
+- Correct the narrow PHPCS suppression scopes revealed by canonical RC2 Plugin Check 2.1.0 static-new: action-specific nonce seed reads, read-only query selectors, and the already-prefixed `argentwolf_video_processor_publication_plan_saved` hook are now covered at the exact multi-line expression/call sites that the sniffs inspect. This is a scanner-scope correction only and does not change runtime behavior or relax nonce enforcement.
+- Preserve canonical RC2 as failed release evidence: Forgejo run 154 built commit `865a36190478c3f92c5fc69a09e1260cd7eb75ca`, tree `de4d422d065a0a4a9c067df31924dfb98d11863b`, package SHA-256 `d5d8296b0299e3d09fd2cf2a097054c56a9a39bbfd889ea848b946184813b29d`. Exact package identity passed and the intentional prerelease Stable-tag mismatch was allowed, but five nonce-analysis warnings and two false-positive hook-prefix warnings stopped static-new before upgrade phases.
+- Forgejo CI run 155 is green for the scope-only correction. RC3 is a new candidate identity; RC1 and RC2 package bytes remain immutable failed evidence.
+
 ## 2.0.0-rc2 - 2026-09-07
 
 - Address WordPress Plugin Check 2.1.0 findings discovered by the first canonical RC1 release-validation pass without weakening the 1.0-derived filesystem, atomic-state, or streaming safety boundaries. Normalize request input handling, add translator context, prefer WordPress URL/tag helpers, remove the WordPress-6.5-only `array_is_list()` dependency, and narrowly document reviewed direct-SQL/cURL boundaries where WordPress APIs do not provide equivalent semantics.

@@ -182,7 +182,7 @@ The existing settings keys, queue table, attachment metadata, hook names, cron
 identifiers, Settings page slug, and `wp argent-video` command are retained for
 upgrade compatibility.
 
-This Forgejo release-candidate package identifies itself as `2.0.0-rc2` in the
+This Forgejo release-candidate package identifies itself as `2.0.0-rc3` in the
 plugin header while `Stable tag: 1.0.0` deliberately continues to identify the
 public WordPress.org release. RC packages are not published to WordPress.org SVN.
 The Stable tag moves to `2.0.0` only when the final release is promoted.
@@ -192,6 +192,9 @@ Administrators upgrading from version 0.2.3 should use the normal WordPress
 plugin-update workflow and confirm the plugin remains active.
 
 == Upgrade Notice ==
+
+= 2.0.0-rc3 =
+Third controlled 2.0 release candidate. Corrects Plugin Check suppression scope for reviewed nonce/query/hook cases found by canonical RC2; no runtime behavior change. Keep WordPress.org production users on 1.0.0 until final 2.0.0 publication.
 
 = 2.0.0-rc2 =
 Second controlled 2.0 release candidate. Resolves WordPress Plugin Check findings found in canonical RC1 while retaining the same 2.0 feature scope; keep WordPress.org production users on 1.0.0 until final 2.0.0 publication.
@@ -221,6 +224,11 @@ Renames the public plugin and package to ArgentWolf Video Processor and prepares
 the project for WordPress.org review while retaining existing data identifiers.
 
 == Changelog ==
+
+= 2.0.0-rc3 =
+* Correct narrow PHPCS suppression scopes for action-specific nonce seed reads, read-only query selectors, and the already-prefixed publication-plan hook; runtime behavior and nonce enforcement are unchanged.
+* Preserve canonical RC2 run 154 as failed release evidence after exact package identity passed but static Plugin Check stopped on five nonce-analysis warnings and two hook-prefix false positives.
+* Advance to a new immutable RC3 candidate; RC1 and RC2 bytes are never rebuilt or reused.
 
 = 2.0.0-rc2 =
 * Resolve WordPress Plugin Check 2.1.0 findings discovered by the first canonical RC1 release-validation pass without relaxing the established WordPress uploads/filesystem or PeerTube streaming boundaries.
