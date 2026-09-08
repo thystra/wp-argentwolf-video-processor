@@ -34,12 +34,15 @@ awvp_release_assert(
 
 $post = get_post($post_id);
 awvp_release_assert(is_object($post), 'Legacy Core Video post disappeared during upgrade.');
+$actual_content = (string) $post->post_content;
+$actual_content_sha = hash('sha256', $actual_content);
 awvp_release_assert(
-    $expected_content === (string) $post->post_content,
-    '2.0 mutated stored legacy core/video post_content during upgrade.'
+    $expected_content === $actual_content,
+    '2.0 mutated stored legacy core/video post_content during upgrade. '
+    . "expected_sha256={$expected_content_sha} actual_sha256={$actual_content_sha}"
 );
 awvp_release_assert(
-    $expected_content_sha === hash('sha256', (string) $post->post_content),
+    $expected_content_sha === $actual_content_sha,
     'Legacy core/video post_content hash changed during upgrade.'
 );
 

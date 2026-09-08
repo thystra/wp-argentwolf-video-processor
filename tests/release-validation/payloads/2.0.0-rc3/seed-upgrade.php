@@ -124,7 +124,9 @@ awvp_release_assert($job_id > 0, 'Completed 1.0 queue sentinel ID is invalid.');
 update_post_meta($attachment_id, '_argent_video_job_id', $job_id);
 
 $block_content = sprintf(
-    '<!-- wp:video {"id":%1$d,"preload":"metadata"} -->\n<figure class="wp-block-video"><video controls preload="metadata" src="%2$s"></video><figcaption class="wp-element-caption">AWVP 1.0 legacy Core Video sentinel</figcaption></figure>\n<!-- /wp:video -->',
+    '<!-- wp:video {"id":%1$d,"preload":"metadata"} -->' . "\n"
+    . '<figure class="wp-block-video"><video controls preload="metadata" src="%2$s"></video><figcaption class="wp-element-caption">AWVP 1.0 legacy Core Video sentinel</figcaption></figure>' . "\n"
+    . '<!-- /wp:video -->',
     $attachment_id,
     esc_url($source_url)
 );
@@ -133,21 +135,30 @@ $post_id = wp_insert_post(
         'post_type'    => 'post',
         'post_status'  => 'publish',
         'post_title'   => 'AWVP 1.0 Legacy Video Block Sentinel',
-        'post_content' => $block_content,
+        // wp_insert_post() expects slashed post data and unslashes it before persistence.
+        'post_content' => wp_slash($block_content),
     ),
     true
 );
 awvp_release_assert(! is_wp_error($post_id) && (int) $post_id > 0, 'Could not create legacy Core Video post.');
 $post_id = (int) $post_id;
 
-$parsed = parse_blocks($block_content);
+$stored_post = get_post($post_id);
+awvp_release_assert(is_object($stored_post), 'Could not reload legacy Core Video post after seed insert.');
+$stored_content = (string) $stored_post->post_content;
+awvp_release_assert(
+    $block_content === $stored_content,
+    '1.0 legacy Core Video fixture was not stored byte-for-byte before the upgrade test.'
+);
+
+$parsed = parse_blocks($stored_content);
 awvp_release_assert(
     1 === count($parsed)
     && 'core/video' === ($parsed[0]['blockName'] ?? '')
     && $attachment_id === (int) ($parsed[0]['attrs']['id'] ?? 0),
     '1.0 legacy Core Video fixture is not a valid core/video block.'
 );
-$rendered = do_blocks($block_content);
+$rendered = do_blocks($stored_content);
 awvp_release_assert(
     str_contains($rendered, esc_url($managed_url)),
     '1.0 processed Core Video fixture did not render its managed derivative.'
@@ -161,8 +172,8 @@ update_option('awvp_rc_legacy_source_sha256', hash_file('sha256', $source), fals
 update_option('awvp_rc_legacy_managed_path', $managed_output, false);
 update_option('awvp_rc_legacy_managed_url', $managed_url, false);
 update_option('awvp_rc_legacy_managed_sha256', hash_file('sha256', $managed_output), false);
-update_option('awvp_rc_legacy_post_content', $block_content, false);
-update_option('awvp_rc_legacy_post_content_sha256', hash('sha256', $block_content), false);
+update_option('awvp_rc_legacy_post_content', $stored_content, false);
+update_option('awvp_rc_legacy_post_content_sha256', hash('sha256', $stored_content), false);
 update_option('awvp_rc_legacy_attachment_meta_sha256', awvp_rc_post_meta_hash($attachment_id), false);
 update_option('awvp_rc_legacy_signature', $signature, false);
 
