@@ -378,10 +378,11 @@ final class PeerTube_Connection_Admin
     public function upload_policy_action(): void
     {
         $this->require_post_administrator();
-        // phpcs:ignore WordPress.Security.NonceVerification.Missing -- The sanitized backend ID is required to derive the action-specific nonce checked immediately below.
+        // phpcs:disable WordPress.Security.NonceVerification.Missing -- The sanitized backend ID is required to derive the action-specific nonce checked immediately below.
         $backend_id = isset($_POST['backend_id']) && is_string($_POST['backend_id'])
             ? Backend_Identity::sanitize(sanitize_text_field(wp_unslash($_POST['backend_id'])))
             : '';
+        // phpcs:enable WordPress.Security.NonceVerification.Missing
         if ('' === $backend_id || Backend_Registry::LOCAL_ID === $backend_id) {
             $this->reject_invalid_request();
         }
@@ -418,10 +419,11 @@ final class PeerTube_Connection_Admin
     private function lifecycle_action(string $expected_action, string $nonce_prefix, string $method): void
     {
         $this->require_post_administrator();
-        // phpcs:ignore WordPress.Security.NonceVerification.Missing -- The sanitized backend ID is required to derive the action-specific nonce checked immediately below.
+        // phpcs:disable WordPress.Security.NonceVerification.Missing -- The sanitized backend ID is required to derive the action-specific nonce checked immediately below.
         $backend_id = isset($_POST['backend_id']) && is_string($_POST['backend_id'])
             ? Backend_Identity::sanitize(sanitize_text_field(wp_unslash($_POST['backend_id'])))
             : '';
+        // phpcs:enable WordPress.Security.NonceVerification.Missing
         if ('' === $backend_id || Backend_Registry::LOCAL_ID === $backend_id) {
             $this->reject_invalid_request();
         }
@@ -1085,10 +1087,11 @@ final class PeerTube_Connection_Admin
 
     private function raw_operation_id(): string
     {
-        // phpcs:ignore WordPress.Security.NonceVerification.Missing -- The sanitized operation ID is required to derive the action-specific nonce checked by every caller immediately afterward.
+        // phpcs:disable WordPress.Security.NonceVerification.Missing -- The sanitized operation ID is required to derive the action-specific nonce checked by every caller immediately afterward.
         $value = isset($_POST['operation_id']) && is_string($_POST['operation_id'])
             ? sanitize_text_field(wp_unslash($_POST['operation_id']))
             : '';
+        // phpcs:enable WordPress.Security.NonceVerification.Missing
         return PeerTube_Connection_Input::operation_id($value);
     }
 
@@ -1859,19 +1862,21 @@ final class PeerTube_Connection_Admin
 
     private function query_notice(): string
     {
-        // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only redirect notice; no state mutation occurs.
+        // phpcs:disable WordPress.Security.NonceVerification.Recommended -- Read-only redirect notice; no state mutation occurs.
         $value = isset($_GET[self::NOTICE_QUERY]) && is_string($_GET[self::NOTICE_QUERY])
             ? sanitize_key(wp_unslash($_GET[self::NOTICE_QUERY]))
             : '';
+        // phpcs:enable WordPress.Security.NonceVerification.Recommended
         return $value;
     }
 
     private function query_operation_id(): string
     {
-        // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only operation selector; mutations use separate nonce-protected POST actions.
+        // phpcs:disable WordPress.Security.NonceVerification.Recommended -- Read-only operation selector; mutations use separate nonce-protected POST actions.
         $value = isset($_GET[self::OPERATION_QUERY]) && is_string($_GET[self::OPERATION_QUERY])
             ? sanitize_text_field(wp_unslash($_GET[self::OPERATION_QUERY]))
             : '';
+        // phpcs:enable WordPress.Security.NonceVerification.Recommended
         return PeerTube_Connection_Input::operation_id($value);
     }
 

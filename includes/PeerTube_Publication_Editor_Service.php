@@ -213,12 +213,13 @@ final class PeerTube_Publication_Editor_Service
         $before_destination = $destination;
         if ($before === $candidate && $before_destination === $destination_candidate) {
             if (function_exists('do_action')) {
-                // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- Hook is already fully prefixed with argentwolf_video_processor_.
+                // phpcs:disable WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- Hook is already fully prefixed with argentwolf_video_processor_.
                 do_action(
                     'argentwolf_video_processor_publication_plan_saved',
                     $video_id,
                     (int) $candidate['anchor_post_id']
                 );
+                // phpcs:enable WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound
             }
             return self::result(self::PRESENT);
         }
@@ -235,12 +236,13 @@ final class PeerTube_Publication_Editor_Service
 
         if ($candidate === $after_plan && $destination_candidate === $after_destination) {
             if (function_exists('do_action')) {
-                // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- Hook is already fully prefixed with argentwolf_video_processor_.
+                // phpcs:disable WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- Hook is already fully prefixed with argentwolf_video_processor_.
                 do_action(
                     'argentwolf_video_processor_publication_plan_saved',
                     $video_id,
                     (int) $candidate['anchor_post_id']
                 );
+                // phpcs:enable WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound
             }
             return self::result(self::APPLIED);
         }
