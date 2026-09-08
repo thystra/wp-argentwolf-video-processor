@@ -455,6 +455,9 @@ final class Video_Publishing_Admin
     /** @param array<string,string> $choices */
     private function site_provider_select(string $field, string $label, string $value, array $choices): void
     {
+        if ('category_id' === $field) {
+            $choices = $this->alphabetical_choices($choices);
+        }
         ?>
         <label><?php echo esc_html($label); ?>
             <select name="awvp_publishing[site][<?php echo esc_attr($field); ?>]">
@@ -516,6 +519,9 @@ final class Video_Publishing_Admin
     /** @param array<string,string> $choices */
     private function provider_override_select(string $backend_id, string $field, mixed $value, array $choices): void
     {
+        if ('category_id' === $field) {
+            $choices = $this->alphabetical_choices($choices);
+        }
         $selected = null === $value ? 'inherit' : ('' === $value ? 'none' : (string) $value);
         ?>
         <select name="awvp_publishing[backend_overrides][<?php echo esc_attr($backend_id); ?>][<?php echo esc_attr($field); ?>]">
@@ -532,6 +538,21 @@ final class Video_Publishing_Admin
             <br><span class="description"><?php esc_html_e('Load this server’s publishing options above to choose by name.', 'argentwolf-video-processor'); ?></span>
         <?php endif; ?>
         <?php
+    }
+
+    /** @param array<string,string> $choices @return array<string,string> */
+    private function alphabetical_choices(array $choices): array
+    {
+        uksort(
+            $choices,
+            static function (string|int $left_id, string|int $right_id) use ($choices): int {
+                $left = (string) ($choices[$left_id] ?? '');
+                $right = (string) ($choices[$right_id] ?? '');
+                $label_order = strnatcasecmp($left, $right);
+                return 0 !== $label_order ? $label_order : strcmp((string) $left_id, (string) $right_id);
+            }
+        );
+        return $choices;
     }
 
     private function render_notice(): void

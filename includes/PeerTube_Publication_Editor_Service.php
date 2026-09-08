@@ -513,7 +513,7 @@ final class PeerTube_Publication_Editor_Service
             'privacies'=>$privacies,
             'unsupported_privacies'=>$unsupported_privacies,
             'licences'=>$this->dictionary_choices($catalog['licences']),
-            'categories'=>$this->dictionary_choices($catalog['categories']),
+            'categories'=>$this->dictionary_choices($catalog['categories'], true),
             'languages'=>$languages,
             'comments'=>self::comment_choices(),
             'support_presets'=>$support,
@@ -538,11 +538,20 @@ final class PeerTube_Publication_Editor_Service
     }
 
     /** @param array<string,string> $dictionary @return list<array{id:string,label:string}> */
-    private function dictionary_choices(array $dictionary): array
+    private function dictionary_choices(array $dictionary, bool $alphabetical = false): array
     {
         $out = array();
         foreach ($dictionary as $id => $label) {
             $out[] = array('id'=>(string) $id,'label'=>(string) $label);
+        }
+        if ($alphabetical) {
+            usort(
+                $out,
+                static function (array $left, array $right): int {
+                    $label_order = strnatcasecmp((string) $left['label'], (string) $right['label']);
+                    return 0 !== $label_order ? $label_order : strcmp((string) $left['id'], (string) $right['id']);
+                }
+            );
         }
         return $out;
     }

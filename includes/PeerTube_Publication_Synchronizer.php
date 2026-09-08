@@ -55,7 +55,12 @@ final class PeerTube_Publication_Synchronizer
             return;
         }
         $post_id = Video_Meta::sanitize_positive_id($post->ID ?? 0);
-        if ($post_id < 1 || Video_Post_Type::POST_TYPE === ($post->post_type ?? null)) {
+        if (
+            $post_id < 1
+            || Video_Post_Type::POST_TYPE === ($post->post_type ?? null)
+            || false !== wp_is_post_revision($post_id)
+            || false !== wp_is_post_autosave($post_id)
+        ) {
             return;
         }
 
@@ -64,7 +69,18 @@ final class PeerTube_Publication_Synchronizer
         $video_ids = array();
         foreach (($validation['video_ids'] ?? array()) as $video_id) {
             $video_id = Video_Meta::sanitize_positive_id($video_id);
-            if ($video_id > 0) {
+            if ($video_id < 1) {
+                continue;
+            }
+
+            // A block reused from another post is display-only for publication
+            // authority. Only the video's immutable origin anchor may advance or
+            // revoke its PeerTube lifecycle. This also keeps copied block content
+            // from becoming a second status-transition authority.
+            $origin_post_id = Video_Meta::sanitize_positive_id(
+                get_post_meta($video_id, Video_Meta::ORIGIN_POST_ID, true)
+            );
+            if ($origin_post_id === $post_id) {
                 $video_ids[$video_id] = true;
             }
         }

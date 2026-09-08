@@ -48,5 +48,6 @@ $assert(str_contains($admin, 'Previously selected option is no longer available'
 $assert(! str_contains($admin, "esc_html_e('Licence ID'"), 'Publishing settings still ask administrators for a raw licence ID.');
 $assert(! str_contains($admin, "esc_html_e('Category ID'"), 'Publishing settings still ask administrators for a raw category ID.');
 $assert(! str_contains($admin, "esc_html_e('Channel ID'"), 'Publishing settings still ask administrators for a raw channel ID.');
+$assert(str_contains($admin, "if ('category_id' === \$field)") && str_contains($admin, 'alphabetical_choices'), 'Publishing settings do not alphabetize PeerTube categories by label.');
 
 fwrite(STDOUT, "R46 video publishing admin-boundary tests passed.\n");

@@ -53,7 +53,7 @@ namespace {
         'origin'=>'https://video.example.org','server_version'=>'8.2.0','refreshed_at'=>2000000000,'stale'=>false,'stale_reason'=>'',
         'channels'=>array(array('id'=>'41','name'=>'main','display_name'=>'Main','authority'=>'owned'),array('id'=>'42','name'=>'other','display_name'=>'Other','authority'=>'owned')),
         'privacies'=>array('1'=>'Public','2'=>'Unlisted','3'=>'Private','4'=>'Internal','5'=>'Password protected'),
-        'licences'=>array('2'=>'Attribution'),'categories'=>array('15'=>'Science'),'languages'=>array('_unknown'=>'Unknown','en'=>'English'),
+        'licences'=>array('2'=>'Attribution'),'categories'=>array('15'=>'Science','16'=>'Animals','17'=>'Technology'),'languages'=>array('_unknown'=>'Unknown','en'=>'English'),
         'capabilities'=>array('sensitive_content'=>true,'sensitive_flags'=>true,'password_privacy'=>true),
     );
     $GLOBALS['awvp_pub_posts'][100]=(object)array('ID'=>100,'post_type'=>'argent_video','post_title'=>'Video');
@@ -67,6 +67,7 @@ namespace {
     $assert(false===$state['draft']['review']['tags'],'Defaults must not satisfy tag review.');
     $assert(array('5')===array_column($state['choices']['unsupported_privacies'],'id'),'Password privacy must stay visible but unselectable.');
     $assert(array('en')===array_column($state['choices']['languages'],'id'),'_unknown language must not become an authored provider ID.');
+    $assert(array('Animals','Science','Technology')===array_column($state['choices']['categories'],'label'),'PeerTube categories must be presented alphabetically by human-readable label.');
 
     $plan=$state['draft']; $plan['channel_id']='42'; $plan['tags']=array(); $plan['thumbnail_attachment_id']=30;
     foreach (array('title','channel','tags','privacy','moderation') as $f) $plan['review'][$f]=true;
