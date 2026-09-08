@@ -5,6 +5,8 @@ $root=dirname(__DIR__);$admin=file_get_contents($root.'/includes/Local_Retention
 $f=0;$a=function(bool $v,string $m)use(&$f){if(!$v){fwrite(STDERR,"FAIL: $m\n");$f++;}};
 $a(is_string($admin)&&str_contains($admin,"current_user_can('manage_options')")&&str_contains($admin,'check_admin_referer'),'Retention admin must require capability and nonce.');
 $a(1===substr_count((string)$admin, "\$_GET['awvp_retention_notice']")&&str_contains((string)$admin,'phpcs:disable WordPress.Security.NonceVerification.Recommended -- Read-only redirect notice; it cannot mutate state.'),'Read-only retention redirect notice must be read exactly once under the reviewed nonce-verification suppression.');
+$retention_admin_normalized=preg_replace('/\s+/','',(string)$admin)??'';
+$a(str_contains($retention_admin_normalized,"sanitize_key(sanitize_text_field(wp_unslash(\$_GET['awvp_retention_notice']??'')))"),'Read-only retention redirect notice must be unslashed and sanitized at the superglobal read boundary.');
 foreach(array('wp_delete_file','Storage::remove_tree','unlink(','wp_delete_attachment','wp_delete_post') as $needle)$a(!str_contains((string)$admin,$needle),"Admin request acquired inline destructive authority: $needle");
 $a(str_contains((string)$service,"public const TASK_TYPE='peertube_local_retention_cleanup'")&&str_contains((string)$service,'$this->tasks->enqueue'),'Cleanup must be a durable queued task.');
 $a(str_contains((string)$admin,'Local_Retention_Policy::MODE_DELETE_ALL ===')&&!str_contains((string)$admin,"if('removed'===\$source||'complete'===\$cleanup)"),'Completed managed-only cleanup must remain administratively reconfigurable; only irreversible full cleanup is frozen.');
