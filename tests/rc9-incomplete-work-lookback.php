@@ -71,6 +71,8 @@ namespace {
     $source=(string)file_get_contents(dirname(__DIR__).'/includes/PeerTube_Incomplete_Work_Reconciler.php');
     foreach(array('PeerTube_Staged_Upload_Operation_Store','upload_indeterminate','update_publication(','resumable_upload') as $forbidden){$assert(!str_contains($source,$forbidden),'Incomplete-work reconciler acquired remote mutation authority: '.$forbidden);}
     $assert(str_contains($source,'DEFAULT_WINDOW_SECONDS = 86400')&&str_contains($source,'MAX_WINDOW_SECONDS = 604800'),'RC9 24h/168h recovery constants drifted.');
+    $assert(str_contains($source,'MAX_SCAN = 250'),'RC9 bounded recovery scan limit drifted from 250 videos.');
+    $assert(!str_contains($source,"'meta_key'"),'RC9 recovery scan reintroduced a slow postmeta SQL filter.');
 
     fwrite(STDOUT,"RC9 incomplete-work lookback tests passed.\n");
 }

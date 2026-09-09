@@ -15,7 +15,7 @@ final class PeerTube_Incomplete_Work_Reconciler
 {
     public const DEFAULT_WINDOW_SECONDS = 86400; // 24 hours.
     public const MAX_WINDOW_SECONDS = 604800; // 168 hours.
-    public const MAX_SCAN = 100;
+    public const MAX_SCAN = 250;
 
     public function __construct(private readonly PeerTube_Publication_Synchronizer $synchronizer)
     {
@@ -28,7 +28,9 @@ final class PeerTube_Incomplete_Work_Reconciler
             return 0;
         }
 
-        // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_key -- Bounded recovery scan intentionally restricts candidates to AWVP lifecycle metadata.
+        // Keep the one-minute recovery pass bounded without a postmeta SQL filter.
+        // Candidate lifecycle state is checked in PHP below, avoiding an expensive
+        // meta_key query while still covering the site-sized RC9 recovery horizon.
         $ids = get_posts(array(
             'post_type'      => Video_Post_Type::POST_TYPE,
             'post_status'    => 'any',
@@ -36,7 +38,6 @@ final class PeerTube_Incomplete_Work_Reconciler
             'posts_per_page' => self::MAX_SCAN,
             'orderby'        => 'modified',
             'order'          => 'DESC',
-            'meta_key'       => Video_Meta::PEERTUBE_PUBLICATION_LIFECYCLE,
         ));
         if (! is_array($ids)) {
             return 0;

@@ -37,6 +37,7 @@ namespace ArgentVideo {
     function get_attached_file(int $id):string|false{return 20===$id?'/tmp/awvp-overview-source.mp4':false;}
     function get_post(int $id):object|false{return $GLOBALS['awvp_rc9_overview_posts'][$id]??false;}
     function get_the_author_meta(string $field,int $id):string{unset($field);return 7===$id?'Alan':'';}
+    function wp_filesize(string $path):int{return (int)filesize($path);}
     function size_format(int|float $bytes,int $decimals=0):string{unset($decimals);return (string)$bytes.' B';}
     function __(string $s,string $domain=''):string{unset($domain);return $s;}
 }
@@ -64,6 +65,8 @@ namespace {
     $source=(string)file_get_contents(dirname(__DIR__).'/includes/PeerTube_Overview_Admin.php');
     $assert(str_contains($source,'<details')&&str_contains($source,"'operation_id='")&&str_contains($source,"'remote_uuid='"),'Internal operation/remote IDs are not relegated to expandable diagnostics.');
     $assert(str_contains($source,"__('Resume'")&&str_contains($source,'$row[\'resumable\']'),'Overview does not expose Resume only through bounded recovery eligibility.');
+    $assert(str_contains($source,'sanitize_text_field(wp_unslash($_POST[\'video_id\']))'),'Overview Resume video ID is not sanitized with a WordPress-recognized sanitizer.');
+    $assert(str_contains($source,'wp_filesize($file)')&&0===preg_match('/(?<!wp_)filesize\(\$file\)/',$source),'Overview media sizing bypasses the WordPress filesystem wrapper.');
     @unlink('/tmp/awvp-overview-source.mp4');
     fwrite(STDOUT,"RC9 Overview/Status policy tests passed.\n");
 }

@@ -86,7 +86,9 @@ final class PeerTube_Overview_Admin
         if (! current_user_can('manage_options')) {
             wp_die(esc_html__('You are not allowed to resume ArgentWolf Video Processor recovery.', 'argentwolf-video-processor'));
         }
-        $video_id = isset($_POST['video_id']) ? Video_Meta::sanitize_positive_id(wp_unslash($_POST['video_id'])) : 0;
+        $video_id = isset($_POST['video_id'])
+            ? Video_Meta::sanitize_positive_id(sanitize_text_field(wp_unslash($_POST['video_id'])))
+            : 0;
         check_admin_referer(self::ACTION_RESUME . ':' . (string) $video_id);
         $result = $video_id > 0 && $this->recovery->resume($video_id, time()) ? 'resumed' : 'refused';
         wp_safe_redirect(Settings_Hub::tab_url(Settings_Hub::TAB_OVERVIEW, array('awvp_recovery' => $result)));
@@ -155,7 +157,7 @@ final class PeerTube_Overview_Admin
         $attached = $attachment_id > 0 ? (string) get_post_meta($attachment_id, '_wp_attached_file', true) : '';
         $filename = '' !== $attached ? basename($attached) : __('Media file unavailable', 'argentwolf-video-processor');
         $file = $attachment_id > 0 && function_exists('get_attached_file') ? get_attached_file($attachment_id) : false;
-        $bytes = is_string($file) && is_file($file) ? filesize($file) : false;
+        $bytes = is_string($file) && '' !== $file && function_exists('wp_filesize') ? wp_filesize($file) : false;
         $size = is_int($bytes) && $bytes >= 0 && function_exists('size_format') ? size_format($bytes, 1) : '';
 
         $anchor_id = Video_Meta::sanitize_positive_id(get_post_meta($video_id, Video_Meta::ORIGIN_POST_ID, true));
