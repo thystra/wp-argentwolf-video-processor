@@ -12,6 +12,7 @@ final class Activator
     public const DB_VERSION = '2';
     public const DB_OPTION = 'argent_video_processor_db_version';
     public const CRON_HOOK = 'argent_video_processor_dispatch';
+    public const PEERTUBE_RECOVERY_HOOK = 'argent_video_processor_peertube_recovery';
 
     public static function activate(): void
     {
@@ -23,6 +24,7 @@ final class Activator
     public static function deactivate(): void
     {
         wp_clear_scheduled_hook(self::CRON_HOOK);
+        wp_clear_scheduled_hook(self::PEERTUBE_RECOVERY_HOOK);
     }
 
     public static function maybe_upgrade(): void
@@ -36,6 +38,9 @@ final class Activator
     {
         if (! wp_next_scheduled(self::CRON_HOOK)) {
             wp_schedule_event(time() + 60, 'argent_video_five_minutes', self::CRON_HOOK);
+        }
+        if (! wp_next_scheduled(self::PEERTUBE_RECOVERY_HOOK)) {
+            wp_schedule_event(time() + 60, 'argent_video_one_minute', self::PEERTUBE_RECOVERY_HOOK);
         }
     }
 

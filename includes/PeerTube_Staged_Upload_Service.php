@@ -55,7 +55,8 @@ final class PeerTube_Staged_Upload_Service
         string $name,
         int $actor_id,
         int $now,
-        ?string $destination_id = null
+        ?string $destination_id = null,
+        ?string $content_type = null
     ): array {
         if ($video_post_id < 1 || $actor_id < 1 || $now < 1) {
             return self::result(self::STATUS_REFUSED);
@@ -78,7 +79,8 @@ final class PeerTube_Staged_Upload_Service
         $destination_id = null === $destination_id
             ? PeerTube_Connection_Input::destination_id($descriptor['default_destination'] ?? null)
             : PeerTube_Connection_Input::destination_id($destination_id);
-        if ('' === $destination_id) {
+        $content_type = self::video_content_type($content_type ?? 'video/mp4');
+        if ('' === $destination_id || '' === $content_type) {
             return self::result(self::STATUS_REFUSED);
         }
 
@@ -90,7 +92,7 @@ final class PeerTube_Staged_Upload_Service
             'source'         => $source,
             'upload'         => array(
                 'filename'     => basename($source['relative_path']),
-                'content_type' => 'video/mp4',
+                'content_type' => $content_type,
                 'name'         => $name,
                 'privacy'      => PeerTube_Staged_Upload_State_Machine::PRIVATE_PRIVACY,
             ),
@@ -112,6 +114,15 @@ final class PeerTube_Staged_Upload_Service
             return self::result(self::STATUS_CONFLICT, $record);
         }
         return self::result(self::STATUS_REFUSED, $record);
+    }
+
+    private static function video_content_type(mixed $value): string
+    {
+        if (! is_string($value) || trim($value) !== $value || strlen($value) > 128) {
+            return '';
+        }
+        $value = strtolower($value);
+        return 1 === preg_match('/\Avideo\/[a-z0-9][a-z0-9.+_-]{0,126}\z/D', $value) ? $value : '';
     }
 
     /** @return array<string,mixed> */

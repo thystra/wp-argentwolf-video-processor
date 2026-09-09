@@ -139,7 +139,21 @@ final class Local_Retention_Service
         // phpcs:enable WordPress.DB.SlowDBQuery.slow_db_query_meta_key,WordPress.DB.SlowDBQuery.slow_db_query_meta_value
         if(!is_array($ids))return true;
         if(count($ids)>self::MAX_ATTACHMENT_REFERENCES)return true;
-        foreach($ids as $raw){$video_id=Video_Meta::sanitize_positive_id($raw);if($video_id<1)continue;$state=Video_Meta::sanitize_source_state(get_post_meta($video_id,Video_Meta::SOURCE_STATE,true));$cleanup=Video_Meta::sanitize_cleanup_state(get_post_meta($video_id,Video_Meta::CLEANUP_STATE,true));$policy=Local_Retention_Policy::sanitize(get_post_meta($video_id,Video_Meta::LOCAL_RETENTION_POLICY,true));if('removed'===$state||'running'===$cleanup||('complete'===$cleanup&&array()!==$policy&&Local_Retention_Policy::destructive($policy)))return true;}
+        foreach($ids as $raw){
+            $video_id=Video_Meta::sanitize_positive_id($raw);
+            if($video_id<1)continue;
+            $state=Video_Meta::sanitize_source_state(get_post_meta($video_id,Video_Meta::SOURCE_STATE,true));
+            $cleanup=Video_Meta::sanitize_cleanup_state(get_post_meta($video_id,Video_Meta::CLEANUP_STATE,true));
+            $policy=Local_Retention_Policy::sanitize(get_post_meta($video_id,Video_Meta::LOCAL_RETENTION_POLICY,true));
+            if('removed'===$state||'running'===$cleanup||('complete'===$cleanup&&array()!==$policy&&Local_Retention_Policy::destructive($policy)))return true;
+
+            $destination_exists=metadata_exists('post',$video_id,Video_Meta::DESTINATION);
+            $destination=Video_Destination::resolve(
+                get_post_meta($video_id,Video_Meta::DESTINATION,true),
+                $destination_exists
+            );
+            if(array()===$destination||!Video_Destination::is_local($destination))return true;
+        }
         return false;
     }
     private static function video_context_valid(int $video_id,int $attachment_id=0):bool{$post=$video_id>0?get_post($video_id):null;if(!is_object($post)||Video_Post_Type::POST_TYPE!==($post->post_type??null)||'trash'===($post->post_status??null))return false;return $attachment_id<1||$attachment_id===Video_Meta::sanitize_positive_id(get_post_meta($video_id,Video_Meta::ATTACHMENT_ID,true));}

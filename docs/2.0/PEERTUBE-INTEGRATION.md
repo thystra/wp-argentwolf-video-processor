@@ -331,12 +331,13 @@ boundary; if the required cURL streaming primitives are unavailable the request
 fails closed. The existing safe-HTTP URL/origin validation remains in force.
 
 The authenticated PeerTube settings page may save the segment policy for an
-active backend, but that action transfers no media. R45.5 wires the reviewed
-detached task launcher to the existing five-minute AWVP dispatch event; cron
-performs only due/stale task detection plus detached `--drain` launch and never
-executes PeerTube media HTTP inline. R45.4b3's execution semantics remain
-unchanged: one minute is budgeted per 128 MiB of authoritative source/segment
-size, with a one-hour floor and six-hour ceiling. The process checks its deadline
+active backend, but that action transfers no media. R45.5 originally wired the
+reviewed detached task launcher to the five-minute AWVP dispatch event. RC9 wakes
+the launcher from owned durable task creation and adds a one-minute recovery-only
+event; the five-minute event remains local-FFmpeg-only. Scheduler callbacks perform
+only local probes and detached `--drain` launch and never execute PeerTube media HTTP
+inline. One minute is budgeted per 128 MiB of authoritative source/segment size,
+with a one-hour floor and six-hour ceiling. The process checks its deadline
 only between durable request boundaries; a byte-bearing PUT is never interrupted
 by the worker. The streamed HTTP timeout uses the same size-derived bound. At this
 R45.4/R45.5 checkpoint the adapter still did not advertise staged
@@ -382,10 +383,12 @@ real-WordPress notification/no-replay, drain, one-shot, and R44 matrices.
 
 ### R45.5 recurring detached wake-up
 
-R45.5 reuses the already-existing `argent_video_processor_dispatch` five-minute
-WP-Cron event instead of creating a second PeerTube-specific schedule. `Plugin`
-registers `PeerTube_Task_Worker_Launcher::launch()` as a second callback on that
-event beside the legacy FFmpeg dispatcher. The launcher checks only due queued
+R45.5 originally reused the existing `argent_video_processor_dispatch` five-minute
+WP-Cron event instead of creating a second PeerTube-specific schedule. That historical
+checkpoint registered `PeerTube_Task_Worker_Launcher::launch()` beside the legacy
+FFmpeg dispatcher. RC9 supersedes this runtime topology with event-driven durable
+task wakes plus a one-minute recovery-only event; the five-minute event now owns only
+local FFmpeg dispatch. The launcher checks only due queued
 or stale processing rows for the three reviewed PeerTube task types and returns
 idle when no work is eligible. A positive probe can only start the detached
 `wp argent-video peertube-task-worker --drain --quiet` process; atomic claims in
@@ -436,12 +439,15 @@ tree `867a13ba23495bfacb7e2e065061c2ce34637842`, Forgejo CI run 131. R46.5b adds
 `peertube_publication_sync` and `peertube_publication_finalize` to the detached
 launcher/`--drain` owned set. `--once` deliberately remains the earlier
 upload/reconciliation diagnostic set; publication execution is not added to it.
-The existing five-minute launcher is reused and no additional schedule is created.
+RC9 uses the same detached launcher/worker authority but wakes it from durable task
+creation; the one-minute recovery-only schedule is the sole PeerTube-specific recurring
+safety net.
 
 Publication sync freezes reviewed provider metadata into a non-secret execution
 manifest and resolves the selected support preset and optional thumbnail identity.
-It stages/reuses a confined MP4 and creates or recovers the same resumable-upload
-operation for the selected channel. Resumable initialization remains hard-coded to
+It stages/reuses a confined copy of the WordPress original with its validated `video/*`
+content type and creates or recovers the same resumable-upload operation for the
+selected channel. AWVP-generated local derivatives are not upload authority. Resumable initialization remains hard-coded to
 privacy `3`, so remote processing can occur while WordPress is draft/future without
 premature reveal.
 

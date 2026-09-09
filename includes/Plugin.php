@@ -36,6 +36,7 @@ final class Plugin
         $worker = new Worker($jobs, $transcoder);
         $launcher = new Worker_Launcher($jobs, $worker_logs);
         $peertube_tasks = new Task_Repository();
+        $peertube_upload_operations = new PeerTube_Staged_Upload_Operation_Store();
         $peertube_task_launcher = new PeerTube_Task_Worker_Launcher($peertube_tasks);
         $player = new Player();
         $renderer = new Renderer($player);
@@ -61,8 +62,10 @@ final class Plugin
         $editorial_publish_gate = new Editorial_Publish_Gate($editorial_publish_validator);
         $peertube_publication_synchronizer = new PeerTube_Publication_Synchronizer(
             $peertube_tasks,
-            $editorial_publish_validator
+            $editorial_publish_validator,
+            $jobs
         );
+        $peertube_incomplete_work = new PeerTube_Incomplete_Work_Reconciler($peertube_publication_synchronizer);
         $peertube_api_factory = static fn (string $origin): PeerTube_Api_Client =>
             new PeerTube_Api_Client(new PeerTube_Http_Client($origin));
         $this->backend_factory = new Backend_Adapter_Factory(
@@ -85,7 +88,9 @@ final class Plugin
         add_action('add_attachment', array($queue, 'maybe_enqueue_attachment'));
         add_action('delete_attachment', array($queue, 'delete_attachment'));
         add_action(Activator::CRON_HOOK, array($launcher, 'dispatch'));
-        add_action(Activator::CRON_HOOK, array($peertube_task_launcher, 'launch'));
+        add_action('argentwolf_video_processor_task_enqueued', array($peertube_task_launcher, 'wake'), 10, 2);
+        add_action(Activator::PEERTUBE_RECOVERY_HOOK, array($peertube_incomplete_work, 'recover'), 5);
+        add_action(Activator::PEERTUBE_RECOVERY_HOOK, array($peertube_task_launcher, 'recover'), 10);
         add_filter('render_block_core/video', array($renderer, 'render_block'), 10, 2);
         add_filter('wp_video_shortcode', array($renderer, 'render_shortcode'), 10, 2);
         add_filter('site_status_tests', array($diagnostics, 'site_health_tests'));
@@ -174,12 +179,14 @@ final class Plugin
                     $peertube_upload_policy
                 )
             );
+            $peertube_overview = new PeerTube_Overview_Admin($peertube_upload_operations, $peertube_incomplete_work);
             $settings_hub = new Settings_Hub(
                 $admin,
                 $peertube_admin,
                 $video_publishing_admin,
                 $peertube_migration_admin,
-                $local_retention_admin
+                $local_retention_admin,
+                $peertube_overview
             );
 
             add_action('admin_init', array($admin, 'register'));
@@ -192,6 +199,7 @@ final class Plugin
             add_action('admin_post_argent_video_cancel_attachment', array($admin, 'cancel_action'));
             add_action('admin_post_argent_video_dispatch', array($admin, 'dispatch_action'));
             add_action('admin_post_argentwolf_video_processor_clear_worker_logs', array($admin, 'clear_worker_logs_action'));
+            add_action('admin_post_' . PeerTube_Overview_Admin::ACTION_RESUME, array($peertube_overview, 'resume_action'));
             add_action(
                 'admin_post_' . PeerTube_Connection_Admin::ACTION_START,
                 array($peertube_admin, 'start_action')
@@ -261,7 +269,6 @@ final class Plugin
         }
 
         if (defined('WP_CLI') && WP_CLI) {
-            $peertube_upload_operations = new PeerTube_Staged_Upload_Operation_Store();
             $peertube_upload = new PeerTube_Staged_Upload_Service(
                 $peertube_upload_operations,
                 $this->backend_registry,
@@ -289,6 +296,9 @@ final class Plugin
                 $peertube_failure_notification
             );
             $peertube_cutover = new PeerTube_Serving_Cutover_Service($peertube_remote_assets);
+            $peertube_derivative_cleanup = new PeerTube_Derivative_Cleanup_Service(
+                new Video_Serving_Service($peertube_remote_assets)
+            );
             $peertube_publication_tasks = new PeerTube_Publication_Task_Coordinator(
                 $peertube_tasks,
                 $peertube_upload_operations,
@@ -301,7 +311,8 @@ final class Plugin
                 $peertube_publication_catalogs,
                 $video_publishing_defaults,
                 $peertube_api_factory,
-                $peertube_cutover
+                $peertube_cutover,
+                $peertube_derivative_cleanup
             );
             $peertube_task_worker = new PeerTube_Task_Worker(
                 $peertube_tasks,
@@ -352,6 +363,10 @@ final class Plugin
         $schedules['argent_video_five_minutes'] = array(
             'interval' => 5 * MINUTE_IN_SECONDS,
             'display'  => __('Every five minutes (ArgentWolf Video)', 'argentwolf-video-processor'),
+        );
+        $schedules['argent_video_one_minute'] = array(
+            'interval' => MINUTE_IN_SECONDS,
+            'display'  => __('Every minute (ArgentWolf Video PeerTube recovery)', 'argentwolf-video-processor'),
         );
         return $schedules;
     }

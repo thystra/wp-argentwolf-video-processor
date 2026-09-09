@@ -49,6 +49,17 @@ final class Worker
                 }
 
                 $attachment_id = (int) $job['attachment_id'];
+                $job_id = (int) ($job['id'] ?? 0);
+                $job_lock = is_string($job['lock_token'] ?? null) ? $job['lock_token'] : '';
+                if (class_exists(Local_Retention_Service::class)
+                    && Local_Retention_Service::attachment_local_processing_blocked($attachment_id)) {
+                    if ($this->jobs->cancel_claimed($job_id, $job_lock)) {
+                        update_post_meta($attachment_id, '_argent_video_status', 'cancelled');
+                        delete_post_meta($attachment_id, '_argent_video_last_error');
+                        continue;
+                    }
+                    throw new RuntimeException('Local processing authority changed after the job was claimed.');
+                }
                 update_post_meta($attachment_id, '_argent_video_status', 'processing');
 
                 try {

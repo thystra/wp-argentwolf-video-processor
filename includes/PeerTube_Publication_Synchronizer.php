@@ -26,7 +26,8 @@ final class PeerTube_Publication_Synchronizer
 
     public function __construct(
         private readonly Task_Repository $tasks,
-        private readonly Editorial_Publish_Validator $validator
+        private readonly Editorial_Publish_Validator $validator,
+        private readonly ?Job_Repository $jobs = null
     ) {
     }
 
@@ -46,7 +47,29 @@ final class PeerTube_Publication_Synchronizer
         if (! is_object($post)) {
             return;
         }
+        $this->cancel_local_processing_for_remote_destination($video_id);
         $this->sync_video($video_id, (string) ($post->post_status ?? ''), time());
+    }
+
+    private function cancel_local_processing_for_remote_destination(int $video_id): void
+    {
+        if (null === $this->jobs || $video_id < 1) {
+            return;
+        }
+        $destination = Video_Destination::resolve(
+            get_post_meta($video_id, Video_Meta::DESTINATION, true),
+            metadata_exists('post', $video_id, Video_Meta::DESTINATION)
+        );
+        if (array() === $destination || Video_Destination::is_local($destination)) {
+            return;
+        }
+        $attachment_id = Video_Meta::sanitize_positive_id(
+            get_post_meta($video_id, Video_Meta::ATTACHMENT_ID, true)
+        );
+        if ($attachment_id > 0 && $this->jobs->cancel($attachment_id)) {
+            update_post_meta($attachment_id, '_argent_video_status', 'cancelled');
+            delete_post_meta($attachment_id, '_argent_video_last_error');
+        }
     }
 
     public function transition(string $new_status, string $old_status, mixed $post): void

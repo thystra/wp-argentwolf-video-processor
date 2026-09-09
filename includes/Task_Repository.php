@@ -86,7 +86,7 @@ final class Task_Repository
 
         $existing = $this->find_by_idempotency_key($idempotency_key);
         if (is_array($existing)) {
-            return self::matches_enqueue(
+            if (self::matches_enqueue(
                 $existing,
                 $task_type,
                 $video_post_id,
@@ -96,9 +96,12 @@ final class Task_Repository
                 $payload_json,
                 $priority,
                 $max_attempts
-            )
-                ? self::enqueue_result(self::PRESENT, (int) $existing['id'])
-                : self::enqueue_result(self::CONFLICT);
+            )) {
+                $result = self::enqueue_result(self::PRESENT, (int) $existing['id']);
+                self::signal_enqueue((int) $existing['id'], $task_type);
+                return $result;
+            }
+            return self::enqueue_result(self::CONFLICT);
         }
 
         global $wpdb;
@@ -149,14 +152,16 @@ final class Task_Repository
                 $priority,
                 $max_attempts
             )) {
-                return self::enqueue_result(self::APPLIED, (int) $row['id']);
+                $result = self::enqueue_result(self::APPLIED, (int) $row['id']);
+                self::signal_enqueue((int) $row['id'], $task_type);
+                return $result;
             }
         }
 
         // A concurrent exact insert may have won the idempotency-key race.
         $existing = $this->find_by_idempotency_key($idempotency_key);
         if (is_array($existing)) {
-            return self::matches_enqueue(
+            if (self::matches_enqueue(
                 $existing,
                 $task_type,
                 $video_post_id,
@@ -166,9 +171,12 @@ final class Task_Repository
                 $payload_json,
                 $priority,
                 $max_attempts
-            )
-                ? self::enqueue_result(self::PRESENT, (int) $existing['id'])
-                : self::enqueue_result(self::CONFLICT);
+            )) {
+                $result = self::enqueue_result(self::PRESENT, (int) $existing['id']);
+                self::signal_enqueue((int) $existing['id'], $task_type);
+                return $result;
+            }
+            return self::enqueue_result(self::CONFLICT);
         }
 
         return self::enqueue_result(self::INDETERMINATE);
@@ -342,6 +350,45 @@ final class Task_Repository
      *
      * @param list<string> $task_types
      */
+    /**
+     * Return the earliest queued run_after for one of the owned task types.
+     *
+     * This is advisory watcher input only; atomic claiming remains authoritative.
+     *
+     * @param list<string> $task_types
+     */
+    public function next_run_after_of_types(array $task_types, int $now): int
+    {
+        $types = self::normalized_task_types($task_types);
+        if (null === $types || array() === $types || $now < 1) {
+            return 0;
+        }
+
+        global $wpdb;
+        $type_sql = implode(',', array_fill(0, count($types), '%s'));
+        $args = array($this->table, ...$types);
+        try {
+            // phpcs:disable PluginCheck.Security.DirectDB.UnescapedDBParameter,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber,WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- $type_sql is a generated list of literal %s placeholders and all type values are supplied separately.
+            $value = $wpdb->get_var(
+                $wpdb->prepare(
+                    "SELECT run_after FROM %i
+                     WHERE status = 'queued' AND attempts < max_attempts
+                       AND task_type IN ({$type_sql})
+                     ORDER BY run_after ASC, priority ASC, id ASC LIMIT 1",
+                    ...$args
+                )
+            );
+            // phpcs:enable PluginCheck.Security.DirectDB.UnescapedDBParameter,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber,WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+        } catch (Throwable) {
+            return 0;
+        }
+        if (! is_string($value) || '' === $value) {
+            return 0;
+        }
+        $timestamp = strtotime($value . ' UTC');
+        return is_int($timestamp) && $timestamp > 0 ? $timestamp : 0;
+    }
+
     public function has_work_of_types(array $task_types, int $now, int $stale_before): bool
     {
         $types = self::normalized_task_types($task_types);
@@ -787,6 +834,15 @@ final class Task_Repository
         }
         $int = (int) $value;
         return $int > 0 ? $int : null;
+    }
+
+    private static function signal_enqueue(int $task_id, string $task_type): void
+    {
+        if ($task_id < 1 || ! self::valid_task_type($task_type) || ! function_exists('do_action')) {
+            return;
+        }
+        // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- Hook is fully prefixed with argentwolf_video_processor_.
+        do_action('argentwolf_video_processor_task_enqueued', $task_id, $task_type);
     }
 
     /** @return array{status:string,task_id:int} */

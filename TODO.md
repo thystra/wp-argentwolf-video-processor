@@ -529,13 +529,29 @@
   revisions/autosaves and requiring immutable origin-anchor ownership for transition
   authority; add regression coverage. Alphabetize category presentation while cutting
   the required next candidate.
-- [ ] Advance the corrected source to `2.0.0-rc8`, obtain green Forgejo CI, build one
-  new canonical RC8 package, and rerun Plugin Check plus the complete exact-package
+- [x] Advance to canonical `2.0.0-rc8`. Source commit
+  `57ba6de225fee3bca200c2faaaf214086eaa83c7`, tree
+  `49ffd65ccffdecc850bce89a4d7ff1b538391951`, exact package SHA-256
+  `943b729de982c48a8019cf0dddda5a746e59d0d5be1ab0900784592981d215dd` passed
+  Plugin Check 2.1.0, exact package identity, and all three clean / three public-1.0.0
+  upgrade release-validation cases.
+- [x] Resume controlled live validation with canonical RC8. The revision/origin-anchor
+  fix held, but Test 3 exposed additional RC9 requirements: PeerTube publication must
+  use the WordPress original instead of requiring a redundant local FFmpeg derivative;
+  empty optional `support`/`nsfwSummary` request fields must be omitted; consequential
+  publication needs read-before/read-after verification and safe retry semantics;
+  detached PeerTube work must wake promptly instead of waiting for the five-minute cron;
+  incomplete work needs bounded recovery/Resume and recognizable administrator status;
+  verified remote serving must survive allowed local-source removal and clean only
+  generated/staging derivatives automatically.
+- [ ] Advance the corrected source to `2.0.0-rc9`, obtain green Forgejo CI, build one
+  canonical RC9 package, and rerun Plugin Check plus the complete exact-package
   clean-install/public-1.0.0-upgrade matrix and disposable `ubuntuzfstest` gate.
-- [ ] Install canonical RC8 through the WordPress web UI on `wolfandraven.blog` and
-  retry with a fresh publication. Verify the published anchor remains authoritative
-  across revision creation, then prove stock PeerTube resumable init/chunking, remote
-  processing, publication finalization, serving cutover, and normal embedded playback.
+- [ ] Install canonical RC9 through the WordPress web UI on `wolfandraven.blog` and
+  resume the preserved live tests. Prove event-driven pickup, original-source resumable
+  upload, remote processing, read-after-write publication verification, serving cutover,
+  non-autoplay PeerTube playback, bounded recovery/Overview behavior, and verified
+  derivative cleanup. Leave historical RC6/RC8 indeterminate evidence untouched.
 - [ ] If defects require code changes, increment `2.0.0-rcN`, rebuild, and rerun
   the affected gates; never mutate or reuse an existing RC version/tag.
 - [ ] Freeze the last accepted RC and promote to `2.0.0` with release/version

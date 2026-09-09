@@ -9,7 +9,8 @@ namespace ArgentVideo;
 
 final class PeerTube_Origin
 {
-    private const DEV_ORIGINS_CONSTANT = 'ARGENT_VIDEO_PEERTUBE_DEV_ORIGINS';
+    private const PRIVATE_ORIGINS_CONSTANT = 'ARGENTWOLF_VIDEO_PROCESSOR_PEERTUBE_PRIVATE_ORIGINS';
+    private const LEGACY_DEV_ORIGINS_CONSTANT = 'ARGENT_VIDEO_PEERTUBE_DEV_ORIGINS';
 
     public static function sanitize(mixed $value): string
     {
@@ -41,12 +42,17 @@ final class PeerTube_Origin
 
     public static function is_development_origin(string $canonical_origin): bool
     {
-        if (! defined(self::DEV_ORIGINS_CONSTANT)) {
-            return false;
+        $configured = array();
+        foreach (array(self::PRIVATE_ORIGINS_CONSTANT, self::LEGACY_DEV_ORIGINS_CONSTANT) as $constant_name) {
+            if (! defined($constant_name)) {
+                continue;
+            }
+            $value = constant($constant_name);
+            if (is_array($value)) {
+                $configured = array_merge($configured, $value);
+            }
         }
-
-        $configured = constant(self::DEV_ORIGINS_CONSTANT);
-        if (! is_array($configured)) {
+        if (array() === $configured) {
             return false;
         }
 

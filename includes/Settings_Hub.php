@@ -11,6 +11,7 @@ namespace ArgentVideo;
 final class Settings_Hub
 {
     public const PAGE_SLUG = 'argent-video-processor';
+    public const TAB_OVERVIEW = 'overview';
     public const TAB_LOCAL = 'local-processing';
     public const TAB_PEERTUBE = 'peertube-servers';
     public const TAB_PUBLISHING = 'publishing';
@@ -22,7 +23,8 @@ final class Settings_Hub
         private readonly PeerTube_Connection_Admin $peertube,
         private readonly Video_Publishing_Admin $publishing,
         private readonly PeerTube_Migration_Admin $migration,
-        private readonly Local_Retention_Admin $retention
+        private readonly Local_Retention_Admin $retention,
+        private readonly ?PeerTube_Overview_Admin $overview = null
     ) {
     }
 
@@ -55,6 +57,13 @@ final class Settings_Hub
             <div class="awvp-settings-tab" style="margin-top:1.5em">
                 <?php
                 switch ($tab) {
+                    case self::TAB_OVERVIEW:
+                        if (null !== $this->overview) {
+                            $this->overview->render_tab();
+                        } else {
+                            $this->local->render_tab();
+                        }
+                        break;
                     case self::TAB_PEERTUBE:
                         $this->peertube->render_tab();
                         break;
@@ -81,6 +90,7 @@ final class Settings_Hub
     public static function tabs(): array
     {
         return array(
+            self::TAB_OVERVIEW => __('Overview', 'argentwolf-video-processor'),
             self::TAB_LOCAL => __('Local Processing', 'argentwolf-video-processor'),
             self::TAB_PEERTUBE => __('PeerTube Servers', 'argentwolf-video-processor'),
             self::TAB_PUBLISHING => __('Publishing', 'argentwolf-video-processor'),
@@ -93,7 +103,7 @@ final class Settings_Hub
     {
         // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only settings-tab selector.
         $raw = isset($_GET['tab']) && is_string($_GET['tab']) ? sanitize_key(wp_unslash($_GET['tab'])) : '';
-        return array_key_exists($raw, self::tabs()) ? $raw : self::TAB_LOCAL;
+        return array_key_exists($raw, self::tabs()) ? $raw : self::TAB_OVERVIEW;
     }
 
     public static function is_tab(string $tab): bool
@@ -107,7 +117,7 @@ final class Settings_Hub
     public static function tab_url(string $tab, array $args = array()): string
     {
         if (! array_key_exists($tab, self::tabs())) {
-            $tab = self::TAB_LOCAL;
+            $tab = self::TAB_OVERVIEW;
         }
         return add_query_arg(
             array_merge(array('page' => self::PAGE_SLUG, 'tab' => $tab), $args),

@@ -123,6 +123,10 @@ final class CLI_Command
         } catch (Throwable $error) {
             WP_CLI::error('PeerTube task worker failed before a bounded result: ' . $this->error_summary($error->getMessage()));
             return;
+        } finally {
+            if (class_exists(PeerTube_Task_Worker_Launcher::class)) {
+                PeerTube_Task_Worker_Launcher::release_launch_lock();
+            }
         }
 
         $status = is_string($result['status'] ?? null) ? $result['status'] : '';

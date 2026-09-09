@@ -84,6 +84,12 @@ $remote_html = $remote_block->render(array('videoId'=>101));
 $assert(str_contains($remote_html, '<iframe') && str_contains($remote_html, 'video.example.org/videos/embed/123e4567-e89b-42d3-a456-426614174000'), 'Verified serving resolver did not switch the AWVP block to PeerTube embed output.');
 $assert(! str_contains(strtolower($remote_html), 'autoplay'), 'PeerTube embed unexpectedly enables autoplay.');
 $assert(! str_contains($remote_html, 'allow="autoplay'), 'PeerTube iframe grants autoplay capability.');
+$GLOBALS['awvp_block_posts'][20]->url = '';
+$GLOBALS['awvp_block_posts'][20]->post_mime_type = 'application/octet-stream';
+$remote_without_source = $remote_block->render(array('videoId'=>101));
+$assert(str_contains($remote_without_source, '<iframe') && str_contains($remote_without_source, 'video.example.org/videos/embed/'), 'Verified PeerTube serving incorrectly depends on readable local source bytes.');
+$GLOBALS['awvp_block_posts'][20]->url = 'https://example.test/uploads/local.mp4';
+$GLOBALS['awvp_block_posts'][20]->post_mime_type = 'video/mp4';
 
 $assert('' === $block->render(array()), 'Unbound block unexpectedly rendered frontend output.');
 $assert('' === $block->render(array('videoId'=>999)), 'Unknown AWVP Video unexpectedly rendered frontend output.');

@@ -1776,6 +1776,22 @@ namespace ArgentVideo {
     );
     $assert(! str_contains($publication_body, 'refresh-token') && ! str_contains($publication_body, 'client-secret'), 'R46.5b publication body leaked unrelated secrets.');
 
+    // RC9 Test 3 regression: blank optional provider fields are omitted rather
+    // than serialized as empty multipart parts that PeerTube may reject.
+    $blank_optional_manifest = $publication_manifest;
+    $blank_optional_manifest['support_markdown'] = '';
+    $blank_optional_manifest['moderation'] = array(
+        'reviewed'=>true,'sensitive'=>false,'reason'=>'','violent'=>false,'sexually_explicit'=>false,
+    );
+    $blank_optional_manifest = PeerTube_Publication_Manifest::sanitize($blank_optional_manifest);
+    $assert(array() !== $blank_optional_manifest, 'RC9 blank-optional publication fixture was invalid.');
+    $queue($response(204, '', array()));
+    $blank_optional_put = $api->update_publication($remote_access, $remote_uuid, $blank_optional_manifest, '1', null);
+    $assert(true === $blank_optional_put['ok'], 'RC9 blank-optional publication PUT was not accepted.');
+    $blank_optional_request = $GLOBALS['awvp_http_requests'][array_key_last($GLOBALS['awvp_http_requests'])];
+    $blank_optional_body = (string)($blank_optional_request['args']['body'] ?? '');
+    $assert(! str_contains($blank_optional_body, 'name="support"') && ! str_contains($blank_optional_body, 'name="nsfwSummary"'), 'RC9 serialized blank support/nsfwSummary fields into the PeerTube multipart request.');
+
     // Thumbnail multipart transport accepts only already-captured bounded bytes; it never reads an arbitrary path.
     $thumbnail_payload = array('filename'=>'reviewed-thumb.jpg','mime'=>'image/jpeg','content'=>"\xff\xd8AWVP-thumb\xff\xd9");
     $before_thumbnail_put = count($GLOBALS['awvp_http_requests']);

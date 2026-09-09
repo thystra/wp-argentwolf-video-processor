@@ -51,6 +51,7 @@ $GLOBALS['awvp_stage_files'][20]=$source;
 $service=new PeerTube_Publication_Staging_Service();
 $first=$service->stage(100);
 $assert('ready'===$first['status'],'Original MP4 did not stage.');
+$assert('video/mp4'===($first['content_type']??''),'Original MP4 content type was not preserved.');
 $assert(20===$first['attachment_id']&&Storage::is_managed_path($first['path']),'Staged source did not land inside managed storage.');
 $assert(hash_file('sha256',$source)===hash_file('sha256',$first['path']),'Staged bytes changed.');
 $second=$service->stage(100);
@@ -62,16 +63,24 @@ $GLOBALS['awvp_stage_files'][20]=$outside;
 $assert('refused'===($service->stage(100)['status']??''),'Original outside WordPress uploads was accepted for staging.');
 $GLOBALS['awvp_stage_files'][20]=$source;
 
-// A managed transcoded MP4 wins over the original attachment.
+// An AWVP-generated derivative must never replace the authoritative Media Library
+// source merely because local FFmpeg completed first.
 $managed=Storage::ensure_attachment_directory(20).'/preferred.mp4'; file_put_contents($managed,"preferred-mp4\n");
 $GLOBALS['awvp_stage_meta'][20]['_argent_video_outputs']=array('mp4'=>array('path'=>$managed));
 $preferred=$service->stage(100);
-$assert('ready'===$preferred['status']&&$managed===$preferred['path'],'Managed MP4 derivative was not preferred.');
+$assert('ready'===$preferred['status']&&$managed!==$preferred['path'],'Managed MP4 derivative became PeerTube publication authority.');
+$assert(hash_file('sha256',$source)===hash_file('sha256',$preferred['path']),'Derivative preference changed the staged source bytes.');
 
-// Unsupported original formats cannot be copied merely because a filename exists.
+// PeerTube may transcode any safe WordPress video source; staging preserves the
+// attachment MIME instead of falsely labeling every source video/mp4.
 unset($GLOBALS['awvp_stage_meta'][20]['_argent_video_outputs']);
+$webm=$source_dir.'/source.webm'; file_put_contents($webm,"webm-synthetic-source\n");
+$GLOBALS['awvp_stage_files'][20]=$webm;
 $GLOBALS['awvp_stage_mime'][20]='video/webm';
-$assert('refused'===($service->stage(100)['status']??''),'Non-MP4 original was accepted for publication staging.');
+$webm_staged=$service->stage(100);
+$assert('ready'===($webm_staged['status']??'')&&'video/webm'===($webm_staged['content_type']??''),'Safe WebM original was not staged with its real content type.');
+$assert(hash_file('sha256',$webm)===hash_file('sha256',$webm_staged['path']),'WebM staging changed source bytes.');
+$GLOBALS['awvp_stage_files'][20]=$source;
 $GLOBALS['awvp_stage_mime'][20]='video/mp4';
 
 // Symlinked originals fail closed.
@@ -83,13 +92,13 @@ if (@symlink($outside,$link)) {
 }
 $GLOBALS['awvp_stage_files'][20]=$source;
 
-// A managed-output path that resolves through a symlink is not accepted; fallback
-// to the ordinary original remains safe and deterministic.
+// Generated-output metadata is irrelevant to publication staging, including a
+// malicious/symlinked derivative path. The authoritative original still wins.
 $badDir=Storage::ensure_attachment_directory(20).'/badlink';
 if (@symlink(dirname($outside),$badDir)) {
     $GLOBALS['awvp_stage_meta'][20]['_argent_video_outputs']=array('mp4'=>array('path'=>$badDir.'/'.basename($outside)));
     $fallback=$service->stage(100);
-    $assert('ready'===$fallback['status']&&$fallback['path']!==$badDir.'/'.basename($outside),'Managed symlink traversal was accepted.');
+    $assert('ready'===$fallback['status']&&$fallback['path']!==$badDir.'/'.basename($outside),'Generated symlink path influenced publication staging.');
     @unlink($badDir);
 }
 

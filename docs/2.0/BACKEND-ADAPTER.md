@@ -636,13 +636,17 @@ bytes in one streamed resumable segment. Updating that policy must not rewrite
 backend identity, origin, destination, secret generation, capability, or health
 state and must not start a transfer.
 
-A separate detached PeerTube task launcher also exists. R45.4b3 makes it invoke
-the bounded `--drain` worker mode, and R45.5 registers that launcher on the
-existing five-minute AWVP dispatch event. The cron callback performs only the
-due/stale task probe and detached launch; it does not call the backend adapter or
-PeerTube media APIs inline and is not exposed as an administrator transfer
-launch. Drain follows only one logical operation across immediate durable
-boundaries and uses size-derived one-hour-to-six-hour process/request guards.
+A separate detached PeerTube task launcher also exists. R45.4b3 introduced the
+bounded `--drain` worker mode and R45.5 originally registered that launcher on the
+five-minute AWVP dispatch event. RC9 supersedes that pacing: owned durable PeerTube
+task creation wakes the launcher immediately, while a separate one-minute recovery
+event handles missed wakes/incomplete lifecycle intent. The five-minute dispatcher
+remains local-FFmpeg-only. Scheduler callbacks perform only local probes/detached
+launches; they do not call the backend adapter or PeerTube media APIs inline and are
+not administrator transfer-launch surfaces. RC9 drain re-enters the site-wide owned
+queue between durable boundaries and waits for future work only in unclaimed slices
+of at most five seconds, within the existing size-derived one-hour-to-six-hour
+process/request guards.
 The drain path is qualified at exact commit
 `33bdd109da2f452afb2058ce0d044d10a729c669` / tree
 `a89963f3e9def2ba65bd43589c87e13a3f4a9b57` with Forgejo CI run 122 and its

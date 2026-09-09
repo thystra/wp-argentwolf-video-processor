@@ -659,13 +659,15 @@ owns no browser/admin/AJAX/REST hook. `--drain` may make multiple lock-token-gua
 claims, but only for one logical operation's exact immediately-runnable task and
 deterministic handoff (plus R45.4b4 notification delivery); it never wanders into
 unrelated upload work.
-R45.5 reuses the existing WordPress five-minute recurring event rather than
-creating a second scheduler. The legacy FFmpeg dispatcher remains one callback,
-and `PeerTube_Task_Worker_Launcher::launch()` is registered as a second callback.
-That PeerTube callback performs only due/stale task detection and detached
-`--drain --quiet` launch; the R43 upload service, R44 reconciliation service,
-coordinator, and worker remain WP-CLI-only. No administrator transfer-launch
-action is added.
+R45.5 originally reused the WordPress five-minute recurring event for the
+PeerTube launcher. RC9 separates those responsibilities: the five-minute event owns
+only the legacy local FFmpeg dispatcher; owned durable PeerTube task creation wakes
+`PeerTube_Task_Worker_Launcher` directly, and the one-minute PeerTube recovery event
+performs only missed-wake/incomplete-lifecycle recovery plus an advisory detached
+`--drain --quiet` launch. The R43 upload service, R44 reconciliation service,
+coordinator, publication executor, retention executor, and worker remain WP-CLI-only.
+No scheduler performs remote HTTP inline and no administrator transfer-launch action
+is added.
 
 The PeerTube Connection settings page does gain one `manage_options` + nonce
 protected POST for non-secret upload-segment policy. It accepts only the exact
@@ -782,10 +784,11 @@ only after WP-Cron's already-qualified callback launches the detached WP-CLI
 
 R46.5b adds publication task types only to the detached drain/launcher ownership
 set. The explicitly qualified `wp argent-video peertube-task-worker --once`
-diagnostic remains upload/reconciliation-only. The five-minute
-`argent_video_processor_dispatch` event still has exactly the existing two
-callbacks: legacy FFmpeg dispatch and the PeerTube detached launcher; no third
-publication scheduler is registered.
+diagnostic remains upload/reconciliation-only. Under RC9 the five-minute
+`argent_video_processor_dispatch` event has only the legacy FFmpeg callback;
+publication/upload/reconciliation/retention tasks use event-driven durable enqueue
+wakes, with the one-minute recovery event as a local safety net. Neither path performs
+PeerTube HTTP in WP-Cron.
 
 Outbound metadata/privacy changes use the existing origin-bound WordPress safe HTTP
 transport and exact configured PeerTube origin. Dynamic video UUID, bearer, field

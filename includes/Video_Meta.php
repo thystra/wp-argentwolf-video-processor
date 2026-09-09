@@ -19,6 +19,7 @@ final class Video_Meta
     public const PEERTUBE_PUBLICATION_PLAN = '_argent_video_peertube_publication_plan';
     public const PEERTUBE_PUBLICATION_LIFECYCLE = '_argent_video_peertube_publication_lifecycle';
     public const PEERTUBE_PUBLICATION_EXECUTION = '_argent_video_peertube_publication_execution';
+    public const PEERTUBE_RECOVERY_WINDOW = '_argent_video_peertube_recovery_window';
     public const SERVING_AUTHORITY = '_argent_video_serving_authority';
     public const PEERTUBE_MIGRATION_PLAN = '_argent_video_peertube_migration_plan';
     public const PEERTUBE_MIGRATION_EXECUTION = '_argent_video_peertube_migration_execution';
@@ -86,6 +87,10 @@ final class Video_Meta
             self::PEERTUBE_PUBLICATION_EXECUTION => $base + array(
                 'type'              => 'array',
                 'sanitize_callback' => array(self::class, 'sanitize_peertube_publication_execution'),
+            ),
+            self::PEERTUBE_RECOVERY_WINDOW => $base + array(
+                'type'              => 'array',
+                'sanitize_callback' => array(self::class, 'sanitize_peertube_recovery_window'),
             ),
             self::SERVING_AUTHORITY => $base + array(
                 'type'              => 'array',
@@ -218,7 +223,24 @@ final class Video_Meta
         return PeerTube_Publication_Execution::sanitize($value);
     }
 
-    /** @return array<string,mixed> */
+    /** @return array{version:int,origin_at:int,resumed_at:int}|array{} */
+    public static function sanitize_peertube_recovery_window(mixed $value): array
+    {
+        if (! is_array($value) || array('version', 'origin_at', 'resumed_at') !== array_keys($value)) {
+            return array();
+        }
+        $version = $value['version'] ?? null;
+        $origin_at = $value['origin_at'] ?? null;
+        $resumed_at = $value['resumed_at'] ?? null;
+        if (1 !== $version || ! is_int($origin_at) || $origin_at < 1 || ! is_int($resumed_at) || $resumed_at < 0) {
+            return array();
+        }
+        if ($resumed_at > 0 && $resumed_at < $origin_at) {
+            return array();
+        }
+        return array('version' => 1, 'origin_at' => $origin_at, 'resumed_at' => $resumed_at);
+    }
+
     /** @return array<string,mixed> */
     public static function sanitize_peertube_migration_plan(mixed $value): array
     {

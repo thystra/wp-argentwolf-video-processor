@@ -202,7 +202,7 @@ final class PeerTube_Http_Client
             || ! self::safe_request_value($metadata['name'] ?? null, 1024, true)
             || 3 !== ($metadata['privacy'] ?? null)
             || ! self::safe_filename($metadata['filename'] ?? null)
-            || 'video/mp4' !== $content_type
+            || ! self::valid_video_content_type($content_type)
             || $total_bytes < 1) {
             throw new InvalidArgumentException('PeerTube resumable-upload initialization is outside the reviewed contract.');
         }
@@ -244,7 +244,7 @@ final class PeerTube_Http_Client
             || $start < 0 || $total_bytes < 1 || $start >= $total_bytes
             || $length < 1 || $length > self::MAX_UPLOAD_REQUEST_BYTES
             || $start > PHP_INT_MAX - $length || $start + $length > $total_bytes
-            || 'video/mp4' !== $content_type) {
+            || ! self::valid_video_content_type($content_type)) {
             throw new InvalidArgumentException('PeerTube resumable-upload chunk is outside the reviewed contract.');
         }
 
@@ -281,7 +281,7 @@ final class PeerTube_Http_Client
             || $start < 0 || $total_bytes < 1 || $start >= $total_bytes
             || $length < 1
             || $start > PHP_INT_MAX - $length || $start + $length > $total_bytes
-            || 'video/mp4' !== $content_type) {
+            || ! self::valid_video_content_type($content_type)) {
             throw new InvalidArgumentException('PeerTube resumable-upload slice is outside the reviewed contract.');
         }
 
@@ -845,6 +845,14 @@ final class PeerTube_Http_Client
     {
         return strlen($value) <= 50
             && 1 === preg_match('/^[a-z0-9_]+(?:[a-z0-9_.-]+[a-z0-9_]+)?$/D', $value);
+    }
+
+    private static function valid_video_content_type(mixed $value): bool
+    {
+        return is_string($value)
+            && trim($value) === $value
+            && strlen($value) <= 128
+            && 1 === preg_match('/\Avideo\/[a-z0-9][a-z0-9.+_-]{0,126}\z/D', strtolower($value));
     }
 
     private static function safe_filename(mixed $value): bool

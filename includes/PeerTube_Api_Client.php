@@ -279,7 +279,7 @@ final class PeerTube_Api_Client implements PeerTube_Password_Grant_Api, PeerTube
             array('options' => array('min_range' => 1))
         );
         if ('' === $access_token || false === $channel_id || ! self::valid_upload_name($name)
-            || ! self::valid_upload_filename($filename) || 'video/mp4' !== $content_type || $total_bytes < 1) {
+            || ! self::valid_upload_filename($filename) || ! self::valid_video_content_type($content_type) || $total_bytes < 1) {
             return self::failure(PeerTube_Api_Error::invalid_response('upload_init_input_invalid'));
         }
 
@@ -323,7 +323,7 @@ final class PeerTube_Api_Client implements PeerTube_Password_Grant_Api, PeerTube
             || $start < 0 || $total_bytes < 1 || $start >= $total_bytes
             || '' === $chunk || strlen($chunk) > PeerTube_Http_Client::MAX_UPLOAD_REQUEST_BYTES
             || $start > PHP_INT_MAX - strlen($chunk) || $start + strlen($chunk) > $total_bytes
-            || 'video/mp4' !== $content_type) {
+            || ! self::valid_video_content_type($content_type)) {
             return self::failure(PeerTube_Api_Error::invalid_response('upload_chunk_input_invalid'));
         }
 
@@ -355,7 +355,7 @@ final class PeerTube_Api_Client implements PeerTube_Password_Grant_Api, PeerTube
             || $start < 0 || $total_bytes < 1 || $start >= $total_bytes
             || $slice->start() !== $start || $slice->bytes() < 1
             || $start > PHP_INT_MAX - $slice->bytes() || $start + $slice->bytes() > $total_bytes
-            || 'video/mp4' !== $content_type) {
+            || ! self::valid_video_content_type($content_type)) {
             return self::failure(PeerTube_Api_Error::invalid_response('upload_slice_input_invalid'));
         }
 
@@ -422,7 +422,7 @@ final class PeerTube_Api_Client implements PeerTube_Password_Grant_Api, PeerTube
             return self::failure(PeerTube_Api_Error::invalid_response('remote_video_shape_invalid', 200));
         }
 
-        return self::success(array(
+        $projection = array(
             'id'          => $id,
             'uuid'        => $uuid,
             'state_id'    => $state_id,
@@ -430,7 +430,160 @@ final class PeerTube_Api_Client implements PeerTube_Password_Grant_Api, PeerTube
             'channel_id'  => $channel_id,
             'embed_path'  => $embed_path,
             'is_live'     => false,
-        ));
+        );
+        $publication = self::publication_state_projection($data);
+        if (is_array($publication)) {
+            $projection['publication'] = $publication;
+        }
+        return self::success($projection);
+    }
+
+    /** @param array<string,mixed> $data @return array<string,mixed>|null */
+    private static function publication_state_projection(array $data): ?array
+    {
+        foreach (array(
+            'name','description','support','tags','licence','category','language',
+            'commentsPolicy','downloadEnabled','originallyPublishedAt','nsfw','nsfwFlags','nsfwSummary'
+        ) as $key) {
+            if (! array_key_exists($key, $data)) {
+                return null;
+            }
+        }
+
+        $name = self::strict_text($data['name'], PeerTube_Publication_Plan::MAX_TITLE_CHARACTERS);
+        $description = self::publication_markdown($data['description']);
+        $support = self::publication_nullable_markdown($data['support']);
+        $tags = self::publication_tags($data['tags']);
+        $licence = self::publication_optional_decimal_choice($data['licence']);
+        $category = self::publication_optional_decimal_choice($data['category']);
+        $language = self::publication_optional_language_choice($data['language']);
+        $comments_policy_id = self::publication_choice_id($data['commentsPolicy']);
+        $comments = array(1=>'enabled',2=>'disabled',3=>'approval_required');
+        $download = $data['downloadEnabled'];
+        $published = self::publication_nullable_datetime($data['originallyPublishedAt']);
+        $nsfw = $data['nsfw'];
+        $flags = $data['nsfwFlags'];
+        $reason = self::publication_nullable_single_line($data['nsfwSummary'], PeerTube_Publication_Plan::MAX_SENSITIVE_REASON_CHARACTERS);
+
+        if ('' === $name || null === $description || null === $support || null === $tags
+            || null === $licence || null === $category || null === $language
+            || ! isset($comments[$comments_policy_id]) || ! is_bool($download)
+            || null === $published || ! is_bool($nsfw) || ! is_int($flags) || $flags < 0 || $flags > 3
+            || null === $reason) {
+            return null;
+        }
+
+        return array(
+            'title'=>$name,
+            'description_markdown'=>$description,
+            'tags'=>$tags,
+            'support_markdown'=>$support,
+            'licence_id'=>$licence,
+            'category_id'=>$category,
+            'language'=>$language,
+            'download_enabled'=>$download,
+            'originally_published_at'=>$published,
+            'comments_policy'=>$comments[$comments_policy_id],
+            'moderation'=>array(
+                'sensitive'=>$nsfw,
+                'reason'=>$reason,
+                'violent'=>(bool)($flags & 1),
+                'sexually_explicit'=>(bool)($flags & 2),
+            ),
+        );
+    }
+
+    private static function publication_markdown(mixed $value): ?string
+    {
+        if (! is_string($value) || strlen($value) > PeerTube_Publication_Plan::MAX_MARKDOWN_BYTES
+            || 1 !== preg_match('//u', $value) || 1 === preg_match('/[\x00\x0B\x0C\x0E-\x1F\x7F]/', $value)) {
+            return null;
+        }
+        return $value;
+    }
+
+    private static function publication_nullable_markdown(mixed $value): ?string
+    {
+        return null === $value ? '' : self::publication_markdown($value);
+    }
+
+    /** @return list<string>|null */
+    private static function publication_tags(mixed $value): ?array
+    {
+        if (! is_array($value) || array_values($value) !== $value || count($value) > PeerTube_Publication_Plan::MAX_TAGS) {
+            return null;
+        }
+        $result = array();
+        $seen = array();
+        foreach ($value as $tag) {
+            $tag = self::strict_text($tag, PeerTube_Publication_Plan::MAX_TAG_CHARACTERS);
+            $length = '' === $tag ? 0 : (function_exists('mb_strlen') ? mb_strlen($tag, 'UTF-8') : strlen($tag));
+            if ($length < PeerTube_Publication_Plan::MIN_TAG_CHARACTERS) {
+                return null;
+            }
+            $key = function_exists('mb_strtolower') ? mb_strtolower($tag, 'UTF-8') : strtolower($tag);
+            if (isset($seen[$key])) {
+                return null;
+            }
+            $seen[$key] = true;
+            $result[] = $tag;
+        }
+        return $result;
+    }
+
+    private static function publication_choice_id(mixed $value): int
+    {
+        if (is_int($value)) {
+            return $value > 0 && $value <= 255 ? $value : 0;
+        }
+        $object = self::object($value);
+        return self::bounded_positive_integer($object['id'] ?? null, 255);
+    }
+
+    private static function publication_optional_decimal_choice(mixed $value): ?string
+    {
+        if (null === $value) {
+            return '';
+        }
+        $object = self::object($value);
+        $candidate = array() === $object ? $value : ($object['id'] ?? null);
+        $id = self::canonical_decimal_id($candidate);
+        return '' === $id ? null : $id;
+    }
+
+    private static function publication_optional_language_choice(mixed $value): ?string
+    {
+        if (null === $value) {
+            return '';
+        }
+        $object = self::object($value);
+        $candidate = array() === $object ? $value : ($object['id'] ?? null);
+        if (! is_string($candidate) || strlen($candidate) > 35
+            || 1 !== preg_match('/^[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*$/D', $candidate)) {
+            return null;
+        }
+        return $candidate;
+    }
+
+    private static function publication_nullable_datetime(mixed $value): ?string
+    {
+        if (null === $value || '' === $value) {
+            return '';
+        }
+        if (! is_string($value) || 1 !== preg_match('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/D', $value)) {
+            return null;
+        }
+        // PeerTube can return fractional seconds. The manifest is second-granular;
+        // only exact second values are safe for no-replay equivalence.
+        return 1 === preg_match('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/D', $value) ? $value : null;
+    }
+
+    private static function publication_nullable_single_line(mixed $value, int $maximum_characters): ?string
+    {
+        if (null === $value || '' === $value) {
+            return '';
+        }
+        return self::strict_text($value, $maximum_characters);
     }
 
     /** @param array<string,mixed> $manifest @param array<string,mixed>|null $thumbnail */
@@ -456,13 +609,13 @@ final class PeerTube_Api_Client implements PeerTube_Password_Grant_Api, PeerTube
             'description'=>(string)$manifest['description_markdown'],
             'channelId'=>(int)$manifest['channel_id'],
             'privacy'=>(int)$privacy_id,
-            'support'=>(string)$manifest['support_markdown'],
             'commentsPolicy'=>$comments[$manifest['comments_policy']],
             'downloadEnabled'=>(bool)$manifest['download_enabled'],
             'nsfw'=>(bool)$manifest['moderation']['sensitive'],
             'nsfwFlags'=>$flags,
-            'nsfwSummary'=>(string)$manifest['moderation']['reason'],
         );
+        if ('' !== (string)$manifest['support_markdown']) $fields['support']=(string)$manifest['support_markdown'];
+        if ('' !== (string)$manifest['moderation']['reason']) $fields['nsfwSummary']=(string)$manifest['moderation']['reason'];
         if ('' !== $manifest['licence_id']) $fields['licence']=(int)$manifest['licence_id'];
         if ('' !== $manifest['category_id']) $fields['category']=(int)$manifest['category_id'];
         if ('' !== $manifest['language']) $fields['language']=(string)$manifest['language'];
@@ -779,6 +932,14 @@ final class PeerTube_Api_Client implements PeerTube_Password_Grant_Api, PeerTube
         }
 
         return self::success($decoded);
+    }
+
+    private static function valid_video_content_type(mixed $value): bool
+    {
+        return is_string($value)
+            && trim($value) === $value
+            && strlen($value) <= 128
+            && 1 === preg_match('/\Avideo\/[a-z0-9][a-z0-9.+_-]{0,126}\z/D', strtolower($value));
     }
 
     private static function is_json_content_type(mixed $value): bool

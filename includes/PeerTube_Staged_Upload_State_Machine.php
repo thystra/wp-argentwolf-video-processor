@@ -458,7 +458,7 @@ final class PeerTube_Staged_Upload_State_Machine
     {
         if (! is_array($upload) || ! self::has_exact_keys($upload, array('filename','content_type','name','privacy'))
             || ! is_string($upload['filename']) || ! is_string($upload['content_type']) || ! is_string($upload['name'])
-            || self::PRIVATE_PRIVACY !== $upload['privacy'] || 'video/mp4' !== $upload['content_type']) return false;
+            || self::PRIVATE_PRIVACY !== $upload['privacy'] || ! self::valid_video_content_type($upload['content_type'])) return false;
         $filename = $upload['filename'];
         if ('' === $filename || strlen($filename) > 255 || basename($filename) !== $filename
             || str_contains($filename, '/') || str_contains($filename, '\\') || 1 === preg_match('/[\x00-\x1F\x7F]/', $filename)
@@ -468,6 +468,14 @@ final class PeerTube_Staged_Upload_State_Machine
         $chars = array();
         $length = preg_match_all('/./us', $upload['name'], $chars);
         return is_int($length) && $length <= 120;
+    }
+
+    private static function valid_video_content_type(mixed $value): bool
+    {
+        return is_string($value)
+            && trim($value) === $value
+            && strlen($value) <= 128
+            && 1 === preg_match('/\Avideo\/[a-z0-9][a-z0-9.+_-]{0,126}\z/D', strtolower($value));
     }
 
     /** @param mixed $identity */

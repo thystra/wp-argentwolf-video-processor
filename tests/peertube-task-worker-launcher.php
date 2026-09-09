@@ -169,9 +169,17 @@ namespace {
     $assert(! $failed['ok'] && PeerTube_Task_Worker_Launcher::STATUS_FAILED === $failed['status'], 'Failed detached exec did not fail closed.');
     $assert(1 === count($GLOBALS['awvp_r45_launcher_deleted']), 'Failed detached exec did not release the launch lock.');
 
-    // R45.5 wires this already-reviewed launcher only from Plugin's existing
-    // recurring dispatch hook. The launcher class itself still owns no scheduler,
-    // browser surface, media implementation, cleanup, or offset-reconciliation grant.
+    // Normal worker exit releases the advisory launch lock; the durable task
+    // claim remains the real concurrency authority.
+    $reset();
+    $GLOBALS['awvp_r45_launcher_transients']['argent_video_processor_peertube_task_launch_lock'] = array('value'=>'1','expiration'=>120);
+    PeerTube_Task_Worker_Launcher::release_launch_lock();
+    $assert(! isset($GLOBALS['awvp_r45_launcher_transients']['argent_video_processor_peertube_task_launch_lock']), 'Normal launch-lock release did not clear the advisory transient.');
+
+    // RC9 wires this already-reviewed launcher from durable task enqueue events,
+    // with a one-minute recovery hook as a safety net. The launcher class itself
+    // still owns no scheduler, browser surface, media implementation, cleanup,
+    // or offset-reconciliation grant.
     $root = dirname(__DIR__);
     $source = (string) file_get_contents($root.'/includes/PeerTube_Task_Worker_Launcher.php');
     foreach (array(
@@ -184,13 +192,24 @@ namespace {
     $plugin = (string) file_get_contents($root.'/includes/Plugin.php');
     $assert(
         str_contains($plugin, '$peertube_task_launcher = new PeerTube_Task_Worker_Launcher($peertube_tasks);')
-            && str_contains($plugin, "add_action(Activator::CRON_HOOK, array(\$peertube_task_launcher, 'launch'));"),
-        'R45.5 Plugin wiring does not use the reviewed detached PeerTube launcher.'
+            && str_contains($plugin, "add_action('argentwolf_video_processor_task_enqueued', array(\$peertube_task_launcher, 'wake'), 10, 2);")
+            && str_contains($plugin, "add_action(Activator::PEERTUBE_RECOVERY_HOOK, array(\$peertube_task_launcher, 'recover'), 10);"),
+        'RC9 Plugin wiring does not use event-driven wake plus the recovery safety net.'
     );
-    foreach (array('includes/Admin.php','includes/CLI_Command.php','includes/Worker.php','includes/Worker_Launcher.php') as $relative) {
+    $assert(
+        ! str_contains($plugin, "add_action(Activator::CRON_HOOK, array(\$peertube_task_launcher, 'launch'));"),
+        'RC9 still launches PeerTube work from the five-minute local-processing cron.'
+    );
+    foreach (array('includes/Admin.php','includes/Worker.php','includes/Worker_Launcher.php') as $relative) {
         $surface = (string) file_get_contents($root.'/'.$relative);
         $assert(! str_contains($surface, 'PeerTube_Task_Worker_Launcher'), 'PeerTube task launcher leaked into unreviewed surface '.$relative);
     }
+    $cli = (string) file_get_contents($root.'/includes/CLI_Command.php');
+    $assert(
+        str_contains($cli, 'PeerTube_Task_Worker_Launcher::release_launch_lock()')
+            && str_contains($cli, 'class_exists(PeerTube_Task_Worker_Launcher::class)'),
+        'RC9 CLI worker does not safely release the short launcher lock on exit.'
+    );
 
     fwrite(STDOUT, "PeerTube task worker launcher tests passed.\n");
 }

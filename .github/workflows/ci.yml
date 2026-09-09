@@ -63,6 +63,9 @@ jobs:
           php tests/peertube-publication-staging.php
           php tests/peertube-publication-thumbnail.php
           php tests/peertube-publication-task-coordinator.php
+          php tests/rc9-incomplete-work-lookback.php
+          php tests/rc9-overview-status.php
+          php tests/rc9-peertube-first-player-cleanup.php
           php tests/video-serving-authority.php
           php tests/video-serving-cutover.php
           php tests/local-retention-policy.php

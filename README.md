@@ -165,10 +165,12 @@ continues one logical upload/reconciliation operation only across immediately
 runnable durable boundaries; it never sleeps through a future `run_after`. The
 drain process uses a size-derived one-hour-to-six-hour safe-boundary budget and
 streamed segment requests use the same size-derived timeout. The detached
-launcher uses `--drain`. R45.5 wires that reviewed launcher to the plugin's
-existing five-minute `argent_video_processor_dispatch` event: the cron callback
-performs only the due/stale task probe and detached WP-CLI launch, never PeerTube
-media HTTP inline. No administrator transfer-launch action is added. The bounded
+launcher uses `--drain`. RC9 wakes that reviewed launcher when an owned durable
+PeerTube task is created; a separate one-minute PeerTube recovery event is only a
+missed-wake/incomplete-lifecycle safety net. The existing five-minute
+`argent_video_processor_dispatch` event now remains local-FFmpeg-only. Neither
+scheduler performs PeerTube media HTTP inline, and no administrator transfer-launch
+action is added. The bounded
 drain checkpoint is qualified at commit
 `33bdd109da2f452afb2058ce0d044d10a729c669` (Forgejo CI 122 plus its retained
 real-WordPress matrices), and durable failure notification is qualified at
@@ -197,7 +199,12 @@ activation, or automatic
 connection invocation. The detached PeerTube media-task path does not bootstrap or refresh credentials. Before credentials are
 sent, the administrator must explicitly authorize the displayed external
 service. An allowlisted development-only plaintext HTTP origin requires a second
-transport-risk acknowledgement.
+transport-risk acknowledgement. Private/split-DNS PeerTube origins that cannot
+pass the public-origin rule must be explicitly allowlisted by exact canonical
+origin in `wp-config.php` with
+`ARGENTWOLF_VIDEO_PROCESSOR_PEERTUBE_PRIVATE_ORIGINS` (array of origins). RC-era
+`ARGENT_VIDEO_PEERTUBE_DEV_ORIGINS` remains a compatibility alias; new
+installations and documentation use the longer canonical constant.
 
 The explicit grant sends the entered PeerTube username and password plus an
 optional six-digit OTP only to that same exact origin. The instance-local OAuth
@@ -265,7 +272,7 @@ the same advisory registry with their own capability and NVD link.
 
 Public WordPress.org stable release: `1.0.0`.
 
-Current controlled development candidate: `2.0.0-rc8`. RC packages are built
+Current controlled development candidate: `2.0.0-rc9`. RC packages are built
 from reviewed Forgejo commits and are not published to WordPress.org SVN. The
 public Stable tag remains `1.0.0` until final `2.0.0` promotion.
 
@@ -319,13 +326,14 @@ WordPress `publish` is the only state that can authorize the reviewed final
 privacy. A later draft/pending/private/trash/reschedule generation supersedes an
 older reveal generation without destructive queue cancellation.
 
-R46.5b adds the detached executor for that intent. The existing five-minute AWVP
-dispatch event and detached `--drain` launcher own the new publication sync/finalize
-task types; the qualified diagnostic `--once` set remains upload/reconciliation
-only. Sync freezes a non-secret execution manifest from the strict reviewed plan,
-current backend catalog/default/support context, and immutable thumbnail identity;
-it stages or reuses an AWVP-managed MP4 and hands the operation to the existing
-resumable uploader, whose creation request is privacy `3` (Private).
+R46.5b adds the detached executor for that intent. RC9 wakes the detached `--drain`
+watcher from durable PeerTube task creation and retains a one-minute recovery-only
+schedule; the qualified diagnostic `--once` set remains upload/reconciliation only.
+Sync freezes a non-secret execution manifest from the strict reviewed plan, current
+backend catalog/default/support context, and immutable thumbnail identity. It stages
+a confined copy of the WordPress original with its validated video MIME type and
+hands that source to the existing resumable uploader, whose creation request is
+privacy `3` (Private); local AWVP derivatives are not publication-source authority.
 
 Finalization waits for the existing upload/reconciliation journal to reach
 `ready_verified`. Immediately before mutation it revalidates the current lifecycle

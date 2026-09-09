@@ -78,14 +78,14 @@ namespace ArgentVideo {
     }
     final class PeerTube_Staged_Upload_Service {
         public const STATUS_ADVANCED='advanced'; public array $calls=array(); public array $next=array('status'=>'advanced','operation_id'=>'upload_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa');
-        public function begin(int $video,string $backend,string $path,string $name,int $actor,int $now,?string $destination=null): array {$this->calls[]=compact('video','backend','path','name','actor','now','destination');return $this->next;}
+        public function begin(int $video,string $backend,string $path,string $name,int $actor,int $now,?string $destination=null,?string $content_type=null): array {$this->calls[]=compact('video','backend','path','name','actor','now','destination','content_type');return $this->next;}
     }
     final class PeerTube_Upload_Task_Coordinator {
         public array $calls=array(); public string $status=Task_Repository::APPLIED;
         public function enqueue_upload(string $op,int $now): array {$this->calls[]=array($op,$now);return array('status'=>$this->status,'task_id'=>700);}
     }
     final class PeerTube_Publication_Staging_Service {
-        public array $calls=array(); public array $next=array('status'=>'ready','path'=>'/managed/source.mp4','attachment_id'=>20);
+        public array $calls=array(); public array $next=array('status'=>'ready','path'=>'/managed/source.mp4','attachment_id'=>20,'content_type'=>'video/mp4');
         public function stage(int $video): array {$this->calls[]=$video;return $this->next;}
     }
     interface PeerTube_Publication_Asset_Store {
@@ -105,11 +105,12 @@ namespace ArgentVideo {
         public function origin(): string;
     }
     final class FakePublicationApi implements PeerTube_Publication_Mutation_Api {
-        public array $publication_calls=array(); public array $privacy_calls=array(); public array $status_calls=array(); public string $remote_privacy='3'; public string $channel='41'; public string $uuid='123e4567-e89b-42d3-a456-426614174000'; public bool $mutate_ok=true; public $after_publication=null;
+        public array $publication_calls=array(); public array $privacy_calls=array(); public array $status_calls=array(); public string $remote_privacy='3'; public string $channel='41'; public string $uuid='123e4567-e89b-42d3-a456-426614174000'; public bool $mutate_ok=true; public $after_publication=null; public ?array $remote_publication=null;
         public function origin(): string {return 'https://video.example.org';}
-        public function update_publication(string $token,string $uuid,array $manifest,string $privacy,?array $thumbnail=null): array {$this->publication_calls[]=compact('token','uuid','manifest','privacy','thumbnail'); if(is_callable($this->after_publication))($this->after_publication)(); if($this->mutate_ok)$this->remote_privacy=$privacy; return array('ok'=>$this->mutate_ok,'data'=>array('updated'=>true),'error'=>null);}
+        public function update_publication(string $token,string $uuid,array $manifest,string $privacy,?array $thumbnail=null): array {$this->publication_calls[]=compact('token','uuid','manifest','privacy','thumbnail'); if(is_callable($this->after_publication))($this->after_publication)(); if($this->mutate_ok){$this->remote_privacy=$privacy;$this->remote_publication=self::publication($manifest);} return array('ok'=>$this->mutate_ok,'data'=>array('updated'=>true),'error'=>$this->mutate_ok?null:array('code'=>'transport_error'));}
         public function update_privacy(string $token,string $uuid,string $privacy): array {$this->privacy_calls[]=compact('token','uuid','privacy'); if($this->mutate_ok)$this->remote_privacy=$privacy; return array('ok'=>$this->mutate_ok,'data'=>array('updated'=>true),'error'=>null);}
-        public function video_status(string $token,string $uuid): array {$this->status_calls[]=compact('token','uuid'); return array('ok'=>true,'data'=>array('id'=>55,'uuid'=>$this->uuid,'state_id'=>1,'privacy_id'=>$this->remote_privacy,'channel_id'=>$this->channel,'embed_path'=>'/videos/embed/'.$this->uuid,'is_live'=>false),'error'=>null);}
+        public function video_status(string $token,string $uuid): array {$this->status_calls[]=compact('token','uuid'); $data=array('id'=>55,'uuid'=>$this->uuid,'state_id'=>1,'privacy_id'=>$this->remote_privacy,'channel_id'=>$this->channel,'embed_path'=>'/videos/embed/'.$this->uuid,'is_live'=>false); if(is_array($this->remote_publication))$data['publication']=$this->remote_publication; return array('ok'=>true,'data'=>$data,'error'=>null);}
+        public static function publication(array $manifest): array {return array('title'=>$manifest['title'],'description_markdown'=>$manifest['description_markdown'],'tags'=>$manifest['tags'],'support_markdown'=>$manifest['support_markdown'],'licence_id'=>$manifest['licence_id'],'category_id'=>$manifest['category_id'],'language'=>$manifest['language'],'download_enabled'=>$manifest['download_enabled'],'originally_published_at'=>$manifest['originally_published_at'],'comments_policy'=>$manifest['comments_policy'],'moderation'=>array('sensitive'=>$manifest['moderation']['sensitive'],'reason'=>$manifest['moderation']['reason'],'violent'=>$manifest['moderation']['violent'],'sexually_explicit'=>$manifest['moderation']['sexually_explicit']));}
     }
 }
 
@@ -150,7 +151,7 @@ namespace {
     // Sync: durable private upload handoff; post author is used, never invented user 1.
     $reset($makeLife(1,'draft','3',true,false),'draft'); $x=$factory(); $r=$x['coord']->advance_claimed($task(1,Coordinator::TASK_SYNC),$now);
     $assert(Coordinator::STATUS_COMPLETE===$r['status']&&'private_upload_handoff'===$r['service_status'],'Sync did not complete private upload handoff.');
-    $assert(1===count($x['staging']->calls)&&1===count($x['upload']->calls)&&7===$x['upload']->calls[0]['actor']&&'41'===$x['upload']->calls[0]['destination'],'Sync did not use staged source/reviewed channel/actual post author.');
+    $assert(1===count($x['staging']->calls)&&1===count($x['upload']->calls)&&7===$x['upload']->calls[0]['actor']&&'41'===$x['upload']->calls[0]['destination']&&'video/mp4'===$x['upload']->calls[0]['content_type'],'Sync did not use staged source/reviewed channel/actual post author.');
     $execution=$GLOBALS['awvp_pub_meta'][$video][Video_Meta::PEERTUBE_PUBLICATION_EXECUTION]??null; $assert(is_array($execution)&&'upload_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'===($execution['operation_id']??''),'Sync did not persist upload identity.');
     $assert(1===count($x['uploadTasks']->calls)&&1===count($x['tasks']->enqueues)&&Coordinator::TASK_FINALIZE===$x['tasks']->enqueues[0]['type']&&720===$x['tasks']->enqueues[0]['max_attempts'],'Sync did not durably enqueue upload/finalize with long verification horizon.');
 
@@ -168,6 +169,12 @@ namespace {
     $assert(1===count($x['api']->publication_calls)&&'1'===$x['api']->publication_calls[0]['privacy']&&0===count($x['api']->privacy_calls),'Published finalization used unexpected mutation path.');
     $assert(1===count($x['assets']->calls)&&'1'===$x['assets']->calls[0]['privacy'],'Verified final privacy was not recorded locally.');
     $saved=Execution::sanitize($GLOBALS['awvp_pub_meta'][$video][Video_Meta::PEERTUBE_PUBLICATION_EXECUTION]??null); $assert(Manifest::sha256($manifest)===($saved['applied_manifest_sha256']??''),'Applied manifest was not durably recorded.');
+
+    // Crash-recovery boundary: if PeerTube already exposes the complete desired
+    // state, finalize converges local evidence without replaying the PUT.
+    $reset($makeLife(1,'publish','1',true,true),'publish'); $GLOBALS['awvp_pub_meta'][$video][Video_Meta::PEERTUBE_PUBLICATION_EXECUTION]=$exec; $x=$factory(); $x['operations']->records[$exec['operation_id']]=$ready; $x['api']->remote_privacy='1'; $x['api']->remote_publication=FakePublicationApi::publication($manifest);
+    $existing=$x['coord']->advance_claimed($task(55,Coordinator::TASK_FINALIZE),$now); $assert(Coordinator::STATUS_COMPLETE===$existing['status']&&'verified_existing'===$existing['service_status'],'Already-applied remote publication did not converge without replay.');
+    $assert(0===count($x['api']->publication_calls)&&1<=count($x['api']->status_calls),'Already-applied publication replayed the consequential PUT.');
 
     // If WordPress loses publish authority during the PUT, correct immediately to Private and verify it.
     $reset($makeLife(1,'publish','1',true,true),'publish'); $GLOBALS['awvp_pub_meta'][$video][Video_Meta::PEERTUBE_PUBLICATION_EXECUTION]=$exec; $x=$factory(); $x['operations']->records[$exec['operation_id']]=$ready; $x['api']->remote_privacy='3';

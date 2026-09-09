@@ -2163,3 +2163,56 @@ existing editorial rule that copied/reused blocks are display-only outside their
 origin post. Focused regression coverage reproduces the revision and non-anchor reuse
 cases. RC8 also alphabetizes PeerTube category presentation by human-readable label
 without modifying provider IDs or the stored provider catalog.
+
+### RC8 qualification/live Test 3 and RC9 transition
+
+Canonical RC8 is immutable qualification/live-test evidence. The source transition is
+commit `57ba6de225fee3bca200c2faaaf214086eaa83c7`, final tree
+`49ffd65ccffdecc850bce89a4d7ff1b538391951`, and the exact canonical package SHA-256
+`943b729de982c48a8019cf0dddda5a746e59d0d5be1ab0900784592981d215dd`. The exact
+package passed Plugin Check 2.1.0, installed-package identity, all three public-1.0.0
+upgrade fixtures, and all three clean-install fixtures. RC8 bytes must never be rebuilt,
+relabeled, or mutated.
+
+Controlled RC8 live testing confirmed the RC7 revision/origin-anchor correction but
+then exposed a broader execution issue in Test 3. PeerTube publication was still coupled
+to an AWVP-generated MP4/local FFmpeg path even though PeerTube is the selected remote
+processor. Publication request construction also serialized optional blank `support` /
+`nsfwSummary` fields; the observed failure occurred before the consequential publication
+PUT, so PeerTube remained private, local serving remained authoritative, and no destructive
+cutover/cleanup authority was reached. Preserve that live state as evidence rather than
+mutating it in place.
+
+RC9 changes the authority model without weakening the existing remote-mutation fences:
+
+- PeerTube tasks wake the detached bounded `--drain` watcher from durable task enqueue;
+  the old five-minute dispatcher remains local-FFmpeg-only, while a new one-minute hook
+  is strictly a missed-wake/incomplete-lifecycle recovery safety net. The watcher releases
+  claims before sleeping, rechecks the full owned queue at most every five seconds, and
+  releases its short launcher lock when the CLI process exits.
+- Incomplete publication lifecycle intent gets a 24-hour automatic recovery window and
+  an explicit Resume action, both capped at 168 hours from the original incomplete
+  observation. This recovery re-enters only the local synchronizer/task enqueue path and
+  never replays `upload_indeterminate`.
+- PeerTube staging copies the immutable WordPress original inside the plugin-managed
+  uploads subtree and preserves its validated `video/*` MIME type. A valid non-local
+  destination cancels redundant queued/claimed local FFmpeg work before transcoding.
+- Blank optional publication fields are omitted. Finalization reads the complete comparable
+  PeerTube state before mutation, skips a PUT only when that full desired state is already
+  proven, and performs a separate full-state read after a PUT. Uncertain acceptance remains
+  held instead of automatically replayed.
+- Verified PeerTube serving is resolved before local-source readability, so later allowed
+  retention cannot break remote playback. After verified public/unlisted cutover, automatic
+  cleanup may remove only AWVP-generated/staging derivatives; original WordPress source
+  deletion remains exclusively under explicit R46.9 policy.
+- Settings now defaults to an Overview / **Status & Needs Attention** projection using
+  Media Library filename/title/size plus origin post/author and staged-upload byte progress.
+  Internal operation IDs and remote UUIDs are diagnostic details rather than primary identity.
+- New configuration uses `ARGENTWOLF_VIDEO_PROCESSOR_PEERTUBE_PRIVATE_ORIGINS`; the old
+  `ARGENT_VIDEO_PEERTUBE_DEV_ORIGINS` constant remains accepted as an intentional compatibility
+  alias for existing RC installations.
+
+The RC9 source handoff is patch-based from exact RC8 commit `57ba6de225fee3bca200c2faaaf214086eaa83c7`.
+Before live use, require green Forgejo CI, one canonical RC9 artifact, exact-package
+release validation, disposable-VM qualification, then install that same artifact through
+the WordPress web UI. Existing RC6/RC8 held/indeterminate evidence must remain untouched.

@@ -47,7 +47,8 @@ final class PeerTube_Publication_Task_Coordinator
         private readonly PeerTube_Publication_Catalog_Store $catalogs,
         private readonly Video_Publishing_Defaults_Store $defaults,
         callable $api_factory,
-        private readonly ?PeerTube_Serving_Cutover_Service $cutover = null
+        private readonly ?PeerTube_Serving_Cutover_Service $cutover = null,
+        private readonly ?PeerTube_Derivative_Cleanup_Service $derivative_cleanup = null
     ) {
         $this->api_factory = Closure::fromCallable($api_factory);
     }
@@ -111,7 +112,7 @@ final class PeerTube_Publication_Task_Coordinator
         if ('' === $execution['operation_id']) {
             $staged=$this->staging->stage($video_id);
             if ('ready' !== ($staged['status'] ?? null)) {
-                return $this->fail($task_id,self::TASK_SYNC,$lock,'A stable MP4 source could not be staged for PeerTube upload.',$now,(string)($staged['status']??'staging_refused'));
+                return $this->fail($task_id,self::TASK_SYNC,$lock,'The authoritative WordPress video source could not be staged for PeerTube upload.',$now,(string)($staged['status']??'staging_refused'));
             }
             $actor_id = self::positive_int(get_current_user_id());
             if ($actor_id < 1) {
@@ -127,7 +128,8 @@ final class PeerTube_Publication_Task_Coordinator
                 (string)$manifest['title'],
                 $actor_id,
                 $now,
-                (string)$manifest['channel_id']
+                (string)$manifest['channel_id'],
+                (string)$staged['content_type']
             );
             if (PeerTube_Staged_Upload_Service::STATUS_ADVANCED !== ($begun['status']??null)
                 || 1 !== preg_match('/^upload_[a-f0-9]{32}$/D',(string)($begun['operation_id']??''))) {
@@ -230,11 +232,31 @@ final class PeerTube_Publication_Task_Coordinator
                 'content'=>(string)$thumbnail_capture['content'],
             );
         }
+        // Read before the consequential PUT. A prior worker may have completed
+        // the provider mutation and crashed before persisting local evidence.
+        // Skip replay only when the GET proves the complete desired publication
+        // state; privacy/channel alone are intentionally insufficient.
+        if ($this->remote_matches_manifest($api,(string)$secret['access_token'],$execution,$manifest,$target)) {
+            $asset_status=$this->assets->record_publication_observation((int)$execution['remote_asset_id'],$video_id,(string)$execution['backend_id'],(string)$execution['remote_uuid'],(string)$execution['channel_id'],$target,$now);
+            if (! in_array($asset_status,array(PeerTube_Remote_Asset_Store::APPLIED,PeerTube_Remote_Asset_Store::PRESENT),true)) return $this->fail($task_id,self::TASK_FINALIZE,$lock,'Existing PeerTube publication was verified but local asset observation was indeterminate.',$now,'asset_indeterminate');
+            $execution=PeerTube_Publication_Execution::mark_applied($execution,$manifest,$now);
+            if (array()===$execution || ! $this->save_execution($video_id,$execution)) return $this->fail($task_id,self::TASK_FINALIZE,$lock,'Existing applied publication manifest could not be durably recorded.',$now,'execution_indeterminate');
+            return $this->finish_cutover($task_id,$lock,$video_id,$now,'verified_existing');
+        }
+
         try { $updated=$api->update_publication((string)$secret['access_token'],(string)$execution['remote_uuid'],$manifest,$target,$thumbnail); }
         catch(Throwable){ $updated=array('ok'=>false); }
-        if (true !== ($updated['ok']??false)) return $this->fail($task_id,self::TASK_FINALIZE,$lock,'PeerTube publication update was not definitively accepted; automatic replay is refused.',$now,'mutation_indeterminate');
-        $verified=$this->verify_remote($api,(string)$secret['access_token'],$execution,$target);
-        if (! $verified) return $this->fail($task_id,self::TASK_FINALIZE,$lock,'PeerTube publication update could not be positively verified.',$now,'verification_failed');
+        if (true !== ($updated['ok']??false)) {
+            $error=is_array($updated['error']??null)?$updated['error']:array();
+            $code=is_string($error['code']??null)?$error['code']:'';
+            if ('publication_update_input_invalid'===$code) {
+                return $this->fail($task_id,self::TASK_FINALIZE,$lock,'PeerTube publication update was refused locally before transmission; an explicit retry is safe after correcting the input.',$now,'mutation_not_sent');
+            }
+            return $this->fail($task_id,self::TASK_FINALIZE,$lock,'PeerTube publication update was not definitively accepted; automatic replay is refused.',$now,'mutation_indeterminate');
+        }
+        if (! $this->remote_matches_manifest($api,(string)$secret['access_token'],$execution,$manifest,$target)) {
+            return $this->fail($task_id,self::TASK_FINALIZE,$lock,'PeerTube publication update could not be positively verified against the complete reviewed manifest.',$now,'verification_failed');
+        }
 
         // WordPress is authoritative. Recheck after a public/unlisted/internal PUT.
         if ('3' !== $target) {
@@ -266,7 +288,17 @@ final class PeerTube_Publication_Task_Coordinator
             return $this->complete($task_id,self::TASK_FINALIZE,$lock,$now,$service);
         }
         $status=$this->cutover->reconcile($video_id,$now);
-        if (in_array($status,array(PeerTube_Serving_Cutover_Service::APPLIED,PeerTube_Serving_Cutover_Service::PRESENT,PeerTube_Serving_Cutover_Service::LOCAL),true)) {
+        if (in_array($status,array(PeerTube_Serving_Cutover_Service::APPLIED,PeerTube_Serving_Cutover_Service::PRESENT),true)) {
+            if (null !== $this->derivative_cleanup) {
+                $cleanup=$this->derivative_cleanup->cleanup($video_id);
+                if (! in_array($cleanup,array(PeerTube_Derivative_Cleanup_Service::APPLIED,PeerTube_Derivative_Cleanup_Service::PRESENT),true)) {
+                    return $this->reschedule($task_id,self::TASK_FINALIZE,$lock,$now+60,'PeerTube serving is verified; waiting for bounded cleanup of local AWVP derivatives.',$now);
+                }
+                $service.=':cleanup_'.$cleanup;
+            }
+            return $this->complete($task_id,self::TASK_FINALIZE,$lock,$now,$service.':'.$status);
+        }
+        if (PeerTube_Serving_Cutover_Service::LOCAL===$status) {
             return $this->complete($task_id,self::TASK_FINALIZE,$lock,$now,$service.':'.$status);
         }
         if (PeerTube_Serving_Cutover_Service::INDETERMINATE===$status) {
@@ -344,6 +376,37 @@ final class PeerTube_Publication_Task_Coordinator
         foreach(array('licence_id','category_id','language','originally_published_at') as $field){if(''!==$before[$field]&&''===$after[$field])return false;}
         if((int)$before['thumbnail_attachment_id']>0&&(int)$after['thumbnail_attachment_id']<1)return false;
         return true;
+    }
+
+    private function remote_matches_manifest(PeerTube_Publication_Mutation_Api $api,string $token,array $execution,array $manifest,string $privacy):bool
+    {
+        $manifest=PeerTube_Publication_Manifest::sanitize($manifest);
+        if (array()===$manifest || (int)$manifest['thumbnail_attachment_id']>0) return false;
+        try{$status=$api->video_status($token,(string)$execution['remote_uuid']);}catch(Throwable){return false;}
+        $data=is_array($status['data']??null)?$status['data']:array();
+        $publication=is_array($data['publication']??null)?$data['publication']:array();
+        if (true!==($status['ok']??false)||array()===$publication||1!==(int)($data['state_id']??0)
+            ||$privacy!==(string)($data['privacy_id']??'')||(string)$execution['channel_id']!==(string)($data['channel_id']??'')
+            ||!hash_equals((string)$execution['remote_uuid'],(string)($data['uuid']??''))) return false;
+        $expected=array(
+            'title'=>(string)$manifest['title'],
+            'description_markdown'=>(string)$manifest['description_markdown'],
+            'tags'=>$manifest['tags'],
+            'support_markdown'=>(string)$manifest['support_markdown'],
+            'licence_id'=>(string)$manifest['licence_id'],
+            'category_id'=>(string)$manifest['category_id'],
+            'language'=>(string)$manifest['language'],
+            'download_enabled'=>(bool)$manifest['download_enabled'],
+            'originally_published_at'=>(string)$manifest['originally_published_at'],
+            'comments_policy'=>(string)$manifest['comments_policy'],
+            'moderation'=>array(
+                'sensitive'=>(bool)$manifest['moderation']['sensitive'],
+                'reason'=>(string)$manifest['moderation']['reason'],
+                'violent'=>(bool)$manifest['moderation']['violent'],
+                'sexually_explicit'=>(bool)$manifest['moderation']['sexually_explicit'],
+            ),
+        );
+        return $expected===$publication;
     }
 
     private function verify_remote(PeerTube_Publication_Mutation_Api $api,string $token,array $execution,string $privacy):bool

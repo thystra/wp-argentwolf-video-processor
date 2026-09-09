@@ -3,7 +3,7 @@
 Status: 2.0 release-candidate contract
 Target branch: `develop-2.0`
 Stable baseline: WordPress.org-published `1.0.0`; `v1.0.0` identifies the released source, while later stable-main documentation/closure commits do not change the released artifact. The permanent `release/1.x` maintenance branch is rooted at that exact tag.
-Current controlled candidate: `2.0.0-rc8`; RC packages are Forgejo-only and WordPress.org `Stable tag` remains `1.0.0` until final promotion.
+Current controlled candidate: `2.0.0-rc9`; RC packages are Forgejo-only and WordPress.org `Stable tag` remains `1.0.0` until final promotion.
 
 ## 1. Product direction
 
@@ -172,6 +172,15 @@ to existing/pending videos.
 A configured backend represents a manageable destination/asset relationship.
 An arbitrary embeddable PeerTube watch URL from an unconfigured origin is an
 external reference, not a configured backend.
+
+
+For same-host/private/split-DNS PeerTube deployments that cannot satisfy the public
+origin rule, operators may explicitly allowlist exact canonical origins with the
+`ARGENTWOLF_VIDEO_PROCESSOR_PEERTUBE_PRIVATE_ORIGINS` `wp-config.php` constant.
+`ARGENT_VIDEO_PEERTUBE_DEV_ORIGINS` remains a backward-compatibility alias for RC
+installations, but new documentation/configuration uses only the canonical constant.
+The allowlist changes origin eligibility only; existing TLS, exact-origin, transport-risk,
+credential, and request-boundary checks remain in force.
 
 External PeerTube embeds:
 
@@ -773,13 +782,26 @@ not require a correspondingly large PHP request-body string. The final
 remote-created response receives the stronger full-source post-transfer proof.
 
 The PeerTube settings page may save this non-secret per-backend segment policy,
-but that POST performs no media transfer. R45.5 registers the already-reviewed
+but that POST performs no media transfer. R45.5 originally registered the
 PeerTube detached launcher on the plugin's existing five-minute
-`argent_video_processor_dispatch` event. That cron callback only probes the
-generic task table for due queued or stale owned PeerTube work and, when needed,
-starts `wp argent-video peertube-task-worker --drain --quiet`; all upload,
-reconciliation, and mail execution remains inside the detached WP-CLI process.
-No second scheduler or administrator transfer-launch action is added.
+`argent_video_processor_dispatch` event. RC9 supersedes that execution cadence:
+durable PeerTube task creation emits the internal
+`argentwolf_video_processor_task_enqueued` wake signal and the launcher starts
+`wp argent-video peertube-task-worker --drain --quiet` when owned work is due. A
+separate one-minute `argent_video_processor_peertube_recovery` schedule exists only
+as a missed-wake/incomplete-lifecycle recovery safety net; the five-minute dispatcher
+continues to own local FFmpeg processing only. All upload, reconciliation, publication,
+retention, and mail execution remains inside the detached WP-CLI process.
+
+The RC9 drain is a bounded site-wide watcher rather than the earlier same-operation-only
+drain. After each durable boundary it prefers an immediately requeued same task, then
+re-enters the global PeerTube-owned queue. If only future work exists, it releases all
+task claims, sleeps no more than five seconds, and rechecks until the existing process
+budget expires. This allows a newly published video to run promptly while an older
+operation waits on `run_after`. The short advisory launch lock is released when the CLI
+worker exits normally or exceptionally. `upload_indeterminate` remains a hard no-replay
+boundary and is never made retryable merely by the recovery schedule.
+
 Drain/process and streamed-request guards scale at one minute per 128 MiB with a
 one-hour floor and six-hour ceiling; the worker observes its deadline only at
 safe durable request boundaries. PeerTube staged-ingest/server-push/processing
@@ -951,8 +973,10 @@ PeerTube destination, active backend, current managed-secret generation, fresh
 backend-context catalog, and publishing defaults. It freezes a non-secret
 `PeerTube_Publication_Manifest`, including resolved support Markdown and immutable
 thumbnail identity, into `_argent_video_peertube_publication_execution`. It then
-stages/reuses a confined AWVP-managed MP4 and creates or recovers the existing
-staged-upload operation for the reviewed channel. Resumable initialization remains
+stages/reuses a confined copy of the immutable WordPress original, preserving its
+validated `video/*` content type, and creates or recovers the existing staged-upload
+operation for the reviewed channel. AWVP-generated local derivatives are never
+publication-source authority; PeerTube performs its own remote transcode. Resumable initialization remains
 privacy `3`; sync merely queues the existing upload coordinator and a low-priority
 finalizer.
 
@@ -965,9 +989,13 @@ provider context, frozen manifest, thumbnail bytes, and the actual anchor status
 Only actual WordPress `publish` plus current `reveal_authorized=true` permits a
 non-private target.
 
-The final publication PUT is bounded to reviewed metadata fields. Success is not
-accepted until a separate video-status GET verifies UUID, owned channel, ready
-state, and target privacy. After a non-private PUT, WordPress is checked again. If
+The final publication PUT is bounded to reviewed metadata fields; blank optional
+`support` and `nsfwSummary` values are omitted rather than serialized as empty
+multipart fields. RC9 performs a full-state GET before mutation and may skip the PUT
+only when the provider projection proves the complete desired publication state is
+already applied. Otherwise it sends the bounded PUT and requires a separate full-state
+GET to verify UUID, owned channel, ready state, privacy, and every comparable desired
+publication field. After a non-private PUT, WordPress is checked again. If
 reveal authority disappeared during the cross-system race window, the same worker
 issues one privacy-only correction to `3` and positively verifies it before
 completing. A mutation whose acceptance is indeterminate is terminally held rather
@@ -979,7 +1007,27 @@ cleanup, retention, remote deletion, or migration authority.
 
 R46.6 adds a local-only serving cutover after the qualified R46.5b publication executor. `_argent_video_serving_authority` is a strict version-1 non-secret evidence record, never a provider credential or remote mutation command. The detached finalizer may write it only after the current lifecycle/plan/destination/applied execution and durable remote-asset row agree that the exact asset is ready, verified, and at the intended public/unlisted privacy. A retry after publication is already applied may converge the local cutover without fresh provider credentials or HTTP.
 
-Frontend rendering does not trust the cutover record alone. `Video_Serving_Service` re-reads lifecycle generation/plan hash, destination/channel, applied execution, published anchor state, and the remote-asset row. Any mismatch, stale generation, malformed record, changed remote state/privacy, or missing verification returns an empty remote resolution and the dynamic block follows the existing local `wp_video_shortcode()`/Renderer path. Private/internal PeerTube targets deliberately remain local because WordPress audience membership does not prove PeerTube authentication. No frontend network call, cleanup, deletion, or migration is introduced.
+Frontend rendering does not trust the cutover record alone. `Video_Serving_Service` re-reads lifecycle generation/plan hash, destination/channel, applied execution, published anchor state, and the remote-asset row. Any mismatch, stale generation, malformed record, changed remote state/privacy, or missing verification returns an empty remote resolution and the dynamic block follows the existing local Renderer path. RC9 resolves verified PeerTube authority before requiring readable local source bytes, so an allowed later source-retention deletion cannot make an already-verified remote video disappear. Private/internal PeerTube targets deliberately remain local because WordPress audience membership does not prove PeerTube authentication. No frontend network call or remote mutation is introduced.
+
+After verified public/unlisted cutover, RC9 may remove only AWVP-generated/staging derivatives and the attachment `_argent_video_outputs` projection. That cleanup re-proves current remote serving first and never acquires authority to remove the WordPress original; physical source deletion remains exclusively governed by the explicit R46.9 retention policy and its independent safety fences.
+
+### RC9 incomplete-work recovery and operational overview
+
+Publication lifecycle intent with `task_pending=true` is recoverable only through a
+local bounded lookback. The first observed incomplete lifecycle timestamp opens a
+24-hour automatic recovery window; repeated one-minute recovery checks do not move
+that origin. When the automatic window expires, an administrator may use **Resume**
+to open one fresh 24-hour attempt window, but no automatic or manual action can extend
+beyond 168 hours from the original origin. The recovery path may re-run only the local
+lifecycle synchronizer/task enqueue boundary. It has no authority to probe or replay an
+`upload_indeterminate` mutation journal.
+
+Settings > ArgentWolf Video Processor defaults to **Overview**. **Status & Needs
+Attention** identifies PeerTube work by Media Library title/filename/size and affected
+origin post/author, derives staged-upload phase and confirmed-byte progress from the
+durable operation journal, and places internal operation IDs/remote UUIDs under
+expandable diagnostics. Overview is a projection/action surface over existing durable
+records, not a second state machine.
 
 ## R46.7 inert existing-video migration planning
 
@@ -1000,8 +1048,12 @@ The local `_argent_video_peertube_migration_execution` journal is written in `pr
 
 ### R46.9 explicit post-cutover local retention
 
-R46.9 is the only R46 checkpoint with local destructive authority. Retention is
-per AWVP Video and defaults to `keep`. `delete_managed` may remove the
+R46.9 is the only R46 checkpoint with local destructive authority. Separately, RC9
+prevents redundant local FFmpeg processing once an AWVP Video has a valid non-local
+destination: destination commitment cancels queued/failed local work, and the local
+worker rechecks destination authority after claim and can lock-token-fence cancellation
+of the claimed job before invoking FFmpeg. Malformed destination state fails closed.
+Retention is per AWVP Video and defaults to `keep`. `delete_managed` may remove the
 attachment's AWVP-managed storage tree and `_argent_video_outputs` projection
 while preserving the physical WordPress source. `delete_all` additionally
 removes the physical WordPress video file but never the attachment post; it is

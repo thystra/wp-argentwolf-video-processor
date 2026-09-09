@@ -14,10 +14,10 @@ use Throwable;
  * Consumer for the reviewed R45 PeerTube task types.
  *
  * run_once() preserves the qualified one-task execution boundary. run_drain()
- * may continue only one logical upload/reconciliation operation across
- * immediately-runnable durable boundaries. It never sleeps or polls a future
- * run_after, and it observes its size-derived process budget only between
- * remote requests so a byte-bearing PUT is never interrupted by the worker.
+ * is a bounded detached watcher: it advances durable safe boundaries, rechecks
+ * the site-wide owned queue between tasks, and waits only in short unclaimed
+ * slices for future work. Its process budget is observed only between remote
+ * requests so a byte-bearing PUT is never interrupted by the worker.
  */
 final class PeerTube_Task_Worker
 {
@@ -86,27 +86,35 @@ final class PeerTube_Task_Worker
     }
 
     /**
-     * Drain one logical operation across immediately-runnable boundaries.
+     * Drain/watch the site-wide PeerTube-owned queue within one bounded process.
      *
-     * The first task is selected from the owned queue. After that, only the
-     * exact same task may be reclaimed after an immediate reschedule, or the
-     * deterministic reconciliation handoff task for the same operation may be
-     * claimed. Future run_after values, failure/intervention states, completion,
-     * or the size-derived safe-boundary deadline stop the process.
+     * Immediate same-task continuations still get first preference, but every
+     * durable boundary then returns to the global owned queue. If only future
+     * work remains, the detached process sleeps in at most five-second slices
+     * and rechecks the queue, allowing a newly-published video to run promptly
+     * while an older upload/reconciliation is waiting on run_after.
+     *
+     * No claimed task is held while sleeping. Indeterminate byte-bearing work
+     * is never replayed here; it must become an explicitly queued safe boundary
+     * before this worker can claim it again.
      *
      * @param callable():int|null $clock
+     * @param callable(int):void|null $sleeper
      * @return array{
      *   status:string,recovered:int,task_id:int,task_type:string,
      *   coordinator_status:string,steps:int,budget_seconds:int,elapsed_seconds:int
      * }
      */
-    public function run_drain(int $started_at, ?callable $clock = null): array
+    public function run_drain(int $started_at, ?callable $clock = null, ?callable $sleeper = null): array
     {
         if ($started_at < 1) {
             return self::drain_result(self::STATUS_INDETERMINATE);
         }
 
         $clock = null === $clock ? static fn(): int => time() : Closure::fromCallable($clock);
+        $sleeper = null === $sleeper
+            ? static function (int $seconds): void { if ($seconds > 0) { sleep($seconds); } }
+            : Closure::fromCallable($sleeper);
         $now = self::clock_now($clock);
         if ($now < 1) {
             return self::drain_result(self::STATUS_INDETERMINATE);
@@ -120,7 +128,6 @@ final class PeerTube_Task_Worker
 
         $context = $this->task_context($task);
         $source_bytes = is_array($context) ? $context['source_bytes'] : 0;
-        $operation_id = is_array($context) ? $context['operation_id'] : '';
         $budget_seconds = PeerTube_Upload_Runtime_Budget::process_seconds($source_bytes);
         $deadline = $started_at > PHP_INT_MAX - $budget_seconds
             ? PHP_INT_MAX
@@ -133,131 +140,73 @@ final class PeerTube_Task_Worker
         while (true) {
             $now = self::clock_now($clock);
             if ($now < 1) {
-                return self::drain_result(
-                    self::STATUS_INDETERMINATE,
-                    $recovered,
-                    $last_task_id,
-                    $last_task_type,
-                    $last_coordinator_status,
-                    $steps,
-                    $budget_seconds,
-                    0
+                return self::drain_result(self::STATUS_INDETERMINATE, $recovered, $last_task_id, $last_task_type, $last_coordinator_status, $steps, $budget_seconds, 0);
+            }
+            if ($now >= $deadline) {
+                return self::drain_result(self::STATUS_YIELDED, $recovered, $last_task_id, $last_task_type, $last_coordinator_status, $steps, $budget_seconds, max(0, $now - $started_at));
+            }
+
+            if (! is_array($task)) {
+                $task = $this->tasks->claim_next_of_types(self::DRAIN_TASK_TYPES, $now);
+                if (is_array($task)) {
+                    continue;
+                }
+
+                $next_run_after = $this->tasks->next_run_after_of_types(self::DRAIN_TASK_TYPES, $now);
+                if ($next_run_after < 1) {
+                    return self::drain_result(self::STATUS_ADVANCED, $recovered, $last_task_id, $last_task_type, $last_coordinator_status, $steps, $budget_seconds, max(0, $now - $started_at));
+                }
+                if ($next_run_after >= $deadline) {
+                    return self::drain_result(self::STATUS_YIELDED, $recovered, $last_task_id, $last_task_type, $last_coordinator_status, $steps, $budget_seconds, max(0, $now - $started_at));
+                }
+
+                $sleep_seconds = min(
+                    5,
+                    max(1, $next_run_after - $now),
+                    max(1, $deadline - $now)
                 );
+                try {
+                    $sleeper($sleep_seconds);
+                } catch (Throwable) {
+                    return self::drain_result(self::STATUS_INDETERMINATE, $recovered, $last_task_id, $last_task_type, $last_coordinator_status, $steps, $budget_seconds, max(0, $now - $started_at));
+                }
+                continue;
             }
 
             $advanced = $this->advance_one($task, $now, $recovered);
-            $steps++;
+            ++$steps;
             $last_task_id = $advanced['task_id'];
             $last_task_type = $advanced['task_type'];
             $last_coordinator_status = $advanced['coordinator_status'];
             if (self::STATUS_INDETERMINATE === $advanced['status']) {
-                return self::drain_result(
-                    self::STATUS_INDETERMINATE,
-                    $recovered,
-                    $last_task_id,
-                    $last_task_type,
-                    $last_coordinator_status,
-                    $steps,
-                    $budget_seconds,
-                    max(0, $now - $started_at)
-                );
+                return self::drain_result(self::STATUS_INDETERMINATE, $recovered, $last_task_id, $last_task_type, $last_coordinator_status, $steps, $budget_seconds, max(0, $now - $started_at));
             }
 
             $coordinator_result = $this->last_coordinator_result;
             if (! is_array($coordinator_result)) {
-                return self::drain_result(
-                    self::STATUS_INDETERMINATE,
-                    $recovered,
-                    $last_task_id,
-                    $last_task_type,
-                    $last_coordinator_status,
-                    $steps,
-                    $budget_seconds,
-                    max(0, $now - $started_at)
-                );
+                return self::drain_result(self::STATUS_INDETERMINATE, $recovered, $last_task_id, $last_task_type, $last_coordinator_status, $steps, $budget_seconds, max(0, $now - $started_at));
             }
 
-            $next_task_id = 0;
+            $boundary_now = self::clock_now($clock);
+            if ($boundary_now < 1) {
+                return self::drain_result(self::STATUS_INDETERMINATE, $recovered, $last_task_id, $last_task_type, $last_coordinator_status, $steps, $budget_seconds, 0);
+            }
+            if ($boundary_now >= $deadline) {
+                return self::drain_result(self::STATUS_YIELDED, $recovered, $last_task_id, $last_task_type, $last_coordinator_status, $steps, $budget_seconds, max(0, $boundary_now - $started_at));
+            }
+
+            $task = null;
             $run_after = self::positive_int($coordinator_result['run_after'] ?? null);
             if (
                 PeerTube_Upload_Task_Coordinator::STATUS_REQUEUED === $last_coordinator_status
                 && Task_Repository::APPLIED === ($coordinator_result['repository_status'] ?? null)
                 && $run_after > 0
-                && $run_after <= $now
+                && $run_after <= $boundary_now
             ) {
-                $next_task_id = $last_task_id;
-            } elseif (
-                PeerTube_Upload_Task_Coordinator::TASK_UPLOAD_ADVANCE === $last_task_type
-                && PeerTube_Upload_Task_Coordinator::STATUS_COMPLETE === $last_coordinator_status
-                && '' !== $operation_id
-            ) {
-                $handoff = $this->tasks->find_by_idempotency_key(
-                    hash('sha256', 'awvp-task:v1:' . PeerTube_Upload_Task_Coordinator::TASK_REMOTE_RECONCILE . ':' . $operation_id)
-                );
-                if (
-                    is_array($handoff)
-                    && PeerTube_Upload_Task_Coordinator::TASK_REMOTE_RECONCILE === ($handoff['task_type'] ?? null)
-                    && Task_Repository::STATUS_QUEUED === ($handoff['status'] ?? null)
-                ) {
-                    $next_task_id = self::positive_int($handoff['id'] ?? null);
-                }
+                $task = $this->tasks->claim_task_of_types($last_task_id, self::DRAIN_TASK_TYPES, $boundary_now);
             }
-
-            if ($next_task_id < 1) {
-                return self::drain_result(
-                    self::STATUS_ADVANCED,
-                    $recovered,
-                    $last_task_id,
-                    $last_task_type,
-                    $last_coordinator_status,
-                    $steps,
-                    $budget_seconds,
-                    max(0, $now - $started_at)
-                );
-            }
-
-            $boundary_now = self::clock_now($clock);
-            if ($boundary_now < 1) {
-                return self::drain_result(
-                    self::STATUS_INDETERMINATE,
-                    $recovered,
-                    $last_task_id,
-                    $last_task_type,
-                    $last_coordinator_status,
-                    $steps,
-                    $budget_seconds,
-                    max(0, $now - $started_at)
-                );
-            }
-            if ($boundary_now >= $deadline) {
-                return self::drain_result(
-                    self::STATUS_YIELDED,
-                    $recovered,
-                    $last_task_id,
-                    $last_task_type,
-                    $last_coordinator_status,
-                    $steps,
-                    $budget_seconds,
-                    max(0, $boundary_now - $started_at)
-                );
-            }
-
-            $task = $this->tasks->claim_task_of_types($next_task_id, self::DRAIN_TASK_TYPES, $boundary_now);
-            if (! is_array($task)) {
-                // Another worker may have won a legitimate claim race. The
-                // durable queue remains authoritative, so stop rather than
-                // falling back to unrelated queue work.
-                return self::drain_result(
-                    self::STATUS_YIELDED,
-                    $recovered,
-                    $last_task_id,
-                    $last_task_type,
-                    $last_coordinator_status,
-                    $steps,
-                    $budget_seconds,
-                    max(0, $boundary_now - $started_at)
-                );
-            }
+            // If the immediate reclaim lost a race, the next loop re-enters the
+            // global queue rather than replaying any previously claimed task.
         }
     }
 

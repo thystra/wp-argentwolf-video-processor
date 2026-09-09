@@ -66,6 +66,7 @@ $assert = static function (bool $condition, string $message) use (&$failures): v
 $tabs = Settings_Hub::tabs();
 $assert(
     array(
+        Settings_Hub::TAB_OVERVIEW,
         Settings_Hub::TAB_LOCAL,
         Settings_Hub::TAB_PEERTUBE,
         Settings_Hub::TAB_PUBLISHING,
@@ -74,6 +75,7 @@ $assert(
     ) === array_keys($tabs),
     'Unified settings tabs changed or are incomplete.'
 );
+$assert('Overview' === $tabs[Settings_Hub::TAB_OVERVIEW], 'Overview tab label changed.');
 $assert('Local Processing' === $tabs[Settings_Hub::TAB_LOCAL], 'Local Processing tab label changed.');
 $assert('PeerTube Servers' === $tabs[Settings_Hub::TAB_PEERTUBE], 'PeerTube Servers tab label changed.');
 $assert('Publishing' === $tabs[Settings_Hub::TAB_PUBLISHING], 'Publishing tab label changed.');
@@ -81,11 +83,11 @@ $assert('Video Migration' === $tabs[Settings_Hub::TAB_MIGRATION], 'Video Migrati
 $assert('Local Retention' === $tabs[Settings_Hub::TAB_RETENTION], 'Local Retention tab label changed.');
 
 $_GET = array();
-$assert(Settings_Hub::TAB_LOCAL === Settings_Hub::current_tab(), 'Missing tab must default to Local Processing.');
+$assert(Settings_Hub::TAB_OVERVIEW === Settings_Hub::current_tab(), 'Missing tab must default to Overview.');
 $_GET = array('tab' => Settings_Hub::TAB_PEERTUBE);
 $assert(Settings_Hub::TAB_PEERTUBE === Settings_Hub::current_tab(), 'PeerTube tab selector was not accepted.');
 $_GET = array('tab' => 'not-a-real-tab');
-$assert(Settings_Hub::TAB_LOCAL === Settings_Hub::current_tab(), 'Unknown tab must fail closed to Local Processing.');
+$assert(Settings_Hub::TAB_OVERVIEW === Settings_Hub::current_tab(), 'Unknown tab must fail closed to Overview.');
 
 $url = Settings_Hub::tab_url(Settings_Hub::TAB_PUBLISHING, array('notice' => 'saved'));
 $assert(str_contains($url, 'options-general.php?'), 'Settings tab URL must target WordPress Settings.');

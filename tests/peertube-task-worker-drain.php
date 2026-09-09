@@ -8,14 +8,12 @@ namespace ArgentVideo {
         public const APPLIED = 'applied';
         public const STATUS_QUEUED = 'queued';
 
-        /** @var list<array<string,mixed>> */
-        public array $initial_claims = array();
+        /** @var list<array{at:int,task:array<string,mixed>}> */
+        public array $scheduled = array();
         /** @var array<int,list<array<string,mixed>>> */
         public array $exact_claims = array();
         /** @var list<int> */
         public array $exact_claim_ids = array();
-        /** @var list<array<string,mixed>> */
-        public array $find_by_key_results = array();
         public int $claim_next_calls = 0;
 
         public function recover_stale_of_types(array $types, int $stale_before, int $now, int $limit = 100): int
@@ -26,9 +24,16 @@ namespace ArgentVideo {
 
         public function claim_next_of_types(array $types, int $now): ?array
         {
-            unset($types, $now);
+            unset($types);
             $this->claim_next_calls++;
-            return array_shift($this->initial_claims);
+            foreach ($this->scheduled as $index => $entry) {
+                if ($entry['at'] <= $now) {
+                    $task = $entry['task'];
+                    array_splice($this->scheduled, $index, 1);
+                    return $task;
+                }
+            }
+            return null;
         }
 
         public function claim_task_of_types(int $task_id, array $types, int $now): ?array
@@ -41,10 +46,16 @@ namespace ArgentVideo {
             return array_shift($this->exact_claims[$task_id]);
         }
 
-        public function find_by_idempotency_key(string $key): ?array
+        public function next_run_after_of_types(array $types, int $now): int
         {
-            unset($key);
-            return array_shift($this->find_by_key_results);
+            unset($types);
+            $next = 0;
+            foreach ($this->scheduled as $entry) {
+                if ($entry['at'] > $now && (0 === $next || $entry['at'] < $next)) {
+                    $next = $entry['at'];
+                }
+            }
+            return $next;
         }
     }
 
@@ -119,98 +130,96 @@ namespace {
         'lock_token'=>sprintf('00000000-0000-4000-8000-%012d', $id),
     );
 
-    // Drain reclaims only the same task between immediate upload boundaries,
-    // then follows the deterministic reconciliation handoff for that operation.
+    // RC9 watcher behavior: immediate same-task work is preferred, deterministic
+    // handoff remains durable/global, a newly-published task can run while an
+    // older reconciliation waits, and the older work resumes afterward.
     $tasks = new Task_Repository();
     $coordinator = new Coordinator();
-    $tasks->initial_claims[] = $task(41, Coordinator::TASK_UPLOAD_ADVANCE);
-    $tasks->exact_claims[41] = array($task(41, Coordinator::TASK_UPLOAD_ADVANCE));
-    $tasks->find_by_key_results[] = array('id'=>91,'task_type'=>Coordinator::TASK_REMOTE_RECONCILE,'status'=>'queued');
-    $tasks->exact_claims[91] = array(
-        $task(91, Coordinator::TASK_REMOTE_RECONCILE),
-        $task(91, Coordinator::TASK_REMOTE_RECONCILE),
+    $tasks->scheduled = array(
+        array('at'=>1000,'task'=>$task(41, Coordinator::TASK_UPLOAD_ADVANCE)),
+        array('at'=>1000,'task'=>$task(91, Coordinator::TASK_REMOTE_RECONCILE)),
+        array('at'=>1005,'task'=>$task(120, Coordinator::TASK_FAILURE_NOTIFY)),
+        array('at'=>1030,'task'=>$task(91, Coordinator::TASK_REMOTE_RECONCILE)),
     );
+    $tasks->exact_claims[41] = array($task(41, Coordinator::TASK_UPLOAD_ADVANCE));
     $coordinator->results = array(
         array('status'=>'requeued','task_id'=>41,'task_type'=>Coordinator::TASK_UPLOAD_ADVANCE,'repository_status'=>'applied','run_after'=>1000),
         array('status'=>'complete','task_id'=>41,'task_type'=>Coordinator::TASK_UPLOAD_ADVANCE,'repository_status'=>'applied','run_after'=>0),
-        array('status'=>'requeued','task_id'=>91,'task_type'=>Coordinator::TASK_REMOTE_RECONCILE,'repository_status'=>'applied','run_after'=>1000),
-        array('status'=>'requeued','task_id'=>91,'task_type'=>Coordinator::TASK_REMOTE_RECONCILE,'repository_status'=>'applied','run_after'=>1100),
+        array('status'=>'requeued','task_id'=>91,'task_type'=>Coordinator::TASK_REMOTE_RECONCILE,'repository_status'=>'applied','run_after'=>1030),
+        array('status'=>'complete','task_id'=>120,'task_type'=>Coordinator::TASK_FAILURE_NOTIFY,'repository_status'=>'applied','run_after'=>0),
+        array('status'=>'complete','task_id'=>91,'task_type'=>Coordinator::TASK_REMOTE_RECONCILE,'repository_status'=>'applied','run_after'=>0),
     );
+    $time = 1000;
+    $clock = static function () use (&$time): int { return $time; };
+    $sleeps = array();
+    $sleeper = static function (int $seconds) use (&$time, &$sleeps): void { $sleeps[]=$seconds; $time += $seconds; };
     $worker = new PeerTube_Task_Worker($tasks, $coordinator, static fn(string $id): ?array => $id === $operation_id ? $operation : null);
-    $drained = $worker->run_drain(1000, static fn(): int => 1000);
-    $assert(PeerTube_Task_Worker::STATUS_ADVANCED === $drained['status'], 'Drain did not stop cleanly at the future durable boundary.');
-    $assert(4 === $drained['steps'], 'Drain did not advance the expected upload/handoff sequence.');
-    $assert(array(41,91,91) === $tasks->exact_claim_ids, 'Drain claimed anything other than the same task and deterministic handoff.');
-    $assert(array(41,41,91,91) === $coordinator->task_ids, 'Coordinator sequence drifted during drain.');
-    $assert(1 === $tasks->claim_next_calls, 'Drain returned to global queue selection after the first claim.');
+    $drained = $worker->run_drain(1000, $clock, $sleeper);
+    $assert(PeerTube_Task_Worker::STATUS_ADVANCED === $drained['status'], 'RC9 watcher did not drain the bounded owned queue cleanly.');
+    $assert(5 === $drained['steps'], 'RC9 watcher did not advance the expected five durable boundaries.');
+    $assert(array(41) === $tasks->exact_claim_ids, 'Only the immediate same-task continuation should use exact reclaim.');
+    $assert(array(41,41,91,120,91) === $coordinator->task_ids, 'RC9 watcher did not service new work before resuming the future reconciliation.');
+    $assert(array() !== $sleeps && max($sleeps) <= 5, 'RC9 watcher exceeded its five-second sleep slice.');
     $assert(3600 === $drained['budget_seconds'], 'Drain lost the size-derived one-hour process floor.');
 
-    // A size-derived deadline yields only after a durable immediate boundary;
-    // it does not claim/send the next segment once the boundary budget expires.
+    // A future boundary at or beyond the size-derived deadline yields without
+    // sleeping or replaying the just-completed request.
     $large = $operation;
     $large['source']['bytes'] = 10 * 1024 * 1024 * 1024;
     $tasks = new Task_Repository();
     $coordinator = new Coordinator();
-    $tasks->initial_claims[] = $task(51, Coordinator::TASK_UPLOAD_ADVANCE);
+    $tasks->scheduled = array(
+        array('at'=>2000,'task'=>$task(51, Coordinator::TASK_UPLOAD_ADVANCE)),
+        array('at'=>7000,'task'=>$task(51, Coordinator::TASK_UPLOAD_ADVANCE)),
+    );
     $coordinator->results[] = array(
         'status'=>'requeued','task_id'=>51,'task_type'=>Coordinator::TASK_UPLOAD_ADVANCE,
-        'repository_status'=>'applied','run_after'=>2000,
+        'repository_status'=>'applied','run_after'=>7000,
     );
-    $times = array(2000, 2000, 6800);
-    $clock = static function () use (&$times): int { return array_shift($times) ?? 6800; };
+    $time = 2000; $sleeps = array();
+    $clock = static function () use (&$time): int { return $time; };
+    $sleeper = static function (int $seconds) use (&$time, &$sleeps): void { $sleeps[]=$seconds; $time += $seconds; };
     $worker = new PeerTube_Task_Worker($tasks, $coordinator, static fn(string $id): ?array => $id === $operation_id ? $large : null);
-    $yielded = $worker->run_drain(2000, $clock);
-    $assert(PeerTube_Task_Worker::STATUS_YIELDED === $yielded['status'], 'Drain did not yield at the size-derived safe-boundary deadline.');
+    $yielded = $worker->run_drain(2000, $clock, $sleeper);
+    $assert(PeerTube_Task_Worker::STATUS_YIELDED === $yielded['status'], 'Drain did not yield at the future safe-boundary deadline.');
     $assert(1 === $yielded['steps'] && 4800 === $yielded['budget_seconds'], 'Yield result lost bounded progress/budget evidence.');
-    $assert(array() === $tasks->exact_claim_ids, 'Drain claimed another segment after the safe-boundary deadline.');
+    $assert(array() === $sleeps, 'Drain slept even though the next durable boundary was outside its process budget.');
 
-    // Drain mode also owns durable failure-notification delivery, but a
-    // notification is a terminal one-step branch: it must not fall through to
-    // unrelated global queue work or attempt an upload/reconciliation handoff.
+    // Failure notification remains a normal owned durable task. After it
+    // completes, an empty queue ends the watcher rather than inventing work.
     $notification_payload = json_encode(array(
         'version'=>1,
         'operation_id'=>$operation_id,
         'failure_revision'=>7,
         'failure'=>array(
-            'state'=>'upload_indeterminate',
-            'failed_at'=>3000,
-            'confirmed_bytes'=>0,
-            'source_bytes'=>1024 * 1024 * 1024,
-            'request_kind'=>'chunk',
-            'request_start'=>0,
-            'request_bytes'=>128 * 1024 * 1024,
-            'awvp_error_code'=>'peertube.upload.indeterminate',
-            'http_status'=>0,
-            'retry_after'=>0,
-            'service_status'=>'indeterminate',
-            'error_status'=>'transport_timeout',
-            'service_error_code'=>'curl_28',
-            'detail'=>'The PeerTube request timed out before a definitive response was received; possible causes include a stalled or insufficient-throughput network path.',
-            'reason'=>'Upload service stopped at an explicit intervention boundary.',
+            'state'=>'upload_indeterminate','failed_at'=>3000,'confirmed_bytes'=>0,
+            'source_bytes'=>1024 * 1024 * 1024,'request_kind'=>'chunk','request_start'=>0,
+            'request_bytes'=>128 * 1024 * 1024,'awvp_error_code'=>'peertube.upload.indeterminate',
+            'http_status'=>0,'retry_after'=>0,'service_status'=>'indeterminate',
+            'error_status'=>'transport_timeout','service_error_code'=>'curl_28',
+            'detail'=>'Synthetic timeout.','reason'=>'Explicit intervention boundary.',
         ),
     ), JSON_UNESCAPED_SLASHES);
     $notification_task = $task(61, Coordinator::TASK_FAILURE_NOTIFY);
     $notification_task['payload_json'] = $notification_payload;
     $tasks = new Task_Repository();
     $coordinator = new Coordinator();
-    $tasks->initial_claims[] = $notification_task;
+    $tasks->scheduled[] = array('at'=>3000,'task'=>$notification_task);
     $coordinator->results[] = array(
         'status'=>'complete','task_id'=>61,'task_type'=>Coordinator::TASK_FAILURE_NOTIFY,
         'repository_status'=>'applied','run_after'=>0,
     );
     $worker = new PeerTube_Task_Worker($tasks, $coordinator, static fn(string $id): ?array => $id === $operation_id ? $operation : null);
-    $notified = $worker->run_drain(3000, static fn(): int => 3000);
+    $notified = $worker->run_drain(3000, static fn(): int => 3000, static function(int $seconds):void{unset($seconds);});
     $assert(PeerTube_Task_Worker::STATUS_ADVANCED === $notified['status'], 'Drain did not complete the durable notification branch.');
-    $assert(1 === $notified['steps'], 'Failure notification should consume exactly one drain step when mail is accepted.');
-    $assert(array(61) === $coordinator->task_ids, 'Drain did not delegate exactly the claimed notification task.');
-    $assert(array() === $tasks->exact_claim_ids, 'Failure notification incorrectly attempted a same-task or handoff reclaim after completion.');
-    $assert(1 === $tasks->claim_next_calls, 'Failure notification drain wandered back into global queue selection.');
-    $assert(3600 === $notified['budget_seconds'], 'Notification drain lost the conservative one-hour process floor.');
+    $assert(1 === $notified['steps'] && array(61) === $coordinator->task_ids, 'Failure notification did not consume exactly one durable boundary.');
 
     $source = (string) file_get_contents(dirname(__DIR__) . '/includes/PeerTube_Task_Worker.php');
-    foreach (array('sleep(', 'usleep(', 'wp_schedule', 'exec(', 'proc_open', 'shell_exec') as $needle) {
-        $assert(! str_contains($source, $needle), 'Drain worker acquired forbidden wait/scheduler/process authority: '.$needle);
+    foreach (array('usleep(', 'wp_schedule', 'exec(', 'proc_open', 'shell_exec') as $needle) {
+        $assert(! str_contains($source, $needle), 'Drain worker acquired forbidden scheduler/process authority: '.$needle);
     }
+    $assert(str_contains($source, "min(\n                    5,"), 'RC9 watcher lost the bounded five-second wait slice.');
+    $assert(str_contains($source, 'next_run_after_of_types'), 'RC9 watcher lost durable future-work observation.');
 
-    fwrite(STDOUT, "PeerTube task worker drain tests passed.\n");
+    fwrite(STDOUT, "PeerTube task worker RC9 drain/watcher tests passed.\n");
 }

@@ -10,12 +10,12 @@ namespace ArgentVideo;
 use Throwable;
 
 /**
- * Detached-process boundary for the reviewed R45 PeerTube task worker.
+ * Detached-process boundary for the PeerTube task watcher.
  *
- * This class is deliberately not registered with WP-Cron or any administrator,
- * REST, AJAX, or browser surface in R45.4a. It performs no PeerTube HTTP work
- * itself: after an advisory type-owned queue probe it can only launch the
- * reviewed bounded-drain WP-CLI consumer in a detached process.
+ * RC9 wakes this launcher when owned durable work is enqueued and also from a
+ * one-minute recovery schedule. It performs no PeerTube HTTP work itself: after
+ * an advisory type-owned queue probe it can only launch the bounded WP-CLI
+ * watcher in a detached process.
  */
 final class PeerTube_Task_Worker_Launcher
 {
@@ -25,6 +25,7 @@ final class PeerTube_Task_Worker_Launcher
     public const STATUS_FAILED = 'failed';
 
     public const LAUNCH_LOCK_SECONDS = 120;
+
 
     private const LAUNCH_LOCK = 'argent_video_processor_peertube_task_launch_lock';
 
@@ -40,6 +41,28 @@ final class PeerTube_Task_Worker_Launcher
 
     public function __construct(private readonly Task_Repository $tasks)
     {
+    }
+
+
+    /** Event-driven wake path for newly-created durable PeerTube work. */
+    public function wake(int $task_id, string $task_type): void
+    {
+        if ($task_id < 1 || ! in_array($task_type, self::TASK_TYPES, true)) {
+            return;
+        }
+        $this->launch();
+    }
+
+    /** One-minute recovery safety net. */
+    public function recover(): void
+    {
+        $this->launch();
+    }
+
+    /** Release the short advisory launch lock after the detached CLI worker exits. */
+    public static function release_launch_lock(): void
+    {
+        delete_transient(self::LAUNCH_LOCK);
     }
 
     /**

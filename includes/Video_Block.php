@@ -47,18 +47,10 @@ final class Video_Block
         if ($attachment_id < 1) {
             return '';
         }
-        $attachment = get_post($attachment_id);
-        $mime = (string) get_post_mime_type($attachment_id);
-        $url = wp_get_attachment_url($attachment_id);
-        if (! is_object($attachment)
-            || 'attachment' !== ($attachment->post_type ?? null)
-            || 'trash' === ($attachment->post_status ?? null)
-            || ! str_starts_with($mime, 'video/')
-            || ! is_string($url)
-            || '' === $url) {
-            return '';
-        }
 
+        // Verified PeerTube authority is intentionally resolved before touching
+        // local source bytes. A retention policy may have removed the physical
+        // WordPress source after cutover while preserving the attachment record.
         $embed_url = null !== $this->serving ? $this->serving->peertube_embed_url($video_id) : '';
         if ('' !== $embed_url) {
             $title = get_the_title($video_id);
@@ -69,6 +61,17 @@ final class Video_Block
                 esc_attr($title)
             );
         } else {
+            $attachment = get_post($attachment_id);
+            $mime = (string) get_post_mime_type($attachment_id);
+            $url = wp_get_attachment_url($attachment_id);
+            if (! is_object($attachment)
+                || 'attachment' !== ($attachment->post_type ?? null)
+                || 'trash' === ($attachment->post_status ?? null)
+                || ! str_starts_with($mime, 'video/')
+                || ! is_string($url)
+                || '' === $url) {
+                return '';
+            }
             // Missing, stale, or uncertain remote serving evidence always keeps
             // local WordPress/AWVP playback authoritative. The AWVP block owns
             // a native media element so hls.js never competes with MediaElement.

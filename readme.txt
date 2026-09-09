@@ -181,7 +181,7 @@ The existing settings keys, queue table, attachment metadata, hook names, cron
 identifiers, Settings page slug, and `wp argent-video` command are retained for
 upgrade compatibility.
 
-This Forgejo release-candidate package identifies itself as `2.0.0-rc8` in the
+This Forgejo release-candidate package identifies itself as `2.0.0-rc9` in the
 plugin header while `Stable tag: 1.0.0` deliberately continues to identify the
 public WordPress.org release. RC packages are not published to WordPress.org SVN.
 The Stable tag moves to `2.0.0` only when the final release is promoted.
@@ -191,6 +191,9 @@ Administrators upgrading from version 0.2.3 should use the normal WordPress
 plugin-update workflow and confirm the plugin remains active.
 
 == Upgrade Notice ==
+
+= 2.0.0-rc9 =
+Ninth controlled 2.0 release candidate. Makes PeerTube work event-driven with bounded recovery, publishes the original source without redundant FFmpeg, verifies publication state before/after mutation, and adds human-readable operational status. WordPress.org remains on 1.0.0 until final 2.0.0.
 
 = 2.0.0-rc8 =
 Eighth controlled 2.0 release candidate. Prevents WordPress revisions/autosaves or copied non-anchor blocks from revoking PeerTube publication authority, and alphabetizes PeerTube category choices. WordPress.org remains on 1.0.0 until final 2.0.0.
@@ -238,6 +241,13 @@ Renames the public plugin and package to ArgentWolf Video Processor and prepares
 the project for WordPress.org review while retaining existing data identifiers.
 
 == Changelog ==
+
+= 2.0.0-rc9 =
+* Preserve canonical RC8 source `57ba6de225fee3bca200c2faaaf214086eaa83c7`, tree `49ffd65ccffdecc850bce89a4d7ff1b538391951`, package SHA-256 `943b729de982c48a8019cf0dddda5a746e59d0d5be1ab0900784592981d215dd` as immutable qualification/live-test evidence.
+* Wake detached PeerTube workers from durable task creation, keep a one-minute recovery-only schedule, recheck future work in short watcher slices, and bound incomplete-publication recovery to 24-hour windows inside a 168-hour hard cap with explicit Resume.
+* Stage the confined WordPress original for PeerTube with its validated video MIME type, cancel redundant local FFmpeg once PeerTube owns the destination, render verified PeerTube authority before requiring local bytes, and clean only AWVP-generated/staging derivatives after verified cutover.
+* Omit blank optional PeerTube publication fields, verify full remote publication state before/after consequential updates, avoid replay when the desired state is already proven, and keep uncertain mutations held.
+* Add Overview / Status & Needs Attention with Media Library/post/author identity and upload progress; document `ARGENTWOLF_VIDEO_PROCESSOR_PEERTUBE_PRIVATE_ORIGINS` while retaining the legacy RC alias.
 
 = 2.0.0-rc8 =
 * Preserve canonical RC7 package SHA-256 `89bf6d73eb0e6466eb587eabbb01d822d980e1ecd84492475033aa7c27b2e10a` after its exact-package matrix and live web-UI player/finalizer gates passed.

@@ -205,6 +205,30 @@ final class Job_Repository
         return 1 === $updated;
     }
 
+    public function cancel_claimed(int $job_id, string $lock_token): bool
+    {
+        if ($job_id < 1 || 1 !== preg_match('/\A[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\z/D', $lock_token)) {
+            return false;
+        }
+
+        global $wpdb;
+        $updated = $wpdb->query(
+            $wpdb->prepare(
+                "UPDATE %i
+                 SET status = 'cancelled', lock_token = NULL, locked_at = NULL,
+                     completed_at = %s, error_message = NULL, updated_at = %s
+                 WHERE id = %d AND status = 'processing' AND lock_token = %s",
+                $this->table,
+                current_time('mysql', true),
+                current_time('mysql', true),
+                $job_id,
+                $lock_token
+            )
+        );
+
+        return 1 === $updated;
+    }
+
     public function delete_by_attachment(int $attachment_id): void
     {
         global $wpdb;

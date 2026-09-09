@@ -1234,12 +1234,14 @@ process loss after WordPress accepts the message but before the task completion
 commits can cause at-least-once redelivery. The message therefore includes the
 stable upload operation ID so duplicate diagnostic mail remains recognizable.
 
-R45.5 adds no new task status, table, or scheduler state. It reuses the existing
-five-minute AWVP recurring event as a wake-up for the detached PeerTube launcher.
-The launcher's repository probe considers only due queued rows or stale processing
-rows of the reviewed PeerTube task types; future `run_after` rows therefore do
-not cause useless worker processes. The probe remains advisory and the detached
-worker's lock-token claim/recovery remains authoritative.
+R45.5 added no new task status or table and originally reused the five-minute AWVP
+recurring event as a PeerTube wake-up. RC9 still adds no PeerTube scheduler table/state:
+`Task_Repository::enqueue()` emits a local event-driven wake for owned durable rows, and
+a separate one-minute WordPress event is only the missed-wake/incomplete-lifecycle
+recovery safety net. The five-minute AWVP event remains local-processing-only.
+Launcher probes remain advisory and the detached worker's lock-token claim/recovery is
+authoritative. Future `run_after` rows are observed by the bounded drain watcher in
+unclaimed slices of at most five seconds rather than by holding a task lock.
 
 ### R46.3b block binding and serialized identity
 
