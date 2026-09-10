@@ -188,6 +188,42 @@ final class Job_Repository
         );
     }
 
+    /**
+     * Remove a routing-race job that has never been claimed by a worker.
+     * This is not an operator cancellation and therefore must not contribute
+     * to the Cancelled problem count.
+     */
+    public function discard_unstarted(int $attachment_id): bool
+    {
+        global $wpdb;
+        $deleted = $wpdb->query(
+            $wpdb->prepare(
+                "DELETE FROM %i WHERE attachment_id = %d AND status = 'queued' AND started_at IS NULL",
+                $this->table,
+                $attachment_id
+            )
+        );
+        return 1 === $deleted;
+    }
+
+    /** Remove a just-claimed routing-race row before FFmpeg execution starts. */
+    public function discard_claimed(int $job_id, string $lock_token): bool
+    {
+        if ($job_id < 1 || 1 !== preg_match('/\A[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\z/D', $lock_token)) {
+            return false;
+        }
+        global $wpdb;
+        $deleted = $wpdb->query(
+            $wpdb->prepare(
+                "DELETE FROM %i WHERE id = %d AND status = 'processing' AND lock_token = %s",
+                $this->table,
+                $job_id,
+                $lock_token
+            )
+        );
+        return 1 === $deleted;
+    }
+
     public function cancel(int $attachment_id): bool
     {
         global $wpdb;

@@ -503,7 +503,12 @@ final class Task_Repository
         }
 
         if ((int) ($current['attempts'] ?? 0) >= (int) ($current['max_attempts'] ?? 0)) {
-            $result = $this->fail($task_id, $lock_token, 'Task attempt limit reached.', $now);
+            $reason = self::bounded_error($message);
+            $exhausted = 'Task attempt limit reached.';
+            if ('' !== trim($reason)) {
+                $exhausted .= ' Last reason: ' . $reason;
+            }
+            $result = $this->fail($task_id, $lock_token, $exhausted, $now);
             return self::APPLIED === $result ? self::EXHAUSTED : $result;
         }
 
@@ -521,6 +526,55 @@ final class Task_Repository
                 'updated_at' => $timestamp,
             ),
             array('%s','%s','%s','%s','%s','%s','%s')
+        );
+    }
+
+    /**
+     * Return a claimed task to the queue without consuming its execution-attempt
+     * budget. Use only for a dependency wait/deferral where task work itself did
+     * not fail. The claim increment is rolled back under the same lock fence.
+     */
+    public function defer(
+        int $task_id,
+        string $lock_token,
+        int $run_after,
+        string $message,
+        int $now
+    ): string {
+        if (
+            $task_id < 1
+            || ! self::valid_lock_token($lock_token)
+            || $run_after < $now
+            || $now < 1
+        ) {
+            return self::CONFLICT;
+        }
+
+        $current = $this->find($task_id);
+        if (
+            ! is_array($current)
+            || self::STATUS_PROCESSING !== ($current['status'] ?? null)
+            || ! hash_equals($lock_token, (string) ($current['lock_token'] ?? ''))
+        ) {
+            return self::CONFLICT;
+        }
+
+        $attempts = max(0, ((int) ($current['attempts'] ?? 0)) - 1);
+        $timestamp = gmdate('Y-m-d H:i:s', $now);
+        return $this->locked_update(
+            $task_id,
+            $lock_token,
+            array(
+                'status' => self::STATUS_QUEUED,
+                'run_after' => gmdate('Y-m-d H:i:s', $run_after),
+                'attempts' => $attempts,
+                'lock_token' => null,
+                'locked_at' => null,
+                'completed_at' => null,
+                'error_message' => self::bounded_error($message),
+                'updated_at' => $timestamp,
+            ),
+            array('%s','%s','%d','%s','%s','%s','%s','%s')
         );
     }
 

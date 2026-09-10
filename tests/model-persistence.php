@@ -299,21 +299,29 @@ $GLOBALS['wpdb'] = new class {
 
         if (str_starts_with($query, 'TEST_COLUMNS:')) {
             $table = substr($query, strlen('TEST_COLUMNS:'));
-            $columns = str_ends_with($table, 'argent_video_remote_assets')
-                ? array(
+            if (str_ends_with($table, 'argent_video_remote_assets')) {
+                $columns = array(
                     'id', 'video_post_id', 'backend_id', 'channel_id', 'remote_id',
                     'role', 'state', 'desired_privacy', 'actual_privacy',
                     'remote_processing_state', 'remote_url', 'embed_url',
                     'last_synced_at', 'last_verified_at', 'error_code',
                     'error_message', 'created_at', 'updated_at',
-                )
-                : array(
+                );
+            } elseif (str_ends_with($table, 'argent_video_tasks')) {
+                $columns = array(
                     'id', 'task_type', 'video_post_id', 'remote_asset_id',
                     'backend_id', 'idempotency_key', 'status', 'priority',
                     'run_after', 'attempts', 'max_attempts', 'lock_token',
                     'locked_at', 'started_at', 'completed_at', 'payload_json',
                     'error_message', 'created_at', 'updated_at',
                 );
+            } else {
+                $columns = array(
+                    'id', 'video_post_id', 'task_id', 'operation_id', 'remote_asset_id',
+                    'backend_id', 'pipeline_step', 'event_code', 'severity', 'http_status',
+                    'message', 'automatic_action', 'operator_action', 'context_json', 'created_at',
+                );
+            }
 
             return array_map(
                 static fn (string $field): array => array('Field' => $field),
@@ -323,16 +331,17 @@ $GLOBALS['wpdb'] = new class {
 
         if (str_starts_with($query, 'TEST_INDEXES:')) {
             $table = substr($query, strlen('TEST_INDEXES:'));
-            $definitions = str_ends_with($table, 'argent_video_remote_assets')
-                ? array(
+            if (str_ends_with($table, 'argent_video_remote_assets')) {
+                $definitions = array(
                     'PRIMARY' => array(0, array('id')),
                     'backend_remote' => array(0, array('backend_id', 'remote_id')),
                     'video_role' => array(1, array('video_post_id', 'role')),
                     'video_state' => array(1, array('video_post_id', 'state')),
                     'backend_state' => array(1, array('backend_id', 'state')),
                     'state_synced' => array(1, array('state', 'last_synced_at')),
-                )
-                : array(
+                );
+            } elseif (str_ends_with($table, 'argent_video_tasks')) {
+                $definitions = array(
                     'PRIMARY' => array(0, array('id')),
                     'idempotency_key' => array(0, array('idempotency_key')),
                     'status_run' => array(1, array('status', 'run_after', 'priority')),
@@ -340,6 +349,15 @@ $GLOBALS['wpdb'] = new class {
                     'video_type' => array(1, array('video_post_id', 'task_type')),
                     'backend_status' => array(1, array('backend_id', 'status')),
                 );
+            } else {
+                $definitions = array(
+                    'PRIMARY' => array(0, array('id')),
+                    'video_created' => array(1, array('video_post_id', 'created_at')),
+                    'task_created' => array(1, array('task_id', 'created_at')),
+                    'backend_created' => array(1, array('backend_id', 'created_at')),
+                    'severity_created' => array(1, array('severity', 'created_at')),
+                );
+            }
 
             if ($this->omit_backend_remote_index) {
                 unset($definitions['backend_remote']);
@@ -364,11 +382,13 @@ $GLOBALS['wpdb'] = new class {
 };
 
 $queries = Model_Activator::schema_queries();
-$assert(2 === count($queries), 'The 2.0 model must define exactly two supplemental tables in this tranche.');
+$assert(3 === count($queries), 'The RC10 model must define remote assets, tasks, and operator events.');
 
 $joined = implode("\n", $queries);
 $assert(str_contains($joined, 'CREATE TABLE wp_test_argent_video_remote_assets'), 'Remote-assets table missing.');
 $assert(str_contains($joined, 'CREATE TABLE wp_test_argent_video_tasks'), 'Task table missing.');
+$assert(str_contains($joined, 'CREATE TABLE wp_test_argent_video_events'), 'Operator-event table missing.');
+$assert('2' === Model_Activator::DB_VERSION, 'RC10 model schema version must be 2.');
 $assert(! str_contains($joined, 'argent_video_jobs'), '2.0 schema must not redefine the legacy queue table.');
 $assert(str_contains($joined, 'PRIMARY KEY  (id)'), 'dbDelta-compatible PRIMARY KEY formatting missing.');
 $assert(str_contains($joined, 'remote_id varchar(127) DEFAULT NULL'), 'Remote ID length must preserve the conservative composite-index budget.');
@@ -389,7 +409,7 @@ $GLOBALS['argent_video_test_dbdelta'] = array();
 $GLOBALS['argent_video_test_option_updates'] = array();
 $GLOBALS['wpdb']->omit_backend_remote_index = false;
 $assert(Model_Activator::install(), 'Complete schema should be accepted after dbDelta.');
-$assert(2 === count($GLOBALS['argent_video_test_dbdelta']), 'Installer should submit exactly two dbDelta queries.');
+$assert(3 === count($GLOBALS['argent_video_test_dbdelta']), 'Installer should submit exactly three dbDelta queries.');
 $assert(
     array(
         Model_Activator::DB_OPTION,

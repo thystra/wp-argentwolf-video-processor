@@ -544,14 +544,30 @@
   incomplete work needs bounded recovery/Resume and recognizable administrator status;
   verified remote serving must survive allowed local-source removal and clean only
   generated/staging derivatives automatically.
-- [ ] Advance the corrected source to `2.0.0-rc9`, obtain green Forgejo CI, build one
-  canonical RC9 package, and rerun Plugin Check plus the complete exact-package
-  clean-install/public-1.0.0-upgrade matrix and disposable `ubuntuzfstest` gate.
-- [ ] Install canonical RC9 through the WordPress web UI on `wolfandraven.blog` and
-  resume the preserved live tests. Prove event-driven pickup, original-source resumable
-  upload, remote processing, read-after-write publication verification, serving cutover,
-  non-autoplay PeerTube playback, bounded recovery/Overview behavior, and verified
-  derivative cleanup. Leave historical RC6/RC8 indeterminate evidence untouched.
+- [x] Advance to canonical `2.0.0-rc9`. Source commits
+  `878304ba8cbaf24e5017263a2f7f5c6a79f6fbfb` and
+  `854014d03b4fd55940ab6e9bc49fa2b13035c3ba` produced the immutable RC9 package
+  SHA-256 `d28b56e9eaf0ca482559244753677eca10ec0bb4a7bc45e382c42cefc8239c23`;
+  exact-package release validation and Plugin Check passed with only the expected
+  prerelease Stable Tag condition.
+- [x] Install canonical RC9 through the WordPress web UI on `wolfandraven.blog` and
+  resume preserved live tests. RC9 proved event-driven PeerTube dispatch, original
+  Media Library source upload authority, no-blind-replay safety, and fail-closed local
+  serving, while live provider behavior exposed the RC10 credential/catalog, task
+  deferral, diagnostics, tag/embed verification, routing, legacy migration, retention,
+  and responsive-player requirements now tracked in the RC9 -> RC10 handoff roadmap.
+- [x] Complete `2.0.0-rc10` source qualification from immutable RC9 commit `854014d`:
+  require DB schema version 2 with `argent_video_events`, Test-5 local-only recovery,
+  route-before-FFmpeg behavior, explicit legacy 1.x adoption/runtime serving bridge,
+  site-wide archive-of-record policy, responsive packaged CSS, and the RC10 operator
+  diagnostics/terminology regressions.
+- [ ] Push the final RC10 source commit to authoritative Forgejo and require green CI;
+  take the canonical `2.0.0-rc10` ZIP from that Forgejo run, freeze/hash its bytes, and
+  run Plugin Check plus the complete exact-package clean/public-1.0.0-upgrade matrix.
+- [ ] Install the canonical qualified RC10 package through the WordPress web UI and
+  prove Test 5 self-heals to verified PeerTube serving without another upload or
+  publication PUT; then run one fresh PeerTube-bound video and one representative
+  legacy 1.x discovery/adoption/migration smoke test before considering stable 2.0.
 - [ ] If defects require code changes, increment `2.0.0-rcN`, rebuild, and rerun
   the affected gates; never mutate or reuse an existing RC version/tag.
 - [ ] Freeze the last accepted RC and promote to `2.0.0` with release/version

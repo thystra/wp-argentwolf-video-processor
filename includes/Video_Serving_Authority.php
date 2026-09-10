@@ -151,11 +151,12 @@ final class Video_Serving_Authority
             return '';
         }
         $parts = wp_parse_url($value);
+        $path = is_string($parts['path'] ?? null) ? (string) $parts['path'] : '';
         if (! is_array($parts)
             || ! in_array($parts['scheme'] ?? '', array('https','http'), true)
             || ! is_string($parts['host'] ?? null) || '' === $parts['host']
             || isset($parts['user']) || isset($parts['pass']) || isset($parts['query']) || isset($parts['fragment'])
-            || ('/videos/embed/' . $uuid) !== ($parts['path'] ?? '')) {
+            || 1 !== preg_match('#^/videos/embed/[A-Za-z0-9_-]{1,191}$#D', $path)) {
             return '';
         }
         $origin = (string) $parts['scheme'] . '://' . (string) $parts['host'];

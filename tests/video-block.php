@@ -101,6 +101,7 @@ $assert(is_array($metadata), 'Canonical AWVP block.json is not valid JSON.');
 $assert(Video_Block::NAME === ($metadata['name'] ?? null), 'block.json name drifted from PHP registration identity.');
 $assert(array('videoId'=>array('type'=>'integer','default'=>0)) === ($metadata['attributes'] ?? null), 'Serialized block acquired state beyond stable AWVP Video ID.');
 $assert('file:./index.js' === ($metadata['editorScript'] ?? null), 'AWVP block editorScript metadata drifted.');
+$assert('file:./style.css' === ($metadata['style'] ?? null), 'AWVP block frontend style metadata drifted.');
 $asset = require dirname(__DIR__) . '/blocks/video/index.asset.php';
 $assert(is_array($asset), 'AWVP block dependency manifest is invalid.');
 $assert(
@@ -109,6 +110,10 @@ $assert(
 );
 $expected_script_version = substr(hash_file('sha256', dirname(__DIR__) . '/blocks/video/index.js'), 0, 16);
 $assert($expected_script_version === ($asset['version'] ?? null), 'AWVP block script version does not match shipped editor bytes.');
+$css = (string) file_get_contents(dirname(__DIR__) . '/blocks/video/style.css');
+$assert(str_contains($css, '.wp-block-argentwolf-video-processor-video video') && str_contains($css, 'max-width: 100%') && str_contains($css, 'height: auto'), 'AWVP local video stylesheet does not constrain native playback to the content container.');
+$assert(str_contains($css, '.awvp-peertube-embed') && str_contains($css, 'aspect-ratio: 16 / 9') && str_contains($css, '.awvp-peertube-embed iframe') && str_contains($css, 'height: 100%'), 'AWVP PeerTube embed stylesheet is not responsively contained.');
+
 
 $js = (string) file_get_contents(dirname(__DIR__) . '/blocks/video/index.js');
 $assert(str_contains($js, "setAttributes({ videoId: Number(response.video.id) })"), 'Editor does not persist stable AWVP Video ID after binding.');
@@ -151,5 +156,6 @@ $assert(str_contains($plugin, "add_action('rest_api_init', array(\$video_block_e
 $assert(str_contains($plugin, "add_action('rest_api_init', array(\$peertube_publication_editor_rest, 'register'))"), 'PeerTube publication editor REST boundary is not registered from Plugin boot.');
 $assert(str_contains($plugin, "\$editorial_publish_gate->register();"), 'Editorial publication gate is not registered from Plugin boot.');
 $assert(str_contains($build, 'rsync -a "${ROOT_DIR}/blocks/" "${STAGE_DIR}/blocks/"'), 'Release builder does not ship Gutenberg block assets.');
+$assert(str_contains($build, 'style.css'), 'Release builder does not explicitly require the frontend block stylesheet in the canonical ZIP.');
 
 fwrite(STDOUT, "R46 dynamic AWVP Video block tests passed.\n");

@@ -36,7 +36,7 @@ final class Bulk_Queue
             $job = $this->jobs->find_by_attachment($attachment_id);
             if (is_array($job) && in_array((string) $job['status'], array('queued', 'processing'), true)) {
                 $summary['active']++;
-            } elseif ($this->smart_profile($outputs) !== null) {
+            } elseif ($this->queue->local_processing_allowed($attachment_id) && $this->smart_profile($outputs) !== null) {
                 $summary['smart_candidates']++;
             }
         }
@@ -56,6 +56,10 @@ final class Bulk_Queue
         foreach ($this->attachment_ids($after, $through, $limit) as $attachment_id) {
             $job = $this->jobs->find_by_attachment($attachment_id);
             if (is_array($job) && in_array((string) $job['status'], array('queued', 'processing'), true)) {
+                $result['skipped']++;
+                continue;
+            }
+            if (! $this->queue->local_processing_allowed($attachment_id)) {
                 $result['skipped']++;
                 continue;
             }

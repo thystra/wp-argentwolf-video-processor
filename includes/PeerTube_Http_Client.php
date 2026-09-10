@@ -399,7 +399,7 @@ final class PeerTube_Http_Client
                     throw new InvalidArgumentException('PeerTube publication array field is outside the reviewed contract.');
                 }
                 foreach ($value as $item) {
-                    if (! self::safe_request_value($item, 128, false)) {
+                    if (! self::safe_request_value($item, 128, true)) {
                         throw new InvalidArgumentException('PeerTube publication tag is outside the reviewed contract.');
                     }
                 }

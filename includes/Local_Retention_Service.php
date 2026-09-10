@@ -21,7 +21,28 @@ final class Local_Retention_Service
     private const MAX_ATTEMPTS=5;
     private const MAX_ATTACHMENT_REFERENCES=20;
 
-    public function __construct(private readonly Task_Repository $tasks,private readonly Video_Serving_Resolver $serving,private readonly Job_Repository $jobs){}
+    public function __construct(private readonly Task_Repository $tasks,private readonly Video_Serving_Resolver $serving,private readonly Job_Repository $jobs,private readonly ?Archive_Of_Record_Policy_Store $archive_policy=null){}
+
+    /**
+     * Production administrator path: derive source-retention authority from the
+     * site-wide archive-of-record policy rather than asking on every video.
+     *
+     * @return array{status:string,task_id:int,eligible_at:int}
+     */
+    public function configure_for_site_policy(int $video_id,string $mode,int $user_id,int $now):array
+    {
+        if(null===$this->archive_policy)return self::schedule_result(self::REFUSED);
+        $grace=Local_Retention_Policy::MODE_KEEP===$mode?0:$this->archive_policy->grace_days();
+        if(Local_Retention_Policy::MODE_DELETE_ALL===$mode){
+            if(!$this->archive_policy->source_deletion_allowed())return self::schedule_result(self::REFUSED);
+            $master='backend_source';
+        }else{
+            $master=Video_Meta::sanitize_master_authority(get_post_meta($video_id,Video_Meta::MASTER_AUTHORITY,true));
+            if(!in_array($master,array('wordpress_source','backend_source','external_archive'),true))$master='wordpress_source';
+            if($this->archive_policy->wordpress_is_archive())$master='wordpress_source';
+        }
+        return $this->configure($video_id,$mode,$grace,$master,$user_id,$now);
+    }
 
     /** @return array{status:string,task_id:int,eligible_at:int} */
     public function configure(int $video_id,string $mode,int $grace_days,string $master_authority,int $user_id,int $now):array
@@ -33,6 +54,7 @@ final class Local_Retention_Service
         $prior_execution=metadata_exists('post',$video_id,Video_Meta::LOCAL_RETENTION_EXECUTION)?Local_Retention_Execution::sanitize(get_post_meta($video_id,Video_Meta::LOCAL_RETENTION_EXECUTION,true)):array();
         if('complete'===Video_Meta::sanitize_cleanup_state(get_post_meta($video_id,Video_Meta::CLEANUP_STATE,true))&&array()!==$prior_execution&&Local_Retention_Policy::MODE_DELETE_ALL===($prior_execution['mode']??null))return self::schedule_result(self::REFUSED);
         $policy=Local_Retention_Policy::create($mode,$grace_days,$user_id,$now);if(array()===$policy)return self::schedule_result(self::REFUSED);
+        if(Local_Retention_Policy::deletes_source($policy)&&null!==$this->archive_policy&&!$this->archive_policy->source_deletion_allowed())return self::schedule_result(self::REFUSED);
         if(Local_Retention_Policy::deletes_source($policy)&&!in_array($master_authority,array('backend_source','external_archive'),true))return self::schedule_result(self::REFUSED);
         update_post_meta($video_id,Video_Meta::MASTER_AUTHORITY,$master_authority);
         update_post_meta($video_id,Video_Meta::LOCAL_RETENTION_POLICY,$policy);
@@ -51,6 +73,7 @@ final class Local_Retention_Service
         $policy=Local_Retention_Policy::sanitize(get_post_meta($video_id,Video_Meta::LOCAL_RETENTION_POLICY,true));
         if(array()===$policy||!Local_Retention_Policy::destructive($policy))return self::schedule_result(self::REFUSED);
         $master=Video_Meta::sanitize_master_authority(get_post_meta($video_id,Video_Meta::MASTER_AUTHORITY,true));
+        if(Local_Retention_Policy::deletes_source($policy)&&null!==$this->archive_policy&&!$this->archive_policy->source_deletion_allowed())return self::schedule_result(self::REFUSED);
         if(Local_Retention_Policy::deletes_source($policy)&&!in_array($master,array('backend_source','external_archive'),true))return self::schedule_result(self::REFUSED);
         $state=Video_Meta::sanitize_source_state(get_post_meta($video_id,Video_Meta::SOURCE_STATE,true));
         if(!in_array($state,array('present','verified_remote'),true))return self::schedule_result(self::REFUSED);
@@ -58,7 +81,7 @@ final class Local_Retention_Service
         if($attachment_id<1||!self::video_context_valid($video_id,$attachment_id)||!self::attachment_exclusive_to_video($attachment_id,$video_id))return self::schedule_result(self::REFUSED);
         if($this->local_job_active($attachment_id))return self::schedule_result(self::REFUSED);
         $authority=Video_Serving_Authority::sanitize(get_post_meta($video_id,Video_Meta::SERVING_AUTHORITY,true));
-        if(array()===$authority||''===$this->serving->peertube_embed_url($video_id))return self::schedule_result(self::REFUSED);
+        if(array()===$authority||!$this->required_remote_publications_verified($video_id))return self::schedule_result(self::REFUSED);
         $source=Local_Retention_Policy::deletes_source($policy)?WordPress_Source_File::capture($attachment_id):array();
         if(Local_Retention_Policy::deletes_source($policy)&&array()===$source)return self::schedule_result(self::REFUSED);
         $baseline=max((int)$policy['confirmed_at'],(int)$authority['verified_at']);$grace=(int)$policy['grace_days']*86400;
@@ -91,9 +114,10 @@ final class Local_Retention_Service
         if(!self::video_context_valid($video,(int)$execution['attachment_id'])||!self::attachment_exclusive_to_video((int)$execution['attachment_id'],$video))return $this->block($id,$lock,$execution,$now,'AWVP Video or attachment ownership changed before cleanup.');
         if($now<(int)$execution['eligible_at'])return self::worker_result(self::STATUS_REQUEUED,$id,$type,$this->tasks->reschedule($id,$lock,(int)$execution['eligible_at'],'Retention grace period has not elapsed.',$now),(int)$execution['eligible_at'],'waiting');
         $master=Video_Meta::sanitize_master_authority(get_post_meta($video,Video_Meta::MASTER_AUTHORITY,true));
+        if(Local_Retention_Policy::deletes_source($policy)&&null!==$this->archive_policy&&!$this->archive_policy->source_deletion_allowed())return $this->block($id,$lock,$execution,$now,'WordPress is now the archive of record; the original source was kept.');
         if(Local_Retention_Policy::deletes_source($policy)&&!in_array($master,array('backend_source','external_archive'),true))return $this->block($id,$lock,$execution,$now,'Master authority no longer permits source deletion.');
         $authority=Video_Serving_Authority::sanitize(get_post_meta($video,Video_Meta::SERVING_AUTHORITY,true));
-        if(array()===$authority||!hash_equals((string)$execution['authority_sha256'],Local_Retention_Execution::authority_sha256($authority))||''===$this->serving->peertube_embed_url($video))return $this->block($id,$lock,$execution,$now,'Verified remote serving authority changed before cleanup.');
+        if(array()===$authority||!hash_equals((string)$execution['authority_sha256'],Local_Retention_Execution::authority_sha256($authority))||!$this->required_remote_publications_verified($video))return $this->block($id,$lock,$execution,$now,'Verified remote serving authority changed before cleanup.');
         if($this->local_job_active((int)$execution['attachment_id']))return $this->block($id,$lock,$execution,$now,'A local processing job became active before cleanup.');
         if(Local_Retention_Policy::deletes_source($policy)&&Local_Retention_Execution::STATUS_RUNNING!==$execution['status']&&!WordPress_Source_File::matches((int)$execution['attachment_id'],$execution['source']))return $this->block($id,$lock,$execution,$now,'WordPress source identity changed before cleanup.');
         if(Local_Retention_Execution::STATUS_COMPLETE===$execution['status'])return self::worker_result(self::STATUS_COMPLETE,$id,$type,$this->tasks->complete($id,$lock,$now),0,'already_complete');
@@ -107,7 +131,7 @@ final class Local_Retention_Service
             if(metadata_exists('post',(int)$running['attachment_id'],'_argent_video_outputs'))throw new \RuntimeException('Managed output metadata could not be cleared.');
             if(Local_Retention_Policy::deletes_source($policy)){
                 $authority2=Video_Serving_Authority::sanitize(get_post_meta($video,Video_Meta::SERVING_AUTHORITY,true));
-                if(array()===$authority2||!hash_equals((string)$running['authority_sha256'],Local_Retention_Execution::authority_sha256($authority2))||''===$this->serving->peertube_embed_url($video))return $this->block($id,$lock,$running,$now,'Serving authority changed immediately before physical source deletion.');
+                if(array()===$authority2||!hash_equals((string)$running['authority_sha256'],Local_Retention_Execution::authority_sha256($authority2))||!$this->required_remote_publications_verified($video))return $this->block($id,$lock,$running,$now,'Serving authority changed immediately before physical source deletion.');
                 $already_absent=Local_Retention_Execution::STATUS_RUNNING===$execution['status']&&WordPress_Source_File::absent((int)$running['attachment_id'],$running['source']);
                 if(!$already_absent&&!WordPress_Source_File::delete((int)$running['attachment_id'],$running['source']))throw new \RuntimeException('Physical WordPress source deletion could not be positively verified.');
                 $attachment=get_post((int)$running['attachment_id']);if(!is_object($attachment)||'attachment'!==($attachment->post_type??null))throw new \RuntimeException('WordPress attachment identity did not survive physical cleanup.');
@@ -165,6 +189,13 @@ final class Local_Retention_Service
         if(!is_array($ids))return false;$found=array();foreach($ids as $raw){$id=Video_Meta::sanitize_positive_id($raw);if($id>0)$found[$id]=true;}return 1===count($found)&&isset($found[$video_id]);
     }
     private function local_job_active(int $attachment_id):bool{$job=$attachment_id>0?$this->jobs->find_by_attachment($attachment_id):null;return is_array($job)&&in_array((string)($job['status']??''),array('queued','processing'),true);}
+    private function required_remote_publications_verified(int $video_id):bool
+    {
+        // RC10 currently has one required PeerTube publication per Video. Keep
+        // this gate explicit so future multi-server publication can expand the
+        // required set without weakening the retention deletion invariant.
+        return $video_id>0&&''!==$this->serving->peertube_embed_url($video_id);
+    }
     private function block(int $task_id,string $lock,array $execution,int $now,string $reason):array{$blocked=Local_Retention_Execution::transition($execution,Local_Retention_Execution::STATUS_BLOCKED,$now,$reason);if(array()!==$blocked)$this->save_execution((int)$execution['video_id'],$blocked,'blocked');update_post_meta((int)$execution['video_id'],Video_Meta::CLEANUP_STATE,'blocked');return self::worker_result(self::STATUS_COMPLETE,$task_id,self::TASK_TYPE,$this->tasks->complete($task_id,$lock,$now),0,'blocked_keep');}
     private function save_execution(int $video,array $record,string $cleanup):bool{update_post_meta($video,Video_Meta::LOCAL_RETENTION_EXECUTION,$record);update_post_meta($video,Video_Meta::CLEANUP_STATE,$cleanup);return $record===Local_Retention_Execution::sanitize(get_post_meta($video,Video_Meta::LOCAL_RETENTION_EXECUTION,true));}
     /** @return array{version:int,policy_sha256:string,execution_sha256:string}|null */

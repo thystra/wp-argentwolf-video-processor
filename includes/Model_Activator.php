@@ -9,11 +9,12 @@ namespace ArgentVideo;
 
 final class Model_Activator
 {
-    public const DB_VERSION = '1';
+    public const DB_VERSION = '2';
     public const DB_OPTION = 'argent_video_processor_model_db_version';
     public const DB_AUTOLOAD = true;
     public const REMOTE_ASSETS_TABLE = 'argent_video_remote_assets';
     public const TASKS_TABLE = 'argent_video_tasks';
+    public const EVENTS_TABLE = 'argent_video_events';
 
     public static function install(): bool
     {
@@ -54,6 +55,7 @@ final class Model_Activator
         $charset_collate = $wpdb->get_charset_collate();
         $remote_assets = $wpdb->prefix . self::REMOTE_ASSETS_TABLE;
         $tasks = $wpdb->prefix . self::TASKS_TABLE;
+        $events = $wpdb->prefix . self::EVENTS_TABLE;
 
         $remote_sql = "CREATE TABLE {$remote_assets} (
             id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
@@ -110,7 +112,30 @@ final class Model_Activator
             KEY backend_status (backend_id, status)
         ) {$charset_collate};";
 
-        return array($remote_sql, $task_sql);
+        $event_sql = "CREATE TABLE {$events} (
+            id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+            video_post_id bigint(20) unsigned NOT NULL,
+            task_id bigint(20) unsigned DEFAULT NULL,
+            operation_id varchar(96) DEFAULT NULL,
+            remote_asset_id bigint(20) unsigned DEFAULT NULL,
+            backend_id varchar(64) DEFAULT NULL,
+            pipeline_step tinyint(3) unsigned NOT NULL,
+            event_code varchar(64) NOT NULL,
+            severity varchar(16) NOT NULL DEFAULT 'info',
+            http_status smallint(5) unsigned DEFAULT NULL,
+            message text NOT NULL,
+            automatic_action text DEFAULT NULL,
+            operator_action text DEFAULT NULL,
+            context_json text DEFAULT NULL,
+            created_at datetime NOT NULL,
+            PRIMARY KEY  (id),
+            KEY video_created (video_post_id, created_at),
+            KEY task_created (task_id, created_at),
+            KEY backend_created (backend_id, created_at),
+            KEY severity_created (severity, created_at)
+        ) {$charset_collate};";
+
+        return array($remote_sql, $task_sql, $event_sql);
     }
 
     public static function schema_is_current(): bool
@@ -297,6 +322,20 @@ final class Model_Activator
                         'unique'  => false,
                         'columns' => array('backend_id', 'status'),
                     ),
+                ),
+            ),
+            $wpdb->prefix . self::EVENTS_TABLE => array(
+                'columns' => array(
+                    'id','video_post_id','task_id','operation_id','remote_asset_id','backend_id',
+                    'pipeline_step','event_code','severity','http_status','message','automatic_action',
+                    'operator_action','context_json','created_at',
+                ),
+                'indexes' => array(
+                    'PRIMARY' => array('unique' => true, 'columns' => array('id')),
+                    'video_created' => array('unique' => false, 'columns' => array('video_post_id','created_at')),
+                    'task_created' => array('unique' => false, 'columns' => array('task_id','created_at')),
+                    'backend_created' => array('unique' => false, 'columns' => array('backend_id','created_at')),
+                    'severity_created' => array('unique' => false, 'columns' => array('severity','created_at')),
                 ),
             ),
         );

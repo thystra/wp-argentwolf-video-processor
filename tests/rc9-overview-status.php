@@ -29,6 +29,9 @@ namespace ArgentVideo {
         public function status(int $id,?int $now=null,bool $initialize=false):array{unset($id,$now,$initialize);return array('pending'=>false,'eligible'=>false,'resumable'=>false);}
         public function resume(int $id,int $now):bool{unset($id,$now);return true;}
     }
+    final class PeerTube_Event_Repository {
+        public function recent(int $video_id,int $limit=20):array{unset($limit);return 101===$video_id?array(array('id'=>1,'video_post_id'=>101,'task_id'=>88,'operation_id'=>'upload_'.str_repeat('a',32),'remote_asset_id'=>55,'backend_id'=>'pt-primary','pipeline_step'=>4,'event_code'=>'transport_timeout','severity'=>'error','http_status'=>429,'message'=>'Transfer interrupted after 500 bytes.','automatic_action'=>'Automatic replay stopped.','operator_action'=>'Review the upload outcome.','context'=>array(),'created_at'=>'2026-09-10 16:00:00')):array();}
+    }
     final class Settings_Hub { public const TAB_OVERVIEW='overview'; public static function tab_url(string $tab,array $args=array()):string{unset($tab,$args);return '/overview';} }
     function get_posts(array $args):array{unset($args);return array(101);}
     function get_post_meta(int $id,string $key,bool $single=true):mixed{unset($single);return $GLOBALS['awvp_rc9_overview_meta'][$id][$key]??'';}
@@ -44,7 +47,7 @@ namespace ArgentVideo {
 
 namespace {
     require_once dirname(__DIR__).'/includes/PeerTube_Overview_Admin.php';
-    use ArgentVideo\PeerTube_Overview_Admin; use ArgentVideo\PeerTube_Staged_Upload_Operation_Store; use ArgentVideo\PeerTube_Incomplete_Work_Reconciler; use ArgentVideo\Video_Meta;
+    use ArgentVideo\PeerTube_Overview_Admin; use ArgentVideo\PeerTube_Staged_Upload_Operation_Store; use ArgentVideo\PeerTube_Incomplete_Work_Reconciler; use ArgentVideo\PeerTube_Event_Repository; use ArgentVideo\Video_Meta;
     $assert=static function(bool $ok,string $m):void{if(!$ok){fwrite(STDERR,"FAIL: {$m}\n");exit(1);}};
     file_put_contents('/tmp/awvp-overview-source.mp4',str_repeat('x',1234));
     $op='upload_'.str_repeat('a',32); $uuid='123e4567-e89b-42d3-a456-426614174000';
@@ -55,15 +58,16 @@ namespace {
     $GLOBALS['awvp_rc9_overview_meta'][20]['_wp_attached_file']='2026/09/family-trip.mp4';
     $GLOBALS['awvp_rc9_overview_posts'][10]=(object)array('post_author'=>7);
     $store=new PeerTube_Staged_Upload_Operation_Store(array($op=>array('operation_id'=>$op,'phase'=>'upload_indeterminate','source'=>array('bytes'=>1000),'confirmed_bytes'=>500)));
-    $overview=new PeerTube_Overview_Admin($store,new PeerTube_Incomplete_Work_Reconciler());
+    $overview=new PeerTube_Overview_Admin($store,new PeerTube_Incomplete_Work_Reconciler(),new PeerTube_Event_Repository());
     $rows=$overview->rows(1000);
     $assert(1===count($rows),'Overview did not surface the indeterminate PeerTube upload.');
     $row=$rows[0];
     $assert('Field video'===$row['media_title']&&'family-trip.mp4'===$row['filename']&&'Farm update'===$row['post_title']&&'Alan'===$row['author'],'Overview primary identity is not human-recognizable Media Library/post data.');
     $assert(str_contains((string)$row['progress'],'Uploaded 500 B / 1000 B (50%)'),'Overview upload byte progress drifted.');
     $assert('Upload outcome needs attention'===$row['status_label'],'Overview did not classify upload_indeterminate as needs attention.');
+    $assert(4===($row['latest_event']['pipeline_step']??0)&&429===($row['latest_event']['http_status']??0),'Overview did not expose the latest seven-step/HTTP operator event.');
     $source=(string)file_get_contents(dirname(__DIR__).'/includes/PeerTube_Overview_Admin.php');
-    $assert(str_contains($source,'<details')&&str_contains($source,"'operation_id='")&&str_contains($source,"'remote_uuid='"),'Internal operation/remote IDs are not relegated to expandable diagnostics.');
+    $assert(str_contains($source,'<details')&&str_contains($source,"Details & log")&&str_contains($source,'Step %1$d of 7')&&str_contains($source,"'operation_id='")&&str_contains($source,"'remote_uuid='"),'Operator event history/technical IDs are not relegated to Details & log.');
     $assert(str_contains($source,"__('Resume'")&&str_contains($source,'$row[\'resumable\']'),'Overview does not expose Resume only through bounded recovery eligibility.');
     $assert(str_contains($source,'sanitize_text_field(wp_unslash($_POST[\'video_id\']))'),'Overview Resume video ID is not sanitized with a WordPress-recognized sanitizer.');
     $assert(str_contains($source,'wp_filesize($file)')&&0===preg_match('/(?<!wp_)filesize\(\$file\)/',$source),'Overview media sizing bypasses the WordPress filesystem wrapper.');

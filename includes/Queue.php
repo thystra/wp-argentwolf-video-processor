@@ -11,8 +11,10 @@ use RuntimeException;
 
 final class Queue
 {
-    public function __construct(private readonly Job_Repository $jobs)
-    {
+    public function __construct(
+        private readonly Job_Repository $jobs,
+        private readonly ?Video_Publishing_Defaults_Store $publishing_defaults = null
+    ) {
     }
 
     public function maybe_enqueue_attachment(int $attachment_id): void
@@ -23,6 +25,9 @@ final class Queue
 
         $mime = (string) get_post_mime_type($attachment_id);
         if (! str_starts_with($mime, 'video/')) {
+            return;
+        }
+        if (! $this->local_processing_allowed($attachment_id)) {
             return;
         }
 
@@ -43,6 +48,9 @@ final class Queue
         $mime = (string) get_post_mime_type($attachment_id);
         if (! str_starts_with($mime, 'video/')) {
             throw new RuntimeException('The attachment is not a video.');
+        }
+        if (! $this->local_processing_allowed($attachment_id)) {
+            throw new RuntimeException('Local video processing is blocked by the selected final destination.');
         }
 
         if (class_exists(Local_Retention_Service::class) && Local_Retention_Service::attachment_local_processing_blocked($attachment_id)) {
@@ -79,6 +87,46 @@ final class Queue
         delete_post_meta($attachment_id, '_argent_video_last_error');
 
         return $job_id;
+    }
+
+
+    /**
+     * Resolve local-processing authority before creating/claiming FFmpeg work.
+     *
+     * A bound AWVP Video's concrete destination is authoritative. Before a
+     * binding exists, the site default is the only available routing decision.
+     * Missing publishing-default integration preserves the legacy local-only
+     * behavior for narrow callers/tests that do not construct the 2.0 router.
+     */
+    public function local_processing_allowed(int $attachment_id): bool
+    {
+        if ($attachment_id < 1) {
+            return false;
+        }
+
+        if (metadata_exists('post', $attachment_id, Video_Block_Editor_Service::ATTACHMENT_ASSET_META)) {
+            $video_id = Video_Meta::sanitize_positive_id(
+                get_post_meta($attachment_id, Video_Block_Editor_Service::ATTACHMENT_ASSET_META, true)
+            );
+            if ($video_id < 1) {
+                return false;
+            }
+            $destination = Video_Destination::resolve(
+                get_post_meta($video_id, Video_Meta::DESTINATION, true),
+                metadata_exists('post', $video_id, Video_Meta::DESTINATION)
+            );
+            return array() !== $destination && Video_Destination::is_local($destination);
+        }
+
+        if (null === $this->publishing_defaults) {
+            return true;
+        }
+        $settings = $this->publishing_defaults->get();
+        if (! is_array($settings)) {
+            return false;
+        }
+        $destination = Video_Destination::sanitize($settings['default_destination'] ?? null);
+        return array() !== $destination && Video_Destination::is_local($destination);
     }
 
     public function delete_attachment(int $attachment_id): void

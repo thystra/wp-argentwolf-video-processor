@@ -46,29 +46,29 @@ final class PeerTube_Migration_Admin
         $mode = isset($_POST['selection_mode']) && is_string($_POST['selection_mode'])
             ? sanitize_key(wp_unslash($_POST['selection_mode'])) : 'selected';
 
-        $video_ids = array();
+        $candidate_keys = array();
         $truncated = false;
         if ('all' === $mode) {
             $scan = $this->planner->candidates(PeerTube_Migration_Planner::MAX_SELECT_ALL, 0);
             foreach ($scan['items'] as $item) {
-                $video_id = Video_Meta::sanitize_positive_id($item['video_id'] ?? null);
-                if ($video_id > 0) {
-                    $video_ids[] = $video_id;
+                $key = is_string($item['candidate_key'] ?? null) ? (string) $item['candidate_key'] : '';
+                if (1 === preg_match('/^(?:video|legacy):[1-9][0-9]*$/D', $key)) {
+                    $candidate_keys[] = $key;
                 }
             }
             $truncated = true === $scan['more'];
-        } elseif (isset($_POST['video_ids']) && is_array($_POST['video_ids'])) {
-            // phpcs:disable WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Each nonce-protected list member is validated as a strict positive AWVP Video ID below.
-            foreach (wp_unslash($_POST['video_ids']) as $raw) {
-                $video_id = Video_Meta::sanitize_positive_id($raw);
-                if ($video_id > 0 && ! in_array($video_id, $video_ids, true)) {
-                    $video_ids[] = $video_id;
+        } elseif (isset($_POST['candidate_keys']) && is_array($_POST['candidate_keys'])) {
+            // phpcs:disable WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Each nonce-protected list member is accepted only when it matches the bounded migration candidate-key grammar below.
+            foreach (wp_unslash($_POST['candidate_keys']) as $raw) {
+                $key = is_string($raw) ? trim($raw) : '';
+                if (1 === preg_match('/^(?:video|legacy):[1-9][0-9]*$/D', $key) && ! in_array($key, $candidate_keys, true)) {
+                    $candidate_keys[] = $key;
                 }
             }
             // phpcs:enable WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
         }
 
-        $result = $this->planner->plan($video_ids, $backend_id, $channel_id, time());
+        $result = $this->planner->plan_candidates($candidate_keys, $backend_id, $channel_id, time());
         $notice = 'planned';
         if (array() === $result['applied'] && array() === $result['present']) {
             $notice = array() !== $result['indeterminate'] ? 'indeterminate' : 'refused';
@@ -167,7 +167,7 @@ final class PeerTube_Migration_Admin
         ?>
             <h2><?php esc_html_e('Video Migration', 'argentwolf-video-processor'); ?></h2>
             <?php $this->notice(); ?>
-            <p><?php esc_html_e('Use Video Migration to move existing local ArgentWolf videos to a connected PeerTube server. Planning does not change how a video is served. After you review the destination and publication settings, Start migration commits that video to the selected PeerTube server and begins the background publishing workflow. WordPress continues serving the local version until the PeerTube copy is ready and verified.', 'argentwolf-video-processor'); ?></p>
+            <p><?php esc_html_e('Use Video Migration to move existing local ArgentWolf videos to a connected PeerTube server. Completed AWVP 1.x attachments are discovered read-only and are adopted into the 2.0 video model only when you explicitly include them in a planning action. Planning does not change how a video is served. After you review the destination and publication settings, Start migration commits that video to the selected PeerTube server and begins the background publishing workflow. WordPress continues serving the local version until the PeerTube copy is ready and verified.', 'argentwolf-video-processor'); ?></p>
             <p><?php esc_html_e('WordPress post tags are offered as suggestions. Review the PeerTube tags for each video before migration; zero tags is allowed, and PeerTube accepts no more than five tags per video.', 'argentwolf-video-processor'); ?></p>
             <?php if ($review_video_id > 0) : ?>
                 <?php $this->review_form($review_video_id); ?>
@@ -182,8 +182,22 @@ final class PeerTube_Migration_Admin
     {
         $scan = $this->planner->candidates(100, 0);
         $targets = $this->targets();
+        $legacy = $this->planner->legacy_census();
         ?>
         <h2><?php esc_html_e('Plan local videos', 'argentwolf-video-processor'); ?></h2>
+        <?php if ((int) $legacy['completed'] > 0) : ?>
+            <p class="description"><?php echo esc_html(sprintf(
+                /* translators: 1: completed legacy videos, 2: eligible, 3: already adopted, 4: source missing, 5: anchor missing, 6: ambiguous anchors, 7: other invalid/incomplete. */
+                __('Legacy AWVP 1.x census: %1$d completed; %2$d eligible for explicit adoption; %3$d already adopted; %4$d source missing; %5$d publication anchor missing; %6$d ambiguous multi-post anchors; %7$d incomplete/invalid.', 'argentwolf-video-processor'),
+                (int) $legacy['completed'],
+                (int) $legacy['eligible'],
+                (int) $legacy['bound'],
+                (int) $legacy['source_missing'],
+                (int) $legacy['anchor_missing'],
+                (int) $legacy['anchor_ambiguous'],
+                (int) $legacy['incomplete'] + (int) $legacy['invalid']
+            )); ?><?php if (true === $legacy['more']) : ?> <?php esc_html_e('The census is bounded; additional legacy rows exist beyond this scan.', 'argentwolf-video-processor'); ?><?php endif; ?></p>
+        <?php endif; ?>
         <?php if (array() === $targets) : ?>
             <div class="notice notice-warning inline"><p><?php esc_html_e('No connected PeerTube server has current channel information. Refresh the PeerTube publishing choices on the Publishing tab first.', 'argentwolf-video-processor'); ?></p></div>
         <?php elseif (array() === $scan['items']) : ?>
@@ -203,11 +217,22 @@ final class PeerTube_Migration_Admin
                     <thead><tr><td class="check-column"></td><th><?php esc_html_e('Video', 'argentwolf-video-processor'); ?></th><th><?php esc_html_e('Anchor', 'argentwolf-video-processor'); ?></th><th><?php esc_html_e('Current migration state', 'argentwolf-video-processor'); ?></th></tr></thead>
                     <tbody>
                     <?php foreach ($scan['items'] as $item) : ?>
+                        <?php
+                        $legacy_candidate = true === ($item['legacy'] ?? false);
+                        $candidate_key = is_string($item['candidate_key'] ?? null) ? (string) $item['candidate_key'] : '';
+                        ?>
                         <tr>
-                            <th class="check-column"><input type="checkbox" name="video_ids[]" value="<?php echo esc_attr((string)$item['video_id']); ?>"></th>
-                            <td><?php echo esc_html((string)$item['title']); ?> <code>#<?php echo esc_html((string)$item['video_id']); ?></code></td>
+                            <th class="check-column"><input type="checkbox" name="candidate_keys[]" value="<?php echo esc_attr($candidate_key); ?>"></th>
+                            <td>
+                                <?php echo esc_html((string)$item['title']); ?>
+                                <?php if ($legacy_candidate) : ?>
+                                    <code><?php echo esc_html(sprintf(__('legacy attachment #%d', 'argentwolf-video-processor'), (int)$item['attachment_id'])); ?></code>
+                                <?php else : ?>
+                                    <code><?php echo esc_html(sprintf(__('Video #%d', 'argentwolf-video-processor'), (int)$item['video_id'])); ?></code>
+                                <?php endif; ?>
+                            </td>
                             <td>#<?php echo esc_html((string)$item['anchor_post_id']); ?> — <?php echo esc_html((string)$item['post_status']); ?></td>
-                            <td><?php echo esc_html((string)$item['plan_status']); ?></td>
+                            <td><?php echo esc_html($legacy_candidate ? __('legacy — ready for explicit adoption', 'argentwolf-video-processor') : (string)$item['plan_status']); ?></td>
                         </tr>
                     <?php endforeach; ?>
                     </tbody>

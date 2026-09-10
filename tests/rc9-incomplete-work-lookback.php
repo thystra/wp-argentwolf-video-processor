@@ -24,6 +24,11 @@ namespace ArgentVideo {
         public string $status=Task_Repository::APPLIED;
         public function sync_video(int $id,string $status,int $now):array { $this->calls[]=array($id,$status,$now); return array('status'=>$this->status); }
     }
+    class PeerTube_Serving_Cutover_Service {
+        public const APPLIED='applied'; public const PRESENT='present'; public const LOCAL='local'; public const REFUSED='refused'; public const INDETERMINATE='indeterminate';
+        public array $calls=array(); public array $statuses=array();
+        public function reconcile(int $id,int $now):string { $this->calls[]=array($id,$now); return $this->statuses[$id]??self::REFUSED; }
+    }
     function get_post_meta(int $id,string $key,bool $single=true):mixed { unset($single); return $GLOBALS['awvp_rc9_meta'][$id][$key]??''; }
     function metadata_exists(string $type,int $id,string $key):bool { unset($type); return array_key_exists($key,$GLOBALS['awvp_rc9_meta'][$id]??array()); }
     function update_post_meta(int $id,string $key,mixed $value):bool { $GLOBALS['awvp_rc9_meta'][$id][$key]=$value; return true; }
@@ -36,6 +41,7 @@ namespace {
     require_once dirname(__DIR__).'/includes/PeerTube_Incomplete_Work_Reconciler.php';
     use ArgentVideo\PeerTube_Incomplete_Work_Reconciler;
     use ArgentVideo\PeerTube_Publication_Synchronizer;
+    use ArgentVideo\PeerTube_Serving_Cutover_Service;
     use ArgentVideo\Video_Meta;
 
     $assert=static function(bool $ok,string $m):void{if(!$ok){fwrite(STDERR,"FAIL: {$m}\n");exit(1);}};
@@ -67,6 +73,20 @@ namespace {
     $count=$r->recover(2100);
     $assert(1===$count&&array(array(102,'publish',2100))===$sync->calls,'Eligible incomplete lifecycle was not reconciled exactly once.');
     $assert(!isset($GLOBALS['awvp_rc9_meta'][102][Video_Meta::PEERTUBE_RECOVERY_WINDOW]),'Successful recovery retained stale window metadata.');
+
+    // RC10 live-upgrade fixture: RC9 already consumed the lifecycle enqueue
+    // (task_pending=false), but remote publication evidence is complete and only
+    // local serving authority remains missing. Recovery must invoke the local-only
+    // cutover path without requiring publication synchronization.
+    $sync2=new PeerTube_Publication_Synchronizer();
+    $cutover=new PeerTube_Serving_Cutover_Service();
+    $cutover->statuses[103]=PeerTube_Serving_Cutover_Service::APPLIED;
+    $r2=new PeerTube_Incomplete_Work_Reconciler($sync2,$cutover);
+    $GLOBALS['awvp_rc9_meta'][103][Video_Meta::PEERTUBE_PUBLICATION_LIFECYCLE]=array('task_pending'=>false,'updated_at'=>3000,'anchor_post_id'=>12);
+    $GLOBALS['awvp_rc9_ids']=array(103);
+    $count2=$r2->recover(3100);
+    $assert(1===$count2&&array(array(103,3100))===$cutover->calls,'RC10 recovery did not reconcile verified local-only cutover with task_pending=false.');
+    $assert(array()===$sync2->calls,'RC10 local-only cutover recovery unnecessarily invoked publication synchronization.');
 
     $source=(string)file_get_contents(dirname(__DIR__).'/includes/PeerTube_Incomplete_Work_Reconciler.php');
     foreach(array('PeerTube_Staged_Upload_Operation_Store','upload_indeterminate','update_publication(','resumable_upload') as $forbidden){$assert(!str_contains($source,$forbidden),'Incomplete-work reconciler acquired remote mutation authority: '.$forbidden);}

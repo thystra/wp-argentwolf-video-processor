@@ -17,8 +17,10 @@ final class PeerTube_Incomplete_Work_Reconciler
     public const MAX_WINDOW_SECONDS = 604800; // 168 hours.
     public const MAX_SCAN = 250;
 
-    public function __construct(private readonly PeerTube_Publication_Synchronizer $synchronizer)
-    {
+    public function __construct(
+        private readonly PeerTube_Publication_Synchronizer $synchronizer,
+        private readonly ?PeerTube_Serving_Cutover_Service $cutover = null
+    ) {
     }
 
     public function recover(?int $now = null): int
@@ -49,18 +51,37 @@ final class PeerTube_Incomplete_Work_Reconciler
             if ($video_id < 1) {
                 continue;
             }
+            $video_recovered = false;
+
+            // RC10 local-only reconciliation is deliberately independent of the
+            // lifecycle task_pending bit. RC9 could durably enqueue/fail its
+            // finalizer after the remote publication was already verified,
+            // leaving no pending lifecycle enqueue for the recovery hook to see.
+            // The cutover service has no provider HTTP/mutation authority; it
+            // can only derive/repair local serving authority from durable
+            // applied-manifest and verified remote-asset evidence.
+            if (null !== $this->cutover) {
+                $cutover = $this->cutover->reconcile($video_id, $now);
+                if (PeerTube_Serving_Cutover_Service::APPLIED === $cutover) {
+                    delete_post_meta($video_id, Video_Meta::PEERTUBE_RECOVERY_WINDOW);
+                    $video_recovered = true;
+                }
+            }
+
             $state = $this->status($video_id, $now, true);
-            if (true !== ($state['eligible'] ?? false)) {
-                continue;
+            if (true === ($state['eligible'] ?? false)) {
+                $anchor_id = (int) ($state['anchor_post_id'] ?? 0);
+                $anchor = $anchor_id > 0 ? get_post($anchor_id) : null;
+                if (is_object($anchor) && is_string($anchor->post_status ?? null)) {
+                    $result = $this->synchronizer->sync_video($video_id, (string) $anchor->post_status, $now);
+                    if (in_array($result['status'] ?? null, array(Task_Repository::APPLIED, Task_Repository::PRESENT), true)) {
+                        delete_post_meta($video_id, Video_Meta::PEERTUBE_RECOVERY_WINDOW);
+                        $video_recovered = true;
+                    }
+                }
             }
-            $anchor_id = (int) ($state['anchor_post_id'] ?? 0);
-            $anchor = $anchor_id > 0 ? get_post($anchor_id) : null;
-            if (! is_object($anchor) || ! is_string($anchor->post_status ?? null)) {
-                continue;
-            }
-            $result = $this->synchronizer->sync_video($video_id, (string) $anchor->post_status, $now);
-            if (in_array($result['status'] ?? null, array(Task_Repository::APPLIED, Task_Repository::PRESENT), true)) {
-                delete_post_meta($video_id, Video_Meta::PEERTUBE_RECOVERY_WINDOW);
+
+            if ($video_recovered) {
                 ++$recovered;
             }
         }

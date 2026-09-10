@@ -78,28 +78,33 @@ immediately before completion and then survives database persistence.
 
 ## 2.0 RC validation
 
-The active `2.0.0-rc9` payload upgrades from the exact public `1.0.0` package and
+The active `2.0.0-rc10` payload upgrades from the exact public `1.0.0` package and
 requires the exact candidate SHA-256 at invocation time until the canonical
-Forgejo RC artifact is selected. RC9 retains the qualified clean/upgrade contract
-while correcting the PeerTube execution, recovery, publication-verification, and
-operator-status defects found during controlled canonical-RC8 live testing. RC8 is
-retained as immutable qualification/live-test evidence; RC7 and RC6 remain earlier
-live-test evidence; RC5/RC4 remain failed-candidate evidence, RC3 remains accepted
-qualification evidence, and RC1/RC2 remain historical failed-candidate evidence.
+Forgejo RC artifact is selected. RC10 retains the qualified clean/upgrade
+contract while exercising the RC9 live-test fixes, model DB schema version 2 /
+`argent_video_events`, explicit legacy 1.x migration adoption, and runtime
+serving cutover. RC9 and earlier RC packages remain immutable qualification or
+live-test evidence; creating RC10 does not rewrite their payloads.
 
 ```bash
 AWVP_RC_CANDIDATE_SHA256=<sha256-of-exact-candidate-zip> \
 ARTIFACT_DIR=/path/to/release-zips \
-bash tests/release-validation/run.sh 2.0.0-rc9
+bash tests/release-validation/run.sh 2.0.0-rc10
 ```
 
 The upgrade fixture creates a real WordPress `core/video` block while 1.0 is
 active, backed by a real uploads-tree attachment and an existing AWVP-managed
-local derivative. The 2.0 upgrade must preserve the block's stored
-`post_content`, attachment relationship and metadata, source/derivative bytes,
-and completed legacy queue row. Merely upgrading must not mass-convert the Core
-Video block, create an AWVP Video object for it, enqueue PeerTube work, or create
-a remote asset.
+local derivative. The RC10 upgrade must preserve the block's stored
+`post_content`, attachment relationship and legacy processing metadata,
+source/derivative bytes, and completed legacy queue row. Merely upgrading must
+not mass-convert the Core Video block, create an AWVP Video object for it,
+enqueue PeerTube work, or create a remote asset. Read-only legacy discovery must
+then expose that exact fixture as eligible. A separate explicit planning phase
+adopts only the selected attachment, proves that adoption/planning creates no
+FFmpeg or PeerTube task, and finally installs a simulated positively verified
+remote publication so the unchanged historical Core Video block must render the
+verified short-ID PeerTube iframe at runtime without altering stored content or
+the WordPress original source.
 
 The candidate-only phase separately creates and renders the 2.0 dynamic
 `argentwolf-video-processor/video` block. This proves the new block is packaged,

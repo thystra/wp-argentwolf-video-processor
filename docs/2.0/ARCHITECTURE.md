@@ -3,7 +3,7 @@
 Status: 2.0 release-candidate contract
 Target branch: `develop-2.0`
 Stable baseline: WordPress.org-published `1.0.0`; `v1.0.0` identifies the released source, while later stable-main documentation/closure commits do not change the released artifact. The permanent `release/1.x` maintenance branch is rooted at that exact tag.
-Current controlled candidate: `2.0.0-rc9`; RC packages are Forgejo-only and WordPress.org `Stable tag` remains `1.0.0` until final promotion.
+Current controlled candidate: `2.0.0-rc10`; RC packages are Forgejo-only and WordPress.org `Stable tag` remains `1.0.0` until final promotion.
 
 ## 1. Product direction
 
@@ -66,20 +66,31 @@ for 2.0.
 2.0 must preserve the WordPress/AWVP media identity and must never
 destructively remove a physical source merely because a transfer was attempted.
 
-A physical WordPress source may be deleted only when all of the following are
-true:
+RC10 makes archive authority a site-wide choice rather than a repetitive
+per-video "master copy" decision. WordPress is the archive of record by default.
+While that policy is active, AWVP may remove its own generated/staging artifacts
+when otherwise safe, but it must never automatically delete the physical original
+Media Library video. Explicit deletion through the WordPress Media Library remains
+WordPress-authoritative.
 
-1. the operator selected a retention policy that permits deletion;
-2. the target backend accepted the asset;
-3. required backend processing completed successfully;
-4. AWVP positively verified the remote asset and required delivery state;
-5. the AWVP record contains sufficient remote identity/state for later
-   reconciliation;
-6. cleanup is performed by a bounded, auditable job rather than inline in the
-   editor request.
+Changing the site to **WordPress is not the archive of record for original videos**
+requires one administrator acknowledgement at that transition. A physical WordPress
+source may then be deleted only when all of the following are true:
 
-Hosted source copies are not assumed to be archival masters. Presets must make
-this distinction clear.
+1. the site-wide archive policy still permits source deletion at execution time;
+2. the per-video retention choice requests original-source deletion;
+3. every currently required remote publication has been positively verified;
+4. required backend processing and verified serving cutover are complete;
+5. the AWVP record contains sufficient remote identity/state for later reconciliation;
+6. the configured site-wide grace period has expired;
+7. exclusive attachment ownership, exact source identity, and absence of active
+   local processing are re-proved immediately before deletion; and
+8. cleanup is performed by a bounded, auditable detached job rather than inline in
+   an editor or settings request.
+
+Switching the site back to WordPress-as-archive revokes deletion authority even for
+already-queued cleanup work. Serving choice and archive/source-retention choice are
+separate concepts.
 
 ## 5. Core concepts
 
@@ -396,33 +407,23 @@ Track independently:
 For each destructive cleanup, require positive verification and an auditable
 cleanup job.
 
-Storage presets must describe their consequences in plain language.
+Storage presets may describe non-destructive consequences in plain language, but
+RC10 does not allow a preset to silently grant original-source deletion authority.
+The operative source-retention decision is the General setting **WordPress is / is
+not the archive of record for original videos**, plus its site-wide grace period.
 
-Typical deployment patterns:
+Per-video post-cutover cleanup is intentionally narrower:
 
-### Keep Everything
+- **Keep local copies** preserves both the WordPress source and AWVP-managed local
+  derivatives.
+- **Delete generated copies** may remove AWVP-managed derivatives after verified
+  serving while preserving the Media Library original.
+- Original-source removal is offered only when the site is explicitly not the archive
+  of record, and execution still re-proves all remote-publication, serving, ownership,
+  grace, and exact-file-identity gates.
 
-- keep WordPress source;
-- keep backend source;
-- keep delivery derivatives.
-
-### Balanced / Recommended
-
-- configurable WordPress source retention;
-- keep backend source;
-- keep delivery derivatives.
-
-### Minimize Storage
-
-- delete WordPress source after verified backend processing;
-- do not retain backend source where backend policy permits;
-- retain only required web-delivery derivatives.
-
-### External Archive
-
-- assume authoritative masters exist outside WordPress/backend;
-- delete online ingest/source copies after verification;
-- retain delivery assets only.
+Backend-side source/original retention remains a backend policy and is not inferred
+from the WordPress archive-of-record setting.
 
 ## 13. System Status / Help
 
@@ -506,19 +507,23 @@ Inventory:
 
 Migration behavior:
 
-1. inventory and classify;
-2. select profile/destination;
-3. dry-run/preview;
-4. upload each unique media asset once;
-5. wait for backend processing;
-6. positively verify;
-7. update AWVP metadata and/or post blocks only where necessary;
-8. verify rendered state;
-9. clean local source only when policy allows;
-10. retain audit/rollback information.
+1. inventory and classify without mass-creating 2.0 Video objects;
+2. expose completed AWVP 1.x attachments as read-only legacy candidates;
+3. adopt a legacy attachment only when the administrator explicitly selects it for
+   migration planning;
+4. create the 2.0 binding/origin/source model without starting FFmpeg or PeerTube work;
+5. select and explicitly review the target destination/publication plan;
+6. promote the reviewed plan through the one-way migration executor;
+7. upload each unique media asset once, wait for backend processing, and positively verify;
+8. establish verified serving authority and verify rendered state;
+9. clean local source only when the site-wide archive policy and all retention gates allow;
+10. retain durable migration/publication/serving audit evidence.
 
-Unknown or unsupported references must be reported for manual review rather than
-silently rewritten.
+Historical `post_content` is not rewritten merely to migrate an adopted 1.x video.
+Supported historical Core Video and `[video]` rendering may bridge at runtime from the
+adopted attachment to verified 2.0 serving authority. Reused attachments with ambiguous
+publication anchors are reported for manual review rather than assigned an arbitrary
+origin.
 
 Migration must be resumable after browser/session interruption.
 
@@ -1029,9 +1034,23 @@ durable operation journal, and places internal operation IDs/remote UUIDs under
 expandable diagnostics. Overview is a projection/action surface over existing durable
 records, not a second state machine.
 
+RC10 extends that projection with bounded durable `argent_video_events`. Operator
+history uses seven stable steps: Prepare source, Connect to PeerTube, Start upload,
+Transfer video, PeerTube processing, Finalize publication, and Verify serving and
+finish. **Details & log** shows the latest event timestamp, step, PeerTube server/backend
+ID, HTTP status when known, a human-readable classification, automatic decision,
+suggested operator action, bounded recent history, then nested technical IDs. Event
+persistence is allow-listed and bounded; credentials, authorization headers, cookies,
+passwords, secret-bearing request bodies, and token material are never event payloads.
+
+RC10 also adds a local-only reconciliation branch for the live Test-5 state: an already
+applied manifest plus ready/verified remote asset and verified embed evidence may
+establish missing serving authority even when the old lifecycle no longer has
+`task_pending=true`. That branch cannot enqueue an upload or issue a publication PUT.
+
 ## R46.7 inert existing-video migration planning
 
-R46.7 introduces a planner-only layer between legacy/local inventory and the later one-way migration executor. Eligible items are hidden AWVP Videos whose canonical destination resolves to local (including missing legacy destination metadata), whose source attachment remains a video, and which do not already carry publication execution or serving-cutover evidence. The planner reads only local WordPress state, configured backend/default state, and the cached R46.3a publication catalog.
+R46.7 introduces a planner-only layer between legacy/local inventory and the later one-way migration executor. RC10 candidate discovery merges two bounded sources: existing hidden 2.0 AWVP Videos whose canonical destination resolves local, and completed AWVP 1.x video attachments discovered directly from legacy completion/output/source evidence. Discovery of the latter is read-only. It does not mass-create 2.0 Video objects during plugin upgrade or while merely listing candidates. A legacy attachment is adopted only when the administrator explicitly plans its `legacy:<attachment-id>` candidate; adoption establishes the 2.0 Video/attachment/origin/source/local-destination binding without starting FFmpeg or PeerTube work. Ambiguous multi-post anchors, missing sources, incomplete legacy state, and already-bound items are classified rather than guessed. Current and legacy candidate windows are interleaved so one source cannot starve the other from bounded administrator batches. The planner otherwise reads only local WordPress state, configured backend/default state, and the cached R46.3a publication catalog.
 
 Planning stores `_argent_video_peertube_migration_plan`; it never edits `_argent_video_destination` or `_argent_video_peertube_publication_plan`. Consequently the R46.5 lifecycle synchronizer cannot be awakened by planning or review. WordPress tags may be copied into an inert publication draft only when no more than five unique values satisfy PeerTube tag constraints, but all tag review flags remain false. More than five suggestions produce `tag_selection_required` and an empty draft tag set rather than truncation.
 
@@ -1046,40 +1065,75 @@ The local `_argent_video_peertube_migration_execution` journal is written in `pr
 
 `prepared` is the one-way commitment boundary. R46.7 planning/review is frozen once it exists, and ordinary destination editing cannot return the video to Local or choose another backend/channel. Same-target publication metadata may still evolve after handoff through the normal R46.3c/R46.5 generation model. The migration executor itself performs no PeerTube HTTP, staged-upload operation creation, remote-asset mutation, serving cutover, or cleanup. R46.5/R46.6 remain the only remote execution and verified serving paths; R46.9 remains the only local-retention/cleanup checkpoint.
 
-### R46.9 explicit post-cutover local retention
+### R46.9 / RC10 post-cutover local retention and archive authority
 
-R46.9 is the only R46 checkpoint with local destructive authority. Separately, RC9
-prevents redundant local FFmpeg processing once an AWVP Video has a valid non-local
-destination: destination commitment cancels queued/failed local work, and the local
-worker rechecks destination authority after claim and can lock-token-fence cancellation
-of the claimed job before invoking FFmpeg. Malformed destination state fails closed.
-Retention is per AWVP Video and defaults to `keep`. `delete_managed` may remove the
-attachment's AWVP-managed storage tree and `_argent_video_outputs` projection
-while preserving the physical WordPress source. `delete_all` additionally
-removes the physical WordPress video file but never the attachment post; it is
-refused while `wordpress_source` remains the declared master authority.
+R46.9 remains the only R46 checkpoint with local destructive authority. RC10 moves
+original-source authority out of the old per-video master/confirmation workflow and
+into `Archive_Of_Record_Policy_Store`. WordPress-as-archive is the fail-closed default.
+The one-time destructive acknowledgement occurs only when the administrator changes
+the site to **WordPress is not the archive of record for original videos**; changing
+the grace period afterward does not ask for repeated confirmation, and switching back
+to WordPress-as-archive immediately revokes original-deletion authority.
 
-A destructive policy is not deletion authority by itself. The operator must
-confirm the exact per-video policy, choose a 1-365 day grace period, and the
-video must still have current R46.6 public/unlisted serving authority. The
-cleanup journal freezes that serving generation/plan/manifest/remote asset and,
-for source deletion, a confined uploads-relative size/device/inode/mtime/ctime source
-identity. Cleanup runs only as `peertube_local_retention_cleanup` in the existing
-detached `--drain` worker; `--once` is not expanded.
+PeerTube routing is now resolved before ordinary local FFmpeg enqueue. A valid PeerTube
+destination therefore creates PeerTube publication work without manufacturing a local
+job merely to cancel it later; smart backlog discovery also excludes media whose chosen
+destination blocks local processing. Existing/racing local work still rechecks routing
+at execution boundaries and fails closed on malformed destination state.
 
-Immediately before deletion the worker re-proves the live non-trash AWVP Video,
-its exact attachment binding and exclusive ownership of that attachment, serving
-authority, master policy, grace expiry, source identity, and absence of queued/
-processing local FFmpeg work. Duplicate or ambiguous attachment references fail
-closed because managed outputs are attachment-scoped. Entering cleanup `running`
-fences the ordinary local queue, including trash references, then the job
-repository is checked a second time to close the enqueue race. Managed tree
-deletion uses the existing confined `Storage` boundary. Physical source deletion
-uses `wp_delete_file()` only after an immediate stat identity recheck and verifies
-actual absence. A recovered `running` journal may confirm an exact already-absent
-source without replaying deletion; a merely queued job may not. Any mismatch,
-changed serving state, active local work, malformed record, or uncertainty means
-KEEP. No remote PeerTube HTTP or remote deletion is part of retention cleanup.
+Per-video retention defaults to keep. Generated-copy cleanup may remove the
+attachment's AWVP-managed storage tree and `_argent_video_outputs` projection after
+verified serving while preserving the physical WordPress source. Original-source
+removal is configurable only while WordPress is not the archive of record. The
+production service derives the site grace period and rechecks archive authority at
+configuration, scheduling, claimed-task execution, and immediately before physical
+deletion.
+
+A destructive choice is never deletion authority by itself. Cleanup requires current
+R46.6 public/unlisted serving authority and all currently required remote publications
+to be positively verified. The cleanup journal freezes serving generation/plan/
+manifest/remote asset and, for source deletion, a confined uploads-relative
+size/device/inode/mtime/ctime source identity. Cleanup runs only as
+`peertube_local_retention_cleanup` in the existing detached `--drain` worker.
+
+Immediately before deletion the worker re-proves the live non-trash AWVP Video, exact
+attachment binding and exclusive ownership, serving authority, archive policy, grace
+expiry, source identity, and absence of queued/processing local FFmpeg work. Entering
+cleanup `running` fences the ordinary local queue and the job repository is checked a
+second time to close the enqueue race. Managed-tree deletion uses the confined
+`Storage` boundary. Physical source deletion uses `wp_delete_file()` only after an
+immediate stat identity recheck and verifies actual absence. A recovered `running`
+journal may confirm an exact already-absent source without replaying deletion; a merely
+queued job may not. Any mismatch, policy change, changed serving state, active local
+work, malformed record, or uncertainty means KEEP. No remote PeerTube HTTP or remote
+deletion is part of retention cleanup.
+
+
+### RC10 PeerTube execution/recovery hardening
+
+RC10 treats provider outcomes according to when certainty was lost. Local validation or
+preflight failures are **not sent** and can be corrected/retried. Definite HTTP/provider
+rejections retain sanitized status/reason and follow bounded retry policy. Only a
+consequential request that may have been transmitted without a knowable acceptance result
+uses the indeterminate no-blind-replay boundary. Multi-word PeerTube tags are valid bounded
+values, and read-back tag verification compares a normalized unordered set. Verified
+provider embed paths may use PeerTube short IDs; they remain constrained to the configured
+origin and `/videos/embed/<safe-provider-id>` with no userinfo, query, fragment, traversal,
+or cross-origin authority.
+
+Credential authority is restart-safe. An expired/near-expiry access token with a valid
+refresh token is advanced automatically, credential-generation changes invalidate the
+generation-bound publication catalog operationally, and the connection is not considered
+current until credential and catalog authority agree. Long-lived workers explicitly refresh
+option-backed authority at durable task boundaries. Publication/pre-upload watchers use a
+short 120-second lifetime; only an actual staged upload operation promotes the worker to the
+existing size-derived long upload budget. Recoverable dependency waits use task deferral and
+do not consume the finite execution-attempt budget.
+
+The frontend block ships `blocks/video/style.css` through `block.json`, constraining both the
+local `<video>` and PeerTube iframe to the content container. Neither local nor PeerTube
+rendering grants autoplay. The build and both Forgejo/GitHub ZIP inspections require this
+stylesheet so source-only success cannot hide a missing packaged layout fix.
 
 
 ### R45.6 / RC PeerTube capability truth-up

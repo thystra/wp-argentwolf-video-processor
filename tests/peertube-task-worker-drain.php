@@ -83,14 +83,33 @@ namespace ArgentVideo {
 
     final class PeerTube_Staged_Upload_State_Machine
     {
+        public const PHASE_FAILED='failed';
+        public const PHASE_UPLOAD_INDETERMINATE='upload_indeterminate';
+        public const PHASE_PROCESSING='processing';
+        public const PHASE_READY_VERIFIED='ready_verified';
         public static function valid(array $operation): bool
         {
             return isset($operation['operation_id'], $operation['video_post_id'], $operation['backend_id'], $operation['source']['bytes']);
         }
     }
 
+    final class PeerTube_Event_Repository
+    {
+        public array $records=array();
+        public function record(int $video_id,int $pipeline_step,string $event_code,string $severity,string $message,int $now,int $task_id=0,string $operation_id='',int $remote_asset_id=0,string $backend_id='',int $http_status=0,string $automatic_action='',string $operator_action='',array $context=array()):bool
+        {
+            $this->records[]=compact('video_id','pipeline_step','event_code','severity','message','now','task_id','operation_id','remote_asset_id','backend_id','http_status','automatic_action','operator_action','context');
+            return true;
+        }
+    }
+
     final class PeerTube_Upload_Runtime_Budget
     {
+        public static function watcher_seconds(): int
+        {
+            return 120;
+        }
+
         public static function process_seconds(int $source_bytes): int
         {
             return $source_bytes >= 10 * 1024 * 1024 * 1024 ? 4800 : 3600;
@@ -153,12 +172,15 @@ namespace {
     $clock = static function () use (&$time): int { return $time; };
     $sleeps = array();
     $sleeper = static function (int $seconds) use (&$time, &$sleeps): void { $sleeps[]=$seconds; $time += $seconds; };
-    $worker = new PeerTube_Task_Worker($tasks, $coordinator, static fn(string $id): ?array => $id === $operation_id ? $operation : null);
+    $events = new \ArgentVideo\PeerTube_Event_Repository();
+    $worker = new PeerTube_Task_Worker($tasks, $coordinator, static fn(string $id): ?array => $id === $operation_id ? $operation : null, null, null, $events);
     $drained = $worker->run_drain(1000, $clock, $sleeper);
     $assert(PeerTube_Task_Worker::STATUS_ADVANCED === $drained['status'], 'RC9 watcher did not drain the bounded owned queue cleanly.');
     $assert(5 === $drained['steps'], 'RC9 watcher did not advance the expected five durable boundaries.');
     $assert(array(41) === $tasks->exact_claim_ids, 'Only the immediate same-task continuation should use exact reclaim.');
     $assert(array(41,41,91,120,91) === $coordinator->task_ids, 'RC9 watcher did not service new work before resuming the future reconciliation.');
+    $assert(5===count($events->records),'RC10 worker did not append one operator event per durable task boundary.');
+    $assert(3===($events->records[0]['pipeline_step']??0)&&5===($events->records[2]['pipeline_step']??0),'RC10 worker pipeline-step mapping drifted for upload/reconciliation tasks.');
     $assert(array() !== $sleeps && max($sleeps) <= 5, 'RC9 watcher exceeded its five-second sleep slice.');
     $assert(3600 === $drained['budget_seconds'], 'Drain lost the size-derived one-hour process floor.');
 
@@ -185,6 +207,39 @@ namespace {
     $assert(1 === $yielded['steps'] && 4800 === $yielded['budget_seconds'], 'Yield result lost bounded progress/budget evidence.');
     $assert(array() === $sleeps, 'Drain slept even though the next durable boundary was outside its process budget.');
 
+    // Publication-only/pre-upload work must not inherit the upload process
+    // floor. It watches briefly and yields when its next durable boundary lies
+    // beyond that short process lifetime.
+    $publication_task = $task(57, 'peertube_publication_sync');
+    $tasks = new Task_Repository();
+    $coordinator = new Coordinator();
+    $tasks->scheduled = array(
+        array('at'=>2500,'task'=>$publication_task),
+        array('at'=>2800,'task'=>$publication_task),
+    );
+    $publication_calls = array();
+    $publication_advance = static function (array $claimed, int $now) use (&$publication_calls): array {
+        $publication_calls[] = array((int)($claimed['id']??0), $now);
+        return array(
+            'status'=>'requeued','task_id'=>(int)($claimed['id']??0),
+            'task_type'=>(string)($claimed['task_type']??''),
+            'repository_status'=>'applied','run_after'=>2800,
+        );
+    };
+    $time = 2500; $sleeps = array();
+    $clock = static function () use (&$time): int { return $time; };
+    $sleeper = static function (int $seconds) use (&$time, &$sleeps): void { $sleeps[]=$seconds; $time += $seconds; };
+    $worker = new PeerTube_Task_Worker(
+        $tasks, $coordinator,
+        static fn(string $id): ?array => $id === $operation_id ? $operation : null,
+        $publication_advance
+    );
+    $preupload = $worker->run_drain(2500, $clock, $sleeper);
+    $assert(PeerTube_Task_Worker::STATUS_YIELDED === $preupload['status'], 'Pre-upload publication watcher did not yield at its short process boundary.');
+    $assert(120 === $preupload['budget_seconds'], 'Pre-upload publication watcher inherited an hour-scale upload budget.');
+    $assert(1 === $preupload['steps'] && array(array(57,2500)) === $publication_calls, 'Pre-upload publication watcher did not stop after its first durable boundary.');
+    $assert(array() === $sleeps, 'Pre-upload publication watcher slept even though its next boundary was outside the short watcher budget.');
+
     // Failure notification remains a normal owned durable task. After it
     // completes, an empty queue ends the watcher rather than inventing work.
     $notification_payload = json_encode(array(
@@ -209,10 +264,19 @@ namespace {
         'status'=>'complete','task_id'=>61,'task_type'=>Coordinator::TASK_FAILURE_NOTIFY,
         'repository_status'=>'applied','run_after'=>0,
     );
-    $worker = new PeerTube_Task_Worker($tasks, $coordinator, static fn(string $id): ?array => $id === $operation_id ? $operation : null);
+    $events = new \ArgentVideo\PeerTube_Event_Repository();
+    $worker = new PeerTube_Task_Worker($tasks, $coordinator, static fn(string $id): ?array => $id === $operation_id ? $operation : null, null, null, $events);
     $notified = $worker->run_drain(3000, static fn(): int => 3000, static function(int $seconds):void{unset($seconds);});
     $assert(PeerTube_Task_Worker::STATUS_ADVANCED === $notified['status'], 'Drain did not complete the durable notification branch.');
     $assert(1 === $notified['steps'] && array(61) === $coordinator->task_ids, 'Failure notification did not consume exactly one durable boundary.');
+    $assert(1 === count($events->records), 'Failure notification did not write one operator diagnostic event.');
+    $failure_event = $events->records[0];
+    $assert('transport_timeout' === $failure_event['event_code'] && 'error' === $failure_event['severity'], 'Failure event lost its sanitized transport classification.');
+    $assert(4 === $failure_event['pipeline_step'] && 0 === $failure_event['http_status'], 'Failure event did not map byte-bearing timeout to transfer Step 4.');
+    $assert($operation_id === $failure_event['operation_id'], 'Failure event lost the durable upload operation ID.');
+    $assert('transport_timeout' === ($failure_event['context']['error_status'] ?? '') && 'curl_28' === ($failure_event['context']['error_code'] ?? ''), 'Failure event lost transport/API diagnostic evidence.');
+    $assert(0 === ($failure_event['context']['confirmed_bytes'] ?? -1) && 1024 * 1024 * 1024 === ($failure_event['context']['source_bytes'] ?? 0), 'Failure event lost byte-progress evidence from the immutable failure snapshot.');
+    $assert(str_contains($failure_event['message'], 'Synthetic timeout.') && str_contains($failure_event['operator_action'], 'network/server responsiveness'), 'Failure event did not surface useful timeout detail and operator guidance.');
 
     $source = (string) file_get_contents(dirname(__DIR__) . '/includes/PeerTube_Task_Worker.php');
     foreach (array('usleep(', 'wp_schedule', 'exec(', 'proc_open', 'shell_exec') as $needle) {

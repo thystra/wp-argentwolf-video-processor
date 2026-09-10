@@ -127,7 +127,8 @@ done
 for required_block_file in \
     block.json \
     index.js \
-    index.asset.php
+    index.asset.php \
+    style.css
 do
     if ! grep -qx "${SLUG}/blocks/video/${required_block_file}" "${ZIP_MANIFEST}"; then
         echo "Release ZIP is missing blocks/video/${required_block_file}." >&2

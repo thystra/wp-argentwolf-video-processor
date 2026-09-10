@@ -66,7 +66,18 @@ final class PeerTube_Publication_Synchronizer
         $attachment_id = Video_Meta::sanitize_positive_id(
             get_post_meta($video_id, Video_Meta::ATTACHMENT_ID, true)
         );
-        if ($attachment_id > 0 && $this->jobs->cancel($attachment_id)) {
+        if ($attachment_id < 1) {
+            return;
+        }
+        if ($this->jobs->discard_unstarted($attachment_id)) {
+            delete_post_meta($attachment_id, '_argent_video_job_id');
+            if ('queued' === (string) get_post_meta($attachment_id, '_argent_video_status', true)) {
+                delete_post_meta($attachment_id, '_argent_video_status');
+            }
+            delete_post_meta($attachment_id, '_argent_video_last_error');
+            return;
+        }
+        if ($this->jobs->cancel($attachment_id)) {
             update_post_meta($attachment_id, '_argent_video_status', 'cancelled');
             delete_post_meta($attachment_id, '_argent_video_last_error');
         }

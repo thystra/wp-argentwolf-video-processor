@@ -15,7 +15,8 @@ final class PeerTube_Overview_Admin
 
     public function __construct(
         private readonly PeerTube_Staged_Upload_Operation_Store $operations,
-        private readonly PeerTube_Incomplete_Work_Reconciler $recovery
+        private readonly PeerTube_Incomplete_Work_Reconciler $recovery,
+        private readonly ?PeerTube_Event_Repository $events = null
     ) {
     }
 
@@ -54,10 +55,41 @@ final class PeerTube_Overview_Admin
                         <td>
                             <strong><?php echo esc_html((string) $row['status_label']); ?></strong>
                             <?php if ('' !== $row['progress']) : ?><br><?php echo esc_html((string) $row['progress']); ?><?php endif; ?>
-                            <details style="margin-top:.5em"><summary><?php esc_html_e('Diagnostics', 'argentwolf-video-processor'); ?></summary>
+                            <details style="margin-top:.5em"><summary><?php esc_html_e('Details & log', 'argentwolf-video-processor'); ?></summary>
+                                <?php if (is_array($row['latest_event'])) : $event = $row['latest_event']; ?>
+                                    <?php if ('' !== (string) $event['created_at']) : ?><p><strong><?php esc_html_e('Latest event:', 'argentwolf-video-processor'); ?></strong> <?php echo esc_html((string) $event['created_at']); ?></p><?php endif; ?>
+                                    <p><strong><?php echo esc_html(sprintf(
+                                        /* translators: 1: pipeline step number, 2: pipeline step name */
+                                        __('Step %1$d of 7 — %2$s', 'argentwolf-video-processor'),
+                                        (int) $event['pipeline_step'],
+                                        self::pipeline_step_label((int) $event['pipeline_step'])
+                                    )); ?></strong></p>
+                                    <?php if ('' !== (string) $event['backend_id']) : ?><p><strong><?php esc_html_e('Backend ID (internal identifier):', 'argentwolf-video-processor'); ?></strong> <code><?php echo esc_html((string) $event['backend_id']); ?></code></p><?php endif; ?>
+                                    <?php if ((int) $event['http_status'] > 0) : ?><p><strong><?php esc_html_e('HTTP status:', 'argentwolf-video-processor'); ?></strong> <?php echo esc_html((string) $event['http_status']); ?></p><?php endif; ?>
+                                    <p><?php echo esc_html((string) $event['message']); ?></p>
+                                    <?php if ('' !== (string) $event['automatic_action']) : ?><p><strong><?php esc_html_e('Automatic action:', 'argentwolf-video-processor'); ?></strong> <?php echo esc_html((string) $event['automatic_action']); ?></p><?php endif; ?>
+                                    <?php if ('' !== (string) $event['operator_action']) : ?><p><strong><?php esc_html_e('Suggested operator action:', 'argentwolf-video-processor'); ?></strong> <?php echo esc_html((string) $event['operator_action']); ?></p><?php endif; ?>
+                                    <?php if (array() !== $row['events']) : ?>
+                                        <p><strong><?php esc_html_e('Recent activity', 'argentwolf-video-processor'); ?></strong></p>
+                                        <ul>
+                                            <?php foreach ($row['events'] as $history) : ?>
+                                                <li><?php echo esc_html(sprintf(
+                                                    /* translators: 1: timestamp, 2: pipeline step, 3: event message */
+                                                    __('%1$s — Step %2$d of 7 — %3$s', 'argentwolf-video-processor'),
+                                                    (string) $history['created_at'],
+                                                    (int) $history['pipeline_step'],
+                                                    (string) $history['message']
+                                                )); ?></li>
+                                            <?php endforeach; ?>
+                                        </ul>
+                                    <?php endif; ?>
+                                <?php endif; ?>
+                                <p><strong><?php esc_html_e('Technical identifiers', 'argentwolf-video-processor'); ?></strong><br>
                                 <code><?php echo esc_html('video_id=' . (string) $row['video_id']); ?></code><br>
+                                <?php if (is_array($row['latest_event']) && (int) $row['latest_event']['task_id'] > 0) : ?><code><?php echo esc_html('task_id=' . (string) $row['latest_event']['task_id']); ?></code><br><?php endif; ?>
                                 <?php if ('' !== $row['operation_id']) : ?><code><?php echo esc_html('operation_id=' . (string) $row['operation_id']); ?></code><br><?php endif; ?>
                                 <?php if ('' !== $row['remote_uuid']) : ?><code><?php echo esc_html('remote_uuid=' . (string) $row['remote_uuid']); ?></code><?php endif; ?>
+                                </p>
                             </details>
                         </td>
                         <td>
@@ -188,6 +220,8 @@ final class PeerTube_Overview_Admin
                 );
             }
         }
+        $events = null === $this->events ? array() : $this->events->recent($video_id, 10);
+        $latest_event = is_array($events[0] ?? null) ? $events[0] : null;
         return array(
             'video_id' => $video_id,
             'media_title' => $media_title,
@@ -202,7 +236,23 @@ final class PeerTube_Overview_Admin
             'remote_uuid' => is_array($execution) ? (string) ($execution['remote_uuid'] ?? '') : '',
             'recovering' => true === ($recovery['eligible'] ?? false),
             'resumable' => true === ($recovery['resumable'] ?? false),
+            'latest_event' => $latest_event,
+            'events' => $events,
         );
+    }
+
+    private static function pipeline_step_label(int $step): string
+    {
+        return match ($step) {
+            1 => __('Prepare source', 'argentwolf-video-processor'),
+            2 => __('Connect to PeerTube', 'argentwolf-video-processor'),
+            3 => __('Start upload', 'argentwolf-video-processor'),
+            4 => __('Transfer video', 'argentwolf-video-processor'),
+            5 => __('PeerTube processing', 'argentwolf-video-processor'),
+            6 => __('Finalize publication', 'argentwolf-video-processor'),
+            7 => __('Verify serving and finish', 'argentwolf-video-processor'),
+            default => __('Unknown step', 'argentwolf-video-processor'),
+        };
     }
 
     /** @param array<string,mixed> $recovery */

@@ -546,14 +546,14 @@ final class PeerTube_Connection_Admin
             <p><?php esc_html_e('ArgentWolf Video Processor can publish selected videos to configured PeerTube servers. Videos are uploaded in the background while WordPress continues serving the local copy. Once the PeerTube video is ready and its selected visibility has been verified, the post or page will serve the PeerTube version instead.', 'argentwolf-video-processor'); ?></p>
             <p><?php esc_html_e('Publishing defaults are configured on the Publishing tab. Local-file cleanup is configured separately on the Local Retention tab.', 'argentwolf-video-processor'); ?></p>
 
-            <h3><?php esc_html_e('Connect a PeerTube Instance', 'argentwolf-video-processor'); ?></h3>
-            <p><?php esc_html_e('Use the exact HTTPS URL of the PeerTube instance you wish to connect. Do not include any credentials or other information after the base URL.', 'argentwolf-video-processor'); ?></p>
+            <h3><?php esc_html_e('Connect a PeerTube Server', 'argentwolf-video-processor'); ?></h3>
+            <p><?php esc_html_e('Use the exact HTTPS URL of the PeerTube server you wish to connect. Do not include any credentials or other information after the base URL.', 'argentwolf-video-processor'); ?></p>
             <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" autocomplete="off" style="max-width:900px">
                 <input type="hidden" name="action" value="<?php echo esc_attr(self::ACTION_START); ?>">
                 <?php wp_nonce_field(self::NONCE_START, self::NONCE_FIELD, false); ?>
                 <table class="form-table" role="presentation">
                     <tr><th scope="row"><label for="awvp-peertube-origin"><?php esc_html_e('PeerTube URL', 'argentwolf-video-processor'); ?></label></th><td><input class="regular-text code" id="awvp-peertube-origin" name="origin" type="url" placeholder="https://video.example.org" aria-describedby="awvp-peertube-origin-help" required><p class="description" id="awvp-peertube-origin-help"><?php esc_html_e('Enter only the HTTPS base URL, for example https://video.example.org. Do not include a username, password, API path, query string, or fragment.', 'argentwolf-video-processor'); ?></p></td></tr>
-                    <tr><th scope="row"><label for="awvp-peertube-backend-id"><?php esc_html_e('Backend ID', 'argentwolf-video-processor'); ?></label></th><td><input class="regular-text code" id="awvp-peertube-backend-id" name="backend_id" type="text" maxlength="64" pattern="[a-z0-9][a-z0-9_-]{0,63}" title="Use 1-64 lowercase letters, numbers, hyphens, or underscores; begin with a letter or number." aria-describedby="awvp-peertube-backend-id-help" required><p class="description" id="awvp-peertube-backend-id-help"><?php esc_html_e('A permanent internal identifier for this PeerTube server. Use 1–64 lowercase letters, numbers, hyphens, or underscores. It must begin with a letter or number. Spaces and uppercase letters are not allowed. The ID “local” is reserved.', 'argentwolf-video-processor'); ?></p></td></tr>
+                    <tr><th scope="row"><label for="awvp-peertube-backend-id"><?php esc_html_e('Backend ID (internal identifier)', 'argentwolf-video-processor'); ?></label></th><td><input class="regular-text code" id="awvp-peertube-backend-id" name="backend_id" type="text" maxlength="64" pattern="[a-z0-9][a-z0-9_-]{0,63}" title="Use 1-64 lowercase letters, numbers, hyphens, or underscores; begin with a letter or number." aria-describedby="awvp-peertube-backend-id-help" required><p class="description" id="awvp-peertube-backend-id-help"><?php esc_html_e('The Backend ID is used in logs, diagnostics, and error messages to identify the particular PeerTube server involved. Use 1–64 lowercase letters, numbers, hyphens, or underscores. It must begin with a letter or number. Spaces and uppercase letters are not allowed. The ID “local” is reserved.', 'argentwolf-video-processor'); ?></p></td></tr>
                     <tr><th scope="row"><label for="awvp-peertube-label"><?php esc_html_e('Connection Label', 'argentwolf-video-processor'); ?></label></th><td><input class="regular-text" id="awvp-peertube-label" name="label" type="text" maxlength="120" aria-describedby="awvp-peertube-label-help" required><p class="description" id="awvp-peertube-label-help"><?php esc_html_e('A friendly name shown in ArgentWolf Video Processor menus and selectors, for example “ArgentWolf Video”.', 'argentwolf-video-processor'); ?></p></td></tr>
                 </table>
                 <p><button class="button button-primary" type="submit"><?php esc_html_e('Add PeerTube Server', 'argentwolf-video-processor'); ?></button></p>
@@ -561,7 +561,7 @@ final class PeerTube_Connection_Admin
 
             <details style="max-width:900px;margin:1em 0 2em"><summary><strong><?php esc_html_e('How connection setup works', 'argentwolf-video-processor'); ?></strong></summary>
                 <ol>
-                    <li><?php esc_html_e('Add the PeerTube URL, Backend ID, and Connection Label.', 'argentwolf-video-processor'); ?></li>
+                    <li><?php esc_html_e('Add the PeerTube URL, Backend ID (internal identifier), and Connection Label.', 'argentwolf-video-processor'); ?></li>
                     <li><?php esc_html_e('ArgentWolf Video Processor prepares secure local storage for the connection.', 'argentwolf-video-processor'); ?></li>
                     <li><?php esc_html_e('Sign in with a PeerTube username and password, plus a six-digit one-time code if your PeerTube account requires one. You do not need to create or paste an API key.', 'argentwolf-video-processor'); ?></li>
                     <li><?php esc_html_e('ArgentWolf Video Processor stores the returned access and refresh tokens securely; it does not retain the password or one-time code.', 'argentwolf-video-processor'); ?></li>
@@ -681,7 +681,7 @@ final class PeerTube_Connection_Admin
         }
         ?>
         <table class="widefat striped" style="max-width:1100px">
-            <thead><tr><th><?php esc_html_e('Label', 'argentwolf-video-processor'); ?></th><th><?php esc_html_e('PeerTube URL', 'argentwolf-video-processor'); ?></th><th><?php esc_html_e('Backend ID', 'argentwolf-video-processor'); ?></th><th><?php esc_html_e('Status', 'argentwolf-video-processor'); ?></th><th><?php esc_html_e('Updated', 'argentwolf-video-processor'); ?></th><th><?php esc_html_e('Action', 'argentwolf-video-processor'); ?></th></tr></thead>
+            <thead><tr><th><?php esc_html_e('Label', 'argentwolf-video-processor'); ?></th><th><?php esc_html_e('PeerTube URL', 'argentwolf-video-processor'); ?></th><th><?php esc_html_e('Backend ID (internal identifier)', 'argentwolf-video-processor'); ?></th><th><?php esc_html_e('Status', 'argentwolf-video-processor'); ?></th><th><?php esc_html_e('Updated', 'argentwolf-video-processor'); ?></th><th><?php esc_html_e('Action', 'argentwolf-video-processor'); ?></th></tr></thead>
             <tbody>
             <?php foreach ($operations as $operation) : ?>
                 <?php
@@ -716,7 +716,7 @@ final class PeerTube_Connection_Admin
         <h2><?php esc_html_e('Connection setup', 'argentwolf-video-processor'); ?></h2>
         <table class="widefat striped" style="max-width:900px"><tbody>
             <tr><th><?php esc_html_e('Setup ID', 'argentwolf-video-processor'); ?></th><td><code><?php echo esc_html($operation['operation_id']); ?></code></td></tr>
-            <tr><th><?php esc_html_e('Backend ID', 'argentwolf-video-processor'); ?></th><td><code><?php echo esc_html($operation['backend_id']); ?></code></td></tr>
+            <tr><th><?php esc_html_e('Backend ID (internal identifier)', 'argentwolf-video-processor'); ?></th><td><code><?php echo esc_html($operation['backend_id']); ?></code></td></tr>
             <tr><th><?php esc_html_e('PeerTube URL', 'argentwolf-video-processor'); ?></th><td><code><?php echo esc_html($operation['origin']); ?></code></td></tr>
             <tr><th><?php esc_html_e('Status', 'argentwolf-video-processor'); ?></th><td><?php echo esc_html(self::phase_label($phase)); ?></td></tr>
             <tr><th><?php esc_html_e('Progress', 'argentwolf-video-processor'); ?></th><td><?php echo esc_html(sprintf(

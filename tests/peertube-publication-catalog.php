@@ -17,6 +17,7 @@ namespace ArgentVideo {
 namespace {
     $GLOBALS['awvp_catalog_options'] = array();
     $GLOBALS['awvp_catalog_autoload'] = array();
+    $GLOBALS['awvp_catalog_cache_deletes'] = array();
 
     function get_option(string $option, mixed $default = false): mixed
     {
@@ -39,6 +40,11 @@ namespace {
     function wp_set_option_autoload(string $option, bool $autoload): bool
     {
         $GLOBALS['awvp_catalog_autoload'][$option] = $autoload;
+        return true;
+    }
+    function wp_cache_delete(string $key, string $group = ''): bool
+    {
+        $GLOBALS['awvp_catalog_cache_deletes'][] = array($key, $group);
         return true;
     }
 
@@ -122,6 +128,10 @@ namespace {
     $assert(false === $catalog['stale'] && null === $catalog['stale_since'] && '' === $catalog['stale_reason'], 'Successful refresh was not stored fresh.');
     $assert($catalog === $store->get_for_context('pt-primary', 'https://video.example.com', 1), 'Catalog context lookup rejected matching backend/origin/generation.');
     $assert(null === $store->get_for_context('pt-primary', 'https://video.example.com', 2), 'Catalog context lookup accepted a different credential generation.');
+    $GLOBALS['awvp_catalog_cache_deletes'] = array();
+    $assert($catalog === $store->get_for_context_fresh('pt-primary', 'https://video.example.com', 1), 'Fresh catalog context lookup rejected matching authority.');
+    $option_name = \ArgentVideo\PeerTube_Publication_Catalog_Store::option_name('pt-primary');
+    $assert(in_array(array($option_name, 'options'), $GLOBALS['awvp_catalog_cache_deletes'], true) && in_array(array('notoptions', 'options'), $GLOBALS['awvp_catalog_cache_deletes'], true), 'Fresh catalog read did not invalidate request-local WordPress option caches.');
     $assert(false === ($GLOBALS['awvp_catalog_autoload'][\ArgentVideo\PeerTube_Publication_Catalog_Store::option_name('pt-primary')] ?? true), 'Catalog cache must be non-autoloaded.');
     $assert(array('token-sentinel') === $tokens, 'Catalog service did not confine managed bearer to one API call.');
 

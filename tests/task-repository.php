@@ -205,7 +205,34 @@ $final_claim = $repo->claim_next(1030);
 $assert(is_array($final_claim) && 3 === (int) $final_claim['id'] && 2 === (int) $final_claim['attempts'], 'Recovered task did not consume its second attempt.');
 $exhausted = $repo->reschedule(3, (string) $final_claim['lock_token'], 1040, 'retry again', 1031);
 $assert(Task_Repository::EXHAUSTED === $exhausted && 'failed' === ($repo->find(3)['status'] ?? ''), 'Attempt exhaustion did not fail closed.');
+$assert('Task attempt limit reached. Last reason: retry again' === ($repo->find(3)['error_message'] ?? ''), 'Attempt exhaustion lost the last causal reason.');
 
+
+// Dependency waits are deferrals, not failed execution attempts. A claim may
+// be returned to the queue without consuming its finite attempt budget.
+$defer_enqueued = $repo->enqueue(
+    'test_defer',
+    null,
+    null,
+    null,
+    hash('sha256', 'awvp-task:v1:test_defer:1'),
+    array('version'=>1),
+    1040,
+    1032,
+    100,
+    1
+);
+$defer_claim = $repo->claim_task_of_types((int) $defer_enqueued['task_id'], array('test_defer'), 1040);
+$assert(is_array($defer_claim) && 1 === (int) $defer_claim['attempts'], 'Deferral fixture did not consume the claim attempt.');
+$assert(
+    Task_Repository::APPLIED === $repo->defer((int) $defer_claim['id'], (string) $defer_claim['lock_token'], 1050, 'Waiting for authority.', 1041),
+    'Dependency deferral failed.'
+);
+$deferred = $repo->find((int) $defer_claim['id']);
+$assert('queued' === ($deferred['status'] ?? '') && 0 === (int) ($deferred['attempts'] ?? -1) && 'Waiting for authority.' === ($deferred['error_message'] ?? ''), 'Deferral consumed attempt budget or lost its wait reason.');
+$defer_reclaim = $repo->claim_task_of_types((int) $defer_claim['id'], array('test_defer'), 1050);
+$assert(is_array($defer_reclaim) && 1 === (int) $defer_reclaim['attempts'], 'Deferred task could not reuse its preserved attempt budget.');
+$assert(Task_Repository::APPLIED === $repo->complete((int) $defer_reclaim['id'], (string) $defer_reclaim['lock_token'], 1051), 'Deferred task could not complete after its dependency recovered.');
 
 // Generic tasks must support the same bounded attempt scale as the staged
 // upload state machine; a 1 MiB-per-step upload must not be capped at 100 MiB.

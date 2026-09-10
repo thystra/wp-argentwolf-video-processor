@@ -10,17 +10,25 @@ namespace ArgentVideo;
 /**
  * Conservative wall-clock guards for streamed PeerTube upload work.
  *
- * Budgets are intentionally generous: one minute per 128 MiB, with a one-hour
- * floor and six-hour ceiling. The worker only observes the process budget at a
+ * Upload budgets are intentionally generous: one minute per 128 MiB, with a
+ * one-hour floor and six-hour ceiling. A detached worker that has not yet reached
+ * a real upload operation uses a short watcher budget instead. The worker only
+ * observes either process budget at a
  * durable request boundary; it never interrupts a byte-bearing request in
  * flight. Individual streamed requests use the same size-derived timeout.
  */
 final class PeerTube_Upload_Runtime_Budget
 {
     public const BASE_BYTES = 134217728; // 128 MiB.
+    public const WATCHER_SECONDS = 120;
     public const SECONDS_PER_BASE = 60;
     public const MIN_SECONDS = 3600;
     public const MAX_SECONDS = 21600;
+
+    public static function watcher_seconds(): int
+    {
+        return self::WATCHER_SECONDS;
+    }
 
     public static function process_seconds(int $source_bytes): int
     {

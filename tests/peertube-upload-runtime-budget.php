@@ -14,6 +14,7 @@ $assert = static function (bool $ok, string $message): void {
 };
 
 $base = PeerTube_Upload_Runtime_Budget::BASE_BYTES;
+$assert(120 === PeerTube_Upload_Runtime_Budget::watcher_seconds(), 'Pre-upload watcher budget is not short/bounded.');
 $assert(3600 === PeerTube_Upload_Runtime_Budget::process_seconds(1), 'Tiny upload lost the one-hour floor.');
 $assert(3600 === PeerTube_Upload_Runtime_Budget::process_seconds($base), '128 MiB upload lost the one-hour floor.');
 $assert(3600 === PeerTube_Upload_Runtime_Budget::request_seconds(1024 * 1024 * 1024), '1 GiB segment should remain inside the one-hour floor.');

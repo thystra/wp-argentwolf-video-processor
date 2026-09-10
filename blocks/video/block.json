@@ -6,7 +6,11 @@
   "category": "media",
   "icon": "video-alt3",
   "description": "Bind a WordPress video to an AWVP Video and choose its final destination.",
-  "keywords": ["video", "media", "peertube"],
+  "keywords": [
+    "video",
+    "media",
+    "peertube"
+  ],
   "textdomain": "argentwolf-video-processor",
   "attributes": {
     "videoId": {
@@ -17,5 +21,6 @@
   "supports": {
     "html": false
   },
-  "editorScript": "file:./index.js"
+  "editorScript": "file:./index.js",
+  "style": "file:./style.css"
 }

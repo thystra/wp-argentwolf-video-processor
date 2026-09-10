@@ -272,13 +272,19 @@ the same advisory registry with their own capability and NVD link.
 
 Public WordPress.org stable release: `1.0.0`.
 
-Current controlled development candidate: `2.0.0-rc9`. RC packages are built
+Current controlled development candidate: `2.0.0-rc10`. RC packages are built
 from reviewed Forgejo commits and are not published to WordPress.org SVN. The
 public Stable tag remains `1.0.0` until final `2.0.0` promotion.
 
 Install public releases from WordPress.org or use the exact canonical ZIP
 attached to the corresponding Forgejo release. Automatically generated source
 archives are not canonical installable artifacts.
+
+### RC10 live-test hardening (development)
+
+RC10 is the follow-up to controlled RC9 live testing. It preserves RC9 package bytes and hardens the live PeerTube path: automatic credential/catalog authority repair, fresh reads in long-lived workers, dependency deferral without attempt exhaustion, semantic tag and short-embed verification, local-only recovery of already-applied publications, seven-step operator diagnostics, route-before-FFmpeg behavior, responsive no-autoplay rendering, explicit legacy 1.x migration/adoption, and a site-wide WordPress archive-of-record policy.
+
+Legacy discovery is read-only. A completed 1.x attachment becomes a 2.0 AWVP Video only when an administrator explicitly includes it in migration planning; historical post content is not rewritten. Verified serving authority can bridge supported historical Core Video/shortcode output at runtime. Original Media Library deletion remains forbidden while WordPress is the configured archive of record.
 
 ### R46.3c PeerTube publication review (development)
 

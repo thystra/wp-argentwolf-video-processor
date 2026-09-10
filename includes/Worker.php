@@ -16,7 +16,8 @@ final class Worker
 
     public function __construct(
         private readonly Job_Repository $jobs,
-        private readonly Transcoder $transcoder
+        private readonly Transcoder $transcoder,
+        private readonly ?Queue $queue = null
     ) {
     }
 
@@ -51,6 +52,17 @@ final class Worker
                 $attachment_id = (int) $job['attachment_id'];
                 $job_id = (int) ($job['id'] ?? 0);
                 $job_lock = is_string($job['lock_token'] ?? null) ? $job['lock_token'] : '';
+                if (null !== $this->queue && ! $this->queue->local_processing_allowed($attachment_id)) {
+                    if ($this->jobs->discard_claimed($job_id, $job_lock)) {
+                        delete_post_meta($attachment_id, '_argent_video_job_id');
+                        if ('queued' === (string) get_post_meta($attachment_id, '_argent_video_status', true)) {
+                            delete_post_meta($attachment_id, '_argent_video_status');
+                        }
+                        delete_post_meta($attachment_id, '_argent_video_last_error');
+                        continue;
+                    }
+                    throw new RuntimeException('Local processing destination authority changed after the job was claimed.');
+                }
                 if (class_exists(Local_Retention_Service::class)
                     && Local_Retention_Service::attachment_local_processing_blocked($attachment_id)) {
                     if ($this->jobs->cancel_claimed($job_id, $job_lock)) {

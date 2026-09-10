@@ -41,6 +41,13 @@ final class Backend_Registry
         return $this->all()[$backend_id] ?? null;
     }
 
+    /** @return array<string, mixed>|null */
+    public function get_fresh(string $backend_id): ?array
+    {
+        self::invalidate_option_cache(self::OPTION);
+        return $this->get($backend_id);
+    }
+
     /** @return list<string> */
     public function diagnostics(): array
     {
@@ -1059,6 +1066,16 @@ final class Backend_Registry
             ),
             default => Atomic_Option_Result::refused(),
         };
+    }
+
+    private static function invalidate_option_cache(string $option): void
+    {
+        if (! function_exists('wp_cache_delete')) {
+            return;
+        }
+        wp_cache_delete($option, 'options');
+        wp_cache_delete('notoptions', 'options');
+        wp_cache_delete('alloptions', 'options');
     }
 
     /**

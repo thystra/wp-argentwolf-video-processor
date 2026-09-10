@@ -51,8 +51,8 @@ final class PeerTube_Publication_Catalog_Service
         $access_token = $secret['access_token'];
         $secret_generation = $secret['generation'];
 
-        $cached_for_context = $this->store->get_for_context($backend_id, $origin, $secret_generation);
-        if (null === $cached_for_context && null !== $this->store->get($backend_id)) {
+        $cached_for_context = $this->store->get_for_context_fresh($backend_id, $origin, $secret_generation);
+        if (null === $cached_for_context && null !== $this->store->get_fresh($backend_id)) {
             $this->store->mark_stale($backend_id, $now, 'backend_context_changed');
         }
 

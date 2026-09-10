@@ -20,6 +20,12 @@ final class Video_Meta{
  public static function sanitize_cleanup_state(mixed $v):string{return in_array($v,array('none','pending','eligible','running','complete','blocked','failed'),true)?$v:'none';}
  public static function sanitize_positive_id(mixed $v):int{return is_numeric($v)&&((int)$v)>0?(int)$v:0;}
 }
+final class Archive_Of_Record_Policy_Store{
+ public bool $allowed=false;public int $grace=7;
+ public function source_deletion_allowed():bool{return $this->allowed;}
+ public function wordpress_is_archive():bool{return !$this->allowed;}
+ public function grace_days():int{return $this->grace;}
+}
 final class Local_Retention_Policy{
  public const MODE_KEEP='keep',MODE_DELETE_MANAGED='delete_managed',MODE_DELETE_ALL='delete_all';
  public static function create(string $m,int $g,int $u,int $n):array{if(!in_array($m,array(self::MODE_KEEP,self::MODE_DELETE_MANAGED,self::MODE_DELETE_ALL),true)||$u<1||$n<1)return array();if(self::MODE_KEEP===$m)$g=0;elseif($g<1||$g>365)return array();return array('version'=>1,'mode'=>$m,'grace_days'=>$g,'confirmed_by'=>$u,'confirmed_at'=>$n);}
@@ -61,12 +67,21 @@ final class Task_Repository{
 }
 namespace {
 require_once dirname(__DIR__).'/includes/Local_Retention_Service.php';
-use ArgentVideo\{Local_Retention_Service as S,Task_Repository,Job_Repository,FakeServing,Video_Meta,Local_Retention_Policy as P};
+use ArgentVideo\{Local_Retention_Service as S,Task_Repository,Job_Repository,FakeServing,Video_Meta,Local_Retention_Policy as P,Archive_Of_Record_Policy_Store};
 $f=0;$a=function(bool $v,string $m)use(&$f){if(!$v){fwrite(STDERR,"FAIL: $m\n");$f++;}};$tasks=new Task_Repository();$jobs=new Job_Repository();$serving=new FakeServing();$svc=new S($tasks,$serving,$jobs);
 $auth=array('generation'=>2,'plan_sha256'=>str_repeat('a',64),'manifest_sha256'=>str_repeat('b',64),'remote_asset_id'=>9,'remote_uuid'=>'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','verified_at'=>1000,'backend_id'=>'pt');
 $GLOBALS['r469_meta'][100]=array(Video_Meta::ATTACHMENT_ID=>20,Video_Meta::SOURCE_STATE=>'present',Video_Meta::MASTER_AUTHORITY=>'wordpress_source',Video_Meta::SERVING_AUTHORITY=>$auth);
 $GLOBALS['r469_meta'][101]=array(Video_Meta::ATTACHMENT_ID=>21,Video_Meta::SOURCE_STATE=>'present',Video_Meta::MASTER_AUTHORITY=>'wordpress_source',Video_Meta::SERVING_AUTHORITY=>$auth);
 $GLOBALS['r469_meta'][102]=array(Video_Meta::ATTACHMENT_ID=>20,Video_Meta::SOURCE_STATE=>'present',Video_Meta::MASTER_AUTHORITY=>'wordpress_source',Video_Meta::SERVING_AUTHORITY=>$auth);
+$siteTasks=new Task_Repository();$siteJobs=new Job_Repository();$sitePolicy=new Archive_Of_Record_Policy_Store();$siteSvc=new S($siteTasks,$serving,$siteJobs,$sitePolicy);
+$GLOBALS['r469_video_refs']=array(100);
+$siteDenied=$siteSvc->configure_for_site_policy(100,P::MODE_DELETE_ALL,7,1500);$a(S::REFUSED===$siteDenied['status']&&0===count($siteTasks->enqueues),'WordPress-as-archive site policy did not prohibit per-video original deletion.');
+$siteManaged=$siteSvc->configure_for_site_policy(100,P::MODE_DELETE_MANAGED,7,1600);$a(S::APPLIED===$siteManaged['status']&&1600+7*86400===$siteManaged['eligible_at'],'Site policy grace was not applied to managed cleanup without per-video confirmation.');
+$sitePolicy->allowed=true;$GLOBALS['r469_meta'][100][Video_Meta::CLEANUP_STATE]='none';$GLOBALS['r469_meta'][100][Video_Meta::SOURCE_STATE]='present';
+$siteDelete=$siteSvc->configure_for_site_policy(100,P::MODE_DELETE_ALL,7,1700);$a(S::APPLIED===$siteDelete['status'],'Not-WordPress archive policy did not permit delayed original deletion after verified serving.');
+$siteQueue=end($siteTasks->enqueues);$siteTask=array('id'=>$siteDelete['task_id'],'video_post_id'=>100,'task_type'=>S::TASK_TYPE,'lock_token'=>'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','payload_json'=>json_encode($siteQueue['payload']));
+$sitePolicy->allowed=false;$beforeSiteDelete=$GLOBALS['r469_source_deleted'];$siteRun=$siteSvc->advance_claimed($siteTask,$siteDelete['eligible_at']);$a(S::STATUS_COMPLETE===$siteRun['status']&&'blocked_keep'===$siteRun['service_status']&&$beforeSiteDelete===$GLOBALS['r469_source_deleted'],'Switching site policy back to WordPress archive did not stop an already-queued original deletion.');
+$GLOBALS['r469_meta'][100][Video_Meta::CLEANUP_STATE]='none';$GLOBALS['r469_meta'][100][Video_Meta::SOURCE_STATE]='present';
 $GLOBALS['r469_video_refs']=range(100,120);$a(S::attachment_local_processing_blocked(20),'Attachment reuse beyond the bounded reference scan must fail closed.');
 $GLOBALS['r469_video_refs']=array(100,102);$r=$svc->configure(100,P::MODE_DELETE_MANAGED,1,'wordpress_source',7,850);$a(S::REFUSED===$r['status']&&0===count($tasks->enqueues),'Non-exclusive attachment ownership must refuse per-video cleanup.');
 $GLOBALS['r469_video_refs']=array(100);

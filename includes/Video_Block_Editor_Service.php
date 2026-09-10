@@ -30,7 +30,8 @@ final class Video_Block_Editor_Service
 
     public function __construct(
         private readonly Backend_Registry $registry,
-        private readonly Video_Publishing_Defaults_Store $defaults
+        private readonly Video_Publishing_Defaults_Store $defaults,
+        private readonly ?Job_Repository $jobs = null
     ) {
     }
 
@@ -256,9 +257,31 @@ final class Video_Block_Editor_Service
             get_post_meta($video_id, Video_Meta::DESTINATION, true)
         );
 
-        return $after === $destination
-            ? array('status' => self::APPLIED)
-            : array('status' => self::INDETERMINATE);
+        if ($after !== $destination) {
+            return array('status' => self::INDETERMINATE);
+        }
+        if (! Video_Destination::is_local($destination)) {
+            $this->discard_unstarted_local_job($video_id);
+        }
+        return array('status' => self::APPLIED);
+    }
+
+    private function discard_unstarted_local_job(int $video_id): void
+    {
+        if (null === $this->jobs) {
+            return;
+        }
+        $attachment_id = Video_Meta::sanitize_positive_id(
+            get_post_meta($video_id, Video_Meta::ATTACHMENT_ID, true)
+        );
+        if ($attachment_id < 1 || ! $this->jobs->discard_unstarted($attachment_id)) {
+            return;
+        }
+        delete_post_meta($attachment_id, '_argent_video_job_id');
+        if ('queued' === (string) get_post_meta($attachment_id, '_argent_video_status', true)) {
+            delete_post_meta($attachment_id, '_argent_video_status');
+        }
+        delete_post_meta($attachment_id, '_argent_video_last_error');
     }
 
     /** @return list<array{backend_id:string,type:string,label:string}> */

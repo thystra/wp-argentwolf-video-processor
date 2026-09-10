@@ -21,7 +21,8 @@ final class PeerTube_Connection_Admin_Service implements PeerTube_Connection_Adm
         private readonly PeerTube_Identity_Destination_Service $identity_destinations,
         private readonly PeerTube_Backend_Activation_Service $activation,
         private readonly ?PeerTube_Token_Lifecycle_Service $token_lifecycle = null,
-        private readonly ?PeerTube_Upload_Policy_Store $upload_policy = null
+        private readonly ?PeerTube_Upload_Policy_Store $upload_policy = null,
+        private readonly ?PeerTube_Publication_Authority_Repair $authority_repair = null
     ) {
     }
 
@@ -81,6 +82,9 @@ final class PeerTube_Connection_Admin_Service implements PeerTube_Connection_Adm
 
     public function refresh_backend(string $backend_id, int $now): array
     {
+        if (null !== $this->authority_repair) {
+            return $this->authority_repair->repair($backend_id, $now);
+        }
         return null !== $this->token_lifecycle
             ? $this->token_lifecycle->refresh($backend_id, $now)
             : array('status' => PeerTube_Token_Lifecycle_Service::STATUS_REFUSED);

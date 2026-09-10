@@ -31,6 +31,32 @@ final class PeerTube_Publication_Catalog_Store
     }
 
     /** @return array<string,mixed>|null */
+    public function get_fresh(string $backend_id): ?array
+    {
+        $backend_id = Backend_Identity::sanitize($backend_id);
+        if ('' === $backend_id || Backend_Registry::LOCAL_ID === $backend_id) {
+            return null;
+        }
+        self::invalidate_option_cache(self::option_name($backend_id));
+        return $this->get($backend_id);
+    }
+
+    /** @return array<string,mixed>|null */
+    public function get_for_context_fresh(string $backend_id, string $origin, int $secret_generation): ?array
+    {
+        $origin = PeerTube_Origin::sanitize($origin);
+        $catalog = $this->get_fresh($backend_id);
+        if (
+            null === $catalog || '' === $origin || $secret_generation < 1
+            || $origin !== $catalog['origin']
+            || $secret_generation !== $catalog['secret_generation']
+        ) {
+            return null;
+        }
+        return $catalog;
+    }
+
+    /** @return array<string,mixed>|null */
     public function get_for_context(string $backend_id, string $origin, int $secret_generation): ?array
     {
         $origin = PeerTube_Origin::sanitize($origin);
@@ -85,6 +111,16 @@ final class PeerTube_Publication_Catalog_Store
     public static function option_name(string $backend_id): string
     {
         return self::OPTION_PREFIX . substr(hash('sha256', $backend_id), 0, 32);
+    }
+
+    private static function invalidate_option_cache(string $option): void
+    {
+        if (! function_exists('wp_cache_delete')) {
+            return;
+        }
+        wp_cache_delete($option, 'options');
+        wp_cache_delete('notoptions', 'options');
+        wp_cache_delete('alloptions', 'options');
     }
 
     /** @param array<string,mixed> $catalog */

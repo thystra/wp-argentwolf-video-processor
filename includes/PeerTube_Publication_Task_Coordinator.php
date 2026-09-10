@@ -8,6 +8,7 @@ declare(strict_types=1);
 namespace ArgentVideo;
 
 use Closure;
+use InvalidArgumentException;
 use Throwable;
 
 /**
@@ -48,7 +49,8 @@ final class PeerTube_Publication_Task_Coordinator
         private readonly Video_Publishing_Defaults_Store $defaults,
         callable $api_factory,
         private readonly ?PeerTube_Serving_Cutover_Service $cutover = null,
-        private readonly ?PeerTube_Derivative_Cleanup_Service $derivative_cleanup = null
+        private readonly ?PeerTube_Derivative_Cleanup_Service $derivative_cleanup = null,
+        private readonly ?PeerTube_Publication_Authority_Repair $authority_repair = null
     ) {
         $this->api_factory = Closure::fromCallable($api_factory);
     }
@@ -244,15 +246,43 @@ final class PeerTube_Publication_Task_Coordinator
             return $this->finish_cutover($task_id,$lock,$video_id,$now,'verified_existing');
         }
 
-        try { $updated=$api->update_publication((string)$secret['access_token'],(string)$execution['remote_uuid'],$manifest,$target,$thumbnail); }
-        catch(Throwable){ $updated=array('ok'=>false); }
+        try {
+            $updated=$api->update_publication((string)$secret['access_token'],(string)$execution['remote_uuid'],$manifest,$target,$thumbnail);
+        } catch (InvalidArgumentException) {
+            $message='PeerTube publication update was refused locally before transmission; an explicit retry is safe after correcting the input.';
+            return self::with_operator_event($this->fail($task_id,self::TASK_FINALIZE,$lock,$message,$now,'mutation_not_sent'),0,'invalid_input',$message);
+        } catch (Throwable) {
+            $message='PeerTube publication update ended without a definitive provider response; automatic replay is refused.';
+            return self::with_operator_event($this->fail($task_id,self::TASK_FINALIZE,$lock,$message,$now,'mutation_indeterminate'),0,'transport_error',$message);
+        }
         if (true !== ($updated['ok']??false)) {
             $error=is_array($updated['error']??null)?$updated['error']:array();
             $code=is_string($error['code']??null)?$error['code']:'';
             if ('publication_update_input_invalid'===$code) {
-                return $this->fail($task_id,self::TASK_FINALIZE,$lock,'PeerTube publication update was refused locally before transmission; an explicit retry is safe after correcting the input.',$now,'mutation_not_sent');
+                $message='PeerTube publication update was refused locally before transmission; an explicit retry is safe after correcting the input.';
+                return self::with_operator_event($this->fail($task_id,self::TASK_FINALIZE,$lock,$message,$now,'mutation_not_sent'),0,'invalid_input',$message);
             }
-            return $this->fail($task_id,self::TASK_FINALIZE,$lock,'PeerTube publication update was not definitively accepted; automatic replay is refused.',$now,'mutation_indeterminate');
+            $http_status=self::http_status($error['http_status']??null);
+            $error_status=self::machine_error_status($error['status']??null);
+            if ($http_status >= 400 && $http_status < 500) {
+                $message='PeerTube rejected the publication update with HTTP '.$http_status;
+                if ('' !== $error_status) {
+                    $message.=' ('.$error_status.')';
+                }
+                $message.='; no successful mutation is assumed, and an explicit retry is safe after the cause is corrected.';
+                return self::with_operator_event($this->fail($task_id,self::TASK_FINALIZE,$lock,$message,$now,'mutation_rejected'),$http_status,$error_status,$message);
+            }
+            $message='PeerTube publication update was not definitively accepted; automatic replay is refused.';
+            if ($http_status > 0) {
+                $message.=' Provider response: HTTP '.$http_status;
+                if ('' !== $error_status) {
+                    $message.=' ('.$error_status.')';
+                }
+                $message.='.';
+            } elseif ('' !== $error_status) {
+                $message.=' Transport classification: '.$error_status.'.';
+            }
+            return self::with_operator_event($this->fail($task_id,self::TASK_FINALIZE,$lock,$message,$now,'mutation_indeterminate'),$http_status,$error_status,$message);
         }
         if (! $this->remote_matches_manifest($api,(string)$secret['access_token'],$execution,$manifest,$target)) {
             return $this->fail($task_id,self::TASK_FINALIZE,$lock,'PeerTube publication update could not be positively verified against the complete reviewed manifest.',$now,'verification_failed');
@@ -335,11 +365,14 @@ final class PeerTube_Publication_Task_Coordinator
             || $plan['channel_id']!==(string)($destination['channel_id']??'')
             || $lifecycle['anchor_post_id']!==$plan['anchor_post_id']
             || !hash_equals($lifecycle['plan_sha256'],PeerTube_Publication_Lifecycle::plan_sha256($plan))) return array('status'=>'refused');
-        $descriptor=$this->registry->get((string)$plan['backend_id']);
+        if (null !== $this->authority_repair) {
+            $this->authority_repair->repair((string) $plan['backend_id'], $now);
+        }
+        $descriptor=$this->registry->get_fresh((string)$plan['backend_id']);
         if (!is_array($descriptor)||'active'!==($descriptor['state']??null)||Backend_Registry::PEERTUBE_TYPE!==($descriptor['type']??null)) return array('status'=>'backend_unavailable');
         try{$secret=$this->secrets->read((string)$descriptor['secret_ref'],(string)$plan['backend_id']);}catch(Throwable){$secret=null;}
         if (!self::valid_secret($secret,$now)) return array('status'=>'credential_unavailable');
-        $catalog=$this->catalogs->get_for_context((string)$plan['backend_id'],(string)$descriptor['config']['origin'],(int)$secret['generation']);
+        $catalog=$this->catalogs->get_for_context_fresh((string)$plan['backend_id'],(string)$descriptor['config']['origin'],(int)$secret['generation']);
         if (!is_array($catalog)||true===($catalog['stale']??true)) return array('status'=>'catalog_unavailable');
         $settings=$this->defaults->get(); if(null===$settings)return array('status'=>'defaults_unavailable');
         try{$api=($this->api_factory)((string)$descriptor['config']['origin']);}catch(Throwable){$api=null;}
@@ -391,7 +424,7 @@ final class PeerTube_Publication_Task_Coordinator
         $expected=array(
             'title'=>(string)$manifest['title'],
             'description_markdown'=>(string)$manifest['description_markdown'],
-            'tags'=>$manifest['tags'],
+            'tags'=>self::semantic_tags($manifest['tags']),
             'support_markdown'=>(string)$manifest['support_markdown'],
             'licence_id'=>(string)$manifest['licence_id'],
             'category_id'=>(string)$manifest['category_id'],
@@ -406,7 +439,25 @@ final class PeerTube_Publication_Task_Coordinator
                 'sexually_explicit'=>(bool)$manifest['moderation']['sexually_explicit'],
             ),
         );
-        return $expected===$publication;
+        $publication['tags']=self::semantic_tags($publication['tags'] ?? null);
+        return null !== $expected['tags'] && null !== $publication['tags'] && $expected===$publication;
+    }
+
+    /** @return list<string>|null */
+    private static function semantic_tags(mixed $value): ?array
+    {
+        if (! is_array($value) || array_values($value) !== $value || count($value) > 5) {
+            return null;
+        }
+        $tags = array();
+        foreach ($value as $tag) {
+            if (! is_string($tag) || '' === $tag) {
+                return null;
+            }
+            $tags[] = $tag;
+        }
+        sort($tags, SORT_STRING);
+        return $tags;
     }
 
     private function verify_remote(PeerTube_Publication_Mutation_Api $api,string $token,array $execution,string $privacy):bool
@@ -486,8 +537,30 @@ final class PeerTube_Publication_Task_Coordinator
 
     private function complete(int $id,string $type,string $lock,int $now,string $service):array{return self::result(self::STATUS_COMPLETE,$id,$type,$this->tasks->complete($id,$lock,$now),0,$service);}
     private function fail(int $id,string $type,string $lock,string $message,int $now,string $service):array{return self::result(self::STATUS_FAILED,$id,$type,$this->tasks->fail($id,$lock,$message,$now),0,$service);}
-    private function reschedule(int $id,string $type,string $lock,int $after,string $message,int $now):array{return self::result(self::STATUS_REQUEUED,$id,$type,$this->tasks->reschedule($id,$lock,$after,$message,$now),$after,'waiting');}
+    private function reschedule(int $id,string $type,string $lock,int $after,string $message,int $now):array{return self::result(self::STATUS_REQUEUED,$id,$type,$this->tasks->defer($id,$lock,$after,$message,$now),$after,'waiting');}
     private static function result(string $status,int $task_id,string $task_type,string $repo,int $run_after=0,string $service=''):array{return array('status'=>$status,'task_id'=>$task_id,'task_type'=>$task_type,'service_status'=>$service,'repository_status'=>$repo,'run_after'=>$run_after);}
+    /** @param array<string,mixed> $result @return array<string,mixed> */
+    private static function with_operator_event(array $result,int $http_status,string $error_status,string $message): array
+    {
+        $result['http_status']=$http_status;
+        $result['error_status']=$error_status;
+        $result['operator_message']=$message;
+        return $result;
+    }
+
+    private static function http_status(mixed $value): int
+    {
+        return is_int($value) && $value >= 100 && $value <= 599 ? $value : 0;
+    }
+
+    private static function machine_error_status(mixed $value): string
+    {
+        if (! is_string($value) || '' === $value || strlen($value) > 64) {
+            return '';
+        }
+        return 1 === preg_match('/^[a-z][a-z0-9_]{0,63}$/D', $value) ? $value : '';
+    }
+
     private static function positive_int(mixed $v):int{if(is_int($v))return$v>0?$v:0;if(!is_string($v)||1!==preg_match('/^[1-9][0-9]*$/D',$v))return 0;$n=(int)$v;return$n>0&&(string)$n===$v?$n:0;}
 }
 

@@ -10,9 +10,11 @@ namespace ArgentVideo;
 /**
  * R46.7 planner for local-to-PeerTube migration.
  *
- * This service is intentionally inert: it writes only PEERTUBE_MIGRATION_PLAN.
- * It never edits the live destination/publication plan, enqueues a task, performs
- * provider HTTP, or changes serving authority.
+ * For already-modeled 2.0 videos this service writes only PEERTUBE_MIGRATION_PLAN.
+ * An administrator-selected legacy: attachment may first be explicitly adopted
+ * into the minimum local 2.0 identity through Legacy_Video_Adoption_Service.
+ * Planning never starts FFmpeg/PeerTube work, performs provider HTTP, rewrites
+ * historical post_content, or changes serving authority.
  */
 final class PeerTube_Migration_Planner
 {
@@ -27,7 +29,8 @@ final class PeerTube_Migration_Planner
     public function __construct(
         private readonly Backend_Registry $registry,
         private readonly Video_Publishing_Defaults_Store $defaults,
-        private readonly PeerTube_Publication_Catalog_Store $catalogs
+        private readonly PeerTube_Publication_Catalog_Store $catalogs,
+        private readonly ?Legacy_Video_Adoption_Service $legacy = null
     ) {
     }
 
@@ -39,6 +42,46 @@ final class PeerTube_Migration_Planner
         $limit = max(1, min(self::MAX_SELECT_ALL, $limit));
         $offset = max(0, $offset);
         $wanted = $offset + $limit + 1;
+
+        $current = $this->current_candidates($wanted);
+        $legacy = null !== $this->legacy
+            ? $this->legacy->candidates($wanted, 0)
+            : array('items' => array(), 'more' => false);
+        $eligible = $this->merge_candidate_sources($current['items'], $legacy['items']);
+
+        return array(
+            'items' => array_slice($eligible, $offset, $limit),
+            'more'  => count($eligible) > $offset + $limit || true === $current['more'] || true === $legacy['more'],
+        );
+    }
+
+
+    /**
+     * Merge current and legacy candidates fairly so a large existing 2.0 set
+     * cannot starve read-only legacy discovery from bounded admin pages.
+     *
+     * @param list<array<string,mixed>> $current
+     * @param list<array<string,mixed>> $legacy
+     * @return list<array<string,mixed>>
+     */
+    private function merge_candidate_sources(array $current, array $legacy): array
+    {
+        $merged = array();
+        $count = max(count($current), count($legacy));
+        for ($index = 0; $index < $count; ++$index) {
+            if (isset($current[$index])) {
+                $merged[] = $current[$index];
+            }
+            if (isset($legacy[$index])) {
+                $merged[] = $legacy[$index];
+            }
+        }
+        return $merged;
+    }
+
+    /** @return array{items:list<array<string,mixed>>,more:bool} */
+    private function current_candidates(int $wanted): array
+    {
         $eligible = array();
         $db_offset = 0;
         $scanned = 0;
@@ -80,10 +123,23 @@ final class PeerTube_Migration_Planner
                 break;
             }
         }
+        return array('items' => $eligible, 'more' => ! $exhausted);
+    }
 
-        $items = array_slice($eligible, $offset, $limit);
-        $more = count($eligible) > $offset + $limit || ! $exhausted;
-        return array('items'=>$items,'more'=>$more);
+    /**
+     * Legacy 1.x census is intentionally read-only and separate from planning.
+     *
+     * @return array{completed:int,eligible:int,bound:int,incomplete:int,source_missing:int,anchor_missing:int,anchor_ambiguous:int,invalid:int,more:bool}
+     */
+    public function legacy_census(): array
+    {
+        if (null === $this->legacy) {
+            return array(
+                'completed'=>0,'eligible'=>0,'bound'=>0,'incomplete'=>0,'source_missing'=>0,
+                'anchor_missing'=>0,'anchor_ambiguous'=>0,'invalid'=>0,'more'=>false,
+            );
+        }
+        return $this->legacy->census();
     }
 
     /** @return array<string,mixed>|null */
@@ -121,6 +177,8 @@ final class PeerTube_Migration_Planner
             : array();
 
         return array(
+            'candidate_key' => 'video:' . $video_id,
+            'legacy'        => false,
             'video_id'      => $video_id,
             'attachment_id' => $attachment_id,
             'anchor_post_id'=> $anchor_post_id,
@@ -163,6 +221,75 @@ final class PeerTube_Migration_Planner
             }
         }
         return $result;
+    }
+
+
+    /**
+     * Plan mixed current-2.0 and legacy-1.x candidate keys from the admin UI.
+     * Legacy adoption occurs only here, after an explicit administrator action.
+     *
+     * @param list<string> $candidate_keys
+     * @return array{applied:list<int>,present:list<int>,refused:list<int>,indeterminate:list<int>}
+     */
+    public function plan_candidates(array $candidate_keys, string $backend_id, string $channel_id, int $now): array
+    {
+        $result = array('applied'=>array(),'present'=>array(),'refused'=>array(),'indeterminate'=>array());
+        if ($now < 1 || count($candidate_keys) > self::MAX_SELECT_ALL) {
+            return $result;
+        }
+        $context = $this->context($backend_id, $channel_id);
+        if (null === $context) {
+            foreach ($candidate_keys as $key) {
+                $id = $this->candidate_key_id($key);
+                if ($id > 0 && ! in_array($id, $result['refused'], true)) {
+                    $result['refused'][] = $id;
+                }
+            }
+            return $result;
+        }
+
+        $seen = array();
+        foreach ($candidate_keys as $raw_key) {
+            $key = is_string($raw_key) ? trim($raw_key) : '';
+            if ('' === $key || isset($seen[$key])) {
+                continue;
+            }
+            $seen[$key] = true;
+
+            $video_id = 0;
+            if (1 === preg_match('/^video:([1-9][0-9]*)$/D', $key, $match)) {
+                $video_id = Video_Meta::sanitize_positive_id($match[1]);
+            } elseif (1 === preg_match('/^legacy:([1-9][0-9]*)$/D', $key, $match) && null !== $this->legacy) {
+                $attachment_id = Video_Meta::sanitize_positive_id($match[1]);
+                $adoption = $this->legacy->adopt($attachment_id, $now);
+                $video_id = Video_Meta::sanitize_positive_id($adoption['video_id'] ?? null);
+                if ($video_id < 1) {
+                    $bucket = Legacy_Video_Adoption_Service::INDETERMINATE === ($adoption['status'] ?? null)
+                        ? self::INDETERMINATE : self::REFUSED;
+                    $result[$bucket][] = $attachment_id;
+                    continue;
+                }
+            }
+            if ($video_id < 1) {
+                continue;
+            }
+
+            $status = $this->plan_one($video_id, $context, $now);
+            if (isset($result[$status])) {
+                $result[$status][] = $video_id;
+            }
+        }
+        return $result;
+    }
+
+    private function candidate_key_id(mixed $value): int
+    {
+        if (! is_string($value)) {
+            return 0;
+        }
+        return 1 === preg_match('/^(?:video|legacy):([1-9][0-9]*)$/D', $value, $match)
+            ? Video_Meta::sanitize_positive_id($match[1])
+            : 0;
     }
 
     /**

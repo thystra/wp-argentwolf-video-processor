@@ -173,7 +173,7 @@ The release bundles a pinned hls.js browser runtime under its Apache-2.0 license
 PeerTube is optional, self-hostable video-platform software. The 2.0 release
 candidate targets an exact service origin selected by the administrator:
 https://joinpeertube.org/. Service terms, privacy practices, and data location
-are controlled by the operator of that selected instance.
+are controlled by the operator of that selected server.
 
 == Developer notes ==
 
@@ -181,7 +181,7 @@ The existing settings keys, queue table, attachment metadata, hook names, cron
 identifiers, Settings page slug, and `wp argent-video` command are retained for
 upgrade compatibility.
 
-This Forgejo release-candidate package identifies itself as `2.0.0-rc9` in the
+This Forgejo release-candidate package identifies itself as `2.0.0-rc10` in the
 plugin header while `Stable tag: 1.0.0` deliberately continues to identify the
 public WordPress.org release. RC packages are not published to WordPress.org SVN.
 The Stable tag moves to `2.0.0` only when the final release is promoted.
@@ -191,6 +191,9 @@ Administrators upgrading from version 0.2.3 should use the normal WordPress
 plugin-update workflow and confirm the plugin remains active.
 
 == Upgrade Notice ==
+
+= 2.0.0-rc10 =
+Tenth controlled 2.0 release candidate. Repairs RC9 live PeerTube recovery/credentials, provider semantics, routing and diagnostics; adds legacy 1.x migration/serving, responsive player CSS, and site-wide archive-of-record retention. WordPress.org remains on 1.0.0.
 
 = 2.0.0-rc9 =
 Ninth controlled 2.0 release candidate. Makes PeerTube work event-driven with bounded recovery, publishes the original source without redundant FFmpeg, verifies publication state before/after mutation, and adds human-readable operational status. WordPress.org remains on 1.0.0 until final 2.0.0.
@@ -241,6 +244,15 @@ Renames the public plugin and package to ArgentWolf Video Processor and prepares
 the project for WordPress.org review while retaining existing data identifiers.
 
 == Changelog ==
+
+= 2.0.0-rc10 =
+* Preserve canonical RC9 source commits `878304ba8cbaf24e5017263a2f7f5c6a79f6fbfb` and `854014d03b4fd55940ab6e9bc49fa2b13035c3ba`, plus exact RC9 package SHA-256 `d28b56e9eaf0ca482559244753677eca10ec0bb4a7bc45e382c42cefc8239c23`, as immutable live-test evidence. RC10 is a new package identity.
+* Automatically reconcile expired/near-expiry PeerTube credentials and generation-bound publication catalogs, force fresh durable authority reads in long-lived workers, defer dependency waits without spending task attempts, and keep pre-upload watchers short until real upload work begins.
+* Classify local validation and definite provider rejections separately from truly indeterminate consequential mutations; allow valid multi-word tags, verify tag sets without order dependence, and accept authenticated same-origin PeerTube short embed identifiers while retaining no-blind-replay safety.
+* Add bounded seven-step `argent_video_events` operator diagnostics and Test-5 local-only recovery that can establish verified serving authority after upgrade without another upload or publication PUT. Ship responsive no-autoplay frontend CSS and require it in canonical package inspection.
+* Route PeerTube-bound media before local FFmpeg enqueue; discover completed AWVP 1.x attachments read-only and adopt them only through explicit migration planning; bridge eligible historical Core Video/shortcode rendering to verified PeerTube authority without rewriting stored post content.
+* Replace repetitive per-video source-deletion confirmations with a fail-closed site-wide WordPress archive-of-record policy and grace period. Original deletion is possible only when WordPress is not the archive of record and all currently required remote publication/serving evidence is verified at execution time.
+* Standardize operator copy on **PeerTube server** and explain **Backend ID (internal identifier)** as the stable correlation key used in logs, diagnostics, and error messages.
 
 = 2.0.0-rc9 =
 * Preserve canonical RC8 source `57ba6de225fee3bca200c2faaaf214086eaa83c7`, tree `49ffd65ccffdecc850bce89a4d7ff1b538391951`, package SHA-256 `943b729de982c48a8019cf0dddda5a746e59d0d5be1ab0900784592981d215dd` as immutable qualification/live-test evidence.

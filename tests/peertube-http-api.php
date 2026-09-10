@@ -1776,6 +1776,18 @@ namespace ArgentVideo {
     );
     $assert(! str_contains($publication_body, 'refresh-token') && ! str_contains($publication_body, 'client-secret'), 'R46.5b publication body leaked unrelated secrets.');
 
+    // RC10 live-test regression: whitespace inside an individual PeerTube tag is
+    // valid publication data and must not be rejected before transmission.
+    $multiword_manifest = $publication_manifest;
+    $multiword_manifest['tags'] = array('video test');
+    $multiword_manifest = PeerTube_Publication_Manifest::sanitize($multiword_manifest);
+    $assert(array() !== $multiword_manifest, 'RC10 multi-word tag fixture was invalid.');
+    $queue($response(204, '', array()));
+    $multiword_put = $api->update_publication($remote_access, $remote_uuid, $multiword_manifest, '1', null);
+    $assert(true === $multiword_put['ok'], 'RC10 multi-word PeerTube tag was rejected before transmission.');
+    $multiword_request = $GLOBALS['awvp_http_requests'][array_key_last($GLOBALS['awvp_http_requests'])];
+    $assert(str_contains((string)($multiword_request['args']['body'] ?? ''), "\r\nvideo test\r\n"), 'RC10 multi-word tag was not preserved in multipart transport.');
+
     // RC9 Test 3 regression: blank optional provider fields are omitted rather
     // than serialized as empty multipart parts that PeerTube may reject.
     $blank_optional_manifest = $publication_manifest;
