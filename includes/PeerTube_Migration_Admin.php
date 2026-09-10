@@ -226,9 +226,15 @@ final class PeerTube_Migration_Admin
                             <td>
                                 <?php echo esc_html((string)$item['title']); ?>
                                 <?php if ($legacy_candidate) : ?>
-                                    <code><?php echo esc_html(sprintf(__('legacy attachment #%d', 'argentwolf-video-processor'), (int)$item['attachment_id'])); ?></code>
+                                    <code><?php
+                                    /* translators: %d: Legacy WordPress attachment ID. */
+                                    echo esc_html(sprintf(__('legacy attachment #%d', 'argentwolf-video-processor'), (int)$item['attachment_id']));
+                                    ?></code>
                                 <?php else : ?>
-                                    <code><?php echo esc_html(sprintf(__('Video #%d', 'argentwolf-video-processor'), (int)$item['video_id'])); ?></code>
+                                    <code><?php
+                                    /* translators: %d: AWVP Video post ID. */
+                                    echo esc_html(sprintf(__('Video #%d', 'argentwolf-video-processor'), (int)$item['video_id']));
+                                    ?></code>
                                 <?php endif; ?>
                             </td>
                             <td>#<?php echo esc_html((string)$item['anchor_post_id']); ?> — <?php echo esc_html((string)$item['post_status']); ?></td>
