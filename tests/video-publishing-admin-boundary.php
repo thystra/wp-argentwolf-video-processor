@@ -44,6 +44,15 @@ $assert(str_contains($admin, 'Stale since %s; refresh must succeed before these 
 $assert(str_contains($admin, "(int) \$catalog['secret_generation']"), 'Publication-choice page stopped identifying the observed credential generation.');
 $assert(str_contains($admin, 'Load publishing options') && str_contains($admin, 'Refresh publishing options'), 'Publishing options use ambiguous refresh-only administrator wording.');
 $assert(str_contains($admin, 'Use activated channel: %s'), 'Backend channel choice is not rendered by human-readable provider label.');
+$assert(str_contains($admin, "esc_html_e('Serving priority'"), 'PeerTube server defaults do not expose serving priority.');
+$assert(str_contains($admin, 'Higher healthy priority serves first. WordPress local is fixed at priority 0.'), 'Serving-priority behavior is not explained in the publishing UI.');
+$assert(str_contains($admin, "provider_override_select(\$backend_id, 'language'"), 'PeerTube server defaults do not expose a language override dropdown.');
+$assert(str_contains($admin, "'backend_priorities'"), 'Publishing save boundary does not persist backend serving priorities.');
+$assert(str_contains($admin, 'Remote publication health notifications'), 'Publishing settings do not expose remote-health email policy.');
+$assert(str_contains($admin, 'Immediately after the first failed health check'), 'Publishing settings do not offer immediate health email delivery.');
+$assert(str_contains($admin, 'After persistent failure (about 2 hours)'), 'Publishing settings do not offer delayed health email delivery.');
+$assert(str_contains($admin, 'Backend-wide outages are deduplicated to one administrator email'), 'Publishing settings do not explain backend-outage email deduplication.');
+$assert(str_contains($plugin, 'Remote_Health_Notification_Service'), 'Remote-health notification service is not wired into plugin runtime.');
 $assert(str_contains($admin, 'Previously selected option is no longer available'), 'Provider dropdowns do not preserve unavailable stored selections safely.');
 $assert(! str_contains($admin, "esc_html_e('Licence ID'"), 'Publishing settings still ask administrators for a raw licence ID.');
 $assert(! str_contains($admin, "esc_html_e('Category ID'"), 'Publishing settings still ask administrators for a raw category ID.');

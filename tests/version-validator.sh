@@ -74,6 +74,9 @@ expect_pass '2.0.0-rc9'
 write_fixture '2.0.0-rc10' '2.0.0-rc10' '1.0.0'
 expect_pass '2.0.0-rc10'
 
+write_fixture '2.0.0-rc11' '2.0.0-rc11' '1.0.0'
+expect_pass '2.0.0-rc11'
+
 write_fixture '2.0.0-rc1' '2.0.0-rc1' '2.0.0'
 expect_fail '2.0.0-rc1'
 

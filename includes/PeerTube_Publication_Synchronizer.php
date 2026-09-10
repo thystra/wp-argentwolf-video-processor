@@ -135,6 +135,30 @@ final class PeerTube_Publication_Synchronizer
     /** @return array{status:string,generation:int,task_id:int} */
     public function sync_video(int $video_id, string $wordpress_status, int $now): array
     {
+        return $this->sync_video_internal($video_id, $wordpress_status, $now, null);
+    }
+
+    /**
+     * Idempotently advance one explicit republish request to an exact generation.
+     *
+     * A caller persists the requested target generation before invoking this
+     * method. Repeating the call after a crash therefore reuses that generation
+     * and its task idempotency key instead of manufacturing another publication
+     * generation.
+     *
+     * @return array{status:string,generation:int,task_id:int}
+     */
+    public function sync_republish_video(int $video_id, string $wordpress_status, int $now, int $target_generation): array
+    {
+        if ($target_generation < 1) {
+            return self::result(Task_Repository::CONFLICT);
+        }
+        return $this->sync_video_internal($video_id, $wordpress_status, $now, $target_generation);
+    }
+
+    /** @return array{status:string,generation:int,task_id:int} */
+    private function sync_video_internal(int $video_id, string $wordpress_status, int $now, ?int $target_generation): array
+    {
         if ($video_id < 1 || $now < 1) {
             return self::result(Task_Repository::CONFLICT);
         }
@@ -158,12 +182,25 @@ final class PeerTube_Publication_Synchronizer
                 return self::result(Task_Repository::CONFLICT);
             }
 
-            $generation = array() === $before ? 1 : (int) $before['generation'];
-            if (array() !== $before && PeerTube_Publication_Lifecycle::semantic($before) !== PeerTube_Publication_Lifecycle::semantic($desired)) {
-                if ($generation >= PHP_INT_MAX) {
-                    return self::result(Task_Repository::CONFLICT);
+            $current_generation = array() === $before ? 0 : (int) $before['generation'];
+            if (null !== $target_generation) {
+                if ($current_generation > $target_generation
+                    || $target_generation > $current_generation + 1
+                    || ($current_generation === $target_generation
+                        && array() !== $before
+                        && PeerTube_Publication_Lifecycle::semantic($before) !== PeerTube_Publication_Lifecycle::semantic($desired))
+                ) {
+                    return self::result(Task_Repository::CONFLICT, $current_generation);
                 }
-                ++$generation;
+                $generation = $target_generation;
+            } else {
+                $generation = 0 === $current_generation ? 1 : $current_generation;
+                if (array() !== $before && PeerTube_Publication_Lifecycle::semantic($before) !== PeerTube_Publication_Lifecycle::semantic($desired)) {
+                    if ($generation >= PHP_INT_MAX) {
+                        return self::result(Task_Repository::CONFLICT);
+                    }
+                    ++$generation;
+                }
             }
 
             $desired['generation'] = $generation;

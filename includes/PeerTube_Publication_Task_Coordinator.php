@@ -50,7 +50,8 @@ final class PeerTube_Publication_Task_Coordinator
         callable $api_factory,
         private readonly ?PeerTube_Serving_Cutover_Service $cutover = null,
         private readonly ?PeerTube_Derivative_Cleanup_Service $derivative_cleanup = null,
-        private readonly ?PeerTube_Publication_Authority_Repair $authority_repair = null
+        private readonly ?PeerTube_Publication_Authority_Repair $authority_repair = null,
+        private readonly ?Remote_Publication_Health_Service $publication_health = null
     ) {
         $this->api_factory = Closure::fromCallable($api_factory);
     }
@@ -164,13 +165,7 @@ final class PeerTube_Publication_Task_Coordinator
             if (is_array($existing) && array()!==$existing && ''!==(string)$existing['applied_manifest_sha256']
                 && hash_equals((string)$existing['manifest_sha256'],(string)$existing['applied_manifest_sha256'])
                 && $this->asset_matches_applied($existing,(string)$retry_lifecycle['target_privacy_id'])) {
-                $status=$this->cutover->reconcile($video_id,$now);
-                if (in_array($status,array(PeerTube_Serving_Cutover_Service::APPLIED,PeerTube_Serving_Cutover_Service::PRESENT,PeerTube_Serving_Cutover_Service::LOCAL),true)) {
-                    return $this->complete($task_id,self::TASK_FINALIZE,$lock,$now,'cutover_retry:'.$status);
-                }
-                if (PeerTube_Serving_Cutover_Service::INDETERMINATE===$status) {
-                    return $this->reschedule($task_id,self::TASK_FINALIZE,$lock,$now+60,'Verified publication is waiting for durable local serving cutover.',$now);
-                }
+                return $this->finish_cutover($task_id,$lock,$video_id,$now,'cutover_retry');
             }
         }
         $state=$this->current_authority($video_id,$task,$payload,true,$now);
@@ -316,6 +311,41 @@ final class PeerTube_Publication_Task_Coordinator
     {
         if (null === $this->cutover) {
             return $this->complete($task_id,self::TASK_FINALIZE,$lock,$now,$service);
+        }
+        if (null !== $this->publication_health) {
+            $execution=$this->load_execution($video_id);
+            $asset=is_array($execution)?$this->assets->find((int)($execution['remote_asset_id']??0)):null;
+            if (! is_array($asset)) {
+                return $this->reschedule($task_id,self::TASK_FINALIZE,$lock,$now+60,'Publication metadata is verified; waiting for a durable remote serving candidate before public URL qualification.',$now);
+            }
+            $processing_context=array();
+            $operation_id=is_string($execution['operation_id']??null)?(string)$execution['operation_id']:'';
+            $operation=''!==$operation_id?$this->operations->get($operation_id):null;
+            if(is_array($operation)){
+                $source_bytes=is_int($operation['source']['bytes']??null)?(int)$operation['source']['bytes']:0;
+                $processing_started=is_int($operation['accepted_at']??null)?(int)$operation['accepted_at']:0;
+                if($source_bytes>0&&$processing_started>0&&$processing_started<=$now){
+                    $processing_context=array('source_bytes'=>$source_bytes,'processing_started_at'=>$processing_started);
+                }
+            }
+            $public=$this->publication_health->probe_and_record($asset,$now,true,$processing_context);
+            if (true !== ($public['recorded']??false)) {
+                return $this->reschedule($task_id,self::TASK_FINALIZE,$lock,$now+60,'Publication metadata is verified; waiting to durably record the public serving URL health check.',$now);
+            }
+            if (Serving_Viability::HEALTHY !== (string)($public['viability_status']??'')) {
+                $message=is_string($public['message']??null)?trim((string)$public['message']):'';
+                $message=''!==$message?$message:'The published serving URL is not yet usable by an unauthenticated visitor.';
+                $delay=60;
+                if(Serving_Viability::PROCESSING===(string)($public['viability_status']??'')){
+                    $retry=is_int($public['retry_after']??null)?(int)$public['retry_after']:0;
+                    if($retry>0){$delay=max(60,min(900,$retry));}
+                    $eta=is_int($public['estimated_ready_at']??null)?(int)$public['estimated_ready_at']:0;
+                    if($eta>$now){
+                        $message.=' Estimated readiness: '.gmdate('Y-m-d H:i:s',$eta).' UTC ('.(string)($public['estimate_confidence']??'low').' confidence).';
+                    }
+                }
+                return $this->reschedule($task_id,self::TASK_FINALIZE,$lock,$now+$delay,'Publication metadata is verified, but public serving qualification has not passed: '.$message,$now);
+            }
         }
         $status=$this->cutover->reconcile($video_id,$now);
         if (in_array($status,array(PeerTube_Serving_Cutover_Service::APPLIED,PeerTube_Serving_Cutover_Service::PRESENT),true)) {

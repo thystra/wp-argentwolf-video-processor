@@ -255,6 +255,33 @@ final class Remote_Asset_Repository implements PeerTube_Remote_Asset_Store, Peer
         };
     }
 
+    /**
+     * Return remote rows that have completed publication evidence and a serving URL.
+     * Health/priority eligibility is intentionally evaluated by the serving resolver.
+     *
+     * @return list<array<string,mixed>>
+     */
+    public function serving_candidates_for_video(int $video_post_id): array
+    {
+        if ($video_post_id < 1) {
+            return array();
+        }
+        global $wpdb;
+        try {
+            $rows = $wpdb->get_results(
+                $wpdb->prepare(
+                    "SELECT * FROM %i WHERE video_post_id = %d AND state = 'ready' AND last_verified_at IS NOT NULL AND embed_url IS NOT NULL AND embed_url <> '' ORDER BY id ASC",
+                    $this->table,
+                    $video_post_id
+                ),
+                ARRAY_A
+            );
+        } catch (Throwable) {
+            return array();
+        }
+        return is_array($rows) ? array_values(array_filter($rows, 'is_array')) : array();
+    }
+
     /** @return array<string,mixed>|null */
     public function find(int $remote_asset_id): ?array
     {

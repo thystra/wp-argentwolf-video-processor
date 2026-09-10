@@ -556,18 +556,12 @@
   serving, while live provider behavior exposed the RC10 credential/catalog, task
   deferral, diagnostics, tag/embed verification, routing, legacy migration, retention,
   and responsive-player requirements now tracked in the RC9 -> RC10 handoff roadmap.
-- [x] Complete `2.0.0-rc10` source qualification from immutable RC9 commit `854014d`:
-  require DB schema version 2 with `argent_video_events`, Test-5 local-only recovery,
-  route-before-FFmpeg behavior, explicit legacy 1.x adoption/runtime serving bridge,
-  site-wide archive-of-record policy, responsive packaged CSS, and the RC10 operator
-  diagnostics/terminology regressions.
-- [ ] Push the final RC10 source commit to authoritative Forgejo and require green CI;
-  take the canonical `2.0.0-rc10` ZIP from that Forgejo run, freeze/hash its bytes, and
-  run Plugin Check plus the complete exact-package clean/public-1.0.0-upgrade matrix.
-- [ ] Install the canonical qualified RC10 package through the WordPress web UI and
-  prove Test 5 self-heals to verified PeerTube serving without another upload or
-  publication PUT; then run one fresh PeerTube-bound video and one representative
-  legacy 1.x discovery/adoption/migration smoke test before considering stable 2.0.
+- [x] Complete the first `2.0.0-rc10` source qualification from immutable RC9 commit `854014d`, including model DB schema 2 / `argent_video_events`, Test-5 local-only recovery, route-before-FFmpeg, legacy 1.x adoption/runtime serving bridge, archive-of-record policy, responsive packaged CSS, and operator diagnostics.
+- [x] Qualify canonical RC10 candidate #2 at commit `215e7b12582d01ea27f4e1c08b965812f3f13d72`, tree `22892bcbc2449d4e0d31fa8bfff5701ff5feb85c`, exact ZIP SHA-256 `3d4ce93bac8611524d03057ecf270e8e309222b0314f5006ba3520c14afac160`; Plugin Check and all six exact-package clean/public-1.0.0-upgrade cases passed.
+- [x] Install that qualified RC10 candidate through the WordPress web UI on `wolfandraven.blog` and prove Test 5 self-heals locally to the short-ID PeerTube iframe without another upload/publication task, while retaining no-autoplay and responsive containment.
+- [x] Complete the post-qualification RC10 live-fix tranche as the RC11 source scope before a replacement canonical candidate: model DB schema 3 publication health, visitor-facing public-URL qualification, backend serving priorities/failover, processing ETA, incident/email handling, daily backend maintenance, restart-safe Republish, Overview reviewed/dismissed state, per-server default language, and scalable Local Retention default/bulk UI.
+- [ ] Build/qualify canonical `2.0.0-rc11` from authoritative Forgejo after the live-fix source suite and package assertions pass. Canonical RC10 candidate #2 remains immutable historical qualification/live-test evidence and must not be rebuilt or relabeled.
+- [ ] Resume live validation on canonical RC11: set/test the intended PeerTube new-video default, run one fresh PeerTube-bound video (including a sufficiently large processing window to observe public readiness), verify no local FFmpeg cancelled row, health/ETA/cutover/failover/diagnostics behavior, and run one representative legacy 1.x discovery/adoption/migration smoke test before considering stable 2.0.
 - [ ] If defects require code changes, increment `2.0.0-rcN`, rebuild, and rerun
   the affected gates; never mutate or reuse an existing RC version/tag.
 - [ ] Freeze the last accepted RC and promote to `2.0.0` with release/version

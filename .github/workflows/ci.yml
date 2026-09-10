@@ -48,6 +48,22 @@ jobs:
           bash tests/release-validation/test-build-bundle.sh
           php tests/version-policy.php
           php tests/model-persistence.php
+          php tests/backend-health-incident.php
+          php tests/backend-maintenance-status.php
+          php tests/backend-processing-estimator.php
+          php tests/backend-serving-priority.php
+          php tests/serving-viability.php
+          php tests/remote-publication-health.php
+          php tests/peertube-publication-health.php
+          php tests/remote-health-notification-policy.php
+          php tests/remote-health-notification-state.php
+          php tests/remote-health-notification-service.php
+          php tests/peertube-daily-maintenance.php
+          php tests/multi-backend-serving-failover.php
+          php tests/overview-disposition-store.php
+          php tests/rc10-overview-resolution-health.php
+          php tests/remote-republish-service.php
+          php tests/local-retention-default-policy.php
           php tests/peertube-event-repository.php
           php tests/video-destination-publication-plan.php
           php tests/video-publishing-defaults.php
@@ -162,6 +178,7 @@ jobs:
           php tests/ffmpeg-integration.php
           bash tests/vendor-fetch.sh
           node --check assets/js/argent-video-player.js
+          node --check assets/js/local-retention-admin.js
           node --check blocks/video/index.js
 
       - name: Check whitespace errors
@@ -186,6 +203,24 @@ jobs:
           grep -qx 'argentwolf-video-processor/blocks/video/index.js' "${MANIFEST}"
           grep -qx 'argentwolf-video-processor/blocks/video/index.asset.php' "${MANIFEST}"
           grep -qx 'argentwolf-video-processor/blocks/video/style.css' "${MANIFEST}"
+          grep -qx 'argentwolf-video-processor/includes/Backend_Health_Incident_Store.php' "${MANIFEST}"
+          grep -qx 'argentwolf-video-processor/includes/Backend_Maintenance_Status_Store.php' "${MANIFEST}"
+          grep -qx 'argentwolf-video-processor/includes/Backend_Processing_Estimator.php' "${MANIFEST}"
+          grep -qx 'argentwolf-video-processor/includes/Backend_Serving_Priority_Store.php' "${MANIFEST}"
+          grep -qx 'argentwolf-video-processor/includes/Local_Retention_Default_Policy_Store.php' "${MANIFEST}"
+          grep -qx 'argentwolf-video-processor/includes/Overview_Disposition_Store.php' "${MANIFEST}"
+          grep -qx 'argentwolf-video-processor/includes/PeerTube_Daily_Maintenance_Service.php' "${MANIFEST}"
+          grep -qx 'argentwolf-video-processor/includes/PeerTube_Publication_Health_Probe.php' "${MANIFEST}"
+          grep -qx 'argentwolf-video-processor/includes/Remote_Health_Notification_Policy_Store.php' "${MANIFEST}"
+          grep -qx 'argentwolf-video-processor/includes/Remote_Health_Notification_Service.php' "${MANIFEST}"
+          grep -qx 'argentwolf-video-processor/includes/Remote_Health_Notification_State_Store.php' "${MANIFEST}"
+          grep -qx 'argentwolf-video-processor/includes/Remote_Publication_Health_Repository.php' "${MANIFEST}"
+          grep -qx 'argentwolf-video-processor/includes/Remote_Publication_Health_Service.php' "${MANIFEST}"
+          grep -qx 'argentwolf-video-processor/includes/Remote_Republish_Request.php' "${MANIFEST}"
+          grep -qx 'argentwolf-video-processor/includes/Remote_Republish_Service.php' "${MANIFEST}"
+          grep -qx 'argentwolf-video-processor/includes/Serving_Health_Adapter.php' "${MANIFEST}"
+          grep -qx 'argentwolf-video-processor/includes/Serving_Health_Adapter_Factory.php' "${MANIFEST}"
+          grep -qx 'argentwolf-video-processor/includes/Serving_Viability.php' "${MANIFEST}"
           ! grep -qx 'argentwolf-video-processor/assets/vendor/hls.VERSION' "${MANIFEST}"
           ! grep -qx 'argentwolf-video-processor/assets/vendor/hls.SHA256' "${MANIFEST}"
           ! grep -Eq '/(AGENTS|ARCHITECTURE|TODO|tests|build|ops|\.github)' "${MANIFEST}"

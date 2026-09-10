@@ -20,6 +20,7 @@ final class Video_Meta
     public const PEERTUBE_PUBLICATION_LIFECYCLE = '_argent_video_peertube_publication_lifecycle';
     public const PEERTUBE_PUBLICATION_EXECUTION = '_argent_video_peertube_publication_execution';
     public const PEERTUBE_RECOVERY_WINDOW = '_argent_video_peertube_recovery_window';
+    public const REMOTE_REPUBLISH_REQUEST = '_argent_video_remote_republish_request';
     public const SERVING_AUTHORITY = '_argent_video_serving_authority';
     public const PEERTUBE_MIGRATION_PLAN = '_argent_video_peertube_migration_plan';
     public const PEERTUBE_MIGRATION_EXECUTION = '_argent_video_peertube_migration_execution';
@@ -91,6 +92,10 @@ final class Video_Meta
             self::PEERTUBE_RECOVERY_WINDOW => $base + array(
                 'type'              => 'array',
                 'sanitize_callback' => array(self::class, 'sanitize_peertube_recovery_window'),
+            ),
+            self::REMOTE_REPUBLISH_REQUEST => $base + array(
+                'type'              => 'array',
+                'sanitize_callback' => array(self::class, 'sanitize_remote_republish_request'),
             ),
             self::SERVING_AUTHORITY => $base + array(
                 'type'              => 'array',
@@ -221,6 +226,12 @@ final class Video_Meta
     public static function sanitize_peertube_publication_execution(mixed $value): array
     {
         return PeerTube_Publication_Execution::sanitize($value);
+    }
+
+    /** @return array<string,mixed> */
+    public static function sanitize_remote_republish_request(mixed $value): array
+    {
+        return Remote_Republish_Request::sanitize($value);
     }
 
     /** @return array{version:int,origin_at:int,resumed_at:int}|array{} */

@@ -99,6 +99,7 @@ The plugin stores:
 
 - settings and worker state in WordPress options;
 - job state in the `argent_video_jobs` table;
+- 2.0 remote assets, publication tasks, operator events, and public-serving health in the `argent_video_remote_assets`, `argent_video_tasks`, `argent_video_events`, and `argent_video_publication_health` tables;
 - processing status, errors, and output metadata in attachment post metadata;
 - bounded worker diagnostic history in the `argentwolf_video_processor_logs` table;
 - generated derivative files under
@@ -118,21 +119,49 @@ requires an explicit operator-defined constant.
   validated against the plugin-owned uploads root before the filesystem
   operation.
 - Public requests do not directly execute FFmpeg.
-- No telemetry or remote processing service is used.
+- No telemetry service is used. Remote publication occurs only to operator-configured backends (currently PeerTube) and follows explicit per-video publication authority.
 - hls.js is fetched only during controlled builds from the pinned official npm
   package, verified, and shipped locally.
 
 ## Privacy model
 
 Generated derivatives strip metadata when enabled. The original attachment
-remains untouched and may retain its original metadata. The plugin sends no
-video, metadata, or usage information to an external service.
+remains untouched and may retain its original metadata. The plugin sends no telemetry or unrelated usage information to external services. When an operator configures a remote publication backend and authorizes a video for that backend, AWVP sends the selected video and reviewed publication metadata required for that publication.
 
 ## Scheduling
 
-The plugin defines a five-minute WordPress schedule. The callback is a
-lightweight dispatcher only. WordPress installations with front-end WP-Cron
-disabled must invoke due events through a system scheduler.
+The plugin defines separate lightweight schedules: five-minute local-processing dispatch, one-minute PeerTube incomplete-work recovery, hourly remote-publication public-serving health, and daily backend credential/catalog maintenance. Detached workers perform expensive provider/upload work. WordPress installations with front-end WP-Cron disabled must invoke due events through a system scheduler.
+
+
+## 2.0 remote publication, health, and failover
+
+### Publication authority versus serving health
+
+Durable publication authority answers whether a remote publication was legitimately reviewed, executed, and verified. `argent_video_publication_health` separately records the latest provider-independent observation of whether an ordinary unauthenticated visitor can actually consume the serving URL. Health degradation never erases publication history or serving provenance. Frontend rendering performs no provider HTTP; it reads only durable local authority/health state.
+
+The final serving qualification is the visitor-facing public/embed URL. A provider API may explain `processing`, missing/private state, or another failure, but API `published` state cannot override a non-viable public URL. Normalized health includes healthy, processing, missing, private/restricted, embed-disallowed, temporarily unavailable, and indeterminate probe states. Expected processing is not a broken-publication incident and does not start email escalation.
+
+### Serving priorities and failover
+
+Local WordPress is an implicit serving backend at priority 0. Configured remote backends have positive serving priorities (default 500). For each video, the resolver considers only publications that have verified authority and current eligible health, then selects the highest-priority viable candidate. If a preferred backend fails, a lower-priority verified remote may serve; if none remain and the original Media Library source still exists, AWVP falls back to Local. Recovery requires two consecutive healthy observations before automatic failback so a flapping backend does not repeatedly switch the player. Priority controls serving preference only; it does not imply replication or retention authority.
+
+### Health cadence, ETA, and incidents
+
+Successful remote publications are normally rechecked about every six hours by an hourly bounded cron. First failure removes the publication from serving eligibility immediately and appears on Overview. Retry cadence is progressively bounded so a transient failure can recover before delayed email escalation. Backend-wide transport/server outages are represented once per backend rather than generating one email per affected video. Definite single-publication conditions such as missing/private/embed-disabled remain per-video incidents.
+
+While a new public URL is still processing, `Backend_Processing_Estimator` derives an advisory readiness estimate from source bytes plus recent backend history. It retains at most 10 successful upload-accepted-to-publicly-playable observations and ignores samples older than 90 days; this is advisory scheduling information, never publication authority.
+
+### Notifications and maintenance
+
+Remote-health email policy is independently configurable for administrator, publishing user, and origin post author, each Off / delayed / immediate. Recipient addresses are deduplicated, and recovery messages are sent only for roles that actually received the incident alert. Daily backend maintenance reconciles PeerTube credentials and publication catalogs and reports server-level failures on Overview independently from per-video serving health.
+
+### Republish
+
+Republish is an explicit recovery operation available only when the authoritative WordPress original still exists. It records an exact durable request, advances to one exact new publication generation, and creates new upload/publication work for the same or another configured backend. Historical remote assets, tasks, events, upload journals, and prior serving authority remain audit evidence; replacement serving does not cut over until the new publication passes visitor-facing verification.
+
+### Local retention at scale
+
+WordPress is the archive of record by default, and automatic original-source deletion is prohibited while that policy is active. Serving choice and source retention are separate. Local Retention provides one site-wide AWVP Default Policy plus a searchable/filterable compact video list for bounded bulk application. Every destructive application still passes through the same archive-of-record, grace-period, verified-remote, source-confinement, and execution-journal safety checks.
 
 ## Compatibility and renaming
 

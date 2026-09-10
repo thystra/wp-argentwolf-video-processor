@@ -9,12 +9,13 @@ namespace ArgentVideo;
 
 final class Model_Activator
 {
-    public const DB_VERSION = '2';
+    public const DB_VERSION = '3';
     public const DB_OPTION = 'argent_video_processor_model_db_version';
     public const DB_AUTOLOAD = true;
     public const REMOTE_ASSETS_TABLE = 'argent_video_remote_assets';
     public const TASKS_TABLE = 'argent_video_tasks';
     public const EVENTS_TABLE = 'argent_video_events';
+    public const PUBLICATION_HEALTH_TABLE = 'argent_video_publication_health';
 
     public static function install(): bool
     {
@@ -56,6 +57,7 @@ final class Model_Activator
         $remote_assets = $wpdb->prefix . self::REMOTE_ASSETS_TABLE;
         $tasks = $wpdb->prefix . self::TASKS_TABLE;
         $events = $wpdb->prefix . self::EVENTS_TABLE;
+        $publication_health = $wpdb->prefix . self::PUBLICATION_HEALTH_TABLE;
 
         $remote_sql = "CREATE TABLE {$remote_assets} (
             id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
@@ -135,7 +137,29 @@ final class Model_Activator
             KEY severity_created (severity, created_at)
         ) {$charset_collate};";
 
-        return array($remote_sql, $task_sql, $event_sql);
+        $publication_health_sql = "CREATE TABLE {$publication_health} (
+            remote_asset_id bigint(20) unsigned NOT NULL,
+            video_post_id bigint(20) unsigned NOT NULL,
+            backend_id varchar(64) NOT NULL,
+            status varchar(32) NOT NULL DEFAULT 'probe_indeterminate',
+            eligible tinyint(1) unsigned NOT NULL DEFAULT 0,
+            failure_since datetime DEFAULT NULL,
+            last_checked_at datetime DEFAULT NULL,
+            last_healthy_at datetime DEFAULT NULL,
+            success_streak smallint(5) unsigned NOT NULL DEFAULT 0,
+            failure_streak smallint(5) unsigned NOT NULL DEFAULT 0,
+            http_status smallint(5) unsigned DEFAULT NULL,
+            reason_code varchar(64) DEFAULT NULL,
+            message text DEFAULT NULL,
+            next_check_at datetime DEFAULT NULL,
+            updated_at datetime NOT NULL,
+            PRIMARY KEY  (remote_asset_id),
+            KEY video_status (video_post_id, status),
+            KEY backend_status (backend_id, status),
+            KEY next_check (next_check_at)
+        ) {$charset_collate};";
+
+        return array($remote_sql, $task_sql, $event_sql, $publication_health_sql);
     }
 
     public static function schema_is_current(): bool
@@ -336,6 +360,19 @@ final class Model_Activator
                     'task_created' => array('unique' => false, 'columns' => array('task_id','created_at')),
                     'backend_created' => array('unique' => false, 'columns' => array('backend_id','created_at')),
                     'severity_created' => array('unique' => false, 'columns' => array('severity','created_at')),
+                ),
+            ),
+            $wpdb->prefix . self::PUBLICATION_HEALTH_TABLE => array(
+                'columns' => array(
+                    'remote_asset_id','video_post_id','backend_id','status','eligible','failure_since',
+                    'last_checked_at','last_healthy_at','success_streak','failure_streak','http_status',
+                    'reason_code','message','next_check_at','updated_at',
+                ),
+                'indexes' => array(
+                    'PRIMARY' => array('unique' => true, 'columns' => array('remote_asset_id')),
+                    'video_status' => array('unique' => false, 'columns' => array('video_post_id','status')),
+                    'backend_status' => array('unique' => false, 'columns' => array('backend_id','status')),
+                    'next_check' => array('unique' => false, 'columns' => array('next_check_at')),
                 ),
             ),
         );

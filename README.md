@@ -134,7 +134,7 @@ R46.7 migration controls are exposed on the **Video Migration** tab for planning
 
 R46.8 adds the explicit **Start migration** step for a `ready` plan. Starting is a one-way local commitment: AWVP revalidates current source/provider/default/thumbnail evidence, journals the exact migration plan, promotes its publication plan and target destination, and then invokes the existing durable publication synchronizer. Remote upload/publication and verified serving cutover continue through the already-qualified R46.5/R46.6 paths; R46.8 adds no parallel uploader or frontend path.
 
-R46.9 retention controls are exposed on the **Local Retention** tab. Retention is per-video and defaults to **Keep all local copies**. An operator may explicitly choose delayed cleanup of AWVP-managed copies while preserving the WordPress source, or delayed cleanup of all local video copies after declaring a non-WordPress master authority. Destructive actions require a 1-365 day grace period and run only in the existing detached durable worker after current public/unlisted PeerTube serving evidence, local-job quiescence, and exact filesystem identity are revalidated. Physical-source cleanup never deletes the WordPress attachment record; any uncertainty keeps local data.
+R46.9 retention controls are exposed on the **Local Retention** tab. WordPress is the Archive of Record by default, so automatic deletion of original Media Library videos is blocked unless an administrator explicitly changes that site-wide authority policy. The tab provides one **AWVP Default Policy** plus a compact searchable/filterable video list for bounded bulk application instead of requiring a full policy form for every video. An operator may keep all local copies, delete only AWVP-managed derivatives after the site grace period, or—only when WordPress is NOT the Archive of Record—also allow delayed original-source deletion after all currently required remote publications are positively verified. Destructive work still runs only in the detached durable worker after archive authority, grace period, serving evidence, local-job quiescence, and exact filesystem identity are revalidated. Physical-source cleanup never deletes the WordPress attachment record; any uncertainty keeps local data.
 
 ## WP-CLI
 
@@ -272,7 +272,7 @@ the same advisory registry with their own capability and NVD link.
 
 Public WordPress.org stable release: `1.0.0`.
 
-Current controlled development candidate: `2.0.0-rc10`. RC packages are built
+Current controlled development candidate: `2.0.0-rc11`. RC packages are built
 from reviewed Forgejo commits and are not published to WordPress.org SVN. The
 public Stable tag remains `1.0.0` until final `2.0.0` promotion.
 
@@ -280,11 +280,19 @@ Install public releases from WordPress.org or use the exact canonical ZIP
 attached to the corresponding Forgejo release. Automatically generated source
 archives are not canonical installable artifacts.
 
-### RC10 live-test hardening (development)
+### RC10 live-test hardening
 
-RC10 is the follow-up to controlled RC9 live testing. It preserves RC9 package bytes and hardens the live PeerTube path: automatic credential/catalog authority repair, fresh reads in long-lived workers, dependency deferral without attempt exhaustion, semantic tag and short-embed verification, local-only recovery of already-applied publications, seven-step operator diagnostics, route-before-FFmpeg behavior, responsive no-autoplay rendering, explicit legacy 1.x migration/adoption, and a site-wide WordPress archive-of-record policy.
+RC10 followed controlled RC9 live testing. It preserved RC9 package bytes and hardened the live PeerTube path: automatic credential/catalog authority repair, fresh reads in long-lived workers, dependency deferral without attempt exhaustion, semantic tag and short-embed verification, local-only recovery of already-applied publications, seven-step operator diagnostics, route-before-FFmpeg behavior, responsive no-autoplay rendering, explicit legacy 1.x migration/adoption, and a site-wide WordPress archive-of-record policy. Canonical RC10 candidate #2 was qualified and installed live; its bytes remain immutable historical evidence.
 
-Legacy discovery is read-only. A completed 1.x attachment becomes a 2.0 AWVP Video only when an administrator explicitly includes it in migration planning; historical post content is not rewritten. Verified serving authority can bridge supported historical Core Video/shortcode output at runtime. Original Media Library deletion remains forbidden while WordPress is the configured archive of record.
+### RC11 remote-health and recovery hardening (development)
+
+RC11 carries the post-RC10 live findings into a new package identity: model-schema-3 visitor-facing publication health, provider-independent serving priority/failover, processing-aware readiness estimates, remote-health notifications, daily backend authority/catalog maintenance, restart-safe Republish, Overview reviewed/dismissed state, per-server default language, and scalable Local Retention default/bulk administration.
+
+The post-qualification live-fix tranche adds provider-independent publication health and serving failover. AWVP periodically checks the actual unauthenticated public/embed URL that a visitor would receive; provider API state is supplementary diagnosis and cannot by itself make a publication eligible to serve. Health is stored independently from publication authority in model DB schema 3. Verified healthy remote publications are ranked by backend serving priority (local WordPress is priority 0), and the frontend resolves the highest-priority currently viable source without performing network requests during page rendering. Expected provider processing is a distinct non-failure state, with bounded size/history-based readiness estimates using at most the 10 most recent successful samples from the last 90 days.
+
+Remote health incidents appear immediately on Overview. Backend-wide outages are deduplicated from individual-video failures, while missing/private/embed-disabled publications can notify the administrator, publishing user, and/or origin author according to Off / delayed / immediate policy. Daily PeerTube maintenance refreshes credential/catalog authority separately from per-video serving health. Republish can create a new publication generation from a retained WordPress original on the same or another configured PeerTube backend without rewriting historical task/asset/audit evidence.
+
+Legacy discovery is read-only. A completed 1.x attachment becomes a 2.0 AWVP Video only when an administrator explicitly includes it in migration planning; historical post content is not rewritten. Verified serving authority can bridge supported historical Core Video/shortcode output at runtime. Original Media Library deletion remains forbidden while WordPress is the configured archive of record. Local Retention provides one site-wide AWVP Default Policy plus a searchable, filterable bulk list instead of requiring a full policy form for every video.
 
 ### R46.3c PeerTube publication review (development)
 

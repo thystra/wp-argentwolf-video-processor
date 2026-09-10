@@ -63,6 +63,17 @@ namespace ArgentVideo {
         public array $calls=array();
         public function repair(string $backend_id,int $now): array { $this->calls[]=array($backend_id,$now); return array('status'=>'complete'); }
     }
+    final class Serving_Viability {
+        public const HEALTHY='healthy'; public const PROCESSING='processing'; public const MISSING='missing';
+    }
+    final class Remote_Publication_Health_Service {
+        public array $calls=array();
+        public array $next=array('recorded'=>true,'viability_status'=>Serving_Viability::HEALTHY,'reason_code'=>'','message'=>'','http_status'=>200);
+        public function probe_and_record(array $asset,int $now,bool $initial_verified=false,array $processing_context=array()): array {
+            $this->calls[]=array('asset'=>$asset,'now'=>$now,'initial_verified'=>$initial_verified,'processing_context'=>$processing_context);
+            return $this->next;
+        }
+    }
     final class Task_Repository {
         public const APPLIED='applied'; public const PRESENT='present'; public const CONFLICT='conflict'; public const INDETERMINATE='indeterminate';
         public array $transitions=array(); public array $enqueues=array(); public string $enqueue_status=self::APPLIED;
@@ -149,10 +160,10 @@ namespace {
     $makeLife=static function(int $generation,string $status,string $target,bool $upload,bool $reveal) use($planHash,$anchor): array { return array('version'=>1,'generation'=>$generation,'backend_id'=>'pt-primary','anchor_post_id'=>$anchor,'plan_sha256'=>$planHash,'dispatch_policy'=>Plan::DISPATCH_SEND_NOW,'wordpress_status'=>$status,'upload_authorized'=>$upload,'reveal_authorized'=>$reveal,'target_privacy_id'=>$target,'task_pending'=>true,'updated_at'=>1900+$generation); };
     $task=static function(int $id,string $type,int $generation=1) use($video,$planHash): array { return array('id'=>$id,'task_type'=>$type,'video_post_id'=>$video,'lock_token'=>sprintf('00000000-0000-4000-8000-%012d',$id),'payload_json'=>json_encode(array('version'=>1,'generation'=>$generation,'plan_sha256'=>$planHash),JSON_THROW_ON_ERROR)); };
     $reset=static function(array $life,string $postStatus='draft') use($video,$anchor,$plan): void { $GLOBALS['awvp_pub_meta']=array($video=>array(Video_Meta::PEERTUBE_PUBLICATION_PLAN=>$plan,Video_Meta::DESTINATION=>array('version'=>1,'backend_id'=>'pt-primary','channel_id'=>'41'),Video_Meta::PEERTUBE_PUBLICATION_LIFECYCLE=>$life)); $GLOBALS['awvp_pub_posts']=array($video=>(object)array('ID'=>$video,'post_author'=>9,'post_status'=>'publish'),$anchor=>(object)array('ID'=>$anchor,'post_author'=>7,'post_status'=>$postStatus)); $GLOBALS['awvp_pub_options']=array(); $GLOBALS['awvp_pub_current_user']=0; };
-    $factory=static function(?array $catalogOverride=null,bool $withCutover=false,bool $withRepair=false) use($descriptor,$secret,$catalog): array {
-        $tasks=new Task_Repository(); $operations=new PeerTube_Staged_Upload_Operation_Store(); $upload=new PeerTube_Staged_Upload_Service(); $uploadTasks=new PeerTube_Upload_Task_Coordinator(); $staging=new PeerTube_Publication_Staging_Service(); $assets=new FakePublicationAssetStore(); $api=new FakePublicationApi(); $cutover=$withCutover?new \ArgentVideo\PeerTube_Serving_Cutover_Service():null; $repair=$withRepair?new \ArgentVideo\PeerTube_Publication_Authority_Repair():null;
-        $coord=new Coordinator($tasks,$operations,$upload,$uploadTasks,$staging,$assets,new Backend_Registry($descriptor),new Managed_Backend_Secret_Store($secret),new PeerTube_Publication_Catalog_Store(func_num_args()? $catalogOverride:$catalog),new Video_Publishing_Defaults_Store(array()),static fn(string $origin)=>$api,$cutover,null,$repair);
-        return compact('coord','tasks','operations','upload','uploadTasks','staging','assets','api','cutover','repair');
+    $factory=static function(?array $catalogOverride=null,bool $withCutover=false,bool $withRepair=false,bool $withPublicHealth=false) use($descriptor,$secret,$catalog): array {
+        $tasks=new Task_Repository(); $operations=new PeerTube_Staged_Upload_Operation_Store(); $upload=new PeerTube_Staged_Upload_Service(); $uploadTasks=new PeerTube_Upload_Task_Coordinator(); $staging=new PeerTube_Publication_Staging_Service(); $assets=new FakePublicationAssetStore(); $api=new FakePublicationApi(); $cutover=$withCutover?new \ArgentVideo\PeerTube_Serving_Cutover_Service():null; $repair=$withRepair?new \ArgentVideo\PeerTube_Publication_Authority_Repair():null; $publicHealth=$withPublicHealth?new \ArgentVideo\Remote_Publication_Health_Service():null;
+        $coord=new Coordinator($tasks,$operations,$upload,$uploadTasks,$staging,$assets,new Backend_Registry($descriptor),new Managed_Backend_Secret_Store($secret),new PeerTube_Publication_Catalog_Store(func_num_args()? $catalogOverride:$catalog),new Video_Publishing_Defaults_Store(array()),static fn(string $origin)=>$api,$cutover,null,$repair,$publicHealth);
+        return compact('coord','tasks','operations','upload','uploadTasks','staging','assets','api','cutover','repair','publicHealth');
     };
 
     // Sync: durable private upload handoff; post author is used, never invented user 1.
@@ -199,6 +210,22 @@ namespace {
     $x=$factory(); $x['operations']->records[$tagExec['operation_id']]=$ready; $x['api']->remote_privacy='1'; $remote=FakePublicationApi::publication($tagManifest); $remote['tags']=array('gymnastics','kids','videotest'); $x['api']->remote_publication=$remote;
     $tagExisting=$x['coord']->advance_claimed($tagTask,$now);
     $assert(Coordinator::STATUS_COMPLETE===$tagExisting['status']&&'verified_existing'===$tagExisting['service_status']&&0===count($x['api']->publication_calls),'Unordered PeerTube tags caused a false publication mismatch/replay.');
+
+    // RC10 live-fix: API metadata verification is not the final serving gate.
+    // A verified publication must also pass an unauthenticated public/embed URL
+    // probe before serving cutover. A failed public probe defers locally without
+    // replaying the consequential publication mutation.
+    $reset($makeLife(1,'publish','1',true,true),'publish'); $publicExec=Execution::with_remote($exec,55,$uuid,1920); $publicExec=Execution::mark_applied($publicExec,$manifest,1930); $GLOBALS['awvp_pub_meta'][$video][Video_Meta::PEERTUBE_PUBLICATION_EXECUTION]=$publicExec;
+    $x=$factory($catalog,true,false,true); $x['assets']->rows[55]=array('id'=>55,'video_post_id'=>$video,'backend_id'=>'pt-primary','channel_id'=>'41','remote_id'=>$uuid,'role'=>'secondary','state'=>'ready','desired_privacy'=>'public','actual_privacy'=>'public','remote_processing_state'=>'1:published','embed_url'=>'https://video.example.org/videos/embed/abcDEF_123','last_verified_at'=>'2026-09-10 19:00:00');
+    $x['publicHealth']->next=array('recorded'=>true,'viability_status'=>\ArgentVideo\Serving_Viability::MISSING,'reason_code'=>'peertube.health.public_missing','message'=>'The public serving URL is missing.','http_status'=>404);
+    $publicBlocked=$x['coord']->advance_claimed($task(57,Coordinator::TASK_FINALIZE),$now);
+    $assert(Coordinator::STATUS_REQUEUED===$publicBlocked['status']&&0===count($x['api']->publication_calls)&&0===count($x['cutover']->calls)&&1===count($x['publicHealth']->calls),'Public URL failure did not block serving cutover without replaying provider mutation.');
+    $assert(true===($x['publicHealth']->calls[0]['initial_verified']??false),'Initial final serving qualification did not identify itself as an initial verified public probe.');
+
+    $reset($makeLife(1,'publish','1',true,true),'publish'); $GLOBALS['awvp_pub_meta'][$video][Video_Meta::PEERTUBE_PUBLICATION_EXECUTION]=$publicExec;
+    $x=$factory($catalog,true,false,true); $x['assets']->rows[55]=array('id'=>55,'video_post_id'=>$video,'backend_id'=>'pt-primary','channel_id'=>'41','remote_id'=>$uuid,'role'=>'secondary','state'=>'ready','desired_privacy'=>'public','actual_privacy'=>'public','remote_processing_state'=>'1:published','embed_url'=>'https://video.example.org/videos/embed/abcDEF_123','last_verified_at'=>'2026-09-10 19:00:00');
+    $publicDone=$x['coord']->advance_claimed($task(58,Coordinator::TASK_FINALIZE),$now);
+    $assert(Coordinator::STATUS_COMPLETE===$publicDone['status']&&1===count($x['publicHealth']->calls)&&1===count($x['cutover']->calls)&&0===count($x['api']->publication_calls),'Healthy public URL did not authorize local serving cutover.');
 
     // If WordPress loses publish authority during the PUT, correct immediately to Private and verify it.
     $reset($makeLife(1,'publish','1',true,true),'publish'); $GLOBALS['awvp_pub_meta'][$video][Video_Meta::PEERTUBE_PUBLICATION_EXECUTION]=$exec; $x=$factory(); $x['operations']->records[$exec['operation_id']]=$ready; $x['api']->remote_privacy='3';

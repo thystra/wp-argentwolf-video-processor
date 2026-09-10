@@ -49,7 +49,20 @@ final class Plugin
         $video_block_editor_service = new Video_Block_Editor_Service($this->backend_registry, $video_publishing_defaults, $jobs);
         $video_block_editor_rest = new Video_Block_Editor_Rest($video_block_editor_service);
         $peertube_remote_assets = new Remote_Asset_Repository();
-        $video_serving = new Video_Serving_Service($peertube_remote_assets);
+        $publication_health = new Remote_Publication_Health_Repository();
+        $serving_priorities = new Backend_Serving_Priority_Store();
+        $processing_estimator = new Backend_Processing_Estimator();
+        $video_serving = new Video_Serving_Service($peertube_remote_assets, $publication_health, $serving_priorities);
+        $backend_health_incidents = new Backend_Health_Incident_Store();
+        $remote_health_notification_policy = new Remote_Health_Notification_Policy_Store();
+        $remote_health_notification_state = new Remote_Health_Notification_State_Store();
+        $remote_health_notifications = new Remote_Health_Notification_Service(
+            $remote_health_notification_policy,
+            $remote_health_notification_state,
+            $video_serving,
+            array($peertube_upload_operations, 'get'),
+            $peertube_events
+        );
         $legacy_video_serving_bridge = new Legacy_Video_Serving_Bridge($video_serving);
         $archive_of_record_policy = new Archive_Of_Record_Policy_Store();
         $local_retention_service = new Local_Retention_Service($peertube_tasks, $video_serving, $jobs, $archive_of_record_policy);
@@ -68,13 +81,32 @@ final class Plugin
             $editorial_publish_validator,
             $jobs
         );
-        $peertube_cutover = new PeerTube_Serving_Cutover_Service($peertube_remote_assets);
+        $peertube_cutover = new PeerTube_Serving_Cutover_Service($peertube_remote_assets, $publication_health);
         $peertube_incomplete_work = new PeerTube_Incomplete_Work_Reconciler(
             $peertube_publication_synchronizer,
             $peertube_cutover
         );
+        $remote_republish = new Remote_Republish_Service(
+            $this->backend_registry,
+            $video_publishing_defaults,
+            $peertube_publication_catalogs,
+            $peertube_publication_synchronizer,
+            $peertube_events
+        );
         $peertube_api_factory = static fn (string $origin): PeerTube_Api_Client =>
             new PeerTube_Api_Client(new PeerTube_Http_Client($origin));
+        $serving_health_factory = new Serving_Health_Adapter_Factory(
+            new PeerTube_Publication_Health_Probe($peertube_secrets, $peertube_api_factory)
+        );
+        $remote_publication_health = new Remote_Publication_Health_Service(
+            $publication_health,
+            $this->backend_registry,
+            $serving_health_factory,
+            $peertube_events,
+            $processing_estimator,
+            $backend_health_incidents,
+            $remote_health_notifications
+        );
         $peertube_lifecycle = new PeerTube_Token_Lifecycle_Service(
             new PeerTube_Token_Lifecycle_Store(),
             $peertube_secrets,
@@ -92,6 +124,13 @@ final class Plugin
             $peertube_publication_catalogs,
             $peertube_secrets,
             $this->backend_registry
+        );
+        $backend_maintenance_status = new Backend_Maintenance_Status_Store();
+        $peertube_daily_maintenance = new PeerTube_Daily_Maintenance_Service(
+            $this->backend_registry,
+            $peertube_publication_authority_repair,
+            $peertube_publication_catalog_service,
+            $backend_maintenance_status
         );
         $this->backend_factory = new Backend_Adapter_Factory(
             new Local_Backend_Adapter($queue, $diagnostics),
@@ -115,7 +154,10 @@ final class Plugin
         add_action(Activator::CRON_HOOK, array($launcher, 'dispatch'));
         add_action('argentwolf_video_processor_task_enqueued', array($peertube_task_launcher, 'wake'), 10, 2);
         add_action(Activator::PEERTUBE_RECOVERY_HOOK, array($peertube_incomplete_work, 'recover'), 5);
+        add_action(Activator::PEERTUBE_RECOVERY_HOOK, array($remote_republish, 'recover'), 7);
         add_action(Activator::PEERTUBE_RECOVERY_HOOK, array($peertube_task_launcher, 'recover'), 10);
+        add_action(Activator::REMOTE_HEALTH_HOOK, array($remote_publication_health, 'run'));
+        add_action(Activator::BACKEND_MAINTENANCE_HOOK, array($peertube_daily_maintenance, 'run'));
         add_filter('render_block_core/video', array($renderer, 'render_block'), 10, 2);
         add_filter('render_block_core/video', array($legacy_video_serving_bridge, 'render_block'), 20, 2);
         add_filter('wp_video_shortcode', array($renderer, 'render_shortcode'), 10, 2);
@@ -149,7 +191,9 @@ final class Plugin
                 $video_publishing_defaults,
                 $this->backend_registry,
                 $peertube_publication_catalogs,
-                $peertube_publication_catalog_service
+                $peertube_publication_catalog_service,
+                $serving_priorities,
+                $remote_health_notification_policy
             );
             $legacy_video_adoption = new Legacy_Video_Adoption_Service();
             $peertube_migration_planner = new PeerTube_Migration_Planner(
@@ -179,7 +223,8 @@ final class Plugin
                     return $generation > 0 ? $generation : 0;
                 }
             );
-            $local_retention_admin = new Local_Retention_Admin($local_retention_service, $archive_of_record_policy);
+            $local_retention_default = new Local_Retention_Default_Policy_Store();
+            $local_retention_admin = new Local_Retention_Admin($local_retention_service, $archive_of_record_policy, $local_retention_default);
             $peertube_migration_admin = new PeerTube_Migration_Admin(
                 $peertube_migration_planner,
                 $peertube_migration_executor,
@@ -198,7 +243,18 @@ final class Plugin
                     $peertube_publication_authority_repair
                 )
             );
-            $peertube_overview = new PeerTube_Overview_Admin($peertube_upload_operations, $peertube_incomplete_work, $peertube_events);
+            $overview_dispositions = new Overview_Disposition_Store();
+            $peertube_overview = new PeerTube_Overview_Admin(
+                $peertube_upload_operations,
+                $peertube_incomplete_work,
+                $peertube_events,
+                $publication_health,
+                $video_serving,
+                $overview_dispositions,
+                $backend_maintenance_status,
+                $backend_health_incidents,
+                $remote_republish
+            );
             $settings_hub = new Settings_Hub(
                 $admin,
                 $peertube_admin,
@@ -211,6 +267,7 @@ final class Plugin
             add_action('admin_init', array($admin, 'register'));
             add_filter('plugin_action_links_' . plugin_basename(ARGENT_VIDEO_FILE), array($admin, 'plugin_action_links'));
             add_action('admin_menu', array($settings_hub, 'menu'));
+            add_action('admin_enqueue_scripts', array($local_retention_admin, 'enqueue_assets'));
             add_filter('manage_media_columns', array($admin, 'media_columns'));
             add_action('manage_media_custom_column', array($admin, 'media_column'), 10, 2);
             add_action('admin_post_argent_video_queue_attachment', array($admin, 'queue_action'));
@@ -219,6 +276,10 @@ final class Plugin
             add_action('admin_post_argent_video_dispatch', array($admin, 'dispatch_action'));
             add_action('admin_post_argentwolf_video_processor_clear_worker_logs', array($admin, 'clear_worker_logs_action'));
             add_action('admin_post_' . PeerTube_Overview_Admin::ACTION_RESUME, array($peertube_overview, 'resume_action'));
+            add_action('admin_post_' . PeerTube_Overview_Admin::ACTION_REVIEW, static fn (): mixed => $peertube_overview->disposition_action(Overview_Disposition_Store::REVIEWED));
+            add_action('admin_post_' . PeerTube_Overview_Admin::ACTION_UNREVIEW, static fn (): mixed => $peertube_overview->disposition_action('clear'));
+            add_action('admin_post_' . PeerTube_Overview_Admin::ACTION_DISMISS, static fn (): mixed => $peertube_overview->disposition_action(Overview_Disposition_Store::DISMISSED));
+            add_action('admin_post_' . PeerTube_Overview_Admin::ACTION_REPUBLISH, array($peertube_overview, 'republish_action'));
             add_action(
                 'admin_post_' . PeerTube_Connection_Admin::ACTION_START,
                 array($peertube_admin, 'start_action')
@@ -276,6 +337,14 @@ final class Plugin
                 array($local_retention_admin, 'archive_policy_action')
             );
             add_action(
+                'admin_post_' . Local_Retention_Admin::ACTION_DEFAULT_POLICY,
+                array($local_retention_admin, 'default_policy_action')
+            );
+            add_action(
+                'admin_post_' . Local_Retention_Admin::ACTION_BULK_APPLY,
+                array($local_retention_admin, 'bulk_apply_action')
+            );
+            add_action(
                 'admin_post_' . PeerTube_Migration_Admin::ACTION_PLAN,
                 array($peertube_migration_admin, 'plan_action')
             );
@@ -317,9 +386,7 @@ final class Plugin
                 array($peertube_reconciliation, 'advance'),
                 $peertube_failure_notification
             );
-            $peertube_derivative_cleanup = new PeerTube_Derivative_Cleanup_Service(
-                new Video_Serving_Service($peertube_remote_assets)
-            );
+            $peertube_derivative_cleanup = new PeerTube_Derivative_Cleanup_Service($video_serving);
             $peertube_publication_tasks = new PeerTube_Publication_Task_Coordinator(
                 $peertube_tasks,
                 $peertube_upload_operations,
@@ -334,7 +401,8 @@ final class Plugin
                 $peertube_api_factory,
                 $peertube_cutover,
                 $peertube_derivative_cleanup,
-                $peertube_publication_authority_repair
+                $peertube_publication_authority_repair,
+                $remote_publication_health
             );
             $peertube_task_worker = new PeerTube_Task_Worker(
                 $peertube_tasks,

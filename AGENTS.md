@@ -366,7 +366,7 @@ WordPress.org reviewer findings are durable engineering lessons, not one-line co
 
 Current public stable release: `1.0.0`. The permanent `release/1.x` maintenance
 branch is rooted at exact tag `v1.0.0` so emergency 1.0.x work remains possible
-while 2.0 advances independently. Current controlled candidate: `2.0.0-rc10`; it
+while 2.0 advances independently. Current controlled candidate: `2.0.0-rc11`; it
 must remain off WordPress.org SVN until final 2.0.0 promotion.
 
 Cross-project release, validator, partial-mutation, shared-host, and ZFS lessons
@@ -393,6 +393,10 @@ line, applies the shared template guidance together with `AGENTS-TESTING.md`,
 
 Treat `_argent_video_serving_authority` as revocable evidence, not a destination selector. Public/unlisted remote rendering requires current lifecycle/plan/execution/remote-asset agreement; any uncertainty stays local. Do not add render-time PeerTube HTTP or cleanup authority while working in R46.6.
 
+
+## RC11 public-serving health and failover boundary
+
+Publication authority and visitor-facing health are separate durable facts. The final serving-health decision is based on the unauthenticated public/embed URL that AWVP would give a visitor; provider API publish state is diagnostic only and cannot make a failed public URL eligible. Never add provider HTTP to frontend rendering. Local is priority 0; remote priorities choose among already-verified healthy publications and do not imply replication or deletion authority. Expected processing is not a broken-publication failure. Preserve historical authority/assets/tasks/events when health degrades or Republish creates a replacement generation.
 
 ## R46.8 migration execution boundary
 

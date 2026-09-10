@@ -105,6 +105,8 @@ namespace {
         'final_privacy_id' => '2',
         'licence_id' => null,
         'category_id' => '',
+        // Deliberately omit language here: existing RC10 records did not
+        // carry this key and must continue to inherit the site language.
     );
 
     $sanitized = Video_Publishing_Defaults::sanitize($settings);
@@ -118,6 +120,7 @@ namespace {
     $assert('2' === ($effective['final_privacy_id'] ?? ''), 'Backend privacy override was not applied.');
     $assert('2' === ($effective['licence_id'] ?? ''), 'Null backend licence override must inherit site licence.');
     $assert('' === ($effective['category_id'] ?? 'x'), 'Empty backend category override must explicitly clear site category.');
+    $assert('en' === ($effective['language'] ?? ''), 'Missing legacy backend language override must inherit site language.');
     $assert('preset' === ($effective['support']['mode'] ?? ''), 'Support preset was not resolved.');
     $assert(str_contains((string) ($effective['support']['markdown'] ?? ''), 'Become a supporter'), 'Support preset Markdown was not resolved.');
     $assert(! array_key_exists('reviewed', $effective['moderation'] ?? array()), 'Defaults must never satisfy per-video moderation review.');
@@ -128,6 +131,11 @@ namespace {
     $changed_effective = Video_Publishing_Defaults::effective_for_backend($changed, $registry->descriptors['pt-primary']);
     $assert($snapshot['support']['markdown'] !== $changed_effective['support']['markdown'], 'Resolved support snapshot fixture did not change.');
     $assert(str_contains($snapshot['support']['markdown'], 'Become a supporter'), 'Previously resolved support snapshot was mutated by later defaults.');
+
+    $language_override = $settings;
+    $language_override['backend_overrides']['pt-primary']['language'] = 'fr';
+    $language_effective = Video_Publishing_Defaults::effective_for_backend($language_override, $registry->descriptors['pt-primary']);
+    $assert('fr' === ($language_effective['language'] ?? ''), 'Backend language override was not applied.');
 
     $bad_backend = $settings;
     $bad_backend['default_destination'] = array('version'=>1,'backend_id'=>'pt-disabled');

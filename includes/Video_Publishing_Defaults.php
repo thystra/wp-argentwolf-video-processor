@@ -120,6 +120,7 @@ final class Video_Publishing_Defaults
         $privacy = self::inherit($override['final_privacy_id'] ?? null, $site['final_privacy_id']);
         $licence = self::inherit($override['licence_id'] ?? null, $site['licence_id']);
         $category = self::inherit($override['category_id'] ?? null, $site['category_id']);
+        $language = self::inherit($override['language'] ?? null, $site['language']);
 
         $support_id = $site['support_preset_id'];
         $support = array('mode' => 'none', 'preset_id' => '', 'markdown' => '');
@@ -141,7 +142,7 @@ final class Video_Publishing_Defaults
             'final_privacy_id'   => $privacy,
             'licence_id'         => $licence,
             'category_id'        => $category,
-            'language'           => $site['language'],
+            'language'           => $language,
             'comments_policy'    => $site['comments_policy'],
             'download_enabled'   => $site['download_enabled'],
             'support'            => $support,
@@ -235,7 +236,8 @@ final class Video_Publishing_Defaults
             $privacy = self::privacy_id($override['final_privacy_id'] ?? null, true);
             $licence = self::optional_provider_override($override['licence_id'] ?? null);
             $category = self::optional_provider_override($override['category_id'] ?? null);
-            if (null === $channel || null === $privacy || self::INVALID === $licence || self::INVALID === $category) {
+            $language = self::optional_language_override($override['language'] ?? null);
+            if (null === $channel || null === $privacy || self::INVALID === $licence || self::INVALID === $category || self::INVALID === $language) {
                 return null;
             }
 
@@ -244,6 +246,7 @@ final class Video_Publishing_Defaults
                 'final_privacy_id' => $privacy,
                 'licence_id'       => $licence,
                 'category_id'      => $category,
+                'language'         => $language,
             );
         }
 
@@ -298,6 +301,18 @@ final class Video_Publishing_Defaults
         }
         $id = self::provider_id($value, false);
         return null === $id ? self::INVALID : $id;
+    }
+
+    private static function optional_language_override(mixed $value): string|null
+    {
+        if (null === $value) {
+            return null;
+        }
+        if ('' === $value) {
+            return '';
+        }
+        $language = self::language($value);
+        return null === $language ? self::INVALID : $language;
     }
 
     private static function language(mixed $value): ?string

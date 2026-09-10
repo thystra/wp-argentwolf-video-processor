@@ -23,6 +23,7 @@ final class PeerTube_Http_Client
     public const MAX_UPLOAD_REQUEST_BYTES = 1048576;
 
     private const DEFAULT_TIMEOUT_SECONDS = 15;
+    private const MAX_PUBLIC_EMBED_RESPONSE_BYTES = 1048576;
     private const CONFIG_PATH = '/api/v1/config';
     private const OAUTH_CLIENT_PATH = '/api/v1/oauth-clients/local';
     private const TOKEN_PATH = '/api/v1/users/token';
@@ -350,6 +351,22 @@ final class PeerTube_Http_Client
         );
     }
 
+    /** @return array<string,mixed> */
+    public function get_public_embed(string $embed_url): array
+    {
+        if (strlen($embed_url) > 2048 || 1 === preg_match('/[\x00-\x1F\x7F]/', $embed_url)) {
+            throw new InvalidArgumentException('PeerTube public embed URL is outside the reviewed bound.');
+        }
+        $parts = wp_parse_url($embed_url);
+        $path = is_array($parts) && is_string($parts['path'] ?? null) ? $parts['path'] : '';
+        if (! is_array($parts) || isset($parts['user']) || isset($parts['pass']) || isset($parts['query']) || isset($parts['fragment'])
+            || 1 !== preg_match('#^/videos/embed/[A-Za-z0-9_-]{1,191}$#D', $path)
+            || ! $this->targets_origin($embed_url)) {
+            throw new InvalidArgumentException('PeerTube public embed URL does not match the configured origin/path contract.');
+        }
+        return $this->request('GET', $path, self::MAX_PUBLIC_EMBED_RESPONSE_BYTES, 'public');
+    }
+
     /** @return array<string, mixed> */
     public function get_video_status(string $access_token, string $video_uuid): array
     {
@@ -524,7 +541,8 @@ final class PeerTube_Http_Client
             throw new InvalidArgumentException('PeerTube HTTP response limit is outside the reviewed bound.');
         }
 
-        if (! in_array($method, array('GET', 'POST', 'PUT'), true) || ! str_starts_with($path, '/api/v1/')) {
+        $is_public_embed = 'GET' === $method && 1 === preg_match('#^/videos/embed/[A-Za-z0-9_-]{1,191}$#D', $path);
+        if (! in_array($method, array('GET', 'POST', 'PUT'), true) || (! str_starts_with($path, '/api/v1/') && ! $is_public_embed)) {
             throw new InvalidArgumentException('PeerTube HTTP method/path is outside the reviewed endpoint set.');
         }
 
@@ -650,7 +668,7 @@ final class PeerTube_Http_Client
                     'limit_response_size' => $response_limit,
                     'headers'             => array_merge(
                         array(
-                        'Accept'          => 'application/json, application/problem+json',
+                        'Accept'          => $is_public_embed ? 'text/html,application/xhtml+xml' : 'application/json, application/problem+json',
                         'Accept-Encoding' => 'identity',
                         'User-Agent'      => self::user_agent(),
                         ),

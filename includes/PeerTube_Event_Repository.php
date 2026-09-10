@@ -36,6 +36,8 @@ final class PeerTube_Event_Repository
         'request_start',
         'request_bytes',
         'phase',
+        'serving_health',
+        'fallback_backend',
     );
 
     /**

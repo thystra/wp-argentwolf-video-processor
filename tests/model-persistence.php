@@ -90,6 +90,7 @@ require_once dirname(__DIR__) . '/includes/PeerTube_Migration_Execution.php';
 require_once dirname(__DIR__) . '/includes/PeerTube_Publication_Lifecycle.php';
 require_once dirname(__DIR__) . '/includes/PeerTube_Publication_Manifest.php';
 require_once dirname(__DIR__) . '/includes/PeerTube_Publication_Execution.php';
+require_once dirname(__DIR__) . '/includes/Remote_Republish_Request.php';
 require_once dirname(__DIR__) . '/includes/PeerTube_Connection_Input.php';
 require_once dirname(__DIR__) . '/includes/Video_Serving_Authority.php';
 require_once dirname(__DIR__) . '/includes/Local_Retention_Policy.php';
@@ -145,6 +146,7 @@ $expected_meta = array(
     Video_Meta::PEERTUBE_PUBLICATION_LIFECYCLE,
     Video_Meta::PEERTUBE_PUBLICATION_EXECUTION,
     Video_Meta::PEERTUBE_RECOVERY_WINDOW,
+    Video_Meta::REMOTE_REPUBLISH_REQUEST,
     Video_Meta::SERVING_AUTHORITY,
     Video_Meta::PEERTUBE_MIGRATION_PLAN,
     Video_Meta::PEERTUBE_MIGRATION_EXECUTION,
@@ -315,11 +317,17 @@ $GLOBALS['wpdb'] = new class {
                     'locked_at', 'started_at', 'completed_at', 'payload_json',
                     'error_message', 'created_at', 'updated_at',
                 );
-            } else {
+            } elseif (str_ends_with($table, 'argent_video_events')) {
                 $columns = array(
                     'id', 'video_post_id', 'task_id', 'operation_id', 'remote_asset_id',
                     'backend_id', 'pipeline_step', 'event_code', 'severity', 'http_status',
                     'message', 'automatic_action', 'operator_action', 'context_json', 'created_at',
+                );
+            } else {
+                $columns = array(
+                    'remote_asset_id','video_post_id','backend_id','status','eligible','failure_since',
+                    'last_checked_at','last_healthy_at','success_streak','failure_streak','http_status',
+                    'reason_code','message','next_check_at','updated_at',
                 );
             }
 
@@ -349,13 +357,20 @@ $GLOBALS['wpdb'] = new class {
                     'video_type' => array(1, array('video_post_id', 'task_type')),
                     'backend_status' => array(1, array('backend_id', 'status')),
                 );
-            } else {
+            } elseif (str_ends_with($table, 'argent_video_events')) {
                 $definitions = array(
                     'PRIMARY' => array(0, array('id')),
                     'video_created' => array(1, array('video_post_id', 'created_at')),
                     'task_created' => array(1, array('task_id', 'created_at')),
                     'backend_created' => array(1, array('backend_id', 'created_at')),
                     'severity_created' => array(1, array('severity', 'created_at')),
+                );
+            } else {
+                $definitions = array(
+                    'PRIMARY' => array(0, array('remote_asset_id')),
+                    'video_status' => array(1, array('video_post_id','status')),
+                    'backend_status' => array(1, array('backend_id','status')),
+                    'next_check' => array(1, array('next_check_at')),
                 );
             }
 
@@ -382,13 +397,14 @@ $GLOBALS['wpdb'] = new class {
 };
 
 $queries = Model_Activator::schema_queries();
-$assert(3 === count($queries), 'The RC10 model must define remote assets, tasks, and operator events.');
+$assert(4 === count($queries), 'The RC10 live-fix model must define remote assets, tasks, operator events, and publication health.');
 
 $joined = implode("\n", $queries);
 $assert(str_contains($joined, 'CREATE TABLE wp_test_argent_video_remote_assets'), 'Remote-assets table missing.');
 $assert(str_contains($joined, 'CREATE TABLE wp_test_argent_video_tasks'), 'Task table missing.');
 $assert(str_contains($joined, 'CREATE TABLE wp_test_argent_video_events'), 'Operator-event table missing.');
-$assert('2' === Model_Activator::DB_VERSION, 'RC10 model schema version must be 2.');
+$assert(str_contains($joined, 'CREATE TABLE wp_test_argent_video_publication_health'), 'Publication-health table missing.');
+$assert('3' === Model_Activator::DB_VERSION, 'RC10 live-fix model schema version must be 3.');
 $assert(! str_contains($joined, 'argent_video_jobs'), '2.0 schema must not redefine the legacy queue table.');
 $assert(str_contains($joined, 'PRIMARY KEY  (id)'), 'dbDelta-compatible PRIMARY KEY formatting missing.');
 $assert(str_contains($joined, 'remote_id varchar(127) DEFAULT NULL'), 'Remote ID length must preserve the conservative composite-index budget.');
@@ -409,7 +425,7 @@ $GLOBALS['argent_video_test_dbdelta'] = array();
 $GLOBALS['argent_video_test_option_updates'] = array();
 $GLOBALS['wpdb']->omit_backend_remote_index = false;
 $assert(Model_Activator::install(), 'Complete schema should be accepted after dbDelta.');
-$assert(3 === count($GLOBALS['argent_video_test_dbdelta']), 'Installer should submit exactly three dbDelta queries.');
+$assert(4 === count($GLOBALS['argent_video_test_dbdelta']), 'Installer should submit exactly four dbDelta queries.');
 $assert(
     array(
         Model_Activator::DB_OPTION,

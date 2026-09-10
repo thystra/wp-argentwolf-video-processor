@@ -137,6 +137,43 @@ do
     fi
 done
 
+for required_admin_asset in \
+    local-retention-admin.js
+do
+    if ! grep -qx "${SLUG}/assets/js/${required_admin_asset}" "${ZIP_MANIFEST}"; then
+        echo "Release ZIP is missing assets/js/${required_admin_asset}." >&2
+        rm -f "${ZIP_MANIFEST}"
+        exit 1
+    fi
+done
+
+for required_runtime_file in \
+    Backend_Health_Incident_Store.php \
+    Backend_Maintenance_Status_Store.php \
+    Backend_Processing_Estimator.php \
+    Backend_Serving_Priority_Store.php \
+    Local_Retention_Default_Policy_Store.php \
+    Overview_Disposition_Store.php \
+    PeerTube_Daily_Maintenance_Service.php \
+    PeerTube_Publication_Health_Probe.php \
+    Remote_Health_Notification_Policy_Store.php \
+    Remote_Health_Notification_Service.php \
+    Remote_Health_Notification_State_Store.php \
+    Remote_Publication_Health_Repository.php \
+    Remote_Publication_Health_Service.php \
+    Remote_Republish_Request.php \
+    Remote_Republish_Service.php \
+    Serving_Health_Adapter.php \
+    Serving_Health_Adapter_Factory.php \
+    Serving_Viability.php
+do
+    if ! grep -qx "${SLUG}/includes/${required_runtime_file}" "${ZIP_MANIFEST}"; then
+        echo "Release ZIP is missing includes/${required_runtime_file}." >&2
+        rm -f "${ZIP_MANIFEST}"
+        exit 1
+    fi
+done
+
 for forbidden_vendor_metadata in \
     hls.VERSION \
     hls.SHA256

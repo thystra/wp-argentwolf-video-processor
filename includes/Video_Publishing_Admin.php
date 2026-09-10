@@ -20,7 +20,9 @@ final class Video_Publishing_Admin
         private readonly Video_Publishing_Defaults_Store $store,
         private readonly Backend_Registry $registry,
         private readonly ?PeerTube_Publication_Catalog_Store $catalogs = null,
-        private readonly ?PeerTube_Publication_Catalog_Service $catalog_service = null
+        private readonly ?PeerTube_Publication_Catalog_Service $catalog_service = null,
+        private readonly ?Backend_Serving_Priority_Store $serving_priorities = null,
+        private readonly ?Remote_Health_Notification_Policy_Store $health_notifications = null
     ) {
     }
 
@@ -49,10 +51,31 @@ final class Video_Publishing_Admin
         // phpcs:enable WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
         $desired = $this->form_to_settings($input);
         $result = $this->store->save($desired);
-        $notice = match ($result['status'] ?? '') {
-            Video_Publishing_Defaults_Store::APPLIED,
-            Video_Publishing_Defaults_Store::PRESENT => 'saved',
-            Video_Publishing_Defaults_Store::INDETERMINATE => 'indeterminate',
+        $priority_ok = true;
+        if (in_array($result['status'] ?? '', array(Video_Publishing_Defaults_Store::APPLIED, Video_Publishing_Defaults_Store::PRESENT), true)
+            && null !== $this->serving_priorities) {
+            $priority_rows = isset($input['backend_priorities']) && is_array($input['backend_priorities'])
+                ? $input['backend_priorities']
+                : array();
+            foreach ($this->active_peertube_backends() as $backend_id => $_backend) {
+                $raw_priority = $priority_rows[$backend_id] ?? (string) $this->serving_priorities->priority($backend_id);
+                if (! $this->serving_priorities->save($backend_id, $raw_priority)) {
+                    $priority_ok = false;
+                    break;
+                }
+            }
+        }
+        $notification_ok = true;
+        if (in_array($result['status'] ?? '', array(Video_Publishing_Defaults_Store::APPLIED, Video_Publishing_Defaults_Store::PRESENT), true)
+            && null !== $this->health_notifications) {
+            $notification_ok = $this->health_notifications->save($this->notification_policy_from_form($input['health_notifications'] ?? null));
+        }
+        $notice = match (true) {
+            ! $priority_ok => 'priority-refused',
+            ! $notification_ok => 'notification-refused',
+            Video_Publishing_Defaults_Store::APPLIED === ($result['status'] ?? ''),
+            Video_Publishing_Defaults_Store::PRESENT === ($result['status'] ?? '') => 'saved',
+            Video_Publishing_Defaults_Store::INDETERMINATE === ($result['status'] ?? '') => 'indeterminate',
             default => 'refused',
         };
 
@@ -120,6 +143,9 @@ final class Video_Publishing_Admin
         $site_catalog = Backend_Registry::LOCAL_ID !== $selected_backend && null !== $this->catalogs
             ? $this->catalogs->get($selected_backend)
             : null;
+        $health_notifications = null !== $this->health_notifications
+            ? $this->health_notifications->get()
+            : Remote_Health_Notification_Policy_Store::defaults();
         ?>
         <h2><?php esc_html_e('Publishing', 'argentwolf-video-processor'); ?></h2>
             <?php $this->render_notice(); ?>
@@ -232,13 +258,18 @@ final class Video_Publishing_Admin
                         <p><?php esc_html_e('No connected PeerTube servers are available. Connect and activate a PeerTube server before configuring server-specific publishing defaults.', 'argentwolf-video-processor'); ?></p>
                     <?php else : ?>
                         <table class="widefat striped" style="max-width:1100px">
-                            <thead><tr><th><?php esc_html_e('PeerTube server', 'argentwolf-video-processor'); ?></th><th><?php esc_html_e('Channel', 'argentwolf-video-processor'); ?></th><th><?php esc_html_e('Final privacy', 'argentwolf-video-processor'); ?></th><th><?php esc_html_e('Licence', 'argentwolf-video-processor'); ?></th><th><?php esc_html_e('Category', 'argentwolf-video-processor'); ?></th></tr></thead>
+                            <thead><tr><th><?php esc_html_e('PeerTube server', 'argentwolf-video-processor'); ?></th><th><?php esc_html_e('Serving priority', 'argentwolf-video-processor'); ?></th><th><?php esc_html_e('Channel', 'argentwolf-video-processor'); ?></th><th><?php esc_html_e('Final privacy', 'argentwolf-video-processor'); ?></th><th><?php esc_html_e('Licence', 'argentwolf-video-processor'); ?></th><th><?php esc_html_e('Category', 'argentwolf-video-processor'); ?></th><th><?php esc_html_e('Language', 'argentwolf-video-processor'); ?></th></tr></thead>
                             <tbody>
                             <?php foreach ($backends as $backend_id => $backend) : ?>
-                                <?php $override = $settings['backend_overrides'][$backend_id] ?? array('channel_id'=>'','final_privacy_id'=>null,'licence_id'=>null,'category_id'=>null); ?>
+                                <?php $override = $settings['backend_overrides'][$backend_id] ?? array('channel_id'=>'','final_privacy_id'=>null,'licence_id'=>null,'category_id'=>null,'language'=>null); ?>
                                 <?php $catalog = null !== $this->catalogs ? $this->catalogs->get($backend_id) : null; ?>
                                 <tr>
                                     <td><strong><?php echo esc_html($this->backend_label($backend)); ?></strong></td>
+                                    <td>
+                                        <?php $priority = null !== $this->serving_priorities ? $this->serving_priorities->priority($backend_id) : Backend_Serving_Priority_Store::DEFAULT_REMOTE_PRIORITY; ?>
+                                        <input type="number" min="1" max="<?php echo esc_attr((string) Backend_Serving_Priority_Store::MAX_PRIORITY); ?>" name="awvp_publishing[backend_priorities][<?php echo esc_attr($backend_id); ?>]" value="<?php echo esc_attr((string) $priority); ?>" style="width:7em">
+                                        <br><span class="description"><?php esc_html_e('Higher healthy priority serves first. WordPress local is fixed at priority 0.', 'argentwolf-video-processor'); ?></span>
+                                    </td>
                                     <td><?php $this->channel_override_select($backend_id, $backend, $override['channel_id'] ?? '', $catalog); ?></td>
                                     <td><select name="awvp_publishing[backend_overrides][<?php echo esc_attr($backend_id); ?>][final_privacy_id]">
                                         <option value="inherit" <?php selected($override['final_privacy_id'] ?? null, null); ?>><?php esc_html_e('Inherit site', 'argentwolf-video-processor'); ?></option>
@@ -246,11 +277,33 @@ final class Video_Publishing_Admin
                                     </select></td>
                                     <td><?php $this->provider_override_select($backend_id, 'licence_id', $override['licence_id'] ?? null, is_array($catalog) ? $catalog['licences'] : array()); ?></td>
                                     <td><?php $this->provider_override_select($backend_id, 'category_id', $override['category_id'] ?? null, is_array($catalog) ? $catalog['categories'] : array()); ?></td>
+                                    <td><?php $this->provider_override_select($backend_id, 'language', $override['language'] ?? null, is_array($catalog) ? $catalog['languages'] : array()); ?></td>
                                 </tr>
                             <?php endforeach; ?>
                             </tbody>
                         </table>
                     <?php endif; ?>
+
+                    <h2><?php esc_html_e('Remote publication health notifications', 'argentwolf-video-processor'); ?></h2>
+                    <p><?php esc_html_e('Remote serving problems appear on Overview as soon as AWVP observes them. Email timing can be selected independently for the site administrator, the WordPress user who initiated the publication, and the origin-post author. Backend-wide outages are deduplicated to one administrator email rather than one email per affected video.', 'argentwolf-video-processor'); ?></p>
+                    <table class="form-table" role="presentation">
+                        <?php foreach (array(
+                            'administrator' => __('Site administrator', 'argentwolf-video-processor'),
+                            'publishing_user' => __('Publishing user / operator', 'argentwolf-video-processor'),
+                            'origin_author' => __('Origin post author', 'argentwolf-video-processor'),
+                        ) as $role => $label) : ?>
+                            <tr>
+                                <th scope="row"><label for="awvp-health-<?php echo esc_attr($role); ?>"><?php echo esc_html($label); ?></label></th>
+                                <td>
+                                    <select id="awvp-health-<?php echo esc_attr($role); ?>" name="awvp_publishing[health_notifications][<?php echo esc_attr($role); ?>]">
+                                        <option value="off" <?php selected((string) $health_notifications[$role], Remote_Health_Notification_Policy_Store::OFF); ?>><?php esc_html_e('Off', 'argentwolf-video-processor'); ?></option>
+                                        <option value="delayed" <?php selected((string) $health_notifications[$role], Remote_Health_Notification_Policy_Store::DELAYED); ?>><?php esc_html_e('After persistent failure (about 2 hours)', 'argentwolf-video-processor'); ?></option>
+                                        <option value="immediate" <?php selected((string) $health_notifications[$role], Remote_Health_Notification_Policy_Store::IMMEDIATE); ?>><?php esc_html_e('Immediately after the first failed health check', 'argentwolf-video-processor'); ?></option>
+                                    </select>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </table>
 
                     <h2><?php esc_html_e('Support presets', 'argentwolf-video-processor'); ?></h2>
                     <p><?php esc_html_e('Define reusable PeerTube support text. PeerTube accepts Markdown-capable support text; the individual video may choose none, a preset, or custom text.', 'argentwolf-video-processor'); ?></p>
@@ -379,6 +432,7 @@ final class Video_Publishing_Admin
                 'final_privacy_id' => $privacy,
                 'licence_id'       => $this->provider_override_from_form($row['licence_id'] ?? null),
                 'category_id'      => $this->provider_override_from_form($row['category_id'] ?? null),
+                'language'         => $this->language_override_from_form($row['language'] ?? null),
             );
         }
 
@@ -410,6 +464,36 @@ final class Video_Publishing_Admin
             return '';
         }
         return is_string($value) ? $value : '__invalid__';
+    }
+
+    private function language_override_from_form(mixed $value): string|null
+    {
+        if ('inherit' === $value) {
+            return null;
+        }
+        if ('none' === $value) {
+            return '';
+        }
+        return is_string($value) ? $value : '__invalid__';
+    }
+
+    /** @return array{version:int,administrator:string,publishing_user:string,origin_author:string} */
+    private function notification_policy_from_form(mixed $value): array
+    {
+        $value = is_array($value) ? $value : array();
+        $current = null !== $this->health_notifications
+            ? $this->health_notifications->get()
+            : Remote_Health_Notification_Policy_Store::defaults();
+        $result = array('version' => Remote_Health_Notification_Policy_Store::VERSION);
+        foreach (array('administrator','publishing_user','origin_author') as $role) {
+            $raw = is_string($value[$role] ?? null) ? sanitize_key((string) $value[$role]) : (string) $current[$role];
+            $result[$role] = in_array($raw, array(
+                Remote_Health_Notification_Policy_Store::OFF,
+                Remote_Health_Notification_Policy_Store::DELAYED,
+                Remote_Health_Notification_Policy_Store::IMMEDIATE,
+            ), true) ? $raw : '__invalid__';
+        }
+        return $result;
     }
 
     /** @return array<string,array<string,mixed>> */
@@ -566,6 +650,8 @@ final class Video_Publishing_Admin
             'saved' => __('Video publishing defaults saved.', 'argentwolf-video-processor'),
             'indeterminate' => __('AWVP could not verify whether the publishing-defaults save committed. Reload and inspect the current values before retrying.', 'argentwolf-video-processor'),
             'refused' => __('Publishing defaults were not saved. Check backend references, provider IDs, support presets, and stored-schema compatibility.', 'argentwolf-video-processor'),
+            'priority-refused' => __('Publishing defaults were saved, but one or more backend serving priorities could not be verified. Reload and review the server defaults before publishing.', 'argentwolf-video-processor'),
+            'notification-refused' => __('Publishing defaults were saved, but the remote-health email policy could not be verified. Reload and review notification settings before relying on email alerts.', 'argentwolf-video-processor'),
             'choices-refreshed' => __('PeerTube publication choices refreshed and cached.', 'argentwolf-video-processor'),
             'choices-remote-failed' => __('PeerTube publication-choice refresh failed. AWVP preserved the previous valid cache, if any; treat it as stale until refresh succeeds.', 'argentwolf-video-processor'),
             'choices-cache-failed' => __('PeerTube choices were read successfully but AWVP could not safely persist the cache. Existing cached choices were preserved.', 'argentwolf-video-processor'),

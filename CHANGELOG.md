@@ -1,6 +1,18 @@
 <!-- File: CHANGELOG.md -->
 # Changelog
 
+## 2.0.0-rc11 - 2026-09-10
+
+- Preserve canonical RC10 candidate #2 as immutable qualification/live-test evidence: commit `215e7b12582d01ea27f4e1c08b965812f3f13d72`, tree `22892bcbc2449d4e0d31fa8bfff5701ff5feb85c`, exact ZIP SHA-256 `3d4ce93bac8611524d03057ecf270e8e309222b0314f5006ba3520c14afac160`. RC11 carries post-RC10 live findings into a new package identity.
+- Add model DB schema 3 publication-health state. Periodic detached checks validate the actual unauthenticated public/embed URL that visitors receive; provider API publish state is supplementary diagnosis only and cannot make an unusable public URL eligible. Expected provider processing is a separate non-failure state.
+- Add backend-independent serving priority/failover. Local WordPress is priority 0, verified healthy remote publications compete by configured positive priority, and the frontend falls through to the next viable source without render-time network calls. Two-success hysteresis avoids failback flapping.
+- Estimate processing readiness per backend from source size plus at most the 10 most recent successful `upload accepted -> publicly playable` observations from the last 90 days. Processing retries use the estimate without spending finite publication-attempt budget.
+- Add immediate Overview health incidents, backend-wide outage deduplication, configurable administrator/publishing-user/origin-author email timing (Off / delayed / immediate), recovery notices, and daily PeerTube credential/catalog maintenance as a separate server-level concern.
+- Add restart-safe **Republish** from a retained WordPress original to the same or another configured PeerTube server. Republish advances one exact new publication generation/upload operation while preserving historical serving authority, remote assets, tasks, events, and journals until replacement verification completes.
+- Improve **Status & Needs Attention** so resolved work disappears, exact still-current issues can be marked reviewed into a collapsed section or removed from the presentation without deleting audit evidence, and actionable rows link to the real review target instead of generic stale diagnostics.
+- Add per-server **Serving priority** and default **Language** administration while retaining backward compatibility with RC10 settings records that lack a language override.
+- Scale Local Retention for large libraries with one site-wide **AWVP Default Policy**, a compact searchable/filterable one-row-per-video list, per-row selection, and select-all-filtered bulk application. WordPress remains the Archive of Record by default and blocks automatic original-source deletion unless that site-wide authority is explicitly changed.
+
 ## 2.0.0-rc10 - 2026-09-10
 
 - Preserve canonical RC9 as immutable live-test evidence. The final RC9 source line includes `878304ba8cbaf24e5017263a2f7f5c6a79f6fbfb` and Plugin Check remediation commit `854014d03b4fd55940ab6e9bc49fa2b13035c3ba`; exact installable ZIP SHA-256 `d28b56e9eaf0ca482559244753677eca10ec0bb4a7bc45e382c42cefc8239c23`. RC10 fixes belong to a new candidate identity and must never replace those bytes.

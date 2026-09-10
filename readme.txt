@@ -142,9 +142,10 @@ status, output paths, and error information in the local WordPress installation.
 
 Generated derivatives strip source metadata when that setting is enabled. Local
 processing leaves the source unchanged and it may retain its original metadata.
-If an administrator explicitly enables the 2.0 post-cutover `delete_all` retention
-policy, the physical source may later be deleted only after the documented
-master-authority, grace-period, serving, identity, and quiescence checks pass.
+If an administrator explicitly marks WordPress as NOT the Archive of Record and
+selects a source-deleting retention policy, the physical source may later be
+deleted only after the documented archive-authority, grace-period, required-remote,
+serving, identity, and quiescence checks pass.
 
 The plugin contains no telemetry. The public WordPress.org 1.0 release sends no
 media or usage information to a remote processing service. The 2.0 release
@@ -181,7 +182,7 @@ The existing settings keys, queue table, attachment metadata, hook names, cron
 identifiers, Settings page slug, and `wp argent-video` command are retained for
 upgrade compatibility.
 
-This Forgejo release-candidate package identifies itself as `2.0.0-rc10` in the
+This Forgejo release-candidate package identifies itself as `2.0.0-rc11` in the
 plugin header while `Stable tag: 1.0.0` deliberately continues to identify the
 public WordPress.org release. RC packages are not published to WordPress.org SVN.
 The Stable tag moves to `2.0.0` only when the final release is promoted.
@@ -191,6 +192,9 @@ Administrators upgrading from version 0.2.3 should use the normal WordPress
 plugin-update workflow and confirm the plugin remains active.
 
 == Upgrade Notice ==
+
+= 2.0.0-rc11 =
+Eleventh controlled 2.0 release candidate. Adds visitor-facing remote health/failover, processing-aware readiness, health alerts, daily backend maintenance, restart-safe republish, backend priority/language defaults, and scalable retention. WordPress.org remains on 1.0.0.
 
 = 2.0.0-rc10 =
 Tenth controlled 2.0 release candidate. Repairs RC9 live PeerTube recovery/credentials, provider semantics, routing and diagnostics; adds legacy 1.x migration/serving, responsive player CSS, and site-wide archive-of-record retention. WordPress.org remains on 1.0.0.
@@ -244,6 +248,14 @@ Renames the public plugin and package to ArgentWolf Video Processor and prepares
 the project for WordPress.org review while retaining existing data identifiers.
 
 == Changelog ==
+
+= 2.0.0-rc11 =
+* Preserve canonical RC10 candidate #2 (commit `215e7b12582d01ea27f4e1c08b965812f3f13d72`, tree `22892bcbc2449d4e0d31fa8bfff5701ff5feb85c`, ZIP SHA-256 `3d4ce93bac8611524d03057ecf270e8e309222b0314f5006ba3520c14afac160`) as immutable qualification/live-test evidence. RC11 is a new package identity.
+* Add model DB schema 3 visitor-facing publication health, unauthenticated public/embed URL qualification, backend serving priorities/failover, and two-success failback hysteresis without render-time provider requests.
+* Treat provider processing as expected/non-broken and estimate readiness from source size plus at most 10 recent successful backend observations from the last 90 days.
+* Add backend-outage deduplication, immediate Overview visibility, configurable administrator/publishing-user/origin-author email timing, recovery notices, and daily PeerTube credential/catalog maintenance.
+* Add restart-safe Republish from a retained WordPress source to the same or another configured PeerTube server while preserving historical remote/task/event/upload evidence until replacement cutover.
+* Add reviewed/removed Overview presentation state for still-current issues, per-server serving-priority/default-language administration, and compact scalable Local Retention with one AWVP Default Policy plus searchable/filterable bulk application.
 
 = 2.0.0-rc10 =
 * Preserve canonical RC9 source commits `878304ba8cbaf24e5017263a2f7f5c6a79f6fbfb` and `854014d03b4fd55940ab6e9bc49fa2b13035c3ba`, plus exact RC9 package SHA-256 `d28b56e9eaf0ca482559244753677eca10ec0bb4a7bc45e382c42cefc8239c23`, as immutable live-test evidence. RC10 is a new package identity.

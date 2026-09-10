@@ -12,6 +12,11 @@ namespace ArgentVideo {
         public static function sanitize_positive_id(mixed $v):int{return is_int($v)&&$v>0?$v:0;}
     }
     final class Backend_Registry { public const LOCAL_ID='local'; }
+    final class Serving_Viability {
+        public const HEALTHY='healthy'; public const PROCESSING='processing'; public const MISSING='missing';
+        public const PRIVATE_OR_RESTRICTED='private_or_restricted'; public const EMBED_DISALLOWED='embed_disallowed';
+        public const TEMPORARILY_UNAVAILABLE='temporarily_unavailable'; public const PROBE_INDETERMINATE='probe_indeterminate';
+    }
     final class Video_Destination {
         public static function resolve(mixed $v,bool $exists):array{unset($exists);return is_array($v)?$v:array();}
         public static function is_local(array $v):bool{return 'local'===($v['backend_id']??'');}

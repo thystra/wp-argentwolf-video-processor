@@ -13,6 +13,8 @@ final class Activator
     public const DB_OPTION = 'argent_video_processor_db_version';
     public const CRON_HOOK = 'argent_video_processor_dispatch';
     public const PEERTUBE_RECOVERY_HOOK = 'argent_video_processor_peertube_recovery';
+    public const REMOTE_HEALTH_HOOK = 'argent_video_processor_remote_health';
+    public const BACKEND_MAINTENANCE_HOOK = 'argent_video_processor_backend_maintenance';
 
     public static function activate(): void
     {
@@ -25,6 +27,8 @@ final class Activator
     {
         wp_clear_scheduled_hook(self::CRON_HOOK);
         wp_clear_scheduled_hook(self::PEERTUBE_RECOVERY_HOOK);
+        wp_clear_scheduled_hook(self::REMOTE_HEALTH_HOOK);
+        wp_clear_scheduled_hook(self::BACKEND_MAINTENANCE_HOOK);
     }
 
     public static function maybe_upgrade(): void
@@ -41,6 +45,12 @@ final class Activator
         }
         if (! wp_next_scheduled(self::PEERTUBE_RECOVERY_HOOK)) {
             wp_schedule_event(time() + 60, 'argent_video_one_minute', self::PEERTUBE_RECOVERY_HOOK);
+        }
+        if (! wp_next_scheduled(self::REMOTE_HEALTH_HOOK)) {
+            wp_schedule_event(time() + 300, 'hourly', self::REMOTE_HEALTH_HOOK);
+        }
+        if (! wp_next_scheduled(self::BACKEND_MAINTENANCE_HOOK)) {
+            wp_schedule_event(time() + 600, 'daily', self::BACKEND_MAINTENANCE_HOOK);
         }
     }
 

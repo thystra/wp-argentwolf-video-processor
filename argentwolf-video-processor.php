@@ -3,7 +3,7 @@
  * Plugin Name: ArgentWolf Video Processor
  * Plugin URI: https://github.com/thystra/wp-argentwolf-video-processor
  * Description: Processes WordPress video locally or publishes selected videos to configured PeerTube servers.
- * Version: 2.0.0-rc10
+ * Version: 2.0.0-rc11
  * Requires at least: 6.4
  * Requires PHP: 8.1
  * Author: Alan Johnson
@@ -19,7 +19,7 @@ if (! defined('ABSPATH')) {
     exit;
 }
 
-define('ARGENT_VIDEO_VERSION', '2.0.0-rc10');
+define('ARGENT_VIDEO_VERSION', '2.0.0-rc11');
 define('ARGENT_VIDEO_FILE', __FILE__);
 define('ARGENT_VIDEO_DIR', plugin_dir_path(__FILE__));
 define('ARGENT_VIDEO_URL', plugin_dir_url(__FILE__));
@@ -54,6 +54,15 @@ require_once ARGENT_VIDEO_DIR . 'includes/Backend_Capabilities.php';
 require_once ARGENT_VIDEO_DIR . 'includes/Backend_Health.php';
 require_once ARGENT_VIDEO_DIR . 'includes/Backend_Adapter.php';
 require_once ARGENT_VIDEO_DIR . 'includes/Backend_Registry.php';
+require_once ARGENT_VIDEO_DIR . 'includes/Backend_Serving_Priority_Store.php';
+require_once ARGENT_VIDEO_DIR . 'includes/Backend_Processing_Estimator.php';
+require_once ARGENT_VIDEO_DIR . 'includes/Backend_Maintenance_Status_Store.php';
+require_once ARGENT_VIDEO_DIR . 'includes/Backend_Health_Incident_Store.php';
+require_once ARGENT_VIDEO_DIR . 'includes/Remote_Health_Notification_Policy_Store.php';
+require_once ARGENT_VIDEO_DIR . 'includes/Remote_Health_Notification_State_Store.php';
+require_once ARGENT_VIDEO_DIR . 'includes/Serving_Viability.php';
+require_once ARGENT_VIDEO_DIR . 'includes/Serving_Health_Adapter.php';
+require_once ARGENT_VIDEO_DIR . 'includes/Serving_Health_Adapter_Factory.php';
 require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Backend_Adapter.php';
 require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Connection_Coordinator.php';
 require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Password_Grant_Service.php';
@@ -73,6 +82,11 @@ require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Staged_Upload_Service.php';
 require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Remote_Asset_Store.php';
 require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Publication_Asset_Store.php';
 require_once ARGENT_VIDEO_DIR . 'includes/Remote_Asset_Repository.php';
+require_once ARGENT_VIDEO_DIR . 'includes/Remote_Publication_Health_Repository.php';
+require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Publication_Health_Probe.php';
+require_once ARGENT_VIDEO_DIR . 'includes/Remote_Publication_Health_Service.php';
+require_once ARGENT_VIDEO_DIR . 'includes/Remote_Health_Notification_Service.php';
+require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Daily_Maintenance_Service.php';
 require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Remote_Asset_Reconciliation_Service.php';
 require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Connection_Admin_Actions.php';
 require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Connection_Admin_Service.php';
@@ -81,9 +95,12 @@ require_once ARGENT_VIDEO_DIR . 'includes/Model_Activator.php';
 require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Event_Repository.php';
 require_once ARGENT_VIDEO_DIR . 'includes/Task_Repository.php';
 require_once ARGENT_VIDEO_DIR . 'includes/Local_Retention_Policy.php';
+require_once ARGENT_VIDEO_DIR . 'includes/Local_Retention_Default_Policy_Store.php';
 require_once ARGENT_VIDEO_DIR . 'includes/Archive_Of_Record_Policy_Store.php';
 require_once ARGENT_VIDEO_DIR . 'includes/Local_Retention_Execution.php';
 require_once ARGENT_VIDEO_DIR . 'includes/WordPress_Source_File.php';
+require_once ARGENT_VIDEO_DIR . 'includes/Remote_Republish_Request.php';
+require_once ARGENT_VIDEO_DIR . 'includes/Remote_Republish_Service.php';
 require_once ARGENT_VIDEO_DIR . 'includes/Local_Retention_Service.php';
 require_once ARGENT_VIDEO_DIR . 'includes/Local_Retention_Admin.php';
 require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Upload_Failure_Notification.php';
@@ -148,6 +165,7 @@ require_once ARGENT_VIDEO_DIR . 'includes/Diagnostics.php';
 require_once ARGENT_VIDEO_DIR . 'includes/Backend_Adapter_Factory.php';
 require_once ARGENT_VIDEO_DIR . 'includes/Local_Backend_Adapter.php';
 require_once ARGENT_VIDEO_DIR . 'includes/Admin.php';
+require_once ARGENT_VIDEO_DIR . 'includes/Overview_Disposition_Store.php';
 require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Overview_Admin.php';
 require_once ARGENT_VIDEO_DIR . 'includes/Settings_Hub.php';
 require_once ARGENT_VIDEO_DIR . 'includes/CLI_Command.php';

@@ -16,8 +16,10 @@ final class PeerTube_Serving_Cutover_Service
     public const REFUSED = 'refused';
     public const INDETERMINATE = 'indeterminate';
 
-    public function __construct(private readonly PeerTube_Publication_Asset_Store $assets)
-    {
+    public function __construct(
+        private readonly PeerTube_Publication_Asset_Store $assets,
+        private readonly ?Remote_Publication_Health_Repository $health = null
+    ) {
     }
 
     public function reconcile(int $video_id, int $now): string
@@ -72,6 +74,20 @@ final class PeerTube_Serving_Cutover_Service
         $record = Video_Serving_Authority::create($video_id, $lifecycle, $execution, $asset, $now);
         if (array() === $record) {
             return self::clear_or_refuse($video_id, true);
+        }
+        if (null !== $this->health) {
+            // Serving authority may only be created after an actual unauthenticated
+            // public/embed URL probe has passed and been durably recorded. The
+            // cutover service remains local-only and must never manufacture a
+            // healthy observation from provider API state or remote-asset metadata.
+            $health = $this->health->find($asset_id);
+            if (! is_array($health)
+                || $video_id !== (int) ($health['video_post_id'] ?? 0)
+                || (string) $asset['backend_id'] !== (string) ($health['backend_id'] ?? '')
+                || Serving_Viability::HEALTHY !== (string) ($health['status'] ?? '')
+                || 1 !== (int) ($health['eligible'] ?? 0)) {
+                return self::REFUSED;
+            }
         }
         $before = metadata_exists('post', $video_id, Video_Meta::SERVING_AUTHORITY)
             ? Video_Serving_Authority::sanitize(get_post_meta($video_id, Video_Meta::SERVING_AUTHORITY, true))
