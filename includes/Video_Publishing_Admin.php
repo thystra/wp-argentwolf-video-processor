@@ -174,7 +174,7 @@ final class Video_Publishing_Admin
                                         <option value="<?php echo esc_attr($selected_backend); ?>" selected disabled><?php echo esc_html(sprintf(__('Unavailable PeerTube server: %s', 'argentwolf-video-processor'), $selected_backend)); ?></option>
                                     <?php endif; ?>
                                 </select>
-                                <p class="description"><?php esc_html_e('Changing this affects only newly-created, unfrozen videos. It never migrates existing videos. If you switch to a different PeerTube server, save and reload before choosing the provider defaults below so AWVP can show that server’s option names.', 'argentwolf-video-processor'); ?></p>
+                                <p class="description"><?php esc_html_e('Changing this affects only new videos that have not started publishing. It does not move existing videos to another server. If you switch to a different PeerTube server, save and reload before choosing the provider defaults below so AWVP can show that server’s option names.', 'argentwolf-video-processor'); ?></p>
                             </td>
                         </tr>
                         <?php $site = $settings['site']; ?>
@@ -237,7 +237,7 @@ final class Video_Publishing_Admin
                                         <option value="<?php echo esc_attr($preset_id); ?>" <?php selected($site['support_preset_id'], $preset_id); ?>><?php echo esc_html($preset['label']); ?></option>
                                     <?php endforeach; ?>
                                 </select>
-                                <p class="description"><?php esc_html_e('The preset Markdown is resolved/frozen when a remote publication operation is created; later preset edits do not mutate that operation.', 'argentwolf-video-processor'); ?></p>
+                                <p class="description"><?php esc_html_e('The support Markdown is attached to the video when the video publish operation is created; later preset edits do not change that text. To change that text after publishing, edit it on the server where the video was published.', 'argentwolf-video-processor'); ?></p>
                             </td>
                         </tr>
                         <?php $moderation = $site['moderation']; ?>
@@ -248,7 +248,7 @@ final class Video_Publishing_Admin
                                 <label><?php esc_html_e('Summary/reason', 'argentwolf-video-processor'); ?> <input name="awvp_publishing[site][moderation][reason]" type="text" maxlength="<?php echo esc_attr((string) PeerTube_Publication_Plan::MAX_SENSITIVE_REASON_CHARACTERS); ?>" value="<?php echo esc_attr((string) $moderation['reason']); ?>" style="width:32em"></label><br>
                                 <label><input name="awvp_publishing[site][moderation][violent]" type="checkbox" value="1" <?php checked((bool) $moderation['violent']); ?>> <?php esc_html_e('Potentially violent', 'argentwolf-video-processor'); ?></label><br>
                                 <label><input name="awvp_publishing[site][moderation][sexually_explicit]" type="checkbox" value="1" <?php checked((bool) $moderation['sexually_explicit']); ?>> <?php esc_html_e('Potentially sexually explicit', 'argentwolf-video-processor'); ?></label>
-                                <p class="description"><?php esc_html_e('This is only an editor prefill. Every PeerTube video still requires an explicit sensitive-content review before AWVP considers it dispatch-ready.', 'argentwolf-video-processor'); ?></p>
+                                <p class="description"><?php esc_html_e('This is only an editor prefill. Every PeerTube video still requires an explicit sensitive-content review before AWVP will publish the video to the PeerTube server.', 'argentwolf-video-processor'); ?></p>
                             </td>
                         </tr>
                     </table>

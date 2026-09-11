@@ -23,6 +23,9 @@ $assert(str_contains($admin, 'wp_safe_redirect('), 'Publishing mutation must ter
 $assert(str_contains($admin, 'Existing videos keep their current destination and are not migrated automatically.'), 'Upgrade-safe destination guidance disappeared from publishing page.');
 $assert(str_contains($admin, 'Videos sent to PeerTube remain locally playable while they upload and process.'), 'Prepublication privacy guidance disappeared from publishing page.');
 $assert(str_contains($admin, 'Every PeerTube video still requires an explicit sensitive-content review'), 'Moderation review guidance disappeared from publishing page.');
+$assert(str_contains($admin, 'The support Markdown is attached to the video when the video publish operation is created'), 'Support-preset guidance is not written in user-facing publish terminology.');
+$assert(str_contains($admin, 'before AWVP will publish the video to the PeerTube server'), 'Sensitive-content guidance is not written in user-facing publish terminology.');
+$assert(! str_contains($admin, 'resolved/frozen') && ! str_contains($admin, 'do not mutate') && ! str_contains($admin, 'dispatch-ready'), 'Publishing UI regressed to internal implementation terminology.');
 
 $assert(str_contains($plugin, "add_action('admin_menu', array(\$settings_hub, 'menu'))"), 'Unified settings hub is not registered.');
 $assert(str_contains($plugin, "'admin_post_' . Video_Publishing_Admin::ACTION_SAVE"), 'Publishing save action is not registered.');

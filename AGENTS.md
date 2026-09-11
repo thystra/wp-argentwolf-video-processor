@@ -1,5 +1,10 @@
 # ArgentWolf Video Processor agent instructions
 
+
+## User-facing terminology
+
+Keep administrator/editor copy in plain WordPress publishing language. Prefer **publish** or **upload to the PeerTube server** over internal terms such as *dispatch*. Prefer **change** over *mutate*, **fixed** over *resolved* when describing a corrected problem, and phrases such as **can no longer be changed** over *frozen*. Internal class names, constants, state-machine names, developer documentation, tests, and diagnostics may retain precise implementation terminology where needed; do not leak that vocabulary into ordinary settings/help text unless the distinction is necessary for safe operation.
+
 This file contains public, project-specific guidance for contributors and coding
 agents. Private hostnames, user names, deployment paths, credentials, and
 production state do not belong in this repository.

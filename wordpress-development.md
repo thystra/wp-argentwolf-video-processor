@@ -501,3 +501,8 @@ Migration planning is an administrator-only, local-state operation. Use `Tools >
 ### R46.8 migration execution development rule
 
 Treat **Start migration** as a local one-way promotion transaction, not a remote upload button. Before creating its journal, revalidate the current local source/anchor, fresh current-secret-generation backend-bound publication catalog, reviewed provider choices, support preset, and thumbnail bytes. Once `_argent_video_peertube_migration_execution` exists, only converge forward: recover partial local promotion, preserve the selected backend/channel, and hand the promoted plan to `PeerTube_Publication_Synchronizer`. Do not call PeerTube, create an upload operation, switch serving, or delete local media from the migration admin/executor path.
+
+
+### Administrator/editor copy terminology
+
+User-facing AWVP settings and editor text should describe actions in ordinary publishing language. Use **publish** or **upload to the PeerTube server** instead of *dispatch* where the user is choosing or starting publication. Use **change** instead of *mutate*, **fixed** instead of *resolved* for corrected conditions, and **can no longer be changed** instead of *frozen*. Keep implementation vocabulary in code, state machines, technical diagnostics, and developer documentation when it is needed for precision.

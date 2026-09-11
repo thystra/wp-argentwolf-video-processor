@@ -591,7 +591,7 @@ final class PeerTube_Connection_Admin
         }
         ?>
         <table class="widefat striped" style="max-width:1100px">
-            <thead><tr><th><?php esc_html_e('Label', 'argentwolf-video-processor'); ?></th><th><?php esc_html_e('PeerTube URL', 'argentwolf-video-processor'); ?></th><th><?php esc_html_e('Connection status', 'argentwolf-video-processor'); ?></th><th><?php esc_html_e('Upload segment', 'argentwolf-video-processor'); ?></th><th><?php esc_html_e('Credential status', 'argentwolf-video-processor'); ?></th><th><?php esc_html_e('Actions', 'argentwolf-video-processor'); ?></th></tr></thead>
+            <thead><tr><th><?php esc_html_e('Label', 'argentwolf-video-processor'); ?></th><th><?php esc_html_e('PeerTube URL', 'argentwolf-video-processor'); ?></th><th><?php esc_html_e('Connection status', 'argentwolf-video-processor'); ?></th><th><?php esc_html_e('Upload chunk', 'argentwolf-video-processor'); ?></th><th><?php esc_html_e('Credential status', 'argentwolf-video-processor'); ?></th><th><?php esc_html_e('Actions', 'argentwolf-video-processor'); ?></th></tr></thead>
             <tbody>
             <?php foreach ($backends as $backend) : ?>
                 <?php
@@ -635,8 +635,8 @@ final class PeerTube_Connection_Admin
             <?php endforeach; ?>
             </tbody>
         </table>
-        <p><?php esc_html_e('Upload segment size is an advanced transfer setting for each server. The default is 128 MiB. Smaller segments can recover from interrupted Internet transfers with less retransmission; larger segments reduce request overhead on fast, reliable links. Use 0 to send all remaining bytes as one resumable segment.', 'argentwolf-video-processor'); ?></p>
-        <p><?php esc_html_e('Connection credential refresh and disconnect actions run only when you request them. If PeerTube’s response to a credential or disconnect request is uncertain, ArgentWolf Video Processor does not repeat that remote request automatically.', 'argentwolf-video-processor'); ?></p>
+        <p><?php esc_html_e('Upload chunk size is an advanced transfer setting for each server. The default is 128 MiB. Smaller chunks can recover from interrupted Internet transfers with less retransmission; larger chunks reduce request overhead on fast, reliable links. Set to 0 to send each file in one chunk. Recommended for reliable infrastructure or when WordPress and PeerTube are co-located on the same server.', 'argentwolf-video-processor'); ?></p>
+        <p><?php esc_html_e('AWVP automatically refreshes PeerTube credentials and publishing options during normal maintenance so uploads can continue without routine administrator intervention. Disconnect remains a manual administrator action. If the saved authorization can no longer be refreshed, reconnect the PeerTube server.', 'argentwolf-video-processor'); ?></p>
         <?php
     }
 
@@ -649,7 +649,7 @@ final class PeerTube_Connection_Admin
             <input type="hidden" name="action" value="<?php echo esc_attr(self::ACTION_UPLOAD_POLICY); ?>">
             <input type="hidden" name="backend_id" value="<?php echo esc_attr($backend_id); ?>">
             <?php wp_nonce_field(self::NONCE_UPLOAD_POLICY . $backend_id, self::NONCE_FIELD, false); ?>
-            <label class="screen-reader-text" for="awvp-peertube-upload-chunk-<?php echo esc_attr($backend_id); ?>"><?php esc_html_e('Upload segment size in MiB', 'argentwolf-video-processor'); ?></label>
+            <label class="screen-reader-text" for="awvp-peertube-upload-chunk-<?php echo esc_attr($backend_id); ?>"><?php esc_html_e('Upload chunk size in MiB', 'argentwolf-video-processor'); ?></label>
             <input id="awvp-peertube-upload-chunk-<?php echo esc_attr($backend_id); ?>" name="upload_chunk_mib" type="number" min="0" max="<?php echo esc_attr((string) PeerTube_Upload_Policy::MAX_CHUNK_MIB); ?>" step="1" value="<?php echo esc_attr((string) $chunk_mib); ?>" style="width:7em" required>
             <span><?php esc_html_e('MiB', 'argentwolf-video-processor'); ?></span>
             <button class="button button-secondary" type="submit"><?php esc_html_e('Save', 'argentwolf-video-processor'); ?></button>
@@ -1960,7 +1960,7 @@ final class PeerTube_Connection_Admin
             'lifecycle_advanced' => __('The PeerTube credential update advanced to the next step. Continue if another action is offered.', 'argentwolf-video-processor'),
             'token_refreshed' => __('The PeerTube connection credentials were refreshed successfully.', 'argentwolf-video-processor'),
             'backend_disconnected' => __('The PeerTube server was disconnected and its stored connection credentials were removed.', 'argentwolf-video-processor'),
-            'upload_policy_saved' => __('The PeerTube upload segment size was saved for this server.', 'argentwolf-video-processor'),
+            'upload_policy_saved' => __('The PeerTube upload chunk size was saved for this server.', 'argentwolf-video-processor'),
             'refresh_rate_limited' => __('PeerTube asked ArgentWolf Video Processor to wait before refreshing the connection credentials.', 'argentwolf-video-processor'),
             'reauthentication_required' => __('The saved PeerTube authorization can no longer be refreshed. Reconnect the PeerTube server to authorize it again.', 'argentwolf-video-processor'),
             'lifecycle_indeterminate' => __('PeerTube may or may not have completed the credential change. For safety, ArgentWolf Video Processor will not repeat it automatically.', 'argentwolf-video-processor'),

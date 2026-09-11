@@ -311,7 +311,7 @@ final class PeerTube_Migration_Admin
     private function review_form(int $video_id): void
     {
         if (metadata_exists('post', $video_id, Video_Meta::PEERTUBE_MIGRATION_EXECUTION)) {
-            echo '<div class="notice notice-warning inline"><p>' . esc_html__('Migration execution has already started. The migration plan is frozen; return to the queue to resume or inspect execution.', 'argentwolf-video-processor') . '</p></div>';
+            echo '<div class="notice notice-warning inline"><p>' . esc_html__('Migration has already started. The migration plan can no longer be changed; return to the queue to resume or inspect the migration.', 'argentwolf-video-processor') . '</p></div>';
             return;
         }
         $migration = PeerTube_Migration_Plan::sanitize(get_post_meta($video_id, Video_Meta::PEERTUBE_MIGRATION_PLAN, true));

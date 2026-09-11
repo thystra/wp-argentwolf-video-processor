@@ -1281,8 +1281,9 @@ $policy_html = (string) ob_get_clean();
 awvp_admin_assert(
     str_contains($policy_html, 'name="upload_chunk_mib"')
         && str_contains($policy_html, 'value="128"')
-        && str_contains($policy_html, 'Use 0 to send all remaining bytes')
-        && str_contains($policy_html, 'Smaller segments can recover from interrupted Internet transfers'),
+        && str_contains($policy_html, 'Set to 0 to send each file in one chunk')
+        && str_contains($policy_html, 'Smaller chunks can recover from interrupted Internet transfers')
+        && str_contains($policy_html, 'AWVP automatically refreshes PeerTube credentials and publishing options'),
     'R45 upload-policy tuning or operator guidance is missing from the active backend page.'
 );
 awvp_admin_assert(
