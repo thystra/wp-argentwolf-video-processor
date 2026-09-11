@@ -58,14 +58,14 @@ final class PeerTube_Migration_Admin
             }
             $truncated = true === $scan['more'];
         } elseif (isset($_POST['candidate_keys']) && is_array($_POST['candidate_keys'])) {
-            // phpcs:disable WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Each nonce-protected list member is accepted only when it matches the bounded migration candidate-key grammar below.
+            // phpcs:disable WordPress.Security.ValidatedSanitizedInput.InputNotSanitized,WordPress.Security.NonceVerification.Recommended -- plan_action() verifies the action nonce before this bounded candidate list is read; each member is then constrained by the migration candidate-key grammar below.
             foreach (wp_unslash($_POST['candidate_keys']) as $raw) {
                 $key = is_string($raw) ? trim($raw) : '';
                 if (1 === preg_match('/^(?:video|legacy):[1-9][0-9]*$/D', $key) && ! in_array($key, $candidate_keys, true)) {
                     $candidate_keys[] = $key;
                 }
             }
-            // phpcs:enable WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+            // phpcs:enable WordPress.Security.ValidatedSanitizedInput.InputNotSanitized,WordPress.Security.NonceVerification.Recommended
         }
 
         $result = $this->planner->plan_candidates($candidate_keys, $backend_id, $channel_id, time());

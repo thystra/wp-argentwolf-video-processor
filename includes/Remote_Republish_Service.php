@@ -116,6 +116,7 @@ final class Remote_Republish_Service
 
     public function recover(): void
     {
+        // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_key -- Restart recovery intentionally locates only videos carrying the private durable republish marker and returns at most MAX_RECOVERY IDs.
         $ids=get_posts(array('post_type'=>Video_Post_Type::POST_TYPE,'post_status'=>'any','fields'=>'ids','posts_per_page'=>self::MAX_RECOVERY,'orderby'=>'modified','order'=>'ASC','meta_key'=>Video_Meta::REMOTE_REPUBLISH_REQUEST));
         if(!is_array($ids))return;
         $now=time();

@@ -144,6 +144,7 @@ final class Local_Retention_Admin
             wp_die(esc_html__('You do not have permission to configure video retention.', 'argentwolf-video-processor'));
         }
         check_admin_referer(self::NONCE_BULK_APPLY);
+        // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Nonce-protected bounded ID list is sanitized member-by-member below before use.
         $raw_ids = isset($_POST['video_ids']) && is_array($_POST['video_ids']) ? wp_unslash($_POST['video_ids']) : array();
         $ids = array();
         foreach (array_slice($raw_ids, 0, self::MAX_BULK_VIDEOS) as $raw_id) {
