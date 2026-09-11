@@ -453,6 +453,7 @@ run_case() {
         local runtime="$2"
         local output_file
         local rc
+        local diagnostic_rc
 
         output_file="$(mktemp "$REPORT_DIR/.awvp-plugin-check.XXXXXX")"
 
@@ -499,6 +500,22 @@ run_case() {
 
         if (( unexpected != 0 )); then
             echo "PLUGIN_CHECK_FINDINGS_GATE=FAIL mode=$check_mode runtime=$runtime"
+            echo "--- Plugin Check diagnostic output with file context mode=$check_mode runtime=$runtime"
+            set +e
+            if [[ "$runtime" == "yes" ]]; then
+                wp_cli plugin check "$PLUGIN_SLUG" \
+                    --mode="$check_mode" \
+                    --format=json \
+                    --require=/var/www/html/wp-content/plugins/plugin-check/cli.php
+                diagnostic_rc=$?
+            else
+                wp_cli plugin check "$PLUGIN_SLUG" \
+                    --mode="$check_mode" \
+                    --format=json
+                diagnostic_rc=$?
+            fi
+            set -e
+            echo "PLUGIN_CHECK_DIAGNOSTIC_RC=$diagnostic_rc"
             rm -f "$output_file"
             fail "Plugin Check reported unexpected ERROR/WARNING findings"
         fi

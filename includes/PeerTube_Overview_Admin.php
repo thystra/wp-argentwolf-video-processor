@@ -59,8 +59,10 @@ final class PeerTube_Overview_Admin
         ?>
         <h2><?php esc_html_e('Status & Needs Attention', 'argentwolf-video-processor'); ?></h2>
         <p><?php esc_html_e('Active publication work and current remote-serving problems appear here. Resolved conditions disappear automatically; reviewing or removing an item changes only this presentation and never deletes its task or diagnostic history.', 'argentwolf-video-processor'); ?></p>
-        <?php if (isset($_GET['awvp_republish'])) : ?>
-            <?php $republish_notice = sanitize_key((string) wp_unslash($_GET['awvp_republish'])); ?>
+        <?php
+        if (isset($_GET['awvp_republish'])) : // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only redirect status notice; no state change is performed from this query parameter.
+            $republish_notice = sanitize_key((string) wp_unslash($_GET['awvp_republish'])); // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only notice; the republish mutation is separately nonce-protected.
+            ?>
             <div class="notice <?php echo 'queued' === $republish_notice ? 'notice-success' : 'notice-error'; ?>" style="margin:1em 0;padding:.5em 1em"><p>
                 <?php echo esc_html('queued' === $republish_notice
                     ? __('Republish was queued from the retained WordPress source.', 'argentwolf-video-processor')
