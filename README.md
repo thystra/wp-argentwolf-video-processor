@@ -272,7 +272,7 @@ the same advisory registry with their own capability and NVD link.
 
 Public WordPress.org stable release: `1.0.0`.
 
-Current controlled development candidate: `2.0.0-rc11`. RC packages are built
+Current controlled development candidate: `2.0.0-rc12`. RC packages are built
 from reviewed Forgejo commits and are not published to WordPress.org SVN. The
 public Stable tag remains `1.0.0` until final `2.0.0` promotion.
 
@@ -283,6 +283,10 @@ archives are not canonical installable artifacts.
 ### RC10 live-test hardening
 
 RC10 followed controlled RC9 live testing. It preserved RC9 package bytes and hardened the live PeerTube path: automatic credential/catalog authority repair, fresh reads in long-lived workers, dependency deferral without attempt exhaustion, semantic tag and short-embed verification, local-only recovery of already-applied publications, seven-step operator diagnostics, route-before-FFmpeg behavior, responsive no-autoplay rendering, explicit legacy 1.x migration/adoption, and a site-wide WordPress archive-of-record policy. Canonical RC10 candidate #2 was qualified and installed live; its bytes remain immutable historical evidence.
+
+### RC12 live-publication finalizer repair (development)
+
+RC12 preserves qualified RC11 as immutable live-test evidence and fixes defects exposed by the first fresh ~380 MB PeerTube publication. Reviewed description/support Markdown may contain LF/CRLF line breaks and must survive the bounded multipart PUT; RC11 incorrectly rejected those line breaks locally before transmission. RC12 also exposes that definite no-mutation finalizer boundary as an explicit, same-generation **Retry publication** action that requeues the exact failed finalizer without creating another upload or publication generation. Operator event timestamps now use the complete database format map, and the editor no longer exposes the historical `R46.3c` label in dispatch-timing help text.
 
 ### RC11 remote-health and recovery hardening (development)
 

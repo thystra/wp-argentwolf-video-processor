@@ -125,7 +125,7 @@ verify the retrieved Plugin Check version and SHA-256.
 No test may contact PeerTube, production WordPress, or another production
 service.
 
-For RC11 schema-3 qualification, exact-package clean/upgrade cases must also prove the publication-health table contract and load the packaged health/failover/processing/notification/maintenance/republish/default-retention runtime surface without provider HTTP. Visitor-facing URL behavior itself remains a controlled live/provider test; the isolated release matrix must not fake production reachability by contacting PeerTube.
+For RC12 schema-3 qualification, exact-package clean/upgrade cases must also prove the publication-health table contract and load the packaged health/failover/processing/notification/maintenance/republish/default-retention runtime surface without provider HTTP. Visitor-facing URL behavior itself remains a controlled live/provider test; the isolated release matrix must not fake production reachability by contacting PeerTube.
 
 ### Database readiness and consumer-path proof
 

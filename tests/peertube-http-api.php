@@ -1776,6 +1776,33 @@ namespace ArgentVideo {
     );
     $assert(! str_contains($publication_body, 'refresh-token') && ! str_contains($publication_body, 'client-secret'), 'R46.5b publication body leaked unrelated secrets.');
 
+    // RC12 live-test regression: PeerTube descriptions/support are markdown and
+    // may contain LF/CRLF line breaks. These values must survive the reviewed
+    // multipart transport without relaxing control-character checks elsewhere.
+    $multiline_manifest = $publication_manifest;
+    $multiline_manifest['description_markdown'] = "Line one\nLine two";
+    $multiline_manifest['support_markdown'] = "Support line one\r\nSupport line two";
+    $multiline_manifest = PeerTube_Publication_Manifest::sanitize($multiline_manifest);
+    $assert(array() !== $multiline_manifest, 'RC12 multiline publication fixture was invalid.');
+    $queue($response(204, '', array()));
+    $multiline_put = $api->update_publication($remote_access, $remote_uuid, $multiline_manifest, '1', null);
+    $assert(true === $multiline_put['ok'], 'RC12 multiline PeerTube markdown was rejected before transmission.');
+    $multiline_request = $GLOBALS['awvp_http_requests'][array_key_last($GLOBALS['awvp_http_requests'])];
+    $multiline_body = (string)($multiline_request['args']['body'] ?? '');
+    $assert(
+        str_contains($multiline_body, "Line one\nLine two")
+        && str_contains($multiline_body, "Support line one\r\nSupport line two"),
+        'RC12 multiline PeerTube markdown was not preserved in multipart transport.'
+    );
+
+    $empty_description_manifest = $publication_manifest;
+    $empty_description_manifest['description_markdown'] = '';
+    $empty_description_manifest = PeerTube_Publication_Manifest::sanitize($empty_description_manifest);
+    $assert(array() !== $empty_description_manifest, 'RC12 empty-description publication fixture was invalid.');
+    $queue($response(204, '', array()));
+    $empty_description_put = $api->update_publication($remote_access, $remote_uuid, $empty_description_manifest, '1', null);
+    $assert(true === $empty_description_put['ok'], 'RC12 empty PeerTube description was rejected before transmission.');
+
     // RC10 live-test regression: whitespace inside an individual PeerTube tag is
     // valid publication data and must not be rejected before transmission.
     $multiword_manifest = $publication_manifest;

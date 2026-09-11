@@ -105,7 +105,7 @@ final class PeerTube_Event_Repository
                     'context_json'     => '' !== $context_json ? $context_json : null,
                     'created_at'       => gmdate('Y-m-d H:i:s', $now),
                 ),
-                array('%d','%d','%s','%d','%s','%d','%s','%s','%d','%s','%s','%s','%s')
+                array('%d','%d','%s','%d','%s','%d','%s','%s','%d','%s','%s','%s','%s','%s')
             );
         } catch (Throwable) {
             return false;
@@ -148,6 +148,29 @@ final class PeerTube_Event_Repository
             }
         }
         return $result;
+    }
+
+    /** @return array<string,mixed>|null */
+    public function latest_for_task(int $task_id): ?array
+    {
+        if ($task_id < 1) {
+            return null;
+        }
+        global $wpdb;
+        try {
+            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching -- Exact task-id lookup in plugin-owned diagnostics table.
+            $row = $wpdb->get_row(
+                $wpdb->prepare(
+                    'SELECT id,video_post_id,task_id,operation_id,remote_asset_id,backend_id,pipeline_step,event_code,severity,http_status,message,automatic_action,operator_action,context_json,created_at FROM %i WHERE task_id = %d ORDER BY id DESC LIMIT 1',
+                    $wpdb->prefix . self::TABLE_SUFFIX,
+                    $task_id
+                ),
+                ARRAY_A
+            );
+        } catch (Throwable) {
+            return null;
+        }
+        return is_array($row) ? self::normalize_row($row) : null;
     }
 
     /** @param array<string,mixed> $row @return array<string,mixed>|null */

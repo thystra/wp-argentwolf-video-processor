@@ -156,6 +156,7 @@ for required_runtime_file in \
     Overview_Disposition_Store.php \
     PeerTube_Daily_Maintenance_Service.php \
     PeerTube_Publication_Health_Probe.php \
+    PeerTube_Publication_Finalizer_Recovery.php \
     Remote_Health_Notification_Policy_Store.php \
     Remote_Health_Notification_Service.php \
     Remote_Health_Notification_State_Store.php \

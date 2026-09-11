@@ -420,8 +420,13 @@ final class PeerTube_Http_Client
                         throw new InvalidArgumentException('PeerTube publication tag is outside the reviewed contract.');
                     }
                 }
-            } elseif (! is_bool($value) && ! is_int($value) && ! self::safe_request_value($value, 100000, true)) {
-                throw new InvalidArgumentException('PeerTube publication scalar is outside the reviewed contract.');
+            } elseif (! is_bool($value) && ! is_int($value)) {
+                $valid_scalar = in_array($key, array('description','support'), true)
+                    ? self::safe_multiline_request_value($value, 100000, 'description' === $key)
+                    : self::safe_request_value($value, 100000, true);
+                if (! $valid_scalar) {
+                    throw new InvalidArgumentException('PeerTube publication scalar is outside the reviewed contract.');
+                }
             }
         }
 
@@ -852,6 +857,18 @@ final class PeerTube_Http_Client
         }
 
         return $allow_spaces || 1 !== preg_match('/\s/u', $value);
+    }
+
+    private static function safe_multiline_request_value(mixed $value, int $maximum, bool $allow_empty = false): bool
+    {
+        if (! is_string($value) || (! $allow_empty && '' === $value) || strlen($value) > $maximum || 1 !== preg_match('//u', $value)) {
+            return false;
+        }
+
+        // PeerTube description/support fields are markdown and may legitimately
+        // contain tabs and CR/LF line breaks. Keep every other ASCII control
+        // character outside the reviewed multipart transport contract.
+        return 1 !== preg_match('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/', $value);
     }
 
     private static function safe_bearer_token(string $value): bool

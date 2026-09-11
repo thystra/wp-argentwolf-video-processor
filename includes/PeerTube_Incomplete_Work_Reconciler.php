@@ -19,7 +19,8 @@ final class PeerTube_Incomplete_Work_Reconciler
 
     public function __construct(
         private readonly PeerTube_Publication_Synchronizer $synchronizer,
-        private readonly ?PeerTube_Serving_Cutover_Service $cutover = null
+        private readonly ?PeerTube_Serving_Cutover_Service $cutover = null,
+        private readonly ?PeerTube_Publication_Finalizer_Recovery $finalizer_recovery = null
     ) {
     }
 
@@ -103,6 +104,20 @@ final class PeerTube_Incomplete_Work_Reconciler
             if (metadata_exists('post', $video_id, Video_Meta::PEERTUBE_RECOVERY_WINDOW)) {
                 delete_post_meta($video_id, Video_Meta::PEERTUBE_RECOVERY_WINDOW);
             }
+            if (null !== $this->finalizer_recovery) {
+                $retry = $this->finalizer_recovery->status($video_id);
+                if (PeerTube_Publication_Finalizer_Recovery::RESUMABLE === ($retry['status'] ?? null)) {
+                    return self::status_result(
+                        'finalizer_retry',
+                        true,
+                        false,
+                        true,
+                        0,
+                        0,
+                        (int) ($retry['anchor_post_id'] ?? 0)
+                    );
+                }
+            }
             return $empty;
         }
 
@@ -151,6 +166,16 @@ final class PeerTube_Incomplete_Work_Reconciler
 
     public function resume(int $video_id, int $now): bool
     {
+        if (null !== $this->finalizer_recovery) {
+            $retry = $this->finalizer_recovery->status($video_id);
+            if (PeerTube_Publication_Finalizer_Recovery::RESUMABLE === ($retry['status'] ?? null)) {
+                return in_array(
+                    $this->finalizer_recovery->resume($video_id, $now),
+                    array(Task_Repository::APPLIED, Task_Repository::PRESENT),
+                    true
+                );
+            }
+        }
         $state = $this->status($video_id, $now, true);
         if (true !== ($state['pending'] ?? false) || true !== ($state['resumable'] ?? false)) {
             return false;

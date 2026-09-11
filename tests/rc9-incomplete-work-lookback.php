@@ -29,6 +29,12 @@ namespace ArgentVideo {
         public array $calls=array(); public array $statuses=array();
         public function reconcile(int $id,int $now):string { $this->calls[]=array($id,$now); return $this->statuses[$id]??self::REFUSED; }
     }
+    class PeerTube_Publication_Finalizer_Recovery {
+        public const NONE='none'; public const RESUMABLE='resumable';
+        public array $statuses=array(); public array $resume_calls=array(); public string $resume_status=Task_Repository::APPLIED;
+        public function status(int $id):array { return $this->statuses[$id]??array('status'=>self::NONE,'task_id'=>0,'generation'=>0,'anchor_post_id'=>0); }
+        public function resume(int $id,int $now):string { $this->resume_calls[]=array($id,$now); return $this->resume_status; }
+    }
     function get_post_meta(int $id,string $key,bool $single=true):mixed { unset($single); return $GLOBALS['awvp_rc9_meta'][$id][$key]??''; }
     function metadata_exists(string $type,int $id,string $key):bool { unset($type); return array_key_exists($key,$GLOBALS['awvp_rc9_meta'][$id]??array()); }
     function update_post_meta(int $id,string $key,mixed $value):bool { $GLOBALS['awvp_rc9_meta'][$id][$key]=$value; return true; }
@@ -42,6 +48,7 @@ namespace {
     use ArgentVideo\PeerTube_Incomplete_Work_Reconciler;
     use ArgentVideo\PeerTube_Publication_Synchronizer;
     use ArgentVideo\PeerTube_Serving_Cutover_Service;
+    use ArgentVideo\PeerTube_Publication_Finalizer_Recovery;
     use ArgentVideo\Video_Meta;
 
     $assert=static function(bool $ok,string $m):void{if(!$ok){fwrite(STDERR,"FAIL: {$m}\n");exit(1);}};
@@ -87,6 +94,19 @@ namespace {
     $count2=$r2->recover(3100);
     $assert(1===$count2&&array(array(103,3100))===$cutover->calls,'RC10 recovery did not reconcile verified local-only cutover with task_pending=false.');
     $assert(array()===$sync2->calls,'RC10 local-only cutover recovery unnecessarily invoked publication synchronization.');
+
+    // RC12 live-test fixture: the upload is ready and a finalizer proved that no
+    // provider mutation was sent. This is an explicit, operator-resumable local
+    // retry boundary even though lifecycle task_pending is already false.
+    $sync3=new PeerTube_Publication_Synchronizer();
+    $retry=new PeerTube_Publication_Finalizer_Recovery();
+    $retry->statuses[104]=array('status'=>PeerTube_Publication_Finalizer_Recovery::RESUMABLE,'task_id'=>29,'generation'=>2,'anchor_post_id'=>13);
+    $r3=new PeerTube_Incomplete_Work_Reconciler($sync3,null,$retry);
+    $GLOBALS['awvp_rc9_meta'][104][Video_Meta::PEERTUBE_PUBLICATION_LIFECYCLE]=array('task_pending'=>false,'updated_at'=>4000,'anchor_post_id'=>13);
+    $retry_state=$r3->status(104,4100,false);
+    $assert('finalizer_retry'===($retry_state['status']??'')&&true===($retry_state['pending']??false)&&true===($retry_state['resumable']??false),'RC12 safe failed finalizer was not exposed as resumable incomplete work.');
+    $assert($r3->resume(104,4101)&&array(array(104,4101))===$retry->resume_calls,'RC12 resume did not requeue the exact safe failed finalizer.');
+    $assert(array()===$sync3->calls,'RC12 safe finalizer retry incorrectly manufactured a new publication synchronization generation.');
 
     $source=(string)file_get_contents(dirname(__DIR__).'/includes/PeerTube_Incomplete_Work_Reconciler.php');
     foreach(array('PeerTube_Staged_Upload_Operation_Store','upload_indeterminate','update_publication(','resumable_upload') as $forbidden){$assert(!str_contains($source,$forbidden),'Incomplete-work reconciler acquired remote mutation authority: '.$forbidden);}

@@ -477,6 +477,94 @@ final class Task_Repository
         );
     }
 
+    /**
+     * Requeue one exact failed task without changing its durable identity.
+     *
+     * This is intentionally narrower than enqueue(): callers must already know
+     * the task id, type, and idempotency key. Completed work cannot be reopened,
+     * and exhausted work remains terminal.
+     */
+    public function retry_failed_exact(
+        int $task_id,
+        string $task_type,
+        string $idempotency_key,
+        int $now
+    ): string {
+        if (
+            $task_id < 1
+            || ! self::valid_task_type($task_type)
+            || 1 !== preg_match('/\A[a-f0-9]{64}\z/D', $idempotency_key)
+            || $now < 1
+        ) {
+            return self::CONFLICT;
+        }
+
+        $current = $this->find($task_id);
+        if (
+            ! is_array($current)
+            || $task_type !== ($current['task_type'] ?? null)
+            || ! hash_equals($idempotency_key, (string) ($current['idempotency_key'] ?? ''))
+        ) {
+            return self::CONFLICT;
+        }
+        if (self::STATUS_QUEUED === ($current['status'] ?? null)) {
+            self::signal_enqueue($task_id, $task_type);
+            return self::PRESENT;
+        }
+        if (
+            self::STATUS_FAILED !== ($current['status'] ?? null)
+            || null !== ($current['lock_token'] ?? null)
+            || (int) ($current['attempts'] ?? 0) >= (int) ($current['max_attempts'] ?? 0)
+        ) {
+            return self::CONFLICT;
+        }
+
+        $timestamp = gmdate('Y-m-d H:i:s', $now);
+        global $wpdb;
+        try {
+            $updated = $wpdb->update(
+                $this->table,
+                array(
+                    'status' => self::STATUS_QUEUED,
+                    'run_after' => $timestamp,
+                    'lock_token' => null,
+                    'locked_at' => null,
+                    'completed_at' => null,
+                    'error_message' => null,
+                    'updated_at' => $timestamp,
+                ),
+                array(
+                    'id' => $task_id,
+                    'task_type' => $task_type,
+                    'idempotency_key' => $idempotency_key,
+                    'status' => self::STATUS_FAILED,
+                    'lock_token' => null,
+                ),
+                array('%s','%s','%s','%s','%s','%s','%s'),
+                array('%d','%s','%s','%s','%s')
+            );
+        } catch (Throwable) {
+            return self::INDETERMINATE;
+        }
+        if (1 !== $updated) {
+            return self::INDETERMINATE;
+        }
+
+        $after = $this->find($task_id);
+        if (
+            ! is_array($after)
+            || self::STATUS_QUEUED !== ($after['status'] ?? null)
+            || $task_type !== ($after['task_type'] ?? null)
+            || ! hash_equals($idempotency_key, (string) ($after['idempotency_key'] ?? ''))
+            || $timestamp !== ($after['run_after'] ?? null)
+            || null !== ($after['completed_at'] ?? null)
+        ) {
+            return self::INDETERMINATE;
+        }
+        self::signal_enqueue($task_id, $task_type);
+        return self::APPLIED;
+    }
+
     public function reschedule(
         int $task_id,
         string $lock_token,

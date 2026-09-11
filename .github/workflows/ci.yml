@@ -81,6 +81,7 @@ jobs:
           php tests/peertube-publication-staging.php
           php tests/peertube-publication-thumbnail.php
           php tests/peertube-publication-task-coordinator.php
+          php tests/peertube-publication-finalizer-recovery.php
           php tests/rc9-incomplete-work-lookback.php
           php tests/rc9-overview-status.php
           php tests/peertube-operator-terminology.php
@@ -211,6 +212,7 @@ jobs:
           grep -qx 'argentwolf-video-processor/includes/Overview_Disposition_Store.php' "${MANIFEST}"
           grep -qx 'argentwolf-video-processor/includes/PeerTube_Daily_Maintenance_Service.php' "${MANIFEST}"
           grep -qx 'argentwolf-video-processor/includes/PeerTube_Publication_Health_Probe.php' "${MANIFEST}"
+          grep -qx 'argentwolf-video-processor/includes/PeerTube_Publication_Finalizer_Recovery.php' "${MANIFEST}"
           grep -qx 'argentwolf-video-processor/includes/Remote_Health_Notification_Policy_Store.php' "${MANIFEST}"
           grep -qx 'argentwolf-video-processor/includes/Remote_Health_Notification_Service.php' "${MANIFEST}"
           grep -qx 'argentwolf-video-processor/includes/Remote_Health_Notification_State_Store.php' "${MANIFEST}"

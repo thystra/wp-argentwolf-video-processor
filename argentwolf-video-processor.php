@@ -3,7 +3,7 @@
  * Plugin Name: ArgentWolf Video Processor
  * Plugin URI: https://github.com/thystra/wp-argentwolf-video-processor
  * Description: Processes WordPress video locally or publishes selected videos to configured PeerTube servers.
- * Version: 2.0.0-rc11
+ * Version: 2.0.0-rc12
  * Requires at least: 6.4
  * Requires PHP: 8.1
  * Author: Alan Johnson
@@ -19,7 +19,7 @@ if (! defined('ABSPATH')) {
     exit;
 }
 
-define('ARGENT_VIDEO_VERSION', '2.0.0-rc11');
+define('ARGENT_VIDEO_VERSION', '2.0.0-rc12');
 define('ARGENT_VIDEO_FILE', __FILE__);
 define('ARGENT_VIDEO_DIR', plugin_dir_path(__FILE__));
 define('ARGENT_VIDEO_URL', plugin_dir_url(__FILE__));
@@ -131,8 +131,9 @@ require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Publication_Editor_Rest.php';
 require_once ARGENT_VIDEO_DIR . 'includes/Editorial_Publish_Validator.php';
 require_once ARGENT_VIDEO_DIR . 'includes/Editorial_Publish_Gate.php';
 require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Publication_Synchronizer.php';
-require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Incomplete_Work_Reconciler.php';
 require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Publication_Task_Coordinator.php';
+require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Publication_Finalizer_Recovery.php';
+require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Incomplete_Work_Reconciler.php';
 require_once ARGENT_VIDEO_DIR . 'includes/Video_Block.php';
 require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Publication_Catalog_Store.php';
 require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Publication_Catalog_Service.php';

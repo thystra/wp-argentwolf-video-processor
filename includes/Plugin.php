@@ -82,9 +82,15 @@ final class Plugin
             $jobs
         );
         $peertube_cutover = new PeerTube_Serving_Cutover_Service($peertube_remote_assets, $publication_health);
+        $peertube_finalizer_recovery = new PeerTube_Publication_Finalizer_Recovery(
+            $peertube_tasks,
+            $peertube_upload_operations,
+            $peertube_events
+        );
         $peertube_incomplete_work = new PeerTube_Incomplete_Work_Reconciler(
             $peertube_publication_synchronizer,
-            $peertube_cutover
+            $peertube_cutover,
+            $peertube_finalizer_recovery
         );
         $remote_republish = new Remote_Republish_Service(
             $this->backend_registry,

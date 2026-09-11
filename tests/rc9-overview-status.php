@@ -31,7 +31,8 @@ namespace ArgentVideo {
         public function get(string $id):?array{return $this->ops[$id]??null;}
     }
     final class PeerTube_Incomplete_Work_Reconciler {
-        public function status(int $id,?int $now=null,bool $initialize=false):array{unset($id,$now,$initialize);return array('pending'=>false,'eligible'=>false,'resumable'=>false);}
+        public array $statuses=array();
+        public function status(int $id,?int $now=null,bool $initialize=false):array{unset($now,$initialize);return $this->statuses[$id]??array('status'=>'none','pending'=>false,'eligible'=>false,'resumable'=>false);}
         public function resume(int $id,int $now):bool{unset($id,$now);return true;}
     }
     final class PeerTube_Event_Repository {
@@ -63,7 +64,8 @@ namespace {
     $GLOBALS['awvp_rc9_overview_meta'][20]['_wp_attached_file']='2026/09/family-trip.mp4';
     $GLOBALS['awvp_rc9_overview_posts'][10]=(object)array('post_author'=>7);
     $store=new PeerTube_Staged_Upload_Operation_Store(array($op=>array('operation_id'=>$op,'phase'=>'upload_indeterminate','source'=>array('bytes'=>1000),'confirmed_bytes'=>500)));
-    $overview=new PeerTube_Overview_Admin($store,new PeerTube_Incomplete_Work_Reconciler(),new PeerTube_Event_Repository());
+    $recovery=new PeerTube_Incomplete_Work_Reconciler();
+    $overview=new PeerTube_Overview_Admin($store,$recovery,new PeerTube_Event_Repository());
     $rows=$overview->rows(1000);
     $assert(1===count($rows),'Overview did not surface the indeterminate PeerTube upload.');
     $row=$rows[0];
@@ -71,9 +73,19 @@ namespace {
     $assert(str_contains((string)$row['progress'],'Uploaded 500 B / 1000 B (50%)'),'Overview upload byte progress drifted.');
     $assert('Upload outcome needs attention'===$row['status_label'],'Overview did not classify upload_indeterminate as needs attention.');
     $assert(4===($row['latest_event']['pipeline_step']??0)&&429===($row['latest_event']['http_status']??0),'Overview did not expose the latest seven-step/HTTP operator event.');
+
+    // RC12 finalizer no-mutation recovery is a first-class attention row even
+    // when the upload journal is already terminal ready_verified.
+    $store2=new PeerTube_Staged_Upload_Operation_Store(array($op=>array('operation_id'=>$op,'phase'=>'ready_verified','source'=>array('bytes'=>1000),'confirmed_bytes'=>1000)));
+    $recovery2=new PeerTube_Incomplete_Work_Reconciler();
+    $recovery2->statuses[101]=array('status'=>'finalizer_retry','pending'=>true,'eligible'=>false,'resumable'=>true);
+    $overview2=new PeerTube_Overview_Admin($store2,$recovery2,new PeerTube_Event_Repository());
+    $rows2=$overview2->rows(1000);
+    $assert(1===count($rows2)&&true===($rows2[0]['resumable']??false),'RC12 safe failed finalizer did not remain visible after upload reached ready_verified.');
+    $assert('Publication finalization is ready to retry'===($rows2[0]['status_label']??''),'RC12 safe failed finalizer did not receive a recognizable status label.');
     $source=(string)file_get_contents(dirname(__DIR__).'/includes/PeerTube_Overview_Admin.php');
     $assert(str_contains($source,'<details')&&str_contains($source,"Details & log")&&str_contains($source,'Step %1$d of 7')&&str_contains($source,"'operation_id='")&&str_contains($source,"'remote_uuid='"),'Operator event history/technical IDs are not relegated to Details & log.');
-    $assert(str_contains($source,"__('Resume'")&&str_contains($source,'$row[\'resumable\']'),'Overview does not expose Resume only through bounded recovery eligibility.');
+    $assert(str_contains($source,"__('Resume'")&&str_contains($source,"__('Retry publication'")&&str_contains($source,'$row[\'resumable\']'),'Overview does not expose Resume/Retry publication only through bounded recovery eligibility.');
     $assert(str_contains($source,'sanitize_text_field(wp_unslash($_POST[\'video_id\']))'),'Overview Resume video ID is not sanitized with a WordPress-recognized sanitizer.');
     $assert(str_contains($source,'wp_filesize($file)')&&0===preg_match('/(?<!wp_)filesize\(\$file\)/',$source),'Overview media sizing bypasses the WordPress filesystem wrapper.');
     @unlink('/tmp/awvp-overview-source.mp4');

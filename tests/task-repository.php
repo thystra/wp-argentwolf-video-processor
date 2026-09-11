@@ -207,6 +207,18 @@ $exhausted = $repo->reschedule(3, (string) $final_claim['lock_token'], 1040, 're
 $assert(Task_Repository::EXHAUSTED === $exhausted && 'failed' === ($repo->find(3)['status'] ?? ''), 'Attempt exhaustion did not fail closed.');
 $assert('Task attempt limit reached. Last reason: retry again' === ($repo->find(3)['error_message'] ?? ''), 'Attempt exhaustion lost the last causal reason.');
 
+// Explicit recovery may reopen one exact non-exhausted failed task without
+// changing its idempotency identity or resetting its consumed attempt count.
+$key_retry = hash('sha256', 'awvp-task:v1:test_retry_failed:1');
+$retry_enqueued = $repo->enqueue('test_retry_failed', 91, null, 'peertube-primary', $key_retry, array('version'=>1), 1032, 1032, 100, 3);
+$retry_claim = $repo->claim_task_of_types((int) $retry_enqueued['task_id'], array('test_retry_failed'), 1032);
+$assert(is_array($retry_claim) && 1 === (int) $retry_claim['attempts'], 'Failed-task retry fixture was not claimed.');
+$assert(Task_Repository::APPLIED === $repo->fail((int) $retry_claim['id'], (string) $retry_claim['lock_token'], 'safe local refusal', 1033), 'Failed-task retry fixture could not fail.');
+$assert(Task_Repository::APPLIED === $repo->retry_failed_exact((int) $retry_claim['id'], 'test_retry_failed', $key_retry, 1034), 'Exact failed task could not be requeued.');
+$retry_row = $repo->find((int) $retry_claim['id']);
+$assert('queued' === ($retry_row['status'] ?? '') && 1 === (int) ($retry_row['attempts'] ?? 0) && null === ($retry_row['completed_at'] ?? null) && null === ($retry_row['error_message'] ?? null), 'Failed-task retry changed attempt history or retained terminal state.');
+$assert(Task_Repository::PRESENT === $repo->retry_failed_exact((int) $retry_claim['id'], 'test_retry_failed', $key_retry, 1035), 'Exact queued retry was not idempotently recognized.');
+$assert(Task_Repository::CONFLICT === $repo->retry_failed_exact((int) $retry_claim['id'], 'wrong_type', $key_retry, 1035), 'Failed-task retry accepted a mismatched task identity.');
 
 // Dependency waits are deferrals, not failed execution attempts. A claim may
 // be returned to the queue without consuming its finite attempt budget.

@@ -12,8 +12,9 @@ namespace ArgentVideo {
     final class EventWpdb {
         public string $prefix='wp_';
         public int $insert_id=0;
-        public function insert(string $table,array $data,array $format): int|false { unset($format); if('wp_argent_video_events'!==$table)return false; $data['id']=++$this->insert_id; $GLOBALS['awvp_event_rows'][]=$data; return 1; }
+        public function insert(string $table,array $data,array $format): int|false { if('wp_argent_video_events'!==$table||count($data)!==count($format))return false; $data['id']=++$this->insert_id; $GLOBALS['awvp_event_rows'][]=$data; return 1; }
         public function prepare(string $query,mixed ...$args): string { return json_encode(array('query'=>$query,'args'=>$args),JSON_THROW_ON_ERROR); }
+        public function get_row(string $prepared,string $output): ?array { unset($output); $decoded=json_decode($prepared,true,8,JSON_THROW_ON_ERROR); $args=$decoded['args']; $task=(int)($args[1]??0); $rows=array_values(array_filter($GLOBALS['awvp_event_rows'],static fn(array $row):bool=>(int)($row['task_id']??0)===$task)); usort($rows,static fn(array $a,array $b):int=>(int)$b['id']<=>(int)$a['id']); return $rows[0]??null; }
         public function get_results(string $prepared,string $output): array { unset($output); $decoded=json_decode($prepared,true,8,JSON_THROW_ON_ERROR); $args=$decoded['args']; $video=(int)($args[1]??0); $limit=(int)($args[2]??20); $rows=array_values(array_filter($GLOBALS['awvp_event_rows'],static fn(array $row):bool=>(int)$row['video_post_id']===$video)); usort($rows,static fn(array $a,array $b):int=>(int)$b['id']<=>(int)$a['id']); return array_slice($rows,0,$limit); }
     }
 }
@@ -53,6 +54,7 @@ namespace {
     $serialized=json_encode($raw,JSON_UNESCAPED_SLASHES);
     foreach(array('must-not-persist','abc123','xyz987') as $secret){$assert(!str_contains((string)$serialized,$secret),'Secret-bearing diagnostics reached durable event storage: '.$secret);}
     $assert(429===($raw['http_status']??null)&&4===($raw['pipeline_step']??null),'HTTP status/pipeline step did not persist.');
+    $assert('1970-01-01 00:33:20'===($raw['created_at']??null),'Event created_at was not written through the explicit format map.');
 
     $rows=$repo->recent(101,5);
     $assert(1===count($rows),'Recent event query did not return the persisted event.');
@@ -60,6 +62,9 @@ namespace {
     $assert('transfer_interrupted'===($row['event_code']??'')&&'pt-primary'===($row['backend_id']??''),'Recent event identity drifted.');
     $assert(500===($row['context']['confirmed_bytes']??null)&&1000===($row['context']['source_bytes']??null),'Bounded byte progress context was not preserved.');
     $assert(!array_key_exists('access_token',$row['context']??array()),'Sensitive context key survived the allow-list.');
+    $task_row=$repo->latest_for_task(77);
+    $assert(is_array($task_row)&&'transfer_interrupted'===($task_row['event_code']??''),'Exact task event lookup did not return the latest event.');
+    $assert(null===$repo->latest_for_task(999),'Unknown task event lookup did not return null.');
     $assert(false===$repo->record(0,4,'bad','error','bad',2000),'Invalid video identity was accepted.');
     $assert(false===$repo->record(101,8,'bad','error','bad',2000),'Invalid pipeline step was accepted.');
 

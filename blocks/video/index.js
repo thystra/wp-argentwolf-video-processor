@@ -543,7 +543,7 @@
                         { label: __('Send when scheduled or published', 'argentwolf-video-processor'), value: 'send_on_schedule_or_publish' }
                     ],
                     onChange: function (value) { setDraftField('dispatch_policy', value); },
-                    help: __('R46.3c stores this choice only. No PeerTube upload is started by saving the wizard.', 'argentwolf-video-processor')
+                    help: __('Saving this choice does not start a PeerTube upload.', 'argentwolf-video-processor')
                 }),
                 draftReady
                     ? el(Notice, { status: 'success', isDismissible: false }, __('All required publication decisions are reviewed. WordPress publication may proceed; no remote work has started.', 'argentwolf-video-processor'))

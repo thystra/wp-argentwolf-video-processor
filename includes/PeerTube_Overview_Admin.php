@@ -224,7 +224,14 @@ final class PeerTube_Overview_Admin
                                 <input type="hidden" name="action" value="<?php echo esc_attr(self::ACTION_RESUME); ?>">
                                 <input type="hidden" name="video_id" value="<?php echo esc_attr((string) $row['video_id']); ?>">
                                 <?php wp_nonce_field(self::ACTION_RESUME . ':' . (string) $row['video_id']); ?>
-                                <?php submit_button(__('Resume', 'argentwolf-video-processor'), 'secondary small', 'submit', false); ?>
+                                <?php submit_button(
+                                    'finalizer_retry' === (string) ($row['recovery_status'] ?? '')
+                                        ? __('Retry publication', 'argentwolf-video-processor')
+                                        : __('Resume', 'argentwolf-video-processor'),
+                                    'secondary small',
+                                    'submit',
+                                    false
+                                ); ?>
                             </form>
                         <?php elseif (true === $row['recovering']) : ?>
                             <p><?php esc_html_e('Automatic recovery active', 'argentwolf-video-processor'); ?></p>
@@ -514,6 +521,7 @@ final class PeerTube_Overview_Admin
             'remote_uuid' => is_array($execution) ? (string) ($execution['remote_uuid'] ?? '') : '',
             'recovering' => true === ($recovery['eligible'] ?? false),
             'resumable' => true === ($recovery['resumable'] ?? false),
+            'recovery_status' => (string) ($recovery['status'] ?? ''),
             'latest_event' => $latest_event,
             'events' => $events,
             'health_issue' => $health_issue,
@@ -573,6 +581,9 @@ final class PeerTube_Overview_Admin
             };
         }
         if (true === ($recovery['pending'] ?? false)) {
+            if ('finalizer_retry' === (string) ($recovery['status'] ?? '')) {
+                return __('Publication finalization is ready to retry', 'argentwolf-video-processor');
+            }
             return true === ($recovery['eligible'] ?? false)
                 ? __('Recovering incomplete publication', 'argentwolf-video-processor')
                 : __('Publication needs attention', 'argentwolf-video-processor');

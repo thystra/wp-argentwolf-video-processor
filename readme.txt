@@ -182,7 +182,7 @@ The existing settings keys, queue table, attachment metadata, hook names, cron
 identifiers, Settings page slug, and `wp argent-video` command are retained for
 upgrade compatibility.
 
-This Forgejo release-candidate package identifies itself as `2.0.0-rc11` in the
+This Forgejo release-candidate package identifies itself as `2.0.0-rc12` in the
 plugin header while `Stable tag: 1.0.0` deliberately continues to identify the
 public WordPress.org release. RC packages are not published to WordPress.org SVN.
 The Stable tag moves to `2.0.0` only when the final release is promoted.
@@ -192,6 +192,9 @@ Administrators upgrading from version 0.2.3 should use the normal WordPress
 plugin-update workflow and confirm the plugin remains active.
 
 == Upgrade Notice ==
+
+= 2.0.0-rc12 =
+Twelfth controlled 2.0 release candidate. Fixes multiline PeerTube publication metadata, safe same-generation finalizer retry, event timestamps, and editor copy found by RC11 live testing. WordPress.org remains on 1.0.0.
 
 = 2.0.0-rc11 =
 Eleventh controlled 2.0 release candidate. Adds visitor-facing remote health/failover, processing-aware readiness, health alerts, daily backend maintenance, restart-safe republish, backend priority/language defaults, and scalable retention. WordPress.org remains on 1.0.0.
@@ -248,6 +251,12 @@ Renames the public plugin and package to ArgentWolf Video Processor and prepares
 the project for WordPress.org review while retaining existing data identifiers.
 
 == Changelog ==
+
+= 2.0.0-rc12 =
+* Preserve qualified RC11 candidate #4 (commit `c56090eb9b5fd6f92010b7c00a6bf47154607659`, tree `e6a53bb1a412ab9f1558c0e41c778385a4481ec0`, ZIP SHA-256 `0d555201cb1a77f8b515d923f888d88e9421c4b6579d506a8de0940c08e14af6`) as immutable live-test evidence.
+* Allow LF/CRLF in reviewed PeerTube description/support Markdown and an empty description without relaxing unrelated request validation.
+* Add explicit same-generation Retry publication recovery for finalizers that prove no provider mutation was transmitted; no source re-upload or new publication generation is created.
+* Correct operator-event `created_at` writes and remove the historical `R46.3c` label from editor help copy.
 
 = 2.0.0-rc11 =
 * Preserve canonical RC10 candidate #2 (commit `215e7b12582d01ea27f4e1c08b965812f3f13d72`, tree `22892bcbc2449d4e0d31fa8bfff5701ff5feb85c`, ZIP SHA-256 `3d4ce93bac8611524d03057ecf270e8e309222b0314f5006ba3520c14afac160`) as immutable qualification/live-test evidence. RC11 is a new package identity.

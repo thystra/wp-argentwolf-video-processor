@@ -1,3 +1,11 @@
+## 2.0.0-rc12 - 2026-09-10
+
+- Preserve qualified RC11 candidate #4 as immutable live-test evidence: commit `c56090eb9b5fd6f92010b7c00a6bf47154607659`, tree `e6a53bb1a412ab9f1558c0e41c778385a4481ec0`, exact ZIP SHA-256 `0d555201cb1a77f8b515d923f888d88e9421c4b6579d506a8de0940c08e14af6`. RC12 is a new package identity after the fresh-video live test exposed runtime defects.
+- Allow reviewed PeerTube description/support Markdown to carry LF/CRLF line breaks through the bounded multipart publication PUT, while retaining strict control-character validation and supporting an empty description.
+- Add a local-only safe-finalizer recovery boundary for `mutation_not_sent`: Overview can expose **Retry publication**, requeueing the exact failed finalizer/task generation without re-uploading the source or manufacturing a new publication generation.
+- Fix durable operator-event `created_at` writes by supplying the complete `$wpdb->insert()` format map; historical zero timestamps are left untouched rather than guessed.
+- Remove the development-only `R46.3c` label from the editor dispatch-timing help copy.
+
 <!-- File: CHANGELOG.md -->
 # Changelog
 

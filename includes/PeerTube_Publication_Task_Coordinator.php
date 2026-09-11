@@ -511,11 +511,22 @@ final class PeerTube_Publication_Task_Coordinator
         return $record===PeerTube_Publication_Execution::sanitize(get_post_meta($video_id,Video_Meta::PEERTUBE_PUBLICATION_EXECUTION,true));
     }
 
+    public static function finalize_idempotency_key(int $video_id, int $generation, string $plan_sha256): string
+    {
+        if ($video_id < 1 || $generation < 1 || 1 !== preg_match('/^[a-f0-9]{64}$/D', $plan_sha256)) {
+            return '';
+        }
+        return hash('sha256', 'awvp-task:v1:' . self::TASK_FINALIZE . ':' . $video_id . ':' . $generation . ':' . $plan_sha256);
+    }
+
     /** @param array<string,mixed> $lifecycle @return array{status:string,task_id:int} */
     private function enqueue_finalize(int $video_id,array $lifecycle,int $now):array
     {
         $payload=array('version'=>self::PAYLOAD_VERSION,'generation'=>(int)$lifecycle['generation'],'plan_sha256'=>(string)$lifecycle['plan_sha256']);
-        $key=hash('sha256','awvp-task:v1:'.self::TASK_FINALIZE.':'.$video_id.':'.$payload['generation'].':'.$payload['plan_sha256']);
+        $key=self::finalize_idempotency_key($video_id,(int)$payload['generation'],(string)$payload['plan_sha256']);
+        if ('' === $key) {
+            return array('status'=>Task_Repository::CONFLICT,'task_id'=>0);
+        }
         return $this->tasks->enqueue(self::TASK_FINALIZE,$video_id,null,(string)$lifecycle['backend_id'],$key,$payload,$now+15,$now,110,720);
     }
 
