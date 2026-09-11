@@ -331,8 +331,13 @@ final class PeerTube_Publication_Task_Coordinator
             if(is_array($operation)){
                 $source_bytes=is_int($operation['source']['bytes']??null)?(int)$operation['source']['bytes']:0;
                 $processing_started=is_int($operation['accepted_at']??null)?(int)$operation['accepted_at']:0;
+                $processing_verified=is_int($operation['verified_at']??null)?(int)$operation['verified_at']:0;
                 if($source_bytes>0&&$processing_started>0&&$processing_started<=$now){
-                    $processing_context=array('source_bytes'=>$source_bytes,'processing_started_at'=>$processing_started);
+                    $processing_context=array(
+                        'source_bytes'=>$source_bytes,
+                        'processing_started_at'=>$processing_started,
+                        'processing_verified_at'=>($processing_verified>=$processing_started&&$processing_verified<=$now)?$processing_verified:0,
+                    );
                 }
             }
             $public=$this->publication_health->probe_and_record($asset,$now,true,$processing_context);
@@ -403,7 +408,15 @@ final class PeerTube_Publication_Task_Coordinator
             || $lifecycle['anchor_post_id']!==$plan['anchor_post_id']
             || !hash_equals($lifecycle['plan_sha256'],PeerTube_Publication_Lifecycle::plan_sha256($plan))) return array('status'=>'refused');
         if (null !== $this->authority_repair) {
-            $this->authority_repair->repair((string) $plan['backend_id'], $now);
+            // The sync path is the send boundary: require a recently refreshed
+            // provider catalog before staging/opening an upload. Finalizer
+            // checks still repair credentials/stale context but do not force a
+            // five-minute catalog refresh loop while PeerTube is transcoding.
+            $repair=$this->authority_repair->repair((string)$plan['backend_id'],$now,!$remote);
+            $repair_status=is_string($repair['status']??null)?(string)$repair['status']:'';
+            if (PeerTube_Token_Lifecycle_Service::STATUS_COMPLETE !== $repair_status) {
+                return array('status'=>PeerTube_Token_Lifecycle_Service::STATUS_REAUTHENTICATION_REQUIRED===$repair_status?'credential_unavailable':'catalog_unavailable');
+            }
         }
         $descriptor=$this->registry->get_fresh((string)$plan['backend_id']);
         if (!is_array($descriptor)||'active'!==($descriptor['state']??null)||Backend_Registry::PEERTUBE_TYPE!==($descriptor['type']??null)) return array('status'=>'backend_unavailable');

@@ -16,6 +16,7 @@ final class PeerTube_Overview_Admin
     public const ACTION_DISMISS = 'argentwolf_video_processor_overview_dismiss';
     public const ACTION_REPUBLISH = 'argentwolf_video_processor_overview_republish';
     public const ACTION_RESOLVE_UPLOAD = 'argentwolf_video_processor_overview_resolve_upload';
+    public const ACTION_RESET_READINESS = 'argentwolf_video_processor_overview_reset_readiness';
     private const MAX_ROWS = 100;
 
     public function __construct(
@@ -27,13 +28,16 @@ final class PeerTube_Overview_Admin
         private readonly ?Overview_Disposition_Store $dispositions = null,
         private readonly ?Backend_Maintenance_Status_Store $backend_maintenance = null,
         private readonly ?Backend_Health_Incident_Store $backend_incidents = null,
-        private readonly ?Remote_Republish_Service $republish = null
+        private readonly ?Remote_Republish_Service $republish = null,
+        private readonly ?Backend_Processing_Estimator $processing_estimator = null,
+        private readonly ?Backend_Registry $backend_registry = null
     ) {
     }
 
     public function render_tab(): void
     {
-        $rows = $this->rows(time());
+        $now = time();
+        $rows = $this->rows($now);
         $current = array();
         $reviewed = array();
         $active_fingerprints = array();
@@ -58,6 +62,8 @@ final class PeerTube_Overview_Admin
             $this->dispositions->prune($active_fingerprints);
         }
         ?>
+        <?php $this->render_backend_summary($rows, $now); ?>
+        <?php $this->render_readiness_summary($now); ?>
         <h2><?php esc_html_e('Status & Needs Attention', 'argentwolf-video-processor'); ?></h2>
         <p><?php esc_html_e('Active publication work and current remote-serving problems appear here. Fixed conditions disappear automatically; reviewing or removing an item changes only this presentation and never deletes its task or diagnostic history.', 'argentwolf-video-processor'); ?></p>
         <?php
@@ -99,6 +105,321 @@ final class PeerTube_Overview_Admin
                 <?php $this->render_table($reviewed, true); ?>
             </details>
         <?php endif;
+    }
+
+    /** @param list<array<string,mixed>> $attention_rows */
+    private function render_backend_summary(array $attention_rows, int $now): void
+    {
+        $rows = $this->backend_summary($attention_rows, $now);
+        if (array() === $rows) {
+            return;
+        }
+        ?>
+        <h2><?php esc_html_e('Backend Summary', 'argentwolf-video-processor'); ?></h2>
+        <p><?php esc_html_e('A compact view of where AWVP videos are serving now and where publication work or remote-serving attention remains.', 'argentwolf-video-processor'); ?></p>
+        <table class="widefat striped" style="max-width:900px;margin-bottom:1.5em">
+            <thead><tr>
+                <th><?php esc_html_e('Backend', 'argentwolf-video-processor'); ?></th>
+                <th><?php esc_html_e('Serving now', 'argentwolf-video-processor'); ?></th>
+                <th><?php esc_html_e('Healthy remote copies', 'argentwolf-video-processor'); ?></th>
+                <th><?php esc_html_e('Active publication work', 'argentwolf-video-processor'); ?></th>
+                <th><?php esc_html_e('Needs attention', 'argentwolf-video-processor'); ?></th>
+            </tr></thead>
+            <tbody>
+            <?php foreach ($rows as $row) : ?>
+                <tr>
+                    <td><strong><?php echo esc_html((string) $row['label']); ?></strong><br><code><?php echo esc_html((string) $row['backend_id']); ?></code></td>
+                    <td><?php echo esc_html((string) $row['serving_now']); ?></td>
+                    <td><?php echo esc_html(Backend_Registry::LOCAL_ID === (string) $row['backend_id'] ? '—' : (string) $row['healthy']); ?></td>
+                    <td><?php echo esc_html(Backend_Registry::LOCAL_ID === (string) $row['backend_id'] ? '—' : (string) $row['active']); ?></td>
+                    <td><?php echo esc_html((string) $row['needs_attention']); ?></td>
+                </tr>
+            <?php endforeach; ?>
+            </tbody>
+        </table>
+        <?php
+    }
+
+    private function render_readiness_summary(int $now): void
+    {
+        $rows = $this->readiness_summary($now);
+        if (array() === $rows) {
+            return;
+        }
+        if (isset($_GET['awvp_readiness_reset'])) : // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only redirect notice; reset mutation is separately nonce-protected.
+            $notice = sanitize_key((string) wp_unslash($_GET['awvp_readiness_reset'])); // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only redirect notice.
+            ?>
+            <div class="notice <?php echo 'complete' === $notice ? 'notice-success' : 'notice-error'; ?>" style="margin:1em 0;padding:.5em 1em"><p>
+                <?php echo esc_html('complete' === $notice
+                    ? __('Readiness statistics were reset. Publication/task/event/upload history was not changed.', 'argentwolf-video-processor')
+                    : __('Readiness statistics could not be reset.', 'argentwolf-video-processor')); ?>
+            </p></div>
+        <?php endif; ?>
+        <h2><?php esc_html_e('PeerTube Readiness Estimates', 'argentwolf-video-processor'); ?></h2>
+        <p><?php esc_html_e('Typical readiness estimates use recent upload-accepted to remote-ready observations. They are advisory: source duration, codec complexity, runner load, and server load can change actual processing time.', 'argentwolf-video-processor'); ?></p>
+        <table class="widefat striped" style="max-width:1050px">
+            <thead><tr>
+                <th><?php esc_html_e('Backend', 'argentwolf-video-processor'); ?></th>
+                <th><?php esc_html_e('Source size', 'argentwolf-video-processor'); ?></th>
+                <th><?php esc_html_e('Typical readiness', 'argentwolf-video-processor'); ?></th>
+                <th><?php esc_html_e('Samples in band', 'argentwolf-video-processor'); ?></th>
+                <th><?php esc_html_e('Confidence', 'argentwolf-video-processor'); ?></th>
+            </tr></thead>
+            <tbody>
+            <?php foreach ($rows as $row) : ?>
+                <tr>
+                    <td><strong><?php echo esc_html((string) $row['backend_label']); ?></strong><br><code><?php echo esc_html((string) $row['backend_id']); ?></code></td>
+                    <td><?php echo esc_html($this->size_band_label((int) $row['min_bytes'], (int) $row['max_bytes'])); ?></td>
+                    <td><?php echo esc_html(self::format_duration((int) $row['seconds'])); ?></td>
+                    <td><?php echo esc_html((string) $row['same_bucket_count']); ?></td>
+                    <td><?php echo esc_html(self::confidence_label((string) $row['confidence'])); ?></td>
+                </tr>
+            <?php endforeach; ?>
+            </tbody>
+        </table>
+        <div style="margin:.75em 0 1.5em">
+            <?php foreach ($this->readiness_backends() as $backend) : ?>
+                <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" style="display:inline-block;margin:.15em .35em .15em 0">
+                    <input type="hidden" name="action" value="<?php echo esc_attr(self::ACTION_RESET_READINESS); ?>">
+                    <input type="hidden" name="backend_id" value="<?php echo esc_attr((string) $backend['backend_id']); ?>">
+                    <?php wp_nonce_field(self::ACTION_RESET_READINESS); ?>
+                    <?php submit_button(sprintf(
+                        /* translators: %s: backend label */
+                        __('Reset %s readiness statistics', 'argentwolf-video-processor'),
+                        (string) $backend['label']
+                    ), 'secondary small', 'submit', false); ?>
+                </form>
+            <?php endforeach; ?>
+            <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" style="display:inline-block;margin:.15em .35em .15em 0">
+                <input type="hidden" name="action" value="<?php echo esc_attr(self::ACTION_RESET_READINESS); ?>">
+                <input type="hidden" name="backend_id" value="all">
+                <?php wp_nonce_field(self::ACTION_RESET_READINESS); ?>
+                <?php submit_button(__('Reset all readiness statistics', 'argentwolf-video-processor'), 'secondary small', 'submit', false); ?>
+            </form>
+        </div>
+        <p class="description"><?php esc_html_e('Resetting readiness statistics clears only advisory estimator samples. It does not delete publication events, task history, upload journals, remote assets, or serving-health records.', 'argentwolf-video-processor'); ?></p>
+        <?php
+    }
+
+    /**
+     * @param list<array<string,mixed>> $attention_rows
+     * @return list<array{backend_id:string,label:string,serving_now:int,healthy:int,active:int,needs_attention:int}>
+     */
+    public function backend_summary(array $attention_rows, int $now): array
+    {
+        unset($now);
+        if (null === $this->serving) {
+            return array();
+        }
+        $descriptors = null !== $this->backend_registry ? $this->backend_registry->all() : array();
+        $summary = array();
+        $ensure = static function (string $backend_id) use (&$summary, $descriptors): void {
+            if (isset($summary[$backend_id])) {
+                return;
+            }
+            $descriptor = is_array($descriptors[$backend_id] ?? null) ? $descriptors[$backend_id] : array();
+            $label = is_string($descriptor['label'] ?? null) && '' !== trim((string) $descriptor['label'])
+                ? trim((string) $descriptor['label'])
+                : (Backend_Registry::LOCAL_ID === $backend_id ? 'Local AWVP' : $backend_id);
+            $summary[$backend_id] = array(
+                'backend_id' => $backend_id,
+                'label' => $label,
+                'serving_now' => 0,
+                'healthy' => 0,
+                'active' => 0,
+                'needs_attention' => 0,
+            );
+        };
+        $ensure(Backend_Registry::LOCAL_ID);
+        foreach ($descriptors as $backend_id => $descriptor) {
+            if (! is_string($backend_id) || '' === Backend_Identity::sanitize($backend_id) || ! is_array($descriptor)) {
+                continue;
+            }
+            $ensure($backend_id);
+        }
+
+        $ids = get_posts(array(
+            'post_type' => Video_Post_Type::POST_TYPE,
+            'post_status' => 'any',
+            'fields' => 'ids',
+            'posts_per_page' => -1,
+            'orderby' => 'ID',
+            'order' => 'ASC',
+        ));
+        $healthy_seen = array();
+        if (is_array($ids)) {
+            foreach ($ids as $raw_id) {
+                $video_id = Video_Meta::sanitize_positive_id($raw_id);
+                if ($video_id < 1) {
+                    continue;
+                }
+                $candidate = $this->serving->serving_candidate($video_id);
+                $backend_id = Backend_Identity::sanitize((string) ($candidate['backend_id'] ?? ''));
+                if ('' !== $backend_id) {
+                    $ensure($backend_id);
+                    ++$summary[$backend_id]['serving_now'];
+                }
+                if (null !== $this->health) {
+                    foreach ($this->health->for_video($video_id) as $health) {
+                        $remote_backend = Backend_Identity::sanitize((string) ($health['backend_id'] ?? ''));
+                        if ('' === $remote_backend || Backend_Registry::LOCAL_ID === $remote_backend
+                            || Serving_Viability::HEALTHY !== (string) ($health['status'] ?? '')
+                            || 1 !== (int) ($health['eligible'] ?? 0)) {
+                            continue;
+                        }
+                        $key = $remote_backend . ':' . (string) $video_id;
+                        if (isset($healthy_seen[$key])) {
+                            continue;
+                        }
+                        $healthy_seen[$key] = true;
+                        $ensure($remote_backend);
+                        ++$summary[$remote_backend]['healthy'];
+                    }
+                }
+            }
+        }
+
+        $open = $this->operations->open_operations();
+        $active_seen = array();
+        if (is_array($open)) {
+            foreach ($open as $operation) {
+                if (! is_array($operation)) {
+                    continue;
+                }
+                $phase = (string) ($operation['phase'] ?? '');
+                if (in_array($phase, array(
+                    PeerTube_Staged_Upload_State_Machine::PHASE_COMPLETE,
+                    PeerTube_Staged_Upload_State_Machine::PHASE_OPERATOR_ABANDONED,
+                    PeerTube_Staged_Upload_State_Machine::PHASE_FAILED,
+                    PeerTube_Staged_Upload_State_Machine::PHASE_READY_VERIFIED,
+                ), true)) {
+                    continue;
+                }
+                $backend_id = Backend_Identity::sanitize((string) ($operation['backend_id'] ?? ''));
+                $video_id = (int) ($operation['video_post_id'] ?? 0);
+                if ('' === $backend_id || $video_id < 1) {
+                    continue;
+                }
+                $key = $backend_id . ':' . (string) $video_id;
+                if (isset($active_seen[$key])) {
+                    continue;
+                }
+                $active_seen[$key] = true;
+                $ensure($backend_id);
+                ++$summary[$backend_id]['active'];
+            }
+        }
+
+        $attention_seen = array();
+        foreach ($attention_rows as $row) {
+            if (true !== ($row['needs_attention'] ?? false)) {
+                continue;
+            }
+            $backend_id = Backend_Identity::sanitize((string) ($row['backend_id'] ?? ''));
+            $video_id = (int) ($row['video_id'] ?? 0);
+            if ('' === $backend_id || $video_id < 1) {
+                continue;
+            }
+            $key = $backend_id . ':' . (string) $video_id;
+            if (isset($attention_seen[$key])) {
+                continue;
+            }
+            $attention_seen[$key] = true;
+            $ensure($backend_id);
+            ++$summary[$backend_id]['needs_attention'];
+        }
+
+        uasort($summary, static function (array $a, array $b): int {
+            if (Backend_Registry::LOCAL_ID === $a['backend_id']) return -1;
+            if (Backend_Registry::LOCAL_ID === $b['backend_id']) return 1;
+            return strcasecmp((string) $a['label'], (string) $b['label']);
+        });
+        return array_values($summary);
+    }
+
+    /** @return list<array<string,mixed>> */
+    public function readiness_summary(int $now): array
+    {
+        if (null === $this->processing_estimator || $now < 1) {
+            return array();
+        }
+        $out = array();
+        foreach ($this->readiness_backends() as $backend) {
+            foreach ($this->processing_estimator->summaries((string) $backend['backend_id'], $now) as $summary) {
+                $out[] = array_merge($summary, array(
+                    'backend_id' => (string) $backend['backend_id'],
+                    'backend_label' => (string) $backend['label'],
+                ));
+            }
+        }
+        return $out;
+    }
+
+    /** @return list<array{backend_id:string,label:string}> */
+    private function readiness_backends(): array
+    {
+        if (null === $this->backend_registry) {
+            return array();
+        }
+        $out = array();
+        foreach ($this->backend_registry->all() as $backend_id => $descriptor) {
+            if (! is_string($backend_id) || ! is_array($descriptor)
+                || Backend_Registry::LOCAL_ID === $backend_id
+                || Backend_Registry::PEERTUBE_TYPE !== (string) ($descriptor['type'] ?? '')
+                || 'active' !== (string) ($descriptor['state'] ?? '')) {
+                continue;
+            }
+            $label = is_string($descriptor['label'] ?? null) && '' !== trim((string) $descriptor['label'])
+                ? trim((string) $descriptor['label'])
+                : $backend_id;
+            $out[] = array('backend_id' => $backend_id, 'label' => $label);
+        }
+        usort($out, static fn (array $a, array $b): int => strcasecmp((string) $a['label'], (string) $b['label']));
+        return $out;
+    }
+
+    private function size_band_label(int $min_bytes, int $max_bytes): string
+    {
+        if ($max_bytes >= PHP_INT_MAX) {
+            return sprintf(
+                /* translators: %s: formatted source size lower bound */
+                __('Larger than %s', 'argentwolf-video-processor'),
+                size_format(max(1, $min_bytes - 1), 0)
+            );
+        }
+        if ($min_bytes <= 1) {
+            return sprintf(
+                /* translators: %s: formatted source size upper bound */
+                __('Up to %s', 'argentwolf-video-processor'),
+                size_format($max_bytes, 0)
+            );
+        }
+        return sprintf(
+            /* translators: 1: formatted source size lower bound, 2: formatted source size upper bound */
+            __('%1$s – %2$s', 'argentwolf-video-processor'),
+            size_format(max(1, $min_bytes - 1), 0),
+            size_format($max_bytes, 0)
+        );
+    }
+
+    private static function confidence_label(string $confidence): string
+    {
+        return match ($confidence) {
+            'high' => __('High', 'argentwolf-video-processor'),
+            'medium' => __('Medium', 'argentwolf-video-processor'),
+            default => __('Low', 'argentwolf-video-processor'),
+        };
+    }
+
+    private static function format_duration(int $seconds): string
+    {
+        $seconds = max(0, $seconds);
+        $hours = intdiv($seconds, 3600);
+        $minutes = intdiv($seconds % 3600, 60);
+        $remaining = $seconds % 60;
+        return $hours > 0
+            ? sprintf('%d:%02d:%02d', $hours, $minutes, $remaining)
+            : sprintf('%d:%02d', $minutes, $remaining);
     }
 
     private function render_backend_health_incidents(): void
@@ -418,6 +739,29 @@ final class PeerTube_Overview_Admin
         exit;
     }
 
+    public function reset_readiness_action(): void
+    {
+        if (! current_user_can('manage_options') || null === $this->processing_estimator) {
+            wp_die(esc_html__('You are not allowed to reset ArgentWolf Video Processor readiness statistics.', 'argentwolf-video-processor'));
+        }
+        check_admin_referer(self::ACTION_RESET_READINESS);
+        $backend_id = isset($_POST['backend_id'])
+            ? sanitize_text_field(wp_unslash($_POST['backend_id']))
+            : '';
+        $backend_id = 'all' === $backend_id ? 'all' : Backend_Identity::sanitize($backend_id);
+        $complete = false;
+        if ('all' === $backend_id) {
+            $complete = $this->processing_estimator->reset(null, time());
+        } elseif ('' !== $backend_id && Backend_Registry::LOCAL_ID !== $backend_id) {
+            $complete = $this->processing_estimator->reset($backend_id, time());
+        }
+        wp_safe_redirect(Settings_Hub::tab_url(
+            Settings_Hub::TAB_OVERVIEW,
+            array('awvp_readiness_reset' => $complete ? 'complete' : 'failed')
+        ));
+        exit;
+    }
+
     public function disposition_action(string $state): void
     {
         if (! current_user_can('manage_options') || null === $this->dispositions) {
@@ -622,8 +966,20 @@ final class PeerTube_Overview_Admin
         $republish_source = $republish_problem && null !== $this->republish ? $this->republish->source_available($video_id) : false;
         $republish_targets = $republish_source && null !== $this->republish ? $this->republish->targets() : array();
 
+        $backend_id = is_array($health_issue)
+            ? Backend_Identity::sanitize((string) ($health_issue['backend_id'] ?? ''))
+            : Backend_Identity::sanitize((string) ($operation['backend_id'] ?? ''));
+        if ('' === $backend_id) {
+            $destination = Video_Destination::resolve(
+                get_post_meta($video_id, Video_Meta::DESTINATION, true),
+                metadata_exists('post', $video_id, Video_Meta::DESTINATION)
+            );
+            $backend_id = Backend_Identity::sanitize((string) ($destination['backend_id'] ?? ''));
+        }
+
         return array(
             'video_id' => $video_id,
+            'backend_id' => $backend_id,
             'media_title' => $media_title,
             'filename' => $filename,
             'size' => $size,

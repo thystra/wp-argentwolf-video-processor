@@ -260,7 +260,9 @@ final class Plugin
                 $overview_dispositions,
                 $backend_maintenance_status,
                 $backend_health_incidents,
-                $remote_republish
+                $remote_republish,
+                $processing_estimator,
+                $this->backend_registry
             );
             $settings_hub = new Settings_Hub(
                 $admin,
@@ -288,6 +290,7 @@ final class Plugin
             add_action('admin_post_' . PeerTube_Overview_Admin::ACTION_DISMISS, static fn (): mixed => $peertube_overview->disposition_action(Overview_Disposition_Store::DISMISSED));
             add_action('admin_post_' . PeerTube_Overview_Admin::ACTION_REPUBLISH, array($peertube_overview, 'republish_action'));
             add_action('admin_post_' . PeerTube_Overview_Admin::ACTION_RESOLVE_UPLOAD, array($peertube_overview, 'resolve_indeterminate_upload_action'));
+            add_action('admin_post_' . PeerTube_Overview_Admin::ACTION_RESET_READINESS, array($peertube_overview, 'reset_readiness_action'));
             add_action(
                 'admin_post_' . PeerTube_Connection_Admin::ACTION_START,
                 array($peertube_admin, 'start_action')

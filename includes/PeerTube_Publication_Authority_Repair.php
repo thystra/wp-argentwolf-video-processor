@@ -18,6 +18,7 @@ final class PeerTube_Publication_Authority_Repair
 {
     private const TOKEN_SKEW_SECONDS = 60;
     private const MAX_REFRESH_STEPS = 4;
+    public const SEND_CATALOG_MAX_AGE = 300;
 
     public function __construct(
         private readonly PeerTube_Token_Lifecycle_Service $token_lifecycle,
@@ -29,7 +30,7 @@ final class PeerTube_Publication_Authority_Repair
     }
 
     /** @return array{status:string,backend_id:string,retry_after:int} */
-    public function repair(string $backend_id, int $now): array
+    public function repair(string $backend_id, int $now, bool $require_recent_catalog = false): array
     {
         $backend_id = Backend_Identity::sanitize($backend_id);
         if ('' === $backend_id || Backend_Registry::LOCAL_ID === $backend_id || $now < 1) {
@@ -110,7 +111,14 @@ final class PeerTube_Publication_Authority_Repair
             (string) $descriptor['config']['origin'],
             (int) $secret['generation']
         );
-        if (is_array($catalog) && false === ($catalog['stale'] ?? true)) {
+        $catalog_recent = is_array($catalog)
+            && false === ($catalog['stale'] ?? true)
+            && is_int($catalog['refreshed_at'] ?? null)
+            && (int) $catalog['refreshed_at'] > 0
+            && (int) $catalog['refreshed_at'] <= $now
+            && (int) $catalog['refreshed_at'] >= max(1, $now - self::SEND_CATALOG_MAX_AGE);
+        if (is_array($catalog) && false === ($catalog['stale'] ?? true)
+            && (! $require_recent_catalog || $catalog_recent)) {
             return self::result(PeerTube_Token_Lifecycle_Service::STATUS_COMPLETE, $backend_id);
         }
 
@@ -129,9 +137,16 @@ final class PeerTube_Publication_Authority_Repair
             (string) $descriptor['config']['origin'],
             (int) $secret['generation']
         );
+        $catalog_recent = is_array($catalog)
+            && false === ($catalog['stale'] ?? true)
+            && is_int($catalog['refreshed_at'] ?? null)
+            && (int) $catalog['refreshed_at'] > 0
+            && (int) $catalog['refreshed_at'] <= $now
+            && (int) $catalog['refreshed_at'] >= max(1, $now - self::SEND_CATALOG_MAX_AGE);
         return is_array($catalog) && false === ($catalog['stale'] ?? true)
-            ? self::result(PeerTube_Token_Lifecycle_Service::STATUS_COMPLETE, $backend_id)
-            : self::result(PeerTube_Token_Lifecycle_Service::STATUS_INDETERMINATE, $backend_id);
+            && (! $require_recent_catalog || $catalog_recent)
+                ? self::result(PeerTube_Token_Lifecycle_Service::STATUS_COMPLETE, $backend_id)
+                : self::result(PeerTube_Token_Lifecycle_Service::STATUS_INDETERMINATE, $backend_id);
     }
 
     /** @return array<string,mixed>|null */

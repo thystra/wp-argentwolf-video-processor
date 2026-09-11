@@ -59,9 +59,10 @@ namespace ArgentVideo {
         public array $calls=array(); public string $status=self::PRESENT;
         public function reconcile(int $video,int $now): string { $this->calls[]=array($video,$now); return $this->status; }
     }
+    final class PeerTube_Token_Lifecycle_Service { public const STATUS_COMPLETE='complete'; public const STATUS_REAUTHENTICATION_REQUIRED='reauthentication_required'; }
     final class PeerTube_Publication_Authority_Repair {
-        public array $calls=array();
-        public function repair(string $backend_id,int $now): array { $this->calls[]=array($backend_id,$now); return array('status'=>'complete'); }
+        public array $calls=array(); public string $status=PeerTube_Token_Lifecycle_Service::STATUS_COMPLETE;
+        public function repair(string $backend_id,int $now,bool $require_recent_catalog=false): array { $this->calls[]=array($backend_id,$now,$require_recent_catalog); return array('status'=>$this->status); }
     }
     final class Serving_Viability {
         public const HEALTHY='healthy'; public const PROCESSING='processing'; public const MISSING='missing';
@@ -175,7 +176,12 @@ namespace {
 
     // RC10 worker boundary: authority repair is invoked before fresh backend/catalog reads.
     $reset($makeLife(1,'draft','3',true,false),'draft'); $x=$factory($catalog,false,true); $r=$x['coord']->advance_claimed($task(11,Coordinator::TASK_SYNC),$now);
-    $assert(Coordinator::STATUS_COMPLETE===$r['status']&&array(array('pt-primary',$now))===$x['repair']->calls,'Publication task boundary did not invoke bounded credential/catalog authority repair exactly once.');
+    $assert(Coordinator::STATUS_COMPLETE===$r['status']&&array(array('pt-primary',$now,true))===$x['repair']->calls,'Publication task boundary did not require a recent provider catalog exactly once before upload staging.');
+
+    // A required send-time catalog refresh failure must defer before staging or
+    // opening an upload session; the older cached catalog cannot be reused.
+    $reset($makeLife(1,'draft','3',true,false),'draft'); $x=$factory($catalog,false,true); $x['repair']->status='wait'; $blockedFresh=$x['coord']->advance_claimed($task(12,Coordinator::TASK_SYNC),$now);
+    $assert(Coordinator::STATUS_REQUEUED===$blockedFresh['status']&&0===count($x['staging']->calls)&&0===count($x['upload']->calls),'Failed send-time catalog refresh did not fail closed before upload staging.');
 
     // Stale generation and lock contention do no remote/staging work.
     $reset($makeLife(2,'draft','3',true,false),'draft'); $x=$factory(); $stale=$x['coord']->advance_claimed($task(2,Coordinator::TASK_SYNC,1),$now); $assert(Coordinator::STATUS_COMPLETE===$stale['status']&&'stale'===$stale['service_status']&&0===count($x['staging']->calls),'Stale sync generation performed work.');
@@ -224,8 +230,10 @@ namespace {
 
     $reset($makeLife(1,'publish','1',true,true),'publish'); $GLOBALS['awvp_pub_meta'][$video][Video_Meta::PEERTUBE_PUBLICATION_EXECUTION]=$publicExec;
     $x=$factory($catalog,true,false,true); $x['assets']->rows[55]=array('id'=>55,'video_post_id'=>$video,'backend_id'=>'pt-primary','channel_id'=>'41','remote_id'=>$uuid,'role'=>'secondary','state'=>'ready','desired_privacy'=>'public','actual_privacy'=>'public','remote_processing_state'=>'1:published','embed_url'=>'https://video.example.org/videos/embed/abcDEF_123','last_verified_at'=>'2026-09-10 19:00:00');
+    $x['operations']->records[$publicExec['operation_id']]=array('phase'=>'ready_verified','remote_asset_id'=>55,'remote_identity'=>array('uuid'=>$uuid),'source'=>array('bytes'=>500000000),'accepted_at'=>1500,'verified_at'=>1900);
     $publicDone=$x['coord']->advance_claimed($task(58,Coordinator::TASK_FINALIZE),$now);
     $assert(Coordinator::STATUS_COMPLETE===$publicDone['status']&&1===count($x['publicHealth']->calls)&&1===count($x['cutover']->calls)&&0===count($x['api']->publication_calls),'Healthy public URL did not authorize local serving cutover.');
+    $assert(array('source_bytes'=>500000000,'processing_started_at'=>1500,'processing_verified_at'=>1900)===($x['publicHealth']->calls[0]['processing_context']??null),'Final serving qualification did not pass the durable accepted-to-ready interval to readiness learning.');
 
     // If WordPress loses publish authority during the PUT, correct immediately to Private and verify it.
     $reset($makeLife(1,'publish','1',true,true),'publish'); $GLOBALS['awvp_pub_meta'][$video][Video_Meta::PEERTUBE_PUBLICATION_EXECUTION]=$exec; $x=$factory(); $x['operations']->records[$exec['operation_id']]=$ready; $x['api']->remote_privacy='3';

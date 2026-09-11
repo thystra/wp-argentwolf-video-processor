@@ -100,7 +100,7 @@ final class Remote_Publication_Health_Service
      * authority.
      *
      * @param array<string,mixed> $asset
-     * @param array{source_bytes?:int,processing_started_at?:int} $processing_context
+     * @param array{source_bytes?:int,processing_started_at?:int,processing_verified_at?:int} $processing_context
      * @return array{
      *   recorded:bool,
      *   viability_status:string,
@@ -211,14 +211,15 @@ final class Remote_Publication_Health_Service
                 && null !== $this->processing_estimator
                 && $context['source_bytes'] > 0
                 && $context['processing_started_at'] > 0
-                && $context['processing_started_at'] < $now
+                && $context['processing_verified_at'] > $context['processing_started_at']
+                && $context['processing_verified_at'] <= $now
                 && (! is_array($before) || Serving_Viability::HEALTHY !== (string) ($before['status'] ?? ''))
             ) {
                 $this->processing_estimator->observe(
                     $backend_id,
                     $context['source_bytes'],
-                    $now - $context['processing_started_at'],
-                    $now
+                    $context['processing_verified_at'] - $context['processing_started_at'],
+                    $context['processing_verified_at']
                 );
             }
         }
@@ -243,16 +244,20 @@ final class Remote_Publication_Health_Service
 
     /**
      * @param array<string,mixed> $context
-     * @return array{source_bytes:int,processing_started_at:int}
+     * @return array{source_bytes:int,processing_started_at:int,processing_verified_at:int}
      */
     private static function processing_context(array $context, int $now): array
     {
         $bytes = is_int($context['source_bytes'] ?? null) ? $context['source_bytes'] : 0;
         $started = is_int($context['processing_started_at'] ?? null) ? $context['processing_started_at'] : 0;
+        $verified = is_int($context['processing_verified_at'] ?? null) ? $context['processing_verified_at'] : 0;
         if ($bytes < 1 || $started < 1 || $started > $now) {
-            return array('source_bytes' => 0, 'processing_started_at' => 0);
+            return array('source_bytes' => 0, 'processing_started_at' => 0, 'processing_verified_at' => 0);
         }
-        return array('source_bytes' => $bytes, 'processing_started_at' => $started);
+        if ($verified < $started || $verified > $now) {
+            $verified = 0;
+        }
+        return array('source_bytes' => $bytes, 'processing_started_at' => $started, 'processing_verified_at' => $verified);
     }
 
     /**

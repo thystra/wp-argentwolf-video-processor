@@ -27,9 +27,13 @@ final class Backend_Processing_Estimator
     private const MIB = 1048576;
 
     /**
-     * Record one completed upload-accepted -> publicly playable observation.
-     * Metrics are advisory only; losing a concurrent metrics update cannot
-     * affect publication, serving authority, or retention safety.
+     * Record one completed upload-accepted -> remotely ready observation.
+     *
+     * The interval deliberately ends at the durable ready-verification point,
+     * not at eventual public cutover. Finalizer/operator delay is therefore not
+     * allowed to contaminate backend processing estimates. Metrics are advisory
+     * only; losing a concurrent metrics update cannot affect publication,
+     * serving authority, or retention safety.
      */
     public function observe(string $backend_id, int $source_bytes, int $turnaround_seconds, int $observed_at): bool
     {
@@ -125,6 +129,81 @@ final class Backend_Processing_Estimator
         );
     }
 
+
+    /**
+     * Reset advisory readiness history for one backend or for every backend.
+     * This intentionally does not touch task/event/upload journals or serving
+     * authority. The estimator is operational telemetry, not audit evidence.
+     */
+    public function reset(?string $backend_id, int $now): bool
+    {
+        if ($now < 1) {
+            return false;
+        }
+        if (null === $backend_id || '' === $backend_id) {
+            delete_option(self::OPTION);
+            $stored = get_option(self::OPTION, null);
+            return null === $stored || false === $stored;
+        }
+
+        $backend_id = Backend_Identity::sanitize($backend_id);
+        if ('' === $backend_id || Backend_Registry::LOCAL_ID === $backend_id) {
+            return false;
+        }
+        $history = $this->history($now);
+        unset($history[$backend_id]);
+        if (array() === $history) {
+            delete_option(self::OPTION);
+            $stored = get_option(self::OPTION, null);
+            return null === $stored || false === $stored;
+        }
+        ksort($history);
+        $value = array('version' => self::VERSION, 'backends' => $history);
+        update_option(self::OPTION, $value, false);
+        return $value === $this->raw_value($now);
+    }
+
+    /**
+     * Human-facing size bands backed by the exact estimator bucket boundaries.
+     *
+     * @return list<array{bucket:int,min_bytes:int,max_bytes:int,representative_bytes:int}>
+     */
+    public static function size_bands(): array
+    {
+        return array(
+            array('bucket' => 1, 'min_bytes' => 1, 'max_bytes' => 64 * self::MIB, 'representative_bytes' => 32 * self::MIB),
+            array('bucket' => 2, 'min_bytes' => 64 * self::MIB + 1, 'max_bytes' => 256 * self::MIB, 'representative_bytes' => 128 * self::MIB),
+            array('bucket' => 3, 'min_bytes' => 256 * self::MIB + 1, 'max_bytes' => 1024 * self::MIB, 'representative_bytes' => 512 * self::MIB),
+            array('bucket' => 4, 'min_bytes' => 1024 * self::MIB + 1, 'max_bytes' => 4096 * self::MIB, 'representative_bytes' => 2048 * self::MIB),
+            array('bucket' => 5, 'min_bytes' => 4096 * self::MIB + 1, 'max_bytes' => PHP_INT_MAX, 'representative_bytes' => 8192 * self::MIB),
+        );
+    }
+
+    /**
+     * Return one display-ready estimate summary per exact size bucket.
+     *
+     * @return list<array{bucket:int,min_bytes:int,max_bytes:int,representative_bytes:int,seconds:int,confidence:string,basis:string,sample_count:int,same_bucket_count:int}>
+     */
+    public function summaries(string $backend_id, int $now): array
+    {
+        $backend_id = Backend_Identity::sanitize($backend_id);
+        if ('' === $backend_id || Backend_Registry::LOCAL_ID === $backend_id || $now < 1) {
+            return array();
+        }
+        $out = array();
+        foreach (self::size_bands() as $band) {
+            $estimate = $this->estimate($backend_id, $band['representative_bytes'], $now, $now);
+            $out[] = array_merge($band, array(
+                'seconds' => (int) $estimate['seconds'],
+                'confidence' => (string) $estimate['confidence'],
+                'basis' => (string) $estimate['basis'],
+                'sample_count' => (int) $estimate['sample_count'],
+                'same_bucket_count' => (int) $estimate['same_bucket_count'],
+            ));
+        }
+        return $out;
+    }
+
     public static function next_probe_delay(int $estimated_ready_at, int $now): int
     {
         if ($now < 1 || $estimated_ready_at < 1) {
@@ -210,7 +289,7 @@ final class Backend_Processing_Estimator
         return array_slice($samples, 0, max(1, $limit));
     }
 
-    private static function size_bucket(int $bytes): int
+    public static function size_bucket(int $bytes): int
     {
         return match (true) {
             $bytes <= 64 * self::MIB => 1,

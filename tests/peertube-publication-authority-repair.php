@@ -24,9 +24,9 @@ namespace ArgentVideo {
     }
     final class PeerTube_Publication_Catalog_Service {
         public const COMPLETE='complete'; public const REFUSED='refused'; public const REMOTE_FAILED='remote_failed'; public const CACHE_FAILED='cache_failed';
-        public int $calls=0; public string $status=self::COMPLETE;
+        public int $calls=0; public string $status=self::COMPLETE; public bool $write_catalog=true;
         public function __construct(private readonly PeerTube_Publication_Catalog_Store $store,private readonly Managed_Backend_Secret_Store $secrets){}
-        public function refresh(string $backend,int $now):array { unset($now); ++$this->calls; if(self::COMPLETE===$this->status && is_array($this->secrets->secret)){$this->store->catalog=array('backend_id'=>$backend,'origin'=>'https://video.example.org','secret_generation'=>$this->secrets->secret['generation'],'stale'=>false);} return array('status'=>$this->status,'catalog'=>$this->store->catalog); }
+        public function refresh(string $backend,int $now):array { ++$this->calls; if(self::COMPLETE===$this->status && $this->write_catalog && is_array($this->secrets->secret)){$this->store->catalog=array('backend_id'=>$backend,'origin'=>'https://video.example.org','secret_generation'=>$this->secrets->secret['generation'],'refreshed_at'=>$now,'stale'=>false);} return array('status'=>$this->status,'catalog'=>$this->store->catalog); }
     }
 }
 
@@ -63,6 +63,37 @@ namespace {
     $tokenCalls=$tokens->calls; $catalogCalls=$catalogService->calls;
     $current=$repair->repair('pt-primary',2100);
     $a(PeerTube_Token_Lifecycle_Service::STATUS_COMPLETE===($current['status']??'')&&$tokenCalls===$tokens->calls&&$catalogCalls===$catalogService->calls,'Already-current authority performed an unnecessary credential or catalog refresh.');
+
+
+    // A publication send requires a recently refreshed provider catalog. A
+    // non-stale but old snapshot must therefore refresh before upload staging.
+    $secrets->secret=array('access_token'=>'fresh','refresh_token'=>'fresh-refresh','access_expires_at'=>9000,'refresh_expires_at'=>12000,'generation'=>4);
+    $catalogs->catalog=array('backend_id'=>'pt-primary','origin'=>'https://video.example.org','secret_generation'=>4,'refreshed_at'=>1800,'stale'=>false);
+    $catalogService->status=PeerTube_Publication_Catalog_Service::COMPLETE;
+    $beforeCatalogCalls=$catalogService->calls;
+    $sendReady=$repair->repair('pt-primary',2200,true);
+    $a(PeerTube_Token_Lifecycle_Service::STATUS_COMPLETE===($sendReady['status']??''),'Send-time repair did not settle a stale-age catalog refresh.');
+    $a($beforeCatalogCalls+1===$catalogService->calls&&2200===($catalogs->catalog['refreshed_at']??0),'Send-time repair reused a catalog older than the five-minute freshness window.');
+
+    $currentCalls=$catalogService->calls;
+    $stillFresh=$repair->repair('pt-primary',2250,true);
+    $a(PeerTube_Token_Lifecycle_Service::STATUS_COMPLETE===($stillFresh['status']??'')&&$currentCalls===$catalogService->calls,'Fresh send-time catalog performed an unnecessary refresh.');
+
+    // A refresh service may not claim send authority unless the generation-bound
+    // store actually contains a newly refreshed snapshot afterward.
+    $catalogs->catalog['refreshed_at']=1800;
+    $catalogService->write_catalog=false;
+    $catalogService->status=PeerTube_Publication_Catalog_Service::COMPLETE;
+    $missingFresh=$repair->repair('pt-primary',2300,true);
+    $a(PeerTube_Token_Lifecycle_Service::STATUS_INDETERMINATE===($missingFresh['status']??''),'Send-time repair accepted a catalog that remained old after a nominal refresh.');
+    $catalogService->write_catalog=true;
+
+    // A failed required refresh must fail closed instead of silently falling
+    // back to the older snapshot at the upload boundary.
+    $catalogs->catalog['refreshed_at']=1800;
+    $catalogService->status=PeerTube_Publication_Catalog_Service::REMOTE_FAILED;
+    $failedFresh=$repair->repair('pt-primary',2600,true);
+    $a(PeerTube_Token_Lifecycle_Service::STATUS_WAIT===($failedFresh['status']??''),'Failed send-time catalog refresh did not fail closed.');
 
     $secrets->secret=array('access_token'=>'expired','refresh_token'=>'expired-refresh','access_expires_at'=>2100,'refresh_expires_at'=>2150,'generation'=>3);
     $reauth=$repair->repair('pt-primary',2100);

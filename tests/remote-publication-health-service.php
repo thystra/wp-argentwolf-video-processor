@@ -82,6 +82,20 @@ namespace ArgentVideo {
         }
     }
 
+
+    final class Backend_Processing_Estimator {
+        public array $observations=array();
+        public function estimate(string $backend_id,int $bytes,int $started,int $now):array {
+            unset($backend_id,$bytes,$started,$now);
+            return array('seconds'=>300,'estimated_ready_at'=>2300,'confidence'=>'low','basis'=>'size_fallback','sample_count'=>0,'same_bucket_count'=>0);
+        }
+        public static function next_probe_delay(int $estimated_ready_at,int $now):int { unset($estimated_ready_at,$now); return 60; }
+        public function observe(string $backend_id,int $bytes,int $seconds,int $observed_at):bool {
+            $this->observations[]=compact('backend_id','bytes','seconds','observed_at');
+            return true;
+        }
+    }
+
     final class Remote_Health_Notification_Service {
         public int $publication_calls=0;
         public int $backend_calls=0;
@@ -169,6 +183,22 @@ namespace {
     $service6=new Remote_Publication_Health_Service($repo6,$registry,new Serving_Health_Adapter_Factory($adapter6),null,null,null,$notify6);
     $service6->probe_and_record($asset(6,106),2200,false);
     $assert(1===$notify6->publication_calls,'Previously qualified publication failure did not enter notification ownership.');
+
+
+    // Readiness learning must measure only provider processing time from the
+    // durable upload-accepted timestamp to remote ready verification. A later
+    // public/finalizer delay must not inflate the recorded sample.
+    $adapter7=new Awvp_Health_Test_Adapter();
+    $adapter7->observation=\ArgentVideo\Serving_Viability::healthy();
+    $repo7=new Remote_Publication_Health_Repository(array());
+    $estimator7=new \ArgentVideo\Backend_Processing_Estimator();
+    $service7=new Remote_Publication_Health_Service($repo7,$registry,new Serving_Health_Adapter_Factory($adapter7),null,$estimator7);
+    $service7->probe_and_record($asset(7,107),3000,true,array(
+        'source_bytes'=>123456789,
+        'processing_started_at'=>2500,
+        'processing_verified_at'=>2800,
+    ));
+    $assert(array(array('backend_id'=>'pt1','bytes'=>123456789,'seconds'=>300,'observed_at'=>2800))===$estimator7->observations,'Readiness sample included finalizer/public-cutover delay instead of the accepted-to-ready interval.');
 
     fwrite(STDOUT,"Remote publication periodic-health ownership tests passed.\n");
 }

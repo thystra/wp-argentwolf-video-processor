@@ -68,6 +68,18 @@ awvp_release_assert(
     && 7776000 === \ArgentVideo\Backend_Processing_Estimator::MAX_SAMPLE_AGE,
     'Backend processing estimator history bounds changed unexpectedly.'
 );
+$readiness_bands = \ArgentVideo\Backend_Processing_Estimator::size_bands();
+awvp_release_assert(
+    5 === count($readiness_bands)
+    && 1 === ($readiness_bands[0]['min_bytes'] ?? 0)
+    && 67108864 === ($readiness_bands[0]['max_bytes'] ?? 0)
+    && 4294967296 === (($readiness_bands[4]['min_bytes'] ?? 0) - 1),
+    'Backend readiness display bands no longer match the estimator bucket contract.'
+);
+awvp_release_assert(
+    300 === \ArgentVideo\PeerTube_Publication_Authority_Repair::SEND_CATALOG_MAX_AGE,
+    'PeerTube send-time catalog freshness window changed unexpectedly.'
+);
 
 awvp_release_assert(false !== wp_next_scheduled(\ArgentVideo\Activator::REMOTE_HEALTH_HOOK), 'Hourly remote-publication health cron is not scheduled.');
 awvp_release_assert(false !== wp_next_scheduled(\ArgentVideo\Activator::BACKEND_MAINTENANCE_HOOK), 'Daily backend-maintenance cron is not scheduled.');
@@ -83,6 +95,10 @@ awvp_release_assert(
 awvp_release_assert(
     'argentwolf_video_processor_overview_resolve_upload' === \ArgentVideo\PeerTube_Overview_Admin::ACTION_RESOLVE_UPLOAD,
     'RC12 Overview indeterminate-upload resolution action is not packaged.'
+);
+awvp_release_assert(
+    'argentwolf_video_processor_overview_reset_readiness' === \ArgentVideo\PeerTube_Overview_Admin::ACTION_RESET_READINESS,
+    'RC12 Overview readiness-statistics reset action is not packaged.'
 );
 
 echo "AWVP_RC12_LIVEFIX_CONTRACT_PASS\n";

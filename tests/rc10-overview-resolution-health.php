@@ -10,7 +10,7 @@ namespace ArgentVideo {
         public const ATTACHMENT_ID='_attachment'; public const ORIGIN_POST_ID='_origin'; public const SERVING_AUTHORITY='_authority';
         public static function sanitize_positive_id(mixed $v):int{return is_numeric($v)&&((int)$v)>0?(int)$v:0;}
     }
-    final class Backend_Registry { public const LOCAL_ID='local'; }
+    final class Backend_Registry { public const LOCAL_ID='local'; public const PEERTUBE_TYPE='peertube'; public function __construct(public array $rows=array()){} public function all():array{return $this->rows;} }
     final class Backend_Identity { public static function sanitize(mixed $v):string{return is_string($v)&&1===preg_match('/^[a-z0-9][a-z0-9_-]{0,63}$/D',$v)?$v:'';} }
     final class Video_Serving_Authority { public static function sanitize(mixed $v):array{return is_array($v)&&isset($v['remote_asset_id'],$v['backend_id'])?$v:array();} }
     final class Video_Destination {
@@ -24,7 +24,7 @@ namespace ArgentVideo {
         public const PHASE_PROCESSING='processing'; public const PHASE_READY_VERIFIED='ready_verified';
     }
     final class PeerTube_Staged_Upload_Operation_Store {
-        public function __construct(public array $ops=array()){} public function get(string $id):?array{return $this->ops[$id]??null;}
+        public function __construct(public array $ops=array()){} public function get(string $id):?array{return $this->ops[$id]??null;} public function open_operations():?array{return $this->ops;}
     }
     final class PeerTube_Incomplete_Work_Reconciler {
         public function status(int $id,?int $now=null,bool $initialize=false):array{unset($id,$now,$initialize);return array('status'=>'none','pending'=>false,'eligible'=>false,'resumable'=>false,'origin_at'=>0,'expires_at'=>0);}
@@ -40,6 +40,13 @@ namespace ArgentVideo {
     }
     final class Video_Serving_Service {
         public function serving_candidate(int $id):array{unset($id);return array('kind'=>'local','backend_id'=>'local','priority'=>0,'url'=>'https://example.test/source.mp4','remote_asset_id'=>0,'health_status'=>'healthy');}
+    }
+
+
+    final class Backend_Processing_Estimator {
+        public array $reset_calls=array();
+        public function summaries(string $backend_id,int $now):array{unset($now);return array(array('bucket'=>1,'min_bytes'=>1,'max_bytes'=>67108864,'representative_bytes'=>33554432,'seconds'=>321,'confidence'=>'medium','basis'=>'recent_same_size_band','sample_count'=>3,'same_bucket_count'=>2));}
+        public function reset(?string $backend_id,int $now):bool{$this->reset_calls[]=array($backend_id,$now);return true;}
     }
 
     final class Remote_Republish_Service {
@@ -128,10 +135,35 @@ namespace {
     $assert(true===($rows[0]['republish_available']??false),'Operator-retired upload did not unlock explicit Republish.');
     $assert(str_contains((string)$rows[0]['status_label'],'ready to republish'),'Operator-retired upload status is not clear to the administrator.');
 
+
+    // Overview backend/readiness summaries are operational telemetry only.
+    // They count the current serving backend, healthy remote copies, active
+    // publication work, and current attention without modifying audit history.
+    $summaryOps=new PeerTube_Staged_Upload_Operation_Store(array('upload_active'=>array(
+        'phase'=>'processing','backend_id'=>'pt-primary','video_post_id'=>101,
+    )));
+    $summaryHealth=new Remote_Publication_Health_Repository(array(90=>array(
+        'remote_asset_id'=>90,'video_post_id'=>101,'backend_id'=>'pt-primary','status'=>'healthy','eligible'=>1,
+    )));
+    $registry=new \ArgentVideo\Backend_Registry(array(
+        'local'=>array('id'=>'local','type'=>'local','label'=>'Local AWVP','state'=>'active'),
+        'pt-primary'=>array('id'=>'pt-primary','type'=>'peertube','label'=>'Primary PeerTube','state'=>'active'),
+    ));
+    $estimator=new \ArgentVideo\Backend_Processing_Estimator();
+    $overviewSummary=new PeerTube_Overview_Admin($summaryOps,new PeerTube_Incomplete_Work_Reconciler(),new PeerTube_Event_Repository(),$summaryHealth,new Video_Serving_Service(),null,null,null,null,$estimator,$registry);
+    $summary=$overviewSummary->backend_summary(array(array('video_id'=>101,'backend_id'=>'pt-primary','needs_attention'=>true)),1000);
+    $byBackend=array(); foreach($summary as $row){$byBackend[$row['backend_id']]=$row;}
+    $assert(1===($byBackend['local']['serving_now']??0),'Backend summary did not count the current local serving source.');
+    $assert(1===($byBackend['pt-primary']['healthy']??0)&&1===($byBackend['pt-primary']['active']??0)&&1===($byBackend['pt-primary']['needs_attention']??0),'Backend summary did not count healthy/active/attention PeerTube state.');
+    $readiness=$overviewSummary->readiness_summary(1000);
+    $assert(1===count($readiness)&&'Primary PeerTube'===($readiness[0]['backend_label']??'')&&321===($readiness[0]['seconds']??0),'Overview readiness summary did not expose backend-labelled bucket estimates.');
+
     $source=(string)file_get_contents(dirname(__DIR__).'/includes/PeerTube_Overview_Admin.php');
     $assert(!str_contains($source,"esc_html_e('Review diagnostics'"),'Overview still emits the stale generic Review diagnostics action.');
     $assert(str_contains($source,"__('Mark reviewed'")&&str_contains($source,"__('Remove from list'")&&str_contains($source,'Reviewed items'),'Overview review/remove/collapsed-reviewed controls are missing.');
     $assert(str_contains($source,"__('Retire uncertain upload'")&&str_contains($source,'confirmed_no_remote')&&str_contains($source,'I checked PeerTube and confirmed that no matching remote video exists'),'Overview uncertain-upload confirmation boundary is missing.');
     $assert(str_contains($source,'upload_indeterminate_operator_abandoned')&&str_contains($source,'no remote request was sent'),'Overview uncertain-upload audit evidence is missing.');
+    $assert(str_contains($source,'Backend Summary')&&str_contains($source,'PeerTube Readiness Estimates')&&str_contains($source,'Reset all readiness statistics'),'Overview backend/readiness operational summaries or reset control are missing.');
+    $assert(str_contains($source,'does not delete publication events, task history, upload journals, remote assets, or serving-health records'),'Readiness reset copy does not preserve the audit-history boundary.');
     fwrite(STDOUT,"RC10 Overview resolution/health tests passed.\n");
 }
