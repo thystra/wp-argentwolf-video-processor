@@ -19,7 +19,8 @@ final class Remote_Republish_Service
         private readonly Video_Publishing_Defaults_Store $defaults,
         private readonly PeerTube_Publication_Catalog_Store $catalogs,
         private readonly PeerTube_Publication_Synchronizer $synchronizer,
-        private readonly ?PeerTube_Event_Repository $events=null
+        private readonly ?PeerTube_Event_Repository $events=null,
+        private readonly ?PeerTube_Staged_Upload_Operation_Store $operations=null
     ){}
 
 
@@ -55,6 +56,7 @@ final class Remote_Republish_Service
         $attachment_id=Video_Meta::sanitize_positive_id(get_post_meta($video_id,Video_Meta::ATTACHMENT_ID,true));
         $source=WordPress_Source_File::capture($attachment_id);
         if($attachment_id<1||array()===$source)return self::result(self::REFUSED,0,0,'The original WordPress Media Library video is not available for republishing.');
+        if($this->has_unresolved_indeterminate_upload($video_id))return self::result(self::REFUSED,0,0,'The prior upload outcome is still uncertain. Resolve that upload before starting a new publication.');
         $current_plan=PeerTube_Publication_Plan::sanitize(get_post_meta($video_id,Video_Meta::PEERTUBE_PUBLICATION_PLAN,true));
         $lifecycle=PeerTube_Publication_Lifecycle::sanitize(get_post_meta($video_id,Video_Meta::PEERTUBE_PUBLICATION_LIFECYCLE,true));
         if(array()===$current_plan||!PeerTube_Publication_Plan::ready_for_dispatch($current_plan)||array()===$lifecycle)return self::result(self::REFUSED,0,0,'The current reviewed publication state is incomplete.');
@@ -158,6 +160,17 @@ final class Remote_Republish_Service
         $settings=$this->defaults->get();
         return array()!==$catalog&&false===$catalog['stale']&&PeerTube_Origin::sanitize($descriptor['config']['origin']??null)===($catalog['origin']??null)
             &&is_array($settings)&&array()!==PeerTube_Publication_Manifest::build($plan,$catalog,$settings);
+    }
+
+    private function has_unresolved_indeterminate_upload(int $video_id): bool
+    {
+        if(null===$this->operations)return false;
+        $execution=PeerTube_Publication_Execution::sanitize(get_post_meta($video_id,Video_Meta::PEERTUBE_PUBLICATION_EXECUTION,true));
+        $operation_id=is_string($execution['operation_id']??null)?$execution['operation_id']:'';
+        if(''===$operation_id)return false;
+        $operation=$this->operations->get($operation_id);
+        return is_array($operation)
+            && PeerTube_Staged_Upload_State_Machine::PHASE_UPLOAD_INDETERMINATE===($operation['phase']??null);
     }
 
     private function active_peertube(array $d,string $id): bool{return $id===Backend_Identity::sanitize($d['id']??null)&&Backend_Registry::PEERTUBE_TYPE===($d['type']??null)&&'active'===($d['state']??null);}

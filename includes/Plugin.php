@@ -97,7 +97,8 @@ final class Plugin
             $video_publishing_defaults,
             $peertube_publication_catalogs,
             $peertube_publication_synchronizer,
-            $peertube_events
+            $peertube_events,
+            $peertube_upload_operations
         );
         $peertube_api_factory = static fn (string $origin): PeerTube_Api_Client =>
             new PeerTube_Api_Client(new PeerTube_Http_Client($origin));
@@ -286,6 +287,7 @@ final class Plugin
             add_action('admin_post_' . PeerTube_Overview_Admin::ACTION_UNREVIEW, static fn (): mixed => $peertube_overview->disposition_action('clear'));
             add_action('admin_post_' . PeerTube_Overview_Admin::ACTION_DISMISS, static fn (): mixed => $peertube_overview->disposition_action(Overview_Disposition_Store::DISMISSED));
             add_action('admin_post_' . PeerTube_Overview_Admin::ACTION_REPUBLISH, array($peertube_overview, 'republish_action'));
+            add_action('admin_post_' . PeerTube_Overview_Admin::ACTION_RESOLVE_UPLOAD, array($peertube_overview, 'resolve_indeterminate_upload_action'));
             add_action(
                 'admin_post_' . PeerTube_Connection_Admin::ACTION_START,
                 array($peertube_admin, 'start_action')

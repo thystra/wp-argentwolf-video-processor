@@ -340,18 +340,42 @@ $assert(
     'Indeterminate journal record permitted silent upload replay.'
 );
 
-// The same immutable source/destination intent is fenced even after a future
-// terminal state; operation IDs are not an idempotency escape hatch.
+// Only the unreconcilable init boundary can be retired by an explicit
+// administrator confirmation. The old record remains readable evidence but is
+// no longer open and no longer owns the duplicate-intent fence.
+$retired = $store->apply_event(
+    $record['operation_id'],
+    3,
+    Machine::EVENT_OPERATOR_ABANDON,
+    array('confirmed_no_remote' => true),
+    1004
+);
+$assert(Atomic_Option_Result::APPLIED === $retired->status(), 'Confirmed init-indeterminate retirement did not persist.');
+$retired_record = $store->get($record['operation_id']);
+$assert(is_array($retired_record) && Machine::PHASE_OPERATOR_ABANDONED === $retired_record['phase'], 'Retired upload evidence was not retained by get().');
+$assert(null === $store->find_by_intent_sha256((string) $retired_record['intent_sha256']), 'Retired upload still owned the active intent lookup fence.');
+$open = $store->open_operations();
+$assert(is_array($open) && 0 === count($open), 'Operator-retired upload remained in the open-operation projection.');
+
+// The explicit confirmation releases only this retired intent fence so a new
+// publication can create a fresh operation with the exact same retained source
+// and destination. Once that replacement exists, duplicate fencing resumes.
 Awvp_Upload_Store_Test_Entropy::queue_hex(str_repeat('4', 32));
-$duplicate = $store->begin($intent(), 7, 1010);
-$assert(Atomic_Option_Result::CONFLICT === $duplicate['result']->status(), 'Duplicate staged-upload intent was not fenced.');
+$replacement = $store->begin($intent(), 7, 1010);
+$assert(Atomic_Option_Result::APPLIED === $replacement['result']->status(), 'Operator-retired intent did not unlock a fresh staged-upload operation.');
+$assert(is_array($replacement['record']) && 'upload_' . str_repeat('4', 32) === $replacement['record']['operation_id'], 'Replacement upload operation identity drifted.');
+$assert(($replacement['record']['operation_id'] ?? '') === ($store->find_by_intent_sha256((string) $replacement['record']['intent_sha256'])['operation_id'] ?? ''), 'Intent lookup did not prefer the active replacement over retired evidence.');
+$assert(Machine::PHASE_OPERATOR_ABANDONED === ($store->get($record['operation_id'])['phase'] ?? ''), 'Creating a replacement mutated retired historical evidence.');
+Awvp_Upload_Store_Test_Entropy::queue_hex(str_repeat('6', 32));
+$duplicate = $store->begin($intent(), 7, 1011);
+$assert(Atomic_Option_Result::CONFLICT === $duplicate['result']->status(), 'Active replacement staged-upload intent was not fenced.');
 
 // A distinct source commitment is a distinct intent and may coexist.
 Awvp_Upload_Store_Test_Entropy::queue_hex(str_repeat('5', 32));
-$distinct = $store->begin($intent('peertube-primary', 'b'), 7, 1011);
+$distinct = $store->begin($intent('peertube-primary', 'b'), 7, 1012);
 $assert(Atomic_Option_Result::APPLIED === $distinct['result']->status(), 'Distinct staged-upload intent was incorrectly blocked.');
 $open = $store->open_operations();
-$assert(is_array($open) && 2 === count($open), 'Open upload journal projection drifted.');
+$assert(is_array($open) && 2 === count($open), 'Open upload journal projection drifted after retirement/replacement.');
 
 // Unsupported autoload state is fail-closed for both reads and writes.
 $GLOBALS['wpdb']->rows[$option]['autoload'] = 'yes';

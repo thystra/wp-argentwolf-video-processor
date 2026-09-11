@@ -33,6 +33,7 @@ final class PeerTube_Staged_Upload_State_Machine
     public const PHASE_UPLOAD_IN_FLIGHT = 'upload_in_flight';
     public const PHASE_RETRY_WAIT = 'retry_wait';
     public const PHASE_UPLOAD_INDETERMINATE = 'upload_indeterminate';
+    public const PHASE_OPERATOR_ABANDONED = 'operator_abandoned';
     public const PHASE_REMOTE_CREATED = 'remote_created';
     public const PHASE_REMOTE_COMMITTED = 'remote_committed';
     public const PHASE_PROCESSING = 'processing';
@@ -50,6 +51,7 @@ final class PeerTube_Staged_Upload_State_Machine
     public const EVENT_RECONCILE_OFFSET = 'reconcile_offset';
     public const EVENT_REMOTE_CREATED = 'remote_created';
     public const EVENT_RECONCILE_REMOTE_FOUND = 'reconcile_remote_found';
+    public const EVENT_OPERATOR_ABANDON = 'operator_abandon';
     public const EVENT_COMMIT_REMOTE_ASSET = 'commit_remote_asset';
     public const EVENT_PROCESSING_OBSERVED = 'processing_observed';
     public const EVENT_RECONCILE_WAIT = 'reconcile_wait';
@@ -215,6 +217,27 @@ final class PeerTube_Staged_Upload_State_Machine
             }
             $next['phase'] = self::PHASE_UPLOAD_INDETERMINATE;
             $next['last_error'] = self::error($payload['code'], $payload['http_status'], 0);
+        } elseif (self::EVENT_OPERATOR_ABANDON === $event) {
+            // Only an initialization request whose outcome cannot be
+            // reconciled from a resumable-session identifier may be retired by
+            // an operator. Chunk requests retain their resumable reconciliation
+            // path and may never be abandoned to make a blind replay possible.
+            if (self::PHASE_UPLOAD_INDETERMINATE !== $phase
+                || self::REQUEST_INIT !== $record['request_kind']
+                || '' !== $record['upload_session_id']
+                || 0 !== $record['confirmed_bytes']
+                || self::empty_remote_identity() !== $record['remote_identity']
+                || 0 !== $record['remote_asset_id']
+                || ! self::has_exact_keys($payload, array('confirmed_no_remote'))
+                || true !== ($payload['confirmed_no_remote'] ?? null)) {
+                return null;
+            }
+            $next['phase'] = self::PHASE_OPERATOR_ABANDONED;
+            $next['last_error'] = self::error(
+                'peertube.upload.operator_abandoned',
+                (int) $record['last_error']['http_status'],
+                0
+            );
         } elseif (self::EVENT_RECONCILE_OFFSET === $event) {
             $confirmed = self::nonnegative_int($payload['confirmed_bytes'] ?? null);
             $request_end = $record['request_start'] + $record['request_bytes'];
@@ -361,7 +384,7 @@ final class PeerTube_Staged_Upload_State_Machine
     /** @return list<string> */
     private static function phases(): array
     {
-        return array(self::PHASE_READY,self::PHASE_UPLOAD_IN_FLIGHT,self::PHASE_RETRY_WAIT,self::PHASE_UPLOAD_INDETERMINATE,self::PHASE_REMOTE_CREATED,self::PHASE_REMOTE_COMMITTED,self::PHASE_PROCESSING,self::PHASE_READY_VERIFIED,self::PHASE_CLEANUP_PENDING,self::PHASE_COMPLETE,self::PHASE_FAILED);
+        return array(self::PHASE_READY,self::PHASE_UPLOAD_IN_FLIGHT,self::PHASE_RETRY_WAIT,self::PHASE_UPLOAD_INDETERMINATE,self::PHASE_OPERATOR_ABANDONED,self::PHASE_REMOTE_CREATED,self::PHASE_REMOTE_COMMITTED,self::PHASE_PROCESSING,self::PHASE_READY_VERIFIED,self::PHASE_CLEANUP_PENDING,self::PHASE_COMPLETE,self::PHASE_FAILED);
     }
 
     /** @param array<string,mixed> $record */
@@ -400,6 +423,14 @@ final class PeerTube_Staged_Upload_State_Machine
             return self::PHASE_UPLOAD_IN_FLIGHT === $phase
                 ? $no_error
                 : ('peertube.upload.indeterminate' === $record['last_error']['code'] && 0 === $record['last_error']['retry_after']);
+        }
+        if (self::PHASE_OPERATOR_ABANDONED === $phase) {
+            return $record['upload_attempt_no'] > 0 && $has_attempt && $no_remote
+                && self::REQUEST_INIT === $record['request_kind']
+                && '' === $record['upload_session_id'] && 0 === $record['confirmed_bytes']
+                && 0 === $record['request_start'] && 0 === $record['request_bytes']
+                && 'peertube.upload.operator_abandoned' === $record['last_error']['code']
+                && 0 === $record['last_error']['retry_after'];
         }
 
         if ($record['upload_attempt_no'] < 1 || ! $has_attempt || ! $has_remote
@@ -494,7 +525,7 @@ final class PeerTube_Staged_Upload_State_Machine
             || ! is_string($error['code'] ?? null) || ! is_int($error['http_status'] ?? null) || ! is_int($error['retry_after'] ?? null)
             || $error['http_status'] < 0 || $error['http_status'] > 599 || $error['retry_after'] < 0 || $error['retry_after'] > 86400) return false;
         if (self::empty_error() === $error) return true;
-        return in_array($error['code'], array('peertube.upload.request_not_sent','peertube.upload.rate_limited','peertube.upload.source_changed','peertube.upload.backend_unavailable','peertube.upload.refresh_required','peertube.upload.indeterminate','peertube.upload.remote_failed','peertube.remote.processing_wait','peertube.remote.reconcile_wait','peertube.remote.processing_failed','peertube.remote.missing'), true);
+        return in_array($error['code'], array('peertube.upload.request_not_sent','peertube.upload.rate_limited','peertube.upload.source_changed','peertube.upload.backend_unavailable','peertube.upload.refresh_required','peertube.upload.indeterminate','peertube.upload.operator_abandoned','peertube.upload.remote_failed','peertube.remote.processing_wait','peertube.remote.reconcile_wait','peertube.remote.processing_failed','peertube.remote.missing'), true);
     }
 
     private static function valid_safe_retry_error(mixed $code, mixed $http_status, mixed $retry_after, string $request_kind): bool

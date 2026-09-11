@@ -27,6 +27,24 @@ $assert(is_array($init)&&Machine::PHASE_UPLOAD_IN_FLIGHT===$init['phase']&&'init
 $session=Machine::apply($init,Machine::EVENT_UPLOAD_SESSION_CREATED,array('attempt_capability'=>$cap1,'session_id'=>'abcd1234efgh5678'),1002);
 $assert(is_array($session)&&Machine::PHASE_READY===$session['phase']&&'abcd1234efgh5678'===$session['upload_session_id'],'Session commit failed.');
 
+
+// An init request whose response is indeterminate and has no resumable
+// session/remote identity may be retired only after an explicit operator
+// confirmation that no matching remote video exists. This is the one safe
+// boundary that can release the durable duplicate-intent fence for a later
+// explicit Republish.
+$init_uncertain=$make('upload_88888888888888888888888888888888');
+$init_uncertain=Machine::apply($init_uncertain,Machine::EVENT_CLAIM_UPLOAD,array('attempt_capability'=>$cap1,'request_kind'=>'init','request_start'=>0,'request_bytes'=>0),1001);
+$init_uncertain=Machine::apply($init_uncertain,Machine::EVENT_UPLOAD_INDETERMINATE,array('attempt_capability'=>$cap1,'code'=>'peertube.upload.indeterminate','http_status'=>201),1002);
+$assert(is_array($init_uncertain)&&Machine::PHASE_UPLOAD_INDETERMINATE===$init_uncertain['phase'],'Indeterminate init request was not fenced.');
+$assert(null===Machine::apply($init_uncertain,Machine::EVENT_OPERATOR_ABANDON,array('confirmed_no_remote'=>false),1003),'Init indeterminate accepted a negative operator confirmation.');
+$assert(null===Machine::apply($init_uncertain,Machine::EVENT_OPERATOR_ABANDON,array(),1003),'Init indeterminate accepted a missing operator confirmation.');
+$abandoned=Machine::apply($init_uncertain,Machine::EVENT_OPERATOR_ABANDON,array('confirmed_no_remote'=>true),1003);
+$assert(is_array($abandoned)&&Machine::PHASE_OPERATOR_ABANDONED===$abandoned['phase'],'Explicit operator retirement did not enter the terminal abandoned phase.');
+$assert('peertube.upload.operator_abandoned'===($abandoned['last_error']['code']??'')&&201===($abandoned['last_error']['http_status']??0),'Operator retirement did not preserve the original HTTP boundary evidence.');
+$assert(Machine::valid($abandoned),'Operator-retired init record is not a valid durable state-machine record.');
+$assert(null===Machine::apply($abandoned,Machine::EVENT_CLAIM_UPLOAD,array('attempt_capability'=>str_repeat('8',64),'request_kind'=>'init','request_start'=>0,'request_bytes'=>0),1004),'Operator-retired operation permitted silent replay.');
+
 // R45 policy-sized streamed claims are no longer restricted to the historical
 // 1 MiB buffered transport bound. The state machine journals the exact chosen
 // positive range; policy selection remains an executor responsibility.
@@ -47,6 +65,8 @@ $assert(is_array($final),'Final chunk claim failed.');
 $uncertain=Machine::apply($final,Machine::EVENT_UPLOAD_INDETERMINATE,array('attempt_capability'=>$cap3,'code'=>'peertube.upload.indeterminate','http_status'=>0),1006);
 $assert(is_array($uncertain)&&Machine::PHASE_UPLOAD_INDETERMINATE===$uncertain['phase'],'Uncertain final chunk not fenced.');
 $assert(null===Machine::apply($uncertain,Machine::EVENT_CLAIM_UPLOAD,array('attempt_capability'=>str_repeat('4',64),'request_kind'=>'chunk','request_start'=>Machine::MAX_CHUNK_BYTES,'request_bytes'=>$remaining),1007),'Uncertain final chunk could replay silently.');
+
+$assert(null===Machine::apply($uncertain,Machine::EVENT_OPERATOR_ABANDON,array('confirmed_no_remote'=>true),1007),'Resumable chunk indeterminate was incorrectly allowed to bypass reconciliation.');
 
 // A zero-byte resume probe can prove that the uncertain final chunk was not
 // received, after which a new explicit request may claim it again.

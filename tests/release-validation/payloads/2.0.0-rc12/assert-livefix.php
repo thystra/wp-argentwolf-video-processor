@@ -75,4 +75,14 @@ awvp_release_assert(false !== wp_next_scheduled(\ArgentVideo\Activator::BACKEND_
 $republish_meta = registered_meta_key_exists('post', \ArgentVideo\Video_Meta::REMOTE_REPUBLISH_REQUEST, \ArgentVideo\Video_Post_Type::POST_TYPE);
 awvp_release_assert($republish_meta, 'Durable remote-republish request meta is not registered for AWVP Video posts.');
 
+awvp_release_assert(
+    'operator_abandoned' === \ArgentVideo\PeerTube_Staged_Upload_State_Machine::PHASE_OPERATOR_ABANDONED
+    && 'operator_abandon' === \ArgentVideo\PeerTube_Staged_Upload_State_Machine::EVENT_OPERATOR_ABANDON,
+    'RC12 safe indeterminate-upload operator-retirement state contract is not packaged.'
+);
+awvp_release_assert(
+    'argentwolf_video_processor_overview_resolve_upload' === \ArgentVideo\PeerTube_Overview_Admin::ACTION_RESOLVE_UPLOAD,
+    'RC12 Overview indeterminate-upload resolution action is not packaged.'
+);
+
 echo "AWVP_RC12_LIVEFIX_CONTRACT_PASS\n";

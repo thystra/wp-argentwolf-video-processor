@@ -493,6 +493,12 @@ leaving the local authority writer free to supersede the generation.
 
 The AWVP dynamic block may render the verified PeerTube embed only through `Video_Serving_Service`; otherwise it must call the existing local `wp_video_shortcode()` path. Rendering performs local metadata/database reads only and never provider HTTP. The detached cutover writer is fed by R46.5b's positively verified publication state and stores only non-secret evidence.
 
+Periodic remote-publication health is post-cutover monitoring, not a substitute for first-publication execution. A remote asset enters periodic broken-publication monitoring only after the exact asset has durable prior public-serving qualification (`last_healthy_at`) or exact historical serving authority from an older installation. Before that boundary, private/processing/failure observations remain publication/finalizer state and must not generate periodic outage presentation or publication-health email alerts.
+
+### Indeterminate upload operator-resolution boundary
+
+Do not turn `upload_indeterminate` into an ordinary retry/Republish path. Chunk indeterminacy with a resumable session must stay fenced until offset or exact remote identity reconciliation proves what PeerTube accepted. The only operator-retirable case is an initialization request with no session, zero confirmed bytes, and no remote identity/asset. The administrator must independently inspect the selected PeerTube server and explicitly confirm that no matching remote video exists. That confirmation may terminally retire the old operation, preserving its journal/audit record while releasing only its duplicate-intent fence; it performs no provider request. A later explicit Republish may then create a new generation and fresh upload operation.
+
 ### R46.7 migration planner development rule
 
 Migration planning is an administrator-only, local-state operation. Use `Tools > AWVP Video Migration`; refresh PeerTube publication choices separately if the target channel/catalog is unavailable. A migration plan is intentionally inert and does not trigger the R46.5 executor. Treat `ready` as an editorial planning state only; remote execution remains R46.8.

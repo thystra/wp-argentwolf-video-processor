@@ -86,6 +86,22 @@ final class PeerTube_Publication_Lifecycle {
     }
 }
 
+
+final class PeerTube_Publication_Execution {
+    public static function sanitize(mixed $value): array { return is_array($value) ? $value : array(); }
+}
+
+final class PeerTube_Staged_Upload_State_Machine {
+    public const PHASE_UPLOAD_INDETERMINATE = 'upload_indeterminate';
+    public const PHASE_OPERATOR_ABANDONED = 'operator_abandoned';
+}
+
+final class PeerTube_Staged_Upload_Operation_Store {
+    /** @param array<string,array<string,mixed>> $rows */
+    public function __construct(public array $rows = array()) {}
+    public function get(string $operation_id): ?array { return $this->rows[$operation_id] ?? null; }
+}
+
 final class PeerTube_Publication_Catalog {
     public static function sanitize(mixed $value): array {
         return is_array($value) && isset($value['backend_id'], $value['origin'], $value['stale']) ? $value : array();
@@ -181,6 +197,8 @@ use ArgentVideo\Backend_Registry;
 use ArgentVideo\PeerTube_Event_Repository;
 use ArgentVideo\PeerTube_Publication_Catalog_Store;
 use ArgentVideo\PeerTube_Publication_Synchronizer;
+use ArgentVideo\PeerTube_Staged_Upload_Operation_Store;
+use ArgentVideo\PeerTube_Staged_Upload_State_Machine;
 use ArgentVideo\Remote_Republish_Request;
 use ArgentVideo\Remote_Republish_Service;
 use ArgentVideo\Task_Repository;
@@ -247,6 +265,23 @@ $reset = static function (array $initial_plan): void {
     $GLOBALS['awvp_republish_ids'] = array(100);
     $GLOBALS['awvp_republish_source'] = array('relative_path'=>'2026/09/source.mp4','bytes'=>123456789,'device'=>1,'inode'=>2,'mtime'=>3,'ctime'=>4);
 };
+
+// An unresolved consequential upload outcome is a hard service-level fence,
+// not merely a hidden Overview button. After an administrator-retired init
+// uncertainty, the same explicit Republish path is allowed to proceed.
+$reset($plan('pt1','2'));
+$sync_guard = new PeerTube_Publication_Synchronizer();
+$ops_guard = new PeerTube_Staged_Upload_Operation_Store(array(
+    'old-upload'=>array('phase'=>PeerTube_Staged_Upload_State_Machine::PHASE_UPLOAD_INDETERMINATE),
+));
+$svc_guard = new Remote_Republish_Service($registry,$defaults,$catalogs,$sync_guard,null,$ops_guard);
+$before_guard = $GLOBALS['awvp_republish_meta'][100];
+$guarded = $svc_guard->request(100,'pt1',42,1950);
+$assert(Remote_Republish_Service::REFUSED === $guarded['status'] && array() === $sync_guard->calls, 'Unresolved upload indeterminate did not block direct republish service use.');
+$assert($before_guard === $GLOBALS['awvp_republish_meta'][100], 'Indeterminate republish refusal mutated publication state.');
+$ops_guard->rows['old-upload']['phase'] = PeerTube_Staged_Upload_State_Machine::PHASE_OPERATOR_ABANDONED;
+$after_retirement = $svc_guard->request(100,'pt1',42,1951);
+$assert(Remote_Republish_Service::APPLIED === $after_retirement['status'] && 5 === $after_retirement['generation'] && 1 === count($sync_guard->calls), 'Operator-retired upload did not unlock explicit republish.');
 
 // Same-backend republish creates exactly one new generation/task and resets only current execution.
 $reset($plan('pt1','2'));

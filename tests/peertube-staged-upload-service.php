@@ -321,6 +321,30 @@ awvp_coordinator_assert(1 === $whole_api->init_posts && 1 === $whole_api->chunk_
 $whole_call = $whole_api->calls[array_key_last($whole_api->calls)];
 awvp_coordinator_assert(strlen($whole_bytes) === ($whole_call['chunk_bytes'] ?? 0), 'R45 zero policy did not stream the complete remaining source.');
 
+// An uncertain initialization has no resumable session/offset to reconcile.
+// It remains hard-fenced until an administrator has independently checked the
+// PeerTube server and the state machine records explicit retirement. Retirement
+// itself performs no remote I/O; a later explicit begin creates a fresh
+// operation rather than resurrecting the uncertain one.
+$backend = awvp_r43_active_backend();
+$source_path = awvp_r43_source('init-uncertain.mp4', 'init-uncertain');
+$api = new Awvp_R43_Fake_Api($backend['descriptor']['config']['origin']);
+$api->mode = 'init_throw';
+$bundle = awvp_r43_service($api);
+$begun = $bundle['service']->begin(77, $backend['backend_id'], $source_path, 'R43 uncertain init', 7, 5750);
+$operation_id = $begun['operation_id'];
+$uncertain_init = $bundle['service']->advance($operation_id, 5751);
+awvp_coordinator_assert(PeerTube_Staged_Upload_Service::STATUS_INDETERMINATE === $uncertain_init['status'] && Machine::PHASE_UPLOAD_INDETERMINATE === $uncertain_init['phase'], 'R43 uncertain init did not fail closed.');
+$stored_init = $bundle['store']->get($operation_id);
+awvp_coordinator_assert(is_array($stored_init) && Machine::REQUEST_INIT === ($stored_init['request_kind'] ?? ''), 'R43 uncertain init lost its exact request boundary.');
+$retired = $bundle['store']->apply_event($operation_id,(int)$stored_init['record_revision'],Machine::EVENT_OPERATOR_ABANDON,array('confirmed_no_remote'=>true),5752);
+awvp_coordinator_assert(\ArgentVideo\Atomic_Option_Result::APPLIED === $retired->status(), 'R43 confirmed uncertain-init retirement did not persist.');
+$api->mode = 'success';
+$replacement = $bundle['service']->begin(77, $backend['backend_id'], $source_path, 'R43 uncertain init', 7, 5753);
+awvp_coordinator_assert(PeerTube_Staged_Upload_Service::STATUS_ADVANCED === $replacement['status'] && Machine::PHASE_READY === $replacement['phase'], 'R43 retired uncertain init did not unlock a fresh explicit upload operation.');
+awvp_coordinator_assert($operation_id !== ($replacement['operation_id'] ?? ''), 'R43 retirement resurrected the uncertain operation instead of creating a fresh one.');
+awvp_coordinator_assert(1 === $api->init_posts, 'R43 retirement or replacement begin performed unexpected remote I/O.');
+
 // An uncertain byte-bearing PUT is fenced. Repeated advance calls never replay
 // it; only a later explicit zero-byte reconciliation can make retry possible.
 $backend = awvp_r43_active_backend();

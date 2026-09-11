@@ -5,6 +5,8 @@
 - Add a local-only safe-finalizer recovery boundary for `mutation_not_sent`: Overview can expose **Retry publication**, requeueing the exact failed finalizer/task generation without re-uploading the source or manufacturing a new publication generation.
 - Fix durable operator-event `created_at` writes by supplying the complete `$wpdb->insert()` format map; historical zero timestamps are left untouched rather than guessed.
 - Remove the development-only `R46.3c` label from the editor dispatch-timing help copy.
+- Gate periodic broken-publication health checks, Overview incidents, and publication-health email ownership behind durable evidence that the remote asset has previously passed public-serving qualification (or exact pre-health serving authority). Initial private/processing publication state remains owned by the publication/finalizer workflow rather than being misreported as an outage.
+- Add an explicit administrator resolution boundary for unreconcilable `upload_indeterminate` initialization requests: ordinary Republish remains blocked until the administrator checks PeerTube and confirms no matching remote video exists; retirement preserves the old journal/audit evidence, never sends a remote request, releases only that retired intent fence, and then allows an explicit new-generation Republish. Resumable chunk uncertainties remain reconciliation-only and cannot be retired this way.
 
 <!-- File: CHANGELOG.md -->
 # Changelog

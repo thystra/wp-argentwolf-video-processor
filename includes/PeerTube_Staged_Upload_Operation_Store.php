@@ -77,6 +77,15 @@ final class PeerTube_Staged_Upload_Operation_Store
         }
 
         foreach ($journal['operations'] as $stored) {
+            // An administrator may retire only an unreconcilable init-boundary
+            // indeterminate operation after explicitly confirming that no
+            // matching remote video exists. Preserve that record as evidence,
+            // but release its intent fence so an explicit Republish can create
+            // a new upload operation. Every other historical operation keeps
+            // the duplicate-creation fence intact.
+            if (PeerTube_Staged_Upload_State_Machine::PHASE_OPERATOR_ABANDONED === ($stored['phase'] ?? null)) {
+                continue;
+            }
             if (hash_equals($stored['intent_sha256'], $record['intent_sha256'])) {
                 return self::begin_result(
                     $record,
@@ -152,6 +161,9 @@ final class PeerTube_Staged_Upload_Operation_Store
             return null;
         }
         foreach ($journal['operations'] as $record) {
+            if (PeerTube_Staged_Upload_State_Machine::PHASE_OPERATOR_ABANDONED === ($record['phase'] ?? null)) {
+                continue;
+            }
             if (hash_equals($intent_sha256, (string) ($record['intent_sha256'] ?? ''))) {
                 return $record;
             }
@@ -203,8 +215,14 @@ final class PeerTube_Staged_Upload_Operation_Store
 
         return array_filter(
             $journal['operations'],
-            static fn (array $record): bool =>
-                PeerTube_Staged_Upload_State_Machine::PHASE_COMPLETE !== $record['phase']
+            static fn (array $record): bool => ! in_array(
+                $record['phase'],
+                array(
+                    PeerTube_Staged_Upload_State_Machine::PHASE_COMPLETE,
+                    PeerTube_Staged_Upload_State_Machine::PHASE_OPERATOR_ABANDONED,
+                ),
+                true
+            )
         );
     }
 
@@ -256,11 +274,18 @@ final class PeerTube_Staged_Upload_Operation_Store
                 || '' === self::operation_id($operation_id)
                 || ! PeerTube_Staged_Upload_State_Machine::valid($record)
                 || $operation_id !== $record['operation_id']
-                || isset($intent_hashes[$record['intent_sha256']])
             ) {
                 return false;
             }
-            $intent_hashes[$record['intent_sha256']] = true;
+            // Operator-retired init uncertainties remain immutable evidence but
+            // no longer participate in the active duplicate-intent fence. At
+            // most one non-retired operation may still own a given intent.
+            if (PeerTube_Staged_Upload_State_Machine::PHASE_OPERATOR_ABANDONED !== ($record['phase'] ?? null)) {
+                if (isset($intent_hashes[$record['intent_sha256']])) {
+                    return false;
+                }
+                $intent_hashes[$record['intent_sha256']] = true;
+            }
         }
 
         return strlen(serialize($journal)) <= self::MAX_JOURNAL_BYTES;

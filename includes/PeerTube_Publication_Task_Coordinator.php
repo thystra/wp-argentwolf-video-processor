@@ -184,6 +184,13 @@ final class PeerTube_Publication_Task_Coordinator
         if (PeerTube_Staged_Upload_State_Machine::PHASE_UPLOAD_INDETERMINATE === $operation['phase']) {
             return $this->fail($task_id,self::TASK_FINALIZE,$lock,'PeerTube upload is waiting at an explicit intervention boundary; publication finalization will not poll or replay it automatically.',$now,'upload_intervention_required');
         }
+        if (PeerTube_Staged_Upload_State_Machine::PHASE_OPERATOR_ABANDONED === $operation['phase']) {
+            // The administrator has explicitly retired this unreconcilable
+            // initialization after confirming that no matching remote video
+            // exists. This generation is intentionally finished locally; a
+            // later explicit Republish owns any new remote publication.
+            return $this->complete($task_id,self::TASK_FINALIZE,$lock,$now,'upload_operator_abandoned');
+        }
         if (PeerTube_Staged_Upload_State_Machine::PHASE_FAILED === $operation['phase']) return $this->fail($task_id,self::TASK_FINALIZE,$lock,'PeerTube upload/reconciliation failed before publication finalization.',$now,'upload_failed');
         if (PeerTube_Staged_Upload_State_Machine::PHASE_READY_VERIFIED !== $operation['phase']) {
             return $this->reschedule($task_id,self::TASK_FINALIZE,$lock,$now+60,'Waiting for the private PeerTube copy to become ready and verified.',$now);

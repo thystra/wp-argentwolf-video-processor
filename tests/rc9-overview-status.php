@@ -23,8 +23,8 @@ namespace ArgentVideo {
     }
     final class PeerTube_Publication_Execution { public static function sanitize(mixed $v):array{return is_array($v)?$v:array();} }
     final class PeerTube_Staged_Upload_State_Machine {
-        public const PHASE_UPLOAD_INDETERMINATE='upload_indeterminate'; public const PHASE_FAILED='failed';
-        public const PHASE_COMPLETE='complete'; public const PHASE_PROCESSING='processing'; public const PHASE_READY_VERIFIED='ready_verified';
+        public const PHASE_UPLOAD_INDETERMINATE='upload_indeterminate'; public const PHASE_OPERATOR_ABANDONED='operator_abandoned'; public const PHASE_FAILED='failed';
+        public const PHASE_COMPLETE='complete'; public const PHASE_PROCESSING='processing'; public const PHASE_READY_VERIFIED='ready_verified'; public const REQUEST_INIT='init';
     }
     final class PeerTube_Staged_Upload_Operation_Store {
         public function __construct(private array $ops=array()){}

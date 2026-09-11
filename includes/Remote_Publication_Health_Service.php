@@ -31,12 +31,61 @@ final class Remote_Publication_Health_Service
         }
         $processed = 0;
         foreach ($this->health->due_publications($now, self::BATCH) as $asset) {
+            // Periodic broken-publication monitoring is only for a remote
+            // publication that has already proven it can serve visitors. A
+            // newly uploaded asset may intentionally remain private while the
+            // publication/finalizer state machine is still working; that
+            // pre-cutover state must never create an outage incident or email.
+            if (! $this->periodic_monitor_eligible($asset)) {
+                continue;
+            }
             $result = $this->probe_and_record($asset, $now);
             if (true === ($result['recorded'] ?? false)) {
                 ++$processed;
             }
         }
         return $processed;
+    }
+
+    /** @param array<string,mixed> $asset */
+    private function periodic_monitor_eligible(array $asset): bool
+    {
+        return $this->previously_publicly_qualified($asset, $this->health->find((int) ($asset['id'] ?? 0)));
+    }
+
+    /** @param array<string,mixed> $asset @param array<string,mixed>|null $health */
+    private function previously_publicly_qualified(array $asset, ?array $health = null): bool
+    {
+        $asset_id = (int) ($asset['id'] ?? 0);
+        $video_id = (int) ($asset['video_post_id'] ?? 0);
+        $backend_id = Backend_Identity::sanitize((string) ($asset['backend_id'] ?? ''));
+        if ($asset_id < 1 || $video_id < 1 || '' === $backend_id || Backend_Registry::LOCAL_ID === $backend_id) {
+            return false;
+        }
+
+        // last_healthy_at is the durable "was publicly qualified" marker. It
+        // survives later failure/failover so a formerly serving publication
+        // continues to be monitored even when it is no longer the active
+        // serving candidate.
+        if (is_array($health)
+            && $video_id === (int) ($health['video_post_id'] ?? 0)
+            && $backend_id === (string) ($health['backend_id'] ?? '')
+            && is_string($health['last_healthy_at'] ?? null)
+            && '' !== (string) $health['last_healthy_at']) {
+            return true;
+        }
+
+        // RC10/early-RC11 installations may already have durable serving
+        // authority without a publication-health row. Treat that exact
+        // authority as equivalent historical cutover evidence so upgrades
+        // enter periodic monitoring without manufacturing first-publication
+        // health for unrelated ready/private assets.
+        $authority = Video_Serving_Authority::sanitize(
+            get_post_meta($video_id, Video_Meta::SERVING_AUTHORITY, true)
+        );
+        return array() !== $authority
+            && $asset_id === (int) ($authority['remote_asset_id'] ?? 0)
+            && $backend_id === (string) ($authority['backend_id'] ?? '');
     }
 
     /**
@@ -80,6 +129,7 @@ final class Remote_Publication_Health_Service
 
         $context = self::processing_context($processing_context, $now);
         $before = $this->health->find($asset_id);
+        $previously_qualified = $this->previously_publicly_qualified($asset, $before);
         $descriptor = $this->backends->get_fresh($backend_id);
         $adapter = is_array($descriptor) ? $this->adapters->resolve((string) ($descriptor['type'] ?? '')) : null;
         if (! is_array($descriptor) || null === $adapter) {
@@ -150,7 +200,8 @@ final class Remote_Publication_Health_Service
                     }
                 }
             }
-            if (null !== $this->notifications) {
+            if (null !== $this->notifications
+                && ($previously_qualified || Serving_Viability::HEALTHY === $observation->status())) {
                 $after_health = $this->health->find($asset_id);
                 if (is_array($after_health)) {
                     $this->notifications->publication_observed($asset, $after_health, $now, $backend_outage);

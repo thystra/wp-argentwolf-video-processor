@@ -58,6 +58,7 @@ jobs:
           php tests/backend-serving-priority.php
           php tests/serving-viability.php
           php tests/remote-publication-health.php
+          php tests/remote-publication-health-service.php
           php tests/peertube-publication-health.php
           php tests/remote-health-notification-policy.php
           php tests/remote-health-notification-state.php
