@@ -27,7 +27,8 @@ namespace ArgentVideo {
         public function __construct(public array $ops=array()){} public function get(string $id):?array{return $this->ops[$id]??null;} public function open_operations():?array{return $this->ops;}
     }
     final class PeerTube_Incomplete_Work_Reconciler {
-        public function status(int $id,?int $now=null,bool $initialize=false):array{unset($id,$now,$initialize);return array('status'=>'none','pending'=>false,'eligible'=>false,'resumable'=>false,'origin_at'=>0,'expires_at'=>0);}
+        public function __construct(public array $statuses=array()){}
+        public function status(int $id,?int $now=null,bool $initialize=false):array{unset($now,$initialize);return $this->statuses[$id]??array('status'=>'none','pending'=>false,'eligible'=>false,'resumable'=>false,'origin_at'=>0,'expires_at'=>0);}
         public function resume(int $id,int $now):bool{unset($id,$now);return true;}
     }
     final class PeerTube_Event_Repository { public function recent(int $video_id,int $limit=20):array{unset($video_id,$limit);return array();} }
@@ -81,6 +82,16 @@ namespace {
     $store=new PeerTube_Staged_Upload_Operation_Store(array($op=>array('operation_id'=>$op,'phase'=>'ready_verified','record_revision'=>8,'source'=>array('bytes'=>100),'confirmed_bytes'=>100)));
     $overview=new PeerTube_Overview_Admin($store,new PeerTube_Incomplete_Work_Reconciler(),new PeerTube_Event_Repository(),new Remote_Publication_Health_Repository(),new Video_Serving_Service());
     $assert(array()===$overview->rows(1000),'A fully verified/settled ready_verified publication remained stale in Needs Attention.');
+
+    $missingRecovery=new PeerTube_Incomplete_Work_Reconciler(array(101=>array('status'=>'finalizer_missing','pending'=>true,'eligible'=>true,'resumable'=>false,'origin_at'=>900,'expires_at'=>0,'anchor_post_id'=>10)));
+    $overviewMissing=new PeerTube_Overview_Admin($store,$missingRecovery,new PeerTube_Event_Repository(),new Remote_Publication_Health_Repository(),new Video_Serving_Service());
+    $missingRows=$overviewMissing->rows(1000);
+    $assert(1===count($missingRows)&&true===($missingRows[0]['needs_attention']??false)&&str_contains((string)($missingRows[0]['status_label']??''),'restoring'),'Ready remote with a missing current-generation finalizer disappeared from Overview.');
+
+    $terminalRecovery=new PeerTube_Incomplete_Work_Reconciler(array(101=>array('status'=>'finalizer_terminal','pending'=>true,'eligible'=>false,'resumable'=>false,'origin_at'=>900,'expires_at'=>0,'anchor_post_id'=>10)));
+    $overviewTerminal=new PeerTube_Overview_Admin($store,$terminalRecovery,new PeerTube_Event_Repository(),new Remote_Publication_Health_Repository(),new Video_Serving_Service());
+    $terminalRows=$overviewTerminal->rows(1000);
+    $assert(1===count($terminalRows)&&true===($terminalRows[0]['needs_attention']??false)&&str_contains((string)($terminalRows[0]['status_label']??''),'stopped before serving'),'Terminal finalization gap disappeared from Overview.');
 
     $health=new Remote_Publication_Health_Repository(array(55=>array('remote_asset_id'=>55,'video_post_id'=>101,'backend_id'=>'pt-primary','status'=>'missing','eligible'=>0,'failure_since'=>'2026-09-10 20:00:00','last_healthy_at'=>'2026-09-10 19:00:00','http_status'=>404,'message'=>'The published URL returned 404.')));
     $overview=new PeerTube_Overview_Admin($store,new PeerTube_Incomplete_Work_Reconciler(),new PeerTube_Event_Repository(),$health,new Video_Serving_Service());

@@ -1,3 +1,12 @@
+## 2.0.0-rc13.1 - 2026-09-11
+
+- Preserve canonical RC12 candidate #4 as immutable live-test evidence: commit `ffb6f3cf1a1ed277ad4c8d0cacd483d3776cc8bd`, tree `75bff45fb2198fda22bed13887a7baabbe263544`, exact ZIP SHA-256 `6f8c82a6653aacbe285aa8575ee1fc666e2529418f2dd3ca55034392477e4607`. RC13.1 is a new package identity after scheduled Test 8 exposed a generation race.
+- Force fresh WordPress lifecycle/post reads and generation-fence publication finalizers before provider mutation, execution writes, public-health qualification, and serving cutover. A superseded worker cannot write current `applied_manifest` state or establish serving authority.
+- Allow the current generation created by an actual scheduled `future` -> `publish` transition to adopt the existing `ready_verified` upload/remote asset and recreate the exact missing current-generation finalizer without a second upload or generation advance.
+- Surface ready-but-unserved finalization gaps independently of the settled upload journal. Automatically reconstruct only a wholly missing current-generation finalizer; failed/terminal/indeterminate mutation outcomes remain explicit non-replay boundaries.
+- Keep Send-now pre-publication Private staging distinct from final publication: staging Private no longer records the reviewed final manifest as applied.
+- Introduce dotted prerelease build identities (`2.0.0-rcN.M`) so each rebuilt source/package candidate receives a unique, monotonically increasing version instead of reusing the same RC version for multiple byte sets.
+
 ## 2.0.0-rc12 - 2026-09-10
 
 - Preserve qualified RC11 candidate #4 as immutable live-test evidence: commit `c56090eb9b5fd6f92010b7c00a6bf47154607659`, tree `e6a53bb1a412ab9f1558c0e41c778385a4481ec0`, exact ZIP SHA-256 `0d555201cb1a77f8b515d923f888d88e9421c4b6579d506a8de0940c08e14af6`. RC12 is a new package identity after the fresh-video live test exposed runtime defects.

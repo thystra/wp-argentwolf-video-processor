@@ -1068,6 +1068,12 @@ final class PeerTube_Overview_Admin
             if ('finalizer_retry' === (string) ($recovery['status'] ?? '')) {
                 return __('Publication finalization is ready to retry', 'argentwolf-video-processor');
             }
+            if ('finalizer_missing' === (string) ($recovery['status'] ?? '')) {
+                return __('Remote video is ready; AWVP is restoring the missing finish step', 'argentwolf-video-processor');
+            }
+            if ('finalizer_terminal' === (string) ($recovery['status'] ?? '')) {
+                return __('Remote video is ready, but publication stopped before serving', 'argentwolf-video-processor');
+            }
             return true === ($recovery['eligible'] ?? false)
                 ? __('Recovering incomplete publication', 'argentwolf-video-processor')
                 : __('Publication needs attention', 'argentwolf-video-processor');

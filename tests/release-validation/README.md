@@ -78,24 +78,24 @@ immediately before completion and then survives database persistence.
 
 ## 2.0 RC validation
 
-The active `2.0.0-rc12` payload upgrades from the exact public `1.0.0` package and
+The active `2.0.0-rc13.1` payload upgrades from the exact public `1.0.0` package and
 requires the exact candidate SHA-256 at invocation time until the canonical
-Forgejo RC artifact is selected. RC12 extends the qualified clean/upgrade
+Forgejo RC artifact is selected. RC13.1 extends the qualified clean/upgrade
 contract while exercising the RC9 live-test fixes, model DB schema version 3 /
 `argent_video_events` + `argent_video_publication_health`, explicit legacy 1.x
 migration adoption, visitor-facing public-URL serving qualification, and runtime
 serving cutover/failover foundations. RC9 and earlier RC packages remain immutable qualification or
-live-test evidence; creating RC12 does not rewrite their payloads, including the frozen RC10 payload.
+live-test evidence; creating RC13.1 does not rewrite their payloads, including the frozen RC10 payload.
 
 ```bash
 AWVP_RC_CANDIDATE_SHA256=<sha256-of-exact-candidate-zip> \
 ARTIFACT_DIR=/path/to/release-zips \
-bash tests/release-validation/run.sh 2.0.0-rc12
+bash tests/release-validation/run.sh 2.0.0-rc13.1
 ```
 
 The upgrade fixture creates a real WordPress `core/video` block while 1.0 is
 active, backed by a real uploads-tree attachment and an existing AWVP-managed
-local derivative. The RC12 upgrade must preserve the block's stored
+local derivative. The RC13.1 upgrade must preserve the block's stored
 `post_content`, attachment relationship and legacy processing metadata,
 source/derivative bytes, and completed legacy queue row. Merely upgrading must
 not mass-convert the Core Video block, create an AWVP Video object for it,

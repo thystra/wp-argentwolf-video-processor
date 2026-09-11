@@ -30,10 +30,11 @@ namespace ArgentVideo {
         public function reconcile(int $id,int $now):string { $this->calls[]=array($id,$now); return $this->statuses[$id]??self::REFUSED; }
     }
     class PeerTube_Publication_Finalizer_Recovery {
-        public const NONE='none'; public const RESUMABLE='resumable';
-        public array $statuses=array(); public array $resume_calls=array(); public string $resume_status=Task_Repository::APPLIED;
+        public const NONE='none'; public const RESUMABLE='resumable'; public const MISSING='missing'; public const TERMINAL='terminal';
+        public array $statuses=array(); public array $resume_calls=array(); public array $restore_calls=array(); public string $resume_status=Task_Repository::APPLIED; public string $restore_status=Task_Repository::APPLIED;
         public function status(int $id):array { return $this->statuses[$id]??array('status'=>self::NONE,'task_id'=>0,'generation'=>0,'anchor_post_id'=>0); }
         public function resume(int $id,int $now):string { $this->resume_calls[]=array($id,$now); return $this->resume_status; }
+        public function restore_missing(int $id,int $now):string { $this->restore_calls[]=array($id,$now); $this->statuses[$id]=array('status'=>self::NONE,'task_id'=>77,'generation'=>3,'anchor_post_id'=>(int)($this->statuses[$id]['anchor_post_id']??0)); return $this->restore_status; }
     }
     function get_post_meta(int $id,string $key,bool $single=true):mixed { unset($single); return $GLOBALS['awvp_rc9_meta'][$id][$key]??''; }
     function metadata_exists(string $type,int $id,string $key):bool { unset($type); return array_key_exists($key,$GLOBALS['awvp_rc9_meta'][$id]??array()); }
@@ -107,6 +108,33 @@ namespace {
     $assert('finalizer_retry'===($retry_state['status']??'')&&true===($retry_state['pending']??false)&&true===($retry_state['resumable']??false),'RC12 safe failed finalizer was not exposed as resumable incomplete work.');
     $assert($r3->resume(104,4101)&&array(array(104,4101))===$retry->resume_calls,'RC12 resume did not requeue the exact safe failed finalizer.');
     $assert(array()===$sync3->calls,'RC12 safe finalizer retry incorrectly manufactured a new publication synchronization generation.');
+
+
+    // RC13.1/Test-8 fixture: task_pending is false because the generation-3 sync
+    // task itself completed, but the current reveal-authorized generation has no
+    // finalizer. Overview must surface it and the periodic reconciler may safely
+    // restore only the missing finalizer task without manufacturing generation 4.
+    $sync4=new PeerTube_Publication_Synchronizer();
+    $retry4=new PeerTube_Publication_Finalizer_Recovery();
+    $retry4->statuses[105]=array('status'=>PeerTube_Publication_Finalizer_Recovery::MISSING,'task_id'=>0,'generation'=>3,'anchor_post_id'=>14);
+    $r4=new PeerTube_Incomplete_Work_Reconciler($sync4,null,$retry4);
+    $GLOBALS['awvp_rc9_meta'][105][Video_Meta::PEERTUBE_PUBLICATION_LIFECYCLE]=array('task_pending'=>false,'updated_at'=>5000,'anchor_post_id'=>14);
+    $missing_state=$r4->status(105,5100,false);
+    $assert('finalizer_missing'===($missing_state['status']??'')&&true===($missing_state['pending']??false)&&true===($missing_state['eligible']??false)&&false===($missing_state['resumable']??true),'RC13.1 missing current-generation finalizer was not surfaced as automatically recoverable incomplete work.');
+    $GLOBALS['awvp_rc9_ids']=array(105);
+    $count4=$r4->recover(5101);
+    $assert(1===$count4&&array(array(105,5101))===$retry4->restore_calls,'RC13.1 recovery did not restore the missing current-generation finalizer exactly once.');
+    $assert(array()===$sync4->calls,'RC13.1 missing-finalizer recovery incorrectly manufactured a new publication sync/generation.');
+
+    // Terminal current-generation finalizer work must remain visible but must not
+    // be auto-replayed because its provider-mutation outcome may be unsafe.
+    $sync5=new PeerTube_Publication_Synchronizer();
+    $retry5=new PeerTube_Publication_Finalizer_Recovery();
+    $retry5->statuses[106]=array('status'=>PeerTube_Publication_Finalizer_Recovery::TERMINAL,'task_id'=>88,'generation'=>3,'anchor_post_id'=>15);
+    $r5=new PeerTube_Incomplete_Work_Reconciler($sync5,null,$retry5);
+    $GLOBALS['awvp_rc9_meta'][106][Video_Meta::PEERTUBE_PUBLICATION_LIFECYCLE]=array('task_pending'=>false,'updated_at'=>6000,'anchor_post_id'=>15);
+    $terminal_state=$r5->status(106,6100,false);
+    $assert('finalizer_terminal'===($terminal_state['status']??'')&&true===($terminal_state['pending']??false)&&false===($terminal_state['eligible']??true)&&false===($terminal_state['resumable']??true),'Terminal finalizer gap was hidden or incorrectly made replayable.');
 
     $source=(string)file_get_contents(dirname(__DIR__).'/includes/PeerTube_Incomplete_Work_Reconciler.php');
     foreach(array('PeerTube_Staged_Upload_Operation_Store','upload_indeterminate','update_publication(','resumable_upload') as $forbidden){$assert(!str_contains($source,$forbidden),'Incomplete-work reconciler acquired remote mutation authority: '.$forbidden);}

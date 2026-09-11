@@ -80,6 +80,12 @@ expect_pass '2.0.0-rc11'
 write_fixture '2.0.0-rc12' '2.0.0-rc12' '1.0.0'
 expect_pass '2.0.0-rc12'
 
+write_fixture '2.0.0-rc13.1' '2.0.0-rc13.1' '1.0.0'
+expect_pass '2.0.0-rc13.1'
+
+write_fixture '2.0.0-rc13.2' '2.0.0-rc13.2' '1.0.0'
+expect_pass '2.0.0-rc13.2'
+
 write_fixture '2.0.0-rc1' '2.0.0-rc1' '2.0.0'
 expect_fail '2.0.0-rc1'
 
@@ -115,6 +121,9 @@ expect_fail '2.0.0-rc8'
 
 write_fixture '2.0.0-rc9' '2.0.0-rc10' '1.0.0'
 expect_fail '2.0.0-rc9'
+
+write_fixture '2.0.0-rc13.1' '2.0.0-rc13.2' '1.0.0'
+expect_fail '2.0.0-rc13.1'
 
 printf 'Release version validator tests passed.\n'
 

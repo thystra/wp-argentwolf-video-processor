@@ -182,7 +182,7 @@ The existing settings keys, queue table, attachment metadata, hook names, cron
 identifiers, Settings page slug, and `wp argent-video` command are retained for
 upgrade compatibility.
 
-This Forgejo release-candidate package identifies itself as `2.0.0-rc12` in the
+This Forgejo release-candidate package identifies itself as `2.0.0-rc13.1` in the
 plugin header while `Stable tag: 1.0.0` deliberately continues to identify the
 public WordPress.org release. RC packages are not published to WordPress.org SVN.
 The Stable tag moves to `2.0.0` only when the final release is promoted.
@@ -192,6 +192,9 @@ Administrators upgrading from version 0.2.3 should use the normal WordPress
 plugin-update workflow and confirm the plugin remains active.
 
 == Upgrade Notice ==
+
+= 2.0.0-rc13.1 =
+RC13 series build 1. Fixes scheduled Send-now generation races: stale finalizers cannot mutate current state, publish transitions recover the existing verified remote, and stranded finalization stays visible/recoverable. WordPress.org remains on 1.0.0.
 
 = 2.0.0-rc12 =
 Twelfth controlled 2.0 release candidate. Fixes multiline PeerTube publication metadata, safe same-generation finalizer retry, event timestamps, and editor copy found by RC11 live testing. WordPress.org remains on 1.0.0.
@@ -251,6 +254,13 @@ Renames the public plugin and package to ArgentWolf Video Processor and prepares
 the project for WordPress.org review while retaining existing data identifiers.
 
 == Changelog ==
+
+= 2.0.0-rc13.1 =
+* Fence publication finalizers to fresh lifecycle/post state before provider mutation, local execution writes, public-health qualification, and serving cutover so a superseded generation cannot mutate current publication state.
+* Recover a scheduled `future` -> `publish` transition by adopting the existing verified upload/remote asset and recreating the exact missing current-generation finalizer without re-uploading or advancing another generation.
+* Keep ready-but-unserved finalization gaps visible in Status & Needs Attention; automatically reconstruct only a wholly missing finalizer, while terminal/indeterminate provider outcomes remain non-replayable.
+* Do not record the reviewed final manifest as applied while a Send-now publication is only in its pre-publication Private staging state.
+* Adopt dotted RC build identities (`rcN.M`) so every source/package rebuild has a unique increasing version instead of reusing one RC number for multiple candidate byte sets.
 
 = 2.0.0-rc12 =
 * Preserve qualified RC11 candidate #4 (commit `c56090eb9b5fd6f92010b7c00a6bf47154607659`, tree `e6a53bb1a412ab9f1558c0e41c778385a4481ec0`, ZIP SHA-256 `0d555201cb1a77f8b515d923f888d88e9421c4b6579d506a8de0940c08e14af6`) as immutable live-test evidence.

@@ -562,14 +562,14 @@
 - [x] Complete the post-qualification RC10 live-fix tranche as the RC11 source scope before a replacement canonical candidate: model DB schema 3 publication health, visitor-facing public-URL qualification, backend serving priorities/failover, processing ETA, incident/email handling, daily backend maintenance, restart-safe Republish, Overview reviewed/dismissed state, per-server default language, and scalable Local Retention default/bulk UI.
 - [x] Qualify canonical `2.0.0-rc11` candidate #4 at commit `c56090eb9b5fd6f92010b7c00a6bf47154607659`, tree `e6a53bb1a412ab9f1558c0e41c778385a4481ec0`, exact ZIP SHA-256 `0d555201cb1a77f8b515d923f888d88e9421c4b6579d506a8de0940c08e14af6`; install it live on `wolfandraven.blog` and preserve it as immutable evidence.
 - [x] Begin fresh-video live validation on canonical RC11 with a ~388 MB PeerTube-bound source. Upload/transcoding completed and local fallback remained correct, but final publication stalled because multiline description/support Markdown was rejected locally before the publication PUT; the failed finalizer also lacked a same-generation retry path.
-- [ ] Build/qualify `2.0.0-rc12` with multiline publication transport, safe failed-finalizer retry, event timestamp repair, and the pending editor-copy cleanup; install RC12 and resume Test 6 from the existing verified private remote asset without re-upload.
-- [ ] After Test 6 reaches public URL health/cutover on RC12, complete health/ETA/failover diagnostics and one representative legacy 1.x discovery/adoption/migration smoke test before considering stable 2.0.
-- [ ] If defects require code changes, increment `2.0.0-rcN`, rebuild, and rerun
-  the affected gates; never mutate or reuse an existing RC version/tag.
+- [x] Build/qualify/install canonical `2.0.0-rc12` candidate #4 and preserve it as immutable live-test evidence. Test 6 recovery passed; Test 8 then exposed a scheduled Send-now generation race after the large single-request upload reached `ready_verified`.
+- [ ] Build/qualify `2.0.0-rc13.1` from authoritative RC12 candidate #4 commit `ffb6f3cf1a1ed277ad4c8d0cacd483d3776cc8bd` / tree `75bff45fb2198fda22bed13887a7baabbe263544`; fix stale-generation finalizer writes, current-generation adoption/finalizer reconstruction, and hidden ready-but-unserved finalization gaps. Preserve Test 8 unchanged as the live regression fixture until the exact qualified package is installed.
+- [ ] After Test 8 is recovered on RC13.1 without re-upload/new generation, complete health/ETA/failover diagnostics and one representative legacy 1.x discovery/adoption/migration smoke test before considering stable 2.0.
+- [ ] If defects require code changes, increment the prerelease identity before rebuilding. Prefer `2.0.0-rcN.M` for successive immutable builds within one RC series (`rc13.1`, `rc13.2`, ...); advance `N` for the next planned RC tranche. Never mutate or reuse an existing prerelease version/tag.
 - [ ] Freeze the last accepted RC and promote to `2.0.0` with release/version
   metadata changes only; set `Stable tag: 2.0.0` and rerun the exact package gates.
 - [ ] Publish final `2.0.0` through WordPress.org SVN only after final package
-  qualification, then prove the controlled live `2.0.0-rcN -> 2.0.0` automatic
+  qualification, then prove the controlled live `2.0.0-rcN[.M] -> 2.0.0` automatic
   WordPress update path.
 - [ ] Separately prove a clean public `1.0.0 -> 2.0.0` WordPress upgrade before
   declaring the 2.0 release closed.

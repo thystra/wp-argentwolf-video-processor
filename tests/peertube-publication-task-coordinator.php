@@ -4,15 +4,26 @@ declare(strict_types=1);
 
 namespace {
     $GLOBALS['awvp_pub_meta']=array();
+    $GLOBALS['awvp_pub_meta_stale']=array();
     $GLOBALS['awvp_pub_posts']=array();
+    $GLOBALS['awvp_pub_posts_stale']=array();
     $GLOBALS['awvp_pub_options']=array();
     function sanitize_text_field(mixed $v): string { return is_string($v)?$v:''; }
     function wp_parse_url(string $url): array|false { $v=parse_url($url); return is_array($v)?$v:false; }
     function wp_json_encode(mixed $v,int $flags=0,int $depth=512): string|false { return json_encode($v,$flags,$depth); }
-    function get_post_meta(int $id,string $k,bool $single=true): mixed { return $GLOBALS['awvp_pub_meta'][$id][$k] ?? ''; }
+    function get_post_meta(int $id,string $k,bool $single=true): mixed { return array_key_exists($k,$GLOBALS['awvp_pub_meta_stale'][$id]??array())?$GLOBALS['awvp_pub_meta_stale'][$id][$k]:($GLOBALS['awvp_pub_meta'][$id][$k] ?? ''); }
     function metadata_exists(string $type,int $id,string $k): bool { return array_key_exists($k,$GLOBALS['awvp_pub_meta'][$id]??array()); }
-    function update_post_meta(int $id,string $k,mixed $v): bool { $GLOBALS['awvp_pub_meta'][$id][$k]=$v; return true; }
-    function get_post(int $id): mixed { return $GLOBALS['awvp_pub_posts'][$id]??null; }
+    function update_post_meta(int $id,string $k,mixed $v,mixed $prev_value=''): bool {
+        if(4===func_num_args() && ($GLOBALS['awvp_pub_meta'][$id][$k]??'')!==$prev_value)return false;
+        $GLOBALS['awvp_pub_meta'][$id][$k]=$v; unset($GLOBALS['awvp_pub_meta_stale'][$id]); return true;
+    }
+    function get_post(int $id): mixed { return $GLOBALS['awvp_pub_posts_stale'][$id]??($GLOBALS['awvp_pub_posts'][$id]??null); }
+    function wp_cache_delete(mixed $key,string $group=''): bool {
+        $id=is_numeric($key)?(int)$key:0;
+        if('post_meta'===$group&&$id>0)unset($GLOBALS['awvp_pub_meta_stale'][$id]);
+        if('posts'===$group&&$id>0)unset($GLOBALS['awvp_pub_posts_stale'][$id]);
+        return true;
+    }
     function get_current_user_id(): int { return (int)($GLOBALS['awvp_pub_current_user']??0); }
     function get_post_field(string $field,int $id): mixed { $p=$GLOBALS['awvp_pub_posts'][$id]??null; return is_object($p)?($p->{$field}??''):''; }
     function get_option(string $k,mixed $d=false): mixed { return $GLOBALS['awvp_pub_options'][$k]??$d; }
@@ -115,7 +126,14 @@ namespace ArgentVideo {
     final class FakePublicationAssetStore implements PeerTube_Publication_Asset_Store {
         public array $calls=array(); public array $rows=array(); public string $status='applied';
         public function find(int $id): ?array { return $this->rows[$id]??null; }
-        public function record_publication_observation(int $id,int $video,string $backend,string $uuid,string $channel,string $privacy,int $now): string {$this->calls[]=compact('id','video','backend','uuid','channel','privacy','now');return $this->status;}
+        public function record_publication_observation(int $id,int $video,string $backend,string $uuid,string $channel,string $privacy,int $now): string {
+            $this->calls[]=compact('id','video','backend','uuid','channel','privacy','now');
+            if(in_array($this->status,array(PeerTube_Remote_Asset_Store::APPLIED,PeerTube_Remote_Asset_Store::PRESENT),true)){
+                $name=Video_Serving_Authority::privacy_name($privacy);
+                $this->rows[$id]=array_merge($this->rows[$id]??array(),array('id'=>$id,'video_post_id'=>$video,'backend_id'=>$backend,'channel_id'=>$channel,'remote_id'=>$uuid,'role'=>'secondary','state'=>'ready','desired_privacy'=>$name,'actual_privacy'=>$name,'remote_processing_state'=>'1:published','last_verified_at'=>gmdate('Y-m-d H:i:s',$now)));
+            }
+            return $this->status;
+        }
     }
     interface PeerTube_Publication_Mutation_Api {
         public function update_publication(string $access_token,string $video_uuid,array $manifest,string $privacy_id,?array $thumbnail=null): array;
@@ -160,7 +178,7 @@ namespace {
     $secret=array('access_token'=>'access-token','refresh_token'=>'refresh-token','access_expires_at'=>999999,'refresh_expires_at'=>999999,'generation'=>7);
     $makeLife=static function(int $generation,string $status,string $target,bool $upload,bool $reveal) use($planHash,$anchor): array { return array('version'=>1,'generation'=>$generation,'backend_id'=>'pt-primary','anchor_post_id'=>$anchor,'plan_sha256'=>$planHash,'dispatch_policy'=>Plan::DISPATCH_SEND_NOW,'wordpress_status'=>$status,'upload_authorized'=>$upload,'reveal_authorized'=>$reveal,'target_privacy_id'=>$target,'task_pending'=>true,'updated_at'=>1900+$generation); };
     $task=static function(int $id,string $type,int $generation=1) use($video,$planHash): array { return array('id'=>$id,'task_type'=>$type,'video_post_id'=>$video,'lock_token'=>sprintf('00000000-0000-4000-8000-%012d',$id),'payload_json'=>json_encode(array('version'=>1,'generation'=>$generation,'plan_sha256'=>$planHash),JSON_THROW_ON_ERROR)); };
-    $reset=static function(array $life,string $postStatus='draft') use($video,$anchor,$plan): void { $GLOBALS['awvp_pub_meta']=array($video=>array(Video_Meta::PEERTUBE_PUBLICATION_PLAN=>$plan,Video_Meta::DESTINATION=>array('version'=>1,'backend_id'=>'pt-primary','channel_id'=>'41'),Video_Meta::PEERTUBE_PUBLICATION_LIFECYCLE=>$life)); $GLOBALS['awvp_pub_posts']=array($video=>(object)array('ID'=>$video,'post_author'=>9,'post_status'=>'publish'),$anchor=>(object)array('ID'=>$anchor,'post_author'=>7,'post_status'=>$postStatus)); $GLOBALS['awvp_pub_options']=array(); $GLOBALS['awvp_pub_current_user']=0; };
+    $reset=static function(array $life,string $postStatus='draft') use($video,$anchor,$plan): void { $GLOBALS['awvp_pub_meta']=array($video=>array(Video_Meta::PEERTUBE_PUBLICATION_PLAN=>$plan,Video_Meta::DESTINATION=>array('version'=>1,'backend_id'=>'pt-primary','channel_id'=>'41'),Video_Meta::PEERTUBE_PUBLICATION_LIFECYCLE=>$life)); $GLOBALS['awvp_pub_meta_stale']=array(); $GLOBALS['awvp_pub_posts']=array($video=>(object)array('ID'=>$video,'post_author'=>9,'post_status'=>'publish'),$anchor=>(object)array('ID'=>$anchor,'post_author'=>7,'post_status'=>$postStatus)); $GLOBALS['awvp_pub_posts_stale']=array(); $GLOBALS['awvp_pub_options']=array(); $GLOBALS['awvp_pub_current_user']=0; };
     $factory=static function(?array $catalogOverride=null,bool $withCutover=false,bool $withRepair=false,bool $withPublicHealth=false) use($descriptor,$secret,$catalog): array {
         $tasks=new Task_Repository(); $operations=new PeerTube_Staged_Upload_Operation_Store(); $upload=new PeerTube_Staged_Upload_Service(); $uploadTasks=new PeerTube_Upload_Task_Coordinator(); $staging=new PeerTube_Publication_Staging_Service(); $assets=new FakePublicationAssetStore(); $api=new FakePublicationApi(); $cutover=$withCutover?new \ArgentVideo\PeerTube_Serving_Cutover_Service():null; $repair=$withRepair?new \ArgentVideo\PeerTube_Publication_Authority_Repair():null; $publicHealth=$withPublicHealth?new \ArgentVideo\Remote_Publication_Health_Service():null;
         $coord=new Coordinator($tasks,$operations,$upload,$uploadTasks,$staging,$assets,new Backend_Registry($descriptor),new Managed_Backend_Secret_Store($secret),new PeerTube_Publication_Catalog_Store(func_num_args()? $catalogOverride:$catalog),new Video_Publishing_Defaults_Store(array()),static fn(string $origin)=>$api,$cutover,null,$repair,$publicHealth);
@@ -187,8 +205,44 @@ namespace {
     $reset($makeLife(2,'draft','3',true,false),'draft'); $x=$factory(); $stale=$x['coord']->advance_claimed($task(2,Coordinator::TASK_SYNC,1),$now); $assert(Coordinator::STATUS_COMPLETE===$stale['status']&&'stale'===$stale['service_status']&&0===count($x['staging']->calls),'Stale sync generation performed work.');
     $reset($makeLife(1,'draft','3',true,false),'draft'); $lockName='argent_video_processor_publication_execution_lock_'.hash('sha256',(string)$video); $GLOBALS['awvp_pub_options'][$lockName]=array('version'=>1,'token'=>str_repeat('a',32),'created_at'=>$now); $x=$factory(); $busy=$x['coord']->advance_claimed($task(3,Coordinator::TASK_SYNC),$now); $assert(Coordinator::STATUS_REQUEUED===$busy['status']&&0===count($x['staging']->calls),'Live per-video lock did not serialize publication execution.');
 
+    // RC13.1/Test-8 regression: a long-lived worker may still hold generation-2
+    // post-meta cache when the actual future->publish transition has already
+    // written generation 3. The generation-3 sync must discard that cache, adopt
+    // the existing upload operation, and enqueue the current finalizer without a
+    // second source staging/upload operation.
+    $reset($makeLife(3,'publish','1',true,true),'publish');
+    $manifest3=Manifest::build($plan,$catalog,array());
+    $exec3=Execution::with_operation(Execution::create($manifest3,1900),'upload_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',1910);
+    $GLOBALS['awvp_pub_meta'][$video][Video_Meta::PEERTUBE_PUBLICATION_EXECUTION]=$exec3;
+    $GLOBALS['awvp_pub_meta_stale'][$video][Video_Meta::PEERTUBE_PUBLICATION_LIFECYCLE]=$makeLife(2,'future','3',true,false);
+    $x=$factory();
+    $adopt=$x['coord']->advance_claimed($task(31,Coordinator::TASK_SYNC,3),$now);
+    $assert(Coordinator::STATUS_COMPLETE===$adopt['status']&&'private_upload_handoff'===$adopt['service_status'],'Generation-3 sync remained stranded behind stale generation-2 post-meta cache.');
+    $assert(0===count($x['staging']->calls)&&0===count($x['upload']->calls),'Generation-3 sync created a second staged/upload operation instead of adopting the existing one.');
+    $assert(1===count($x['tasks']->enqueues)&&3===($x['tasks']->enqueues[0]['payload']['generation']??0)&&Coordinator::TASK_FINALIZE===$x['tasks']->enqueues[0]['type'],'Generation-3 sync did not enqueue the exact current-generation finalizer continuation.');
+
+    // The superseded generation-2 finalizer must also discard its stale cached
+    // lifecycle before any provider mutation or current execution write.
+    $reset($makeLife(3,'publish','1',true,true),'publish');
+    $GLOBALS['awvp_pub_meta'][$video][Video_Meta::PEERTUBE_PUBLICATION_EXECUTION]=$exec3;
+    $GLOBALS['awvp_pub_meta_stale'][$video][Video_Meta::PEERTUBE_PUBLICATION_LIFECYCLE]=$makeLife(2,'future','3',true,false);
+    $x=$factory(); $x['operations']->records[$exec3['operation_id']]=array('phase'=>'ready_verified','remote_asset_id'=>55,'remote_identity'=>array('uuid'=>$uuid));
+    $oldFinalizer=$x['coord']->advance_claimed($task(32,Coordinator::TASK_FINALIZE,2),$now);
+    $afterOld=$GLOBALS['awvp_pub_meta'][$video][Video_Meta::PEERTUBE_PUBLICATION_EXECUTION];
+    $assert(Coordinator::STATUS_COMPLETE===$oldFinalizer['status']&&'stale'===$oldFinalizer['service_status'],'Superseded generation-2 finalizer did not stop at the fresh generation fence.');
+    $assert(0===count($x['api']->publication_calls)&&0===count($x['assets']->calls)&&''===($afterOld['applied_manifest_sha256']??''),'Superseded finalizer mutated provider/local applied state after generation 3 existed.');
+
     // Transient provider authority reschedules instead of terminally failing.
     $reset($makeLife(1,'draft','3',true,false),'draft'); $x=$factory(null); $transient=$x['coord']->advance_claimed($task(4,Coordinator::TASK_SYNC),$now); $assert(Coordinator::STATUS_REQUEUED===$transient['status']&&'defer'===($x['tasks']->transitions[0][0]??''),'Transient missing catalog consumed an execution attempt instead of deferring.');
+
+    // A pre-publication Send-now finalizer may keep the remote copy Private, but
+    // that staging state must never be recorded as the reviewed final manifest.
+    $reset($makeLife(2,'future','3',true,false),'future'); $manifest=Manifest::build($plan,$catalog,array()); $privateExec=Execution::with_operation(Execution::create($manifest,1900),'upload_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',1910); $GLOBALS['awvp_pub_meta'][$video][Video_Meta::PEERTUBE_PUBLICATION_EXECUTION]=$privateExec;
+    $readyPrivate=array('phase'=>'ready_verified','remote_asset_id'=>55,'remote_identity'=>array('uuid'=>$uuid)); $x=$factory(); $x['operations']->records[$privateExec['operation_id']]=$readyPrivate; $x['api']->remote_privacy='3';
+    $privateStage=$x['coord']->advance_claimed($task(41,Coordinator::TASK_FINALIZE,2),$now);
+    $privateAfter=$GLOBALS['awvp_pub_meta'][$video][Video_Meta::PEERTUBE_PUBLICATION_EXECUTION]??array();
+    $assert(Coordinator::STATUS_COMPLETE===$privateStage['status']&&'staged_private'===$privateStage['service_status'],'Pre-publication private staging did not complete at its non-serving boundary.');
+    $assert(''===($privateAfter['applied_manifest_sha256']??''),'Pre-publication Private staging falsely stamped the reviewed final manifest as applied.');
 
     // Finalize a ready private upload while actually published: final privacy is applied, verified, and recorded.
     $reset($makeLife(1,'publish','1',true,true),'publish'); $manifest=Manifest::build($plan,$catalog,array()); $exec=Execution::with_operation(Execution::create($manifest,1900),'upload_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',1910); $GLOBALS['awvp_pub_meta'][$video][Video_Meta::PEERTUBE_PUBLICATION_EXECUTION]=$exec;

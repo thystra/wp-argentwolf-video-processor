@@ -33,8 +33,8 @@ if (1 === preg_match('/^Stable tag:[\\h]*([0-9.]+)[\\h]*$/m', $readme, $matches)
 $assert($plugin_version === $runtime_version, 'Plugin header and ARGENT_VIDEO_VERSION must match.');
 $assert(
     null !== $plugin_version
-        && 1 === preg_match('/^2\.0\.0(?:-rc[1-9][0-9]*)?$/', $plugin_version),
-    'The 2.0 release line must use 2.0.0-rcN candidates or final 2.0.0.'
+        && 1 === preg_match('/^2\.0\.0(?:-rc[1-9][0-9]*(?:\.[1-9][0-9]*)?)?$/', $plugin_version),
+    'The 2.0 release line must use 2.0.0-rcN or 2.0.0-rcN.M candidates, or final 2.0.0.'
 );
 
 if (null !== $plugin_version && null !== $stable_tag) {
@@ -66,7 +66,10 @@ $assert(version_compare('2.0.0-rc8', '2.0.0-rc9', '<'), 'RC9 must compare newer 
 $assert(version_compare('2.0.0-rc9', '2.0.0-rc10', '<'), 'RC10 must compare newer than RC9.');
 $assert(version_compare('2.0.0-rc10', '2.0.0-rc11', '<'), 'RC11 must compare newer than RC10.');
 $assert(version_compare('2.0.0-rc11', '2.0.0-rc12', '<'), 'RC12 must compare newer than RC11.');
-$assert(version_compare('2.0.0-rc99', '2.0.0', '<'), 'Final 2.0.0 must compare newer than every numbered 2.0.0 RC.');
+$assert(version_compare('2.0.0-rc12', '2.0.0-rc13.1', '<'), 'RC13.1 must compare newer than RC12.');
+$assert(version_compare('2.0.0-rc13', '2.0.0-rc13.1', '<'), 'Dotted RC build 1 must compare newer than its undotted RC series version.');
+$assert(version_compare('2.0.0-rc13.1', '2.0.0-rc13.2', '<'), 'Later dotted RC builds must compare newer than earlier builds.');
+$assert(version_compare('2.0.0-rc99.99', '2.0.0', '<'), 'Final 2.0.0 must compare newer than every numbered/dotted 2.0.0 RC.');
 $assert(version_compare('1.0.0', '2.0.0', '<'), 'Public 1.0.0 must compare older than final 2.0.0.');
 
 if ([] !== $failures) {

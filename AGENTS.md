@@ -303,8 +303,12 @@ WordPress.org reviewer findings are durable engineering lessons, not one-line co
 - Every code release increments the plugin version. Final WordPress.org releases
   keep the main plugin header, `ARGENT_VIDEO_VERSION`, `readme.txt` Stable Tag,
   changelog, Git tag, release artifact name, and WordPress.org SVN tag aligned.
-  Controlled Forgejo prereleases are the exception: use `X.Y.Z-rcN` consistently
-  for the plugin/runtime version, changelog, Git tag, and artifact while leaving
+  Controlled Forgejo prereleases are the exception: use `X.Y.Z-rcN` or, when
+  multiple immutable builds are needed within one RC series, `X.Y.Z-rcN.M`
+  consistently for the plugin/runtime version, changelog, Git tag, and artifact.
+  `N` identifies the RC series; `M` starts at 1 and increments for every rebuilt
+  source/package identity in that series. Never reuse one prerelease version for
+  different bytes. Leave
   `readme.txt` Stable Tag on the current numeric WordPress.org release. Never
   publish an RC to WordPress.org SVN. Final promotion must change the runtime and
   Stable Tag to the numeric release and then prove both public-stable -> final and
@@ -371,7 +375,7 @@ WordPress.org reviewer findings are durable engineering lessons, not one-line co
 
 Current public stable release: `1.0.0`. The permanent `release/1.x` maintenance
 branch is rooted at exact tag `v1.0.0` so emergency 1.0.x work remains possible
-while 2.0 advances independently. Current controlled candidate: `2.0.0-rc12`; it
+while 2.0 advances independently. Current controlled candidate: `2.0.0-rc13.1`; it
 must remain off WordPress.org SVN until final 2.0.0 promotion.
 
 Cross-project release, validator, partial-mutation, shared-host, and ZFS lessons

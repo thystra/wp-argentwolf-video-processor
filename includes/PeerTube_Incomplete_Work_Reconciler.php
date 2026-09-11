@@ -53,6 +53,7 @@ final class PeerTube_Incomplete_Work_Reconciler
                 continue;
             }
             $video_recovered = false;
+            self::refresh_post_meta_cache($video_id);
 
             // RC10 local-only reconciliation is deliberately independent of the
             // lifecycle task_pending bit. RC9 could durably enqueue/fail its
@@ -69,9 +70,22 @@ final class PeerTube_Incomplete_Work_Reconciler
                 }
             }
 
+            if (null !== $this->finalizer_recovery) {
+                $finalizer = $this->finalizer_recovery->status($video_id);
+                if (PeerTube_Publication_Finalizer_Recovery::MISSING === ($finalizer['status'] ?? null)) {
+                    $restored = $this->finalizer_recovery->restore_missing($video_id, $now);
+                    if (in_array($restored, array(Task_Repository::APPLIED, Task_Repository::PRESENT), true)) {
+                        delete_post_meta($video_id, Video_Meta::PEERTUBE_RECOVERY_WINDOW);
+                        $video_recovered = true;
+                    }
+                }
+            }
+
             $state = $this->status($video_id, $now, true);
-            if (true === ($state['eligible'] ?? false)) {
+            if (! $video_recovered && true === ($state['eligible'] ?? false)
+                && 'finalizer_missing' !== ($state['status'] ?? null)) {
                 $anchor_id = (int) ($state['anchor_post_id'] ?? 0);
+                self::refresh_post_cache($anchor_id);
                 $anchor = $anchor_id > 0 ? get_post($anchor_id) : null;
                 if (is_object($anchor) && is_string($anchor->post_status ?? null)) {
                     $result = $this->synchronizer->sync_video($video_id, (string) $anchor->post_status, $now);
@@ -97,6 +111,7 @@ final class PeerTube_Incomplete_Work_Reconciler
         if ($video_id < 1 || $now < 1) {
             return $empty;
         }
+        self::refresh_post_meta_cache($video_id);
         $lifecycle = PeerTube_Publication_Lifecycle::sanitize(
             get_post_meta($video_id, Video_Meta::PEERTUBE_PUBLICATION_LIFECYCLE, true)
         );
@@ -113,6 +128,28 @@ final class PeerTube_Incomplete_Work_Reconciler
                         false,
                         true,
                         0,
+                        0,
+                        (int) ($retry['anchor_post_id'] ?? 0)
+                    );
+                }
+                if (PeerTube_Publication_Finalizer_Recovery::MISSING === ($retry['status'] ?? null)) {
+                    return self::status_result(
+                        'finalizer_missing',
+                        true,
+                        true,
+                        false,
+                        (int) ($lifecycle['updated_at'] ?? 0),
+                        0,
+                        (int) ($retry['anchor_post_id'] ?? 0)
+                    );
+                }
+                if (PeerTube_Publication_Finalizer_Recovery::TERMINAL === ($retry['status'] ?? null)) {
+                    return self::status_result(
+                        'finalizer_terminal',
+                        true,
+                        false,
+                        false,
+                        (int) ($lifecycle['updated_at'] ?? 0),
                         0,
                         (int) ($retry['anchor_post_id'] ?? 0)
                     );
@@ -189,6 +226,20 @@ final class PeerTube_Incomplete_Work_Reconciler
         return $window === Video_Meta::sanitize_peertube_recovery_window(
             get_post_meta($video_id, Video_Meta::PEERTUBE_RECOVERY_WINDOW, true)
         );
+    }
+
+    private static function refresh_post_cache(int $post_id): void
+    {
+        if ($post_id > 0 && function_exists('wp_cache_delete')) {
+            wp_cache_delete($post_id, 'posts');
+        }
+    }
+
+    private static function refresh_post_meta_cache(int $post_id): void
+    {
+        if ($post_id > 0 && function_exists('wp_cache_delete')) {
+            wp_cache_delete($post_id, 'post_meta');
+        }
     }
 
     /** @return array{status:string,pending:bool,eligible:bool,resumable:bool,origin_at:int,expires_at:int,anchor_post_id:int} */

@@ -27,6 +27,8 @@ final class PeerTube_Serving_Cutover_Service
         if ($video_id < 1 || $now < 1) {
             return self::REFUSED;
         }
+        self::refresh_post_cache($video_id);
+        self::refresh_post_meta_cache($video_id);
         $video = get_post($video_id);
         if (! is_object($video) || Video_Post_Type::POST_TYPE !== ($video->post_type ?? null)
             || 'trash' === ($video->post_status ?? null)) {
@@ -54,6 +56,7 @@ final class PeerTube_Serving_Cutover_Service
             return self::clear_or_refuse($video_id, true);
         }
 
+        self::refresh_post_cache((int) $lifecycle['anchor_post_id']);
         $anchor = get_post((int) $lifecycle['anchor_post_id']);
         $privacy = (string) $lifecycle['target_privacy_id'];
         if (true !== $lifecycle['reveal_authorized'] || ! is_object($anchor) || 'publish' !== ($anchor->post_status ?? null)
@@ -89,6 +92,27 @@ final class PeerTube_Serving_Cutover_Service
                 return self::REFUSED;
             }
         }
+        // Re-read the lifecycle/post immediately before the serving-authority
+        // write. This service is local-only, but a separate WordPress request can
+        // still advance the publication while this reconciliation is running.
+        // Never let an older generation install authority after that transition.
+        self::refresh_post_meta_cache($video_id);
+        $latest_lifecycle = PeerTube_Publication_Lifecycle::sanitize(
+            get_post_meta($video_id, Video_Meta::PEERTUBE_PUBLICATION_LIFECYCLE, true)
+        );
+        self::refresh_post_cache((int) $lifecycle['anchor_post_id']);
+        $latest_anchor = get_post((int) $lifecycle['anchor_post_id']);
+        if (array() === $latest_lifecycle
+            || (int) $latest_lifecycle['generation'] !== (int) $lifecycle['generation']
+            || ! hash_equals((string) $latest_lifecycle['plan_sha256'], (string) $lifecycle['plan_sha256'])
+            || (string) $latest_lifecycle['target_privacy_id'] !== $privacy
+            || true !== $latest_lifecycle['reveal_authorized']
+            || 'publish' !== (string) $latest_lifecycle['wordpress_status']
+            || ! is_object($latest_anchor)
+            || 'publish' !== ($latest_anchor->post_status ?? null)) {
+            return self::clear_or_refuse($video_id, false);
+        }
+
         $before = metadata_exists('post', $video_id, Video_Meta::SERVING_AUTHORITY)
             ? Video_Serving_Authority::sanitize(get_post_meta($video_id, Video_Meta::SERVING_AUTHORITY, true))
             : null;
@@ -98,6 +122,20 @@ final class PeerTube_Serving_Cutover_Service
         update_post_meta($video_id, Video_Meta::SERVING_AUTHORITY, $record);
         $after = Video_Serving_Authority::sanitize(get_post_meta($video_id, Video_Meta::SERVING_AUTHORITY, true));
         return $record === $after ? self::APPLIED : self::INDETERMINATE;
+    }
+
+    private static function refresh_post_cache(int $post_id): void
+    {
+        if ($post_id > 0 && function_exists('wp_cache_delete')) {
+            wp_cache_delete($post_id, 'posts');
+        }
+    }
+
+    private static function refresh_post_meta_cache(int $post_id): void
+    {
+        if ($post_id > 0 && function_exists('wp_cache_delete')) {
+            wp_cache_delete($post_id, 'post_meta');
+        }
     }
 
     /** @param array<string,mixed>|null $asset @param array<string,mixed> $execution */

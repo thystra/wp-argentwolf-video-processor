@@ -272,7 +272,7 @@ the same advisory registry with their own capability and NVD link.
 
 Public WordPress.org stable release: `1.0.0`.
 
-Current controlled development candidate: `2.0.0-rc12`. RC packages are built
+Current controlled development candidate: `2.0.0-rc13.1`. RC packages are built
 from reviewed Forgejo commits and are not published to WordPress.org SVN. The
 public Stable tag remains `1.0.0` until final `2.0.0` promotion.
 
@@ -283,6 +283,12 @@ archives are not canonical installable artifacts.
 ### RC10 live-test hardening
 
 RC10 followed controlled RC9 live testing. It preserved RC9 package bytes and hardened the live PeerTube path: automatic credential/catalog authority repair, fresh reads in long-lived workers, dependency deferral without attempt exhaustion, semantic tag and short-embed verification, local-only recovery of already-applied publications, seven-step operator diagnostics, route-before-FFmpeg behavior, responsive no-autoplay rendering, explicit legacy 1.x migration/adoption, and a site-wide WordPress archive-of-record policy. Canonical RC10 candidate #2 was qualified and installed live; its bytes remain immutable historical evidence.
+
+### RC13.1 scheduled-publication generation fencing (development)
+
+RC13.1 is the first build in the RC13 series and fixes the release-blocking race preserved by live Test 8. Long-lived workers now force fresh WordPress lifecycle/post reads at publication authority boundaries; a superseded finalizer is fenced before PeerTube mutation, execution-state writes, public-health qualification, and serving cutover. When a scheduled post advances from `future` to `publish`, the current generation can adopt the already-verified upload/remote asset and recreate the exact missing finalizer without re-uploading or advancing another generation. Ready-but-unserved finalization gaps remain visible in **Status & Needs Attention**, and only a wholly missing finalizer is reconstructed automatically; ambiguous or terminal mutation outcomes remain fail-closed. A Private pre-publication staging pass no longer marks the reviewed final manifest as applied.
+
+The RC naming policy now permits `X.Y.Z-rcN.M`: `N` identifies the RC series and `M` identifies each immutable source/package build within that series. Any source change after an RC13.1 package is frozen must become RC13.2 rather than another unlabeled candidate under RC13.1.
 
 ### RC12 live-publication finalizer repair (development)
 
