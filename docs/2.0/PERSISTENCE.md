@@ -234,9 +234,12 @@ release policy, and the controlling WordPress post ID.
 
 Required review state is explicit. In particular, an empty PeerTube tag list is
 valid only when `tags` review is true; WordPress tags do not make that decision.
-The initial release policy is `when_wordpress_published`, allowing early private
-remote preparation while making actual WordPress publication authoritative for
-later reveal.
+The release policy is `when_wordpress_published`. RC13.2 adds an optional
+`pre_publish_privacy_id` to newly saved version-1 plans: Private (`3`) is the
+default and Unlisted (`2`) is the only alternate staging value. Plans written
+before this field existed sanitize without adding it, preserving their exact plan
+SHA-256 commitment. Actual WordPress publication remains authoritative for final
+visibility and frontend serving cutover.
 
 R46.1 does not enable site defaults, editor controls, migration, remote privacy
 mutation, or serving cutover.
@@ -984,20 +987,20 @@ identities before local destructive uninstall.
 
 ## 14. Audit/event persistence
 
-A detailed append-only event table is not required in the first schema
-implementation.
+The later 2.0 operational tranches justified and implemented the bounded
+`argent_video_events` table. It stores sanitized non-secret seven-step publication
+events with video/task/upload/remote/backend identity, outcome/status, HTTP status
+where useful, operator/AWVP action text, and a small allow-listed context object.
+Bearer tokens, passwords, cookies, request bodies, and other secrets are never
+valid event context.
 
-For early 2.0 work:
-
-- durable last-error/status fields live with the video, task, and remote asset;
-- task attempts/timestamps provide operational evidence;
-- migration tooling must produce external review reports as it does today.
-
-Before the Status/Operations and migration tranches are considered complete,
-re-evaluate whether a bounded `argent_video_events` table is justified by
-actual audit/query requirements.
-
-Do not create an unused event table speculatively.
+RC13.2 exposes this retained evidence through the read-only **History & Logs**
+view. The global query is capped, newest-first, and the UI groups related retained
+events for compact review. The view has no enqueue/resume/provider mutation path;
+normal event-retention/pruning policy remains authoritative and the UI does not
+promise permanent archival. Durable last-error/status fields and task/remote-asset
+records remain independent recovery evidence rather than being reconstructed from
+the presentation table.
 
 ## 15. WordPress REST boundary
 
@@ -1322,9 +1325,11 @@ the currently desired privacy, local task-pending bookkeeping, and update time.
 It contains no token, secret reference, raw provider response, remote identifier,
 source path, or serving authority.
 
-A non-published lifecycle record is valid only when `reveal_authorized=false` and
-its target privacy is PeerTube private (`3`). Only WordPress status `publish` may
-carry `reveal_authorized=true` and a reviewed non-private target. Semantic changes
+A non-published lifecycle record keeps `reveal_authorized=false`. Its target is
+normally PeerTube Private (`3`); RC13.2 also permits Unlisted (`2`) only for an
+actual `future` anchor using reviewed `Send now` staging. That exception is not
+serving authority and cannot mark the final manifest applied. Only WordPress status
+`publish` may carry `reveal_authorized=true` and the reviewed final target. Semantic changes
 increment generation; queue bookkeeping and timestamps do not. The corresponding
 `peertube_publication_sync` task payload stores only schema version, generation,
 and the plan commitment. Old generations are retained as durable history but must

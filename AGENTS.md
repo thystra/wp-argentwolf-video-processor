@@ -5,6 +5,8 @@
 
 Keep administrator/editor copy in plain WordPress publishing language. Prefer **publish** or **upload to the PeerTube server** over internal terms such as *dispatch*. Prefer **change** over *mutate*, **fixed** over *resolved* when describing a corrected problem, and phrases such as **can no longer be changed** over *frozen*. Internal class names, constants, state-machine names, developer documentation, tests, and diagnostics may retain precise implementation terminology where needed; do not leak that vocabulary into ordinary settings/help text unless the distinction is necessary for safe operation.
 
+Normal operator event messages must likewise describe what AWVP checked, what happened, what it is waiting for, and what happens next. Do not lead ordinary event/status copy with implementation concepts such as *durable boundary*, *publication authority*, *lifecycle generation*, or *idempotency*; keep those details in nested technical diagnostics when they are useful.
+
 This file contains public, project-specific guidance for contributors and coding
 agents. Private hostnames, user names, deployment paths, credentials, and
 production state do not belong in this repository.

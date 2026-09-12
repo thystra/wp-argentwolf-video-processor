@@ -21,6 +21,7 @@ final class PeerTube_Event_Repository
 {
     public const TABLE_SUFFIX = Model_Activator::EVENTS_TABLE;
     public const MAX_RECENT = 20;
+    public const MAX_GLOBAL_RECENT = 100;
     public const MAX_MESSAGE_BYTES = 1024;
     private const MAX_ACTION_BYTES = 512;
     private const MAX_CONTEXT_BYTES = 4096;
@@ -130,6 +131,38 @@ final class PeerTube_Event_Repository
                     'SELECT id,video_post_id,task_id,operation_id,remote_asset_id,backend_id,pipeline_step,event_code,severity,http_status,message,automatic_action,operator_action,context_json,created_at FROM %i WHERE video_post_id = %d ORDER BY id DESC LIMIT %d',
                     $wpdb->prefix . self::TABLE_SUFFIX,
                     $video_id,
+                    $limit
+                ),
+                ARRAY_A
+            );
+        } catch (Throwable) {
+            return array();
+        }
+        if (! is_array($rows)) {
+            return array();
+        }
+
+        $result = array();
+        foreach ($rows as $row) {
+            $normalized = self::normalize_row($row);
+            if (null !== $normalized) {
+                $result[] = $normalized;
+            }
+        }
+        return $result;
+    }
+
+    /** @return list<array<string,mixed>> */
+    public function recent_global(int $limit = self::MAX_GLOBAL_RECENT): array
+    {
+        $limit = max(1, min(self::MAX_GLOBAL_RECENT, $limit));
+        global $wpdb;
+        try {
+            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching -- Bounded plugin-owned diagnostics history for the read-only administrator history view.
+            $rows = $wpdb->get_results(
+                $wpdb->prepare(
+                    'SELECT id,video_post_id,task_id,operation_id,remote_asset_id,backend_id,pipeline_step,event_code,severity,http_status,message,automatic_action,operator_action,context_json,created_at FROM %i ORDER BY id DESC LIMIT %d',
+                    $wpdb->prefix . self::TABLE_SUFFIX,
                     $limit
                 ),
                 ARRAY_A

@@ -275,6 +275,10 @@ final class PeerTube_Publication_Editor_Service
         }
 
         $channel_id = (string) ($effective['channel_id'] ?? ($destination['channel_id'] ?? ''));
+        $pre_publish_privacy = (string) ($effective['pre_publish_privacy_id'] ?? PeerTube_Publication_Plan::PRE_PUBLISH_PRIVATE);
+        if (! in_array($pre_publish_privacy, array(PeerTube_Publication_Plan::PRE_PUBLISH_PRIVATE, PeerTube_Publication_Plan::PRE_PUBLISH_UNLISTED), true)) {
+            $pre_publish_privacy = PeerTube_Publication_Plan::PRE_PUBLISH_PRIVATE;
+        }
         $privacy = (string) ($effective['final_privacy_id'] ?? '');
         $licence = (string) ($effective['licence_id'] ?? '');
         $category = (string) ($effective['category_id'] ?? '');
@@ -305,6 +309,7 @@ final class PeerTube_Publication_Editor_Service
             'description_markdown'    => $description,
             'tags'                    => array(),
             'support'                 => $support,
+            'pre_publish_privacy_id'  => $pre_publish_privacy,
             'final_privacy_id'        => $privacy,
             'licence_id'              => $licence,
             'category_id'             => $category,
@@ -391,6 +396,7 @@ final class PeerTube_Publication_Editor_Service
             'description_markdown'    => $input['description_markdown'] ?? '',
             'tags'                    => $input['tags'] ?? null,
             'support'                 => $support,
+            'pre_publish_privacy_id'  => $input['pre_publish_privacy_id'] ?? PeerTube_Publication_Plan::PRE_PUBLISH_PRIVATE,
             'final_privacy_id'        => $input['final_privacy_id'] ?? '',
             'licence_id'              => $input['licence_id'] ?? '',
             'category_id'             => $input['category_id'] ?? '',
@@ -428,6 +434,10 @@ final class PeerTube_Publication_Editor_Service
         if (! $this->channel_exists((string) $plan['channel_id'], $catalog)
             || ! $this->privacy_supported((string) $plan['final_privacy_id'], $catalog)
         ) {
+            return false;
+        }
+        $pre_publish_privacy = PeerTube_Publication_Plan::pre_publish_privacy_id($plan);
+        if (! $this->privacy_supported($pre_publish_privacy, $catalog)) {
             return false;
         }
         if ('' !== $plan['licence_id'] && ! isset($catalog['licences'][$plan['licence_id']])) {

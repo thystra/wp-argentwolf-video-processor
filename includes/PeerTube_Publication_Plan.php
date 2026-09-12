@@ -31,6 +31,8 @@ final class PeerTube_Publication_Plan
     public const DISPATCH_SEND_NOW = 'send_now';
     public const DISPATCH_ON_SCHEDULE_OR_PUBLISH = 'send_on_schedule_or_publish';
     public const RELEASE_WHEN_WORDPRESS_PUBLISHED = 'when_wordpress_published';
+    public const PRE_PUBLISH_PRIVATE = '3';
+    public const PRE_PUBLISH_UNLISTED = '2';
 
     /** @var list<string> */
     private const REQUIRED_REVIEW = array('title', 'channel', 'tags', 'privacy', 'moderation');
@@ -57,6 +59,10 @@ final class PeerTube_Publication_Plan
         $description = self::markdown($value['description_markdown'] ?? '');
         $tags = self::tags($value['tags'] ?? null);
         $support = self::support($value['support'] ?? null);
+        $has_pre_publish_privacy = array_key_exists('pre_publish_privacy_id', $value);
+        $pre_publish_privacy_id = $has_pre_publish_privacy
+            ? self::enum($value['pre_publish_privacy_id'] ?? '', array(self::PRE_PUBLISH_PRIVATE, self::PRE_PUBLISH_UNLISTED))
+            : self::PRE_PUBLISH_PRIVATE;
         $final_privacy_id = self::decimal_identifier($value['final_privacy_id'] ?? null);
         $licence_id = self::optional_decimal_identifier($value['licence_id'] ?? '');
         $category_id = self::optional_decimal_identifier($value['category_id'] ?? '');
@@ -91,6 +97,7 @@ final class PeerTube_Publication_Plan
             || null === $description
             || null === $tags
             || null === $support
+            || '' === $pre_publish_privacy_id
             || '' === $final_privacy_id
             || null === $licence_id
             || null === $category_id
@@ -109,7 +116,7 @@ final class PeerTube_Publication_Plan
             return array();
         }
 
-        return array(
+        $result = array(
             'version'                 => self::VERSION,
             'backend_id'              => $backend_id,
             'channel_id'              => $channel_id,
@@ -117,6 +124,13 @@ final class PeerTube_Publication_Plan
             'description_markdown'    => $description,
             'tags'                    => $tags,
             'support'                 => $support,
+        );
+        // Preserve the exact hash of older version-1 plans that predate the
+        // explicit pre-publication visibility field. New/edited plans carry it.
+        if ($has_pre_publish_privacy) {
+            $result['pre_publish_privacy_id'] = $pre_publish_privacy_id;
+        }
+        $result += array(
             'final_privacy_id'        => $final_privacy_id,
             'licence_id'              => $licence_id,
             'category_id'             => $category_id,
@@ -132,6 +146,16 @@ final class PeerTube_Publication_Plan
             'release_policy'          => $release,
             'anchor_post_id'          => $anchor_post_id,
         );
+        return $result;
+    }
+
+    /** @param array<string,mixed> $plan */
+    public static function pre_publish_privacy_id(array $plan): string
+    {
+        $value = $plan['pre_publish_privacy_id'] ?? self::PRE_PUBLISH_PRIVATE;
+        return is_string($value) && in_array($value, array(self::PRE_PUBLISH_PRIVATE, self::PRE_PUBLISH_UNLISTED), true)
+            ? $value
+            : self::PRE_PUBLISH_PRIVATE;
     }
 
     /** @param array<string,mixed> $plan */

@@ -425,6 +425,16 @@
                     rows: 4,
                     onChange: function (value) { setNested('support', 'markdown', value); }
                 }) : null,
+                publicationDraft.dispatch_policy === 'send_now' ? el(SelectControl, {
+                    label: __('Before WordPress publishes', 'argentwolf-video-processor'),
+                    value: publicationDraft.pre_publish_privacy_id || '3',
+                    options: [
+                        { label: __('Private', 'argentwolf-video-processor'), value: '3' },
+                        { label: __('Unlisted', 'argentwolf-video-processor'), value: '2' }
+                    ],
+                    onChange: function (value) { setDraftField('pre_publish_privacy_id', value, 'privacy'); },
+                    help: __('For a scheduled WordPress post sent early, Private is the safe default. Unlisted permits direct-link access after PeerTube is ready but before WordPress publishes.', 'argentwolf-video-processor')
+                }) : null,
                 el(SelectControl, {
                     label: __('Final privacy', 'argentwolf-video-processor'),
                     value: publicationDraft.final_privacy_id || '',
@@ -533,7 +543,7 @@
                     label: __('I reviewed these PeerTube publishing settings', 'argentwolf-video-processor'),
                     checked: allReviewed,
                     onChange: setAllReview,
-                    help: __('Confirms the title, channel, tags, final privacy, and sensitive-content declaration shown above. Changing any reviewed item requires review again.', 'argentwolf-video-processor')
+                    help: __('Confirms the title, channel, tags, pre-publication/final visibility, and sensitive-content declaration shown above. Changing any reviewed item requires review again.', 'argentwolf-video-processor')
                 }),
                 el(SelectControl, {
                     label: __('Dispatch timing', 'argentwolf-video-processor'),

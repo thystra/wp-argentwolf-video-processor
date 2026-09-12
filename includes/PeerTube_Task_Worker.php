@@ -361,11 +361,11 @@ final class PeerTube_Task_Worker
         $automatic_action = match ($status) {
             'requeued' => 'AWVP queued the next bounded retry or continuation.',
             'failed' => 'Automatic processing stopped at this task boundary.',
-            'indeterminate', 'conflict' => 'Automatic replay stopped until durable state can be reconciled.',
-            default => 'AWVP committed this durable processing boundary.',
+            'indeterminate', 'conflict' => 'Automatic replay stopped until the recorded state can be checked safely.',
+            default => 'AWVP saved the current task result.',
         };
         if ('mutation_indeterminate' === $service || PeerTube_Staged_Upload_State_Machine::PHASE_UPLOAD_INDETERMINATE === $phase) {
-            $automatic_action = 'Automatic replay is stopped by the no-blind-replay safety boundary.';
+            $automatic_action = 'Automatic replay is stopped until the provider result is explicitly checked.';
         }
         if (PeerTube_Upload_Task_Coordinator::TASK_FAILURE_NOTIFY === $task_type) {
             $automatic_action = PeerTube_Staged_Upload_State_Machine::PHASE_UPLOAD_INDETERMINATE === $phase
@@ -423,22 +423,35 @@ final class PeerTube_Task_Worker
             return 'PeerTube processing stopped at Step '.$step.' of 7 with HTTP '.$http_status.'.';
         }
         if ('waiting' === $service) {
-            return 'PeerTube publication is waiting for a current server, credential, or catalog dependency.';
+            return 'PeerTube publication is waiting for the server connection, credentials, or publishing choices to become current. AWVP will retry automatically.';
         }
         if (PeerTube_Staged_Upload_State_Machine::PHASE_UPLOAD_INDETERMINATE === $phase) {
             return 'The upload outcome is indeterminate and automatic byte replay is blocked.';
         }
+        $service_message = match ($service) {
+            'stale' => 'This task was superseded by a newer publication state; no further action was taken by this task.',
+            'private_upload_handoff' => 'Source and remote upload checks passed. PeerTube upload work is queued; visibility remains restricted until the WordPress post reaches the reviewed publication stage.',
+            'ready_verified' => 'PeerTube finished processing and the remote video was verified ready.',
+            'staged_private' => 'PeerTube is ready and remains Private until the WordPress post publishes.',
+            'staged_prepublication' => 'PeerTube is ready at the reviewed pre-publication visibility and will wait for WordPress to publish before final visibility is applied.',
+            'corrected_private' => 'WordPress publication state changed; AWVP verified that the PeerTube video was returned to Private.',
+            'verified', 'verified_existing', 'already_verified' => 'PeerTube publication settings and visitor-facing serving were verified successfully.',
+            default => '',
+        };
+        if ('' !== $service_message) {
+            return $service_message;
+        }
         return match ($task_type) {
-            'peertube_publication_sync' => 'WordPress publication authority and source preparation reached a durable boundary.',
+            'peertube_publication_sync' => 'Source and remote upload checks completed.',
             PeerTube_Upload_Task_Coordinator::TASK_UPLOAD_ADVANCE => 4 === $step
-                ? 'Video transfer to PeerTube reached a durable boundary.'
-                : 'PeerTube upload initialization reached a durable boundary.',
-            PeerTube_Upload_Task_Coordinator::TASK_REMOTE_RECONCILE => 'PeerTube processing status reconciliation reached a durable boundary.',
+                ? 'The current video transfer step completed.'
+                : 'PeerTube upload initialization completed.',
+            PeerTube_Upload_Task_Coordinator::TASK_REMOTE_RECONCILE => 'PeerTube processing status was checked.',
             'peertube_publication_finalize' => 7 === $step
-                ? 'PeerTube publication verification and serving cutover reached a durable boundary.'
-                : 'PeerTube publication finalization reached a durable boundary.',
-            'peertube_local_retention_cleanup' => 'Verified serving and local retention cleanup reached a durable boundary.',
-            default => 'PeerTube processing reached a durable boundary.',
+                ? 'PeerTube serving verification completed.'
+                : 'PeerTube publication settings were checked and applied as allowed by the current WordPress post state.',
+            'peertube_local_retention_cleanup' => 'Local retention checks and the requested cleanup step completed.',
+            default => 'The current PeerTube processing step completed.',
         };
     }
 

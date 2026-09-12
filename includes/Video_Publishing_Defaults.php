@@ -27,6 +27,7 @@ final class Video_Publishing_Defaults
             'version'             => self::VERSION,
             'default_destination' => Video_Destination::local(),
             'site'                => array(
+                'pre_publish_privacy_id' => PeerTube_Publication_Plan::PRE_PUBLISH_PRIVATE,
                 'final_privacy_id'   => '1',
                 'licence_id'         => '',
                 'category_id'        => '',
@@ -117,6 +118,7 @@ final class Video_Publishing_Defaults
             ? $override['channel_id']
             : $fallback_channel;
 
+        $pre_publish_privacy = (string) ($site['pre_publish_privacy_id'] ?? PeerTube_Publication_Plan::PRE_PUBLISH_PRIVATE);
         $privacy = self::inherit($override['final_privacy_id'] ?? null, $site['final_privacy_id']);
         $licence = self::inherit($override['licence_id'] ?? null, $site['licence_id']);
         $category = self::inherit($override['category_id'] ?? null, $site['category_id']);
@@ -137,9 +139,10 @@ final class Video_Publishing_Defaults
         }
 
         return array(
-            'backend_id'         => $backend_id,
-            'channel_id'         => $channel_id,
-            'final_privacy_id'   => $privacy,
+            'backend_id'              => $backend_id,
+            'channel_id'              => $channel_id,
+            'pre_publish_privacy_id'  => $pre_publish_privacy,
+            'final_privacy_id'        => $privacy,
             'licence_id'         => $licence,
             'category_id'        => $category,
             'language'           => $language,
@@ -184,6 +187,10 @@ final class Video_Publishing_Defaults
             return null;
         }
 
+        $pre_publish_privacy = self::enum(
+            $value['pre_publish_privacy_id'] ?? PeerTube_Publication_Plan::PRE_PUBLISH_PRIVATE,
+            array(PeerTube_Publication_Plan::PRE_PUBLISH_PRIVATE, PeerTube_Publication_Plan::PRE_PUBLISH_UNLISTED)
+        );
         $privacy = self::privacy_id($value['final_privacy_id'] ?? null, false);
         $licence = self::provider_id($value['licence_id'] ?? null, true);
         $category = self::provider_id($value['category_id'] ?? null, true);
@@ -198,7 +205,7 @@ final class Video_Publishing_Defaults
         $moderation = self::moderation_prefill($value['moderation'] ?? null);
 
         if (
-            null === $privacy || null === $licence || null === $category || null === $language
+            '' === $pre_publish_privacy || null === $privacy || null === $licence || null === $category || null === $language
             || '' === $comments || null === $download || null === $support_id || '' === $dispatch
             || null === $moderation
         ) {
@@ -206,6 +213,7 @@ final class Video_Publishing_Defaults
         }
 
         return array(
+            'pre_publish_privacy_id' => $pre_publish_privacy,
             'final_privacy_id'  => $privacy,
             'licence_id'        => $licence,
             'category_id'       => $category,

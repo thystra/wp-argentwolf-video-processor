@@ -85,6 +85,7 @@ namespace {
     $assert(is_array($defaults), 'Absent publishing option must resolve to defaults.');
     $assert(Video_Destination::local() === $defaults['default_destination'], 'Upgrade-safe default destination must be WordPress/local.');
     $assert('1' === $defaults['site']['final_privacy_id'], 'Default final PeerTube privacy must be Public.');
+$assert(PeerTube_Publication_Plan::PRE_PUBLISH_PRIVATE === $defaults['site']['pre_publish_privacy_id'], 'Default pre-publication visibility must be Private.');
     $assert(PeerTube_Publication_Plan::DISPATCH_ON_SCHEDULE_OR_PUBLISH === $defaults['site']['dispatch_policy'], 'Default dispatch timing drifted.');
     $assert(array() === $GLOBALS['awvp_publishing_option_writes'], 'Reading absent defaults must not materialize an option.');
 
@@ -93,6 +94,7 @@ namespace {
     $settings['site']['licence_id'] = '2';
     $settings['site']['category_id'] = '15';
     $settings['site']['language'] = 'en';
+    $settings['site']['pre_publish_privacy_id'] = PeerTube_Publication_Plan::PRE_PUBLISH_UNLISTED;
     $settings['site']['support_preset_id'] = 'wolf-raven';
     $settings['support_presets'] = array(
         'wolf-raven' => array(
@@ -117,6 +119,7 @@ namespace {
 
     $effective = Video_Publishing_Defaults::effective_for_backend($settings, $registry->descriptors['pt-primary']);
     $assert('303' === ($effective['channel_id'] ?? ''), 'Backend channel override was not applied.');
+    $assert(PeerTube_Publication_Plan::PRE_PUBLISH_UNLISTED === ($effective['pre_publish_privacy_id'] ?? ''), 'Pre-publication visibility default was not inherited.');
     $assert('2' === ($effective['final_privacy_id'] ?? ''), 'Backend privacy override was not applied.');
     $assert('2' === ($effective['licence_id'] ?? ''), 'Null backend licence override must inherit site licence.');
     $assert('' === ($effective['category_id'] ?? 'x'), 'Empty backend category override must explicitly clear site category.');

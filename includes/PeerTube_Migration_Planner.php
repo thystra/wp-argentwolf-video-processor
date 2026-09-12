@@ -487,7 +487,12 @@ final class PeerTube_Migration_Planner
             return array();
         }
         $privacy = is_string($effective['final_privacy_id'] ?? null) ? $effective['final_privacy_id'] : '';
-        if (! isset($catalog['privacies'][$privacy]) || '5' === $privacy) {
+        $pre_publish_privacy = is_string($effective['pre_publish_privacy_id'] ?? null)
+            ? $effective['pre_publish_privacy_id']
+            : PeerTube_Publication_Plan::PRE_PUBLISH_PRIVATE;
+        if (! isset($catalog['privacies'][$privacy]) || '5' === $privacy
+            || ! in_array($pre_publish_privacy, array(PeerTube_Publication_Plan::PRE_PUBLISH_PRIVATE, PeerTube_Publication_Plan::PRE_PUBLISH_UNLISTED), true)
+            || ! isset($catalog['privacies'][$pre_publish_privacy])) {
             return array();
         }
         $licence = is_string($effective['licence_id'] ?? null) ? $effective['licence_id'] : '';
@@ -521,6 +526,7 @@ final class PeerTube_Migration_Planner
             'description_markdown'    => '',
             'tags'                    => $tags,
             'support'                 => $support,
+            'pre_publish_privacy_id'  => $pre_publish_privacy,
             'final_privacy_id'        => $privacy,
             'licence_id'              => $licence,
             'category_id'             => $category,
@@ -644,7 +650,9 @@ final class PeerTube_Migration_Planner
             return false;
         }
         $privacy = (string) $plan['final_privacy_id'];
-        if ('5' === $privacy || ! isset($catalog['privacies'][$privacy])) {
+        $pre_publish_privacy = PeerTube_Publication_Plan::pre_publish_privacy_id($plan);
+        if ('5' === $privacy || ! isset($catalog['privacies'][$privacy])
+            || ! isset($catalog['privacies'][$pre_publish_privacy])) {
             return false;
         }
         $licence = (string) $plan['licence_id'];

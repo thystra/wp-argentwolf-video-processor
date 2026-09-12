@@ -260,7 +260,13 @@ final class PeerTube_Publication_Synchronizer
         $scheduled_or_published = in_array($status, array('future','publish','private'), true);
         $upload_authorized = PeerTube_Publication_Plan::DISPATCH_SEND_NOW === $dispatch || $scheduled_or_published;
         $reveal_authorized = 'publish' === $status;
-        $target_privacy = $reveal_authorized ? (string) $plan['final_privacy_id'] : '3';
+        $target_privacy = $reveal_authorized
+            ? (string) $plan['final_privacy_id']
+            : (
+                'future' === $status && PeerTube_Publication_Plan::DISPATCH_SEND_NOW === $dispatch
+                    ? PeerTube_Publication_Plan::pre_publish_privacy_id($plan)
+                    : PeerTube_Publication_Plan::PRE_PUBLISH_PRIVATE
+            );
         $plan_sha = PeerTube_Publication_Lifecycle::plan_sha256($plan);
         if ('' === $plan_sha) {
             return array();

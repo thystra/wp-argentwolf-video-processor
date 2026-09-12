@@ -65,13 +65,15 @@ final class PeerTube_Publication_Lifecycle
             return array();
         }
 
-        // Public/non-private target is authorized only by an actual WordPress
-        // publish state. Every other state must target PeerTube private.
+        // Final reviewed visibility is authorized only by an actual WordPress
+        // publish state. Before publication, Send now may optionally stage a
+        // scheduled post as Unlisted; every other non-published state remains
+        // Private. This is staging only and never grants serving cutover.
         if ($reveal) {
             if ('publish' !== $status || ! $upload) {
                 return array();
             }
-        } elseif ('3' !== $privacy) {
+        } elseif (! self::pre_publish_target_allowed($status, $dispatch, $upload, $privacy)) {
             return array();
         }
 
@@ -89,6 +91,22 @@ final class PeerTube_Publication_Lifecycle
             'task_pending'       => $pending,
             'updated_at'         => $updated_at,
         );
+    }
+
+
+    public static function pre_publish_target_allowed(
+        string $status,
+        string $dispatch,
+        bool $upload_authorized,
+        string $privacy_id
+    ): bool {
+        if (PeerTube_Publication_Plan::PRE_PUBLISH_PRIVATE === $privacy_id) {
+            return true;
+        }
+        return PeerTube_Publication_Plan::PRE_PUBLISH_UNLISTED === $privacy_id
+            && 'future' === $status
+            && PeerTube_Publication_Plan::DISPATCH_SEND_NOW === $dispatch
+            && $upload_authorized;
     }
 
     /** @param array<string,mixed> $record @return array<string,mixed> */

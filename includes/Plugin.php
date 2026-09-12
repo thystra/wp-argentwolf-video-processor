@@ -268,6 +268,12 @@ final class Plugin
                 )
             );
             $overview_dispositions = new Overview_Disposition_Store();
+            $publication_history = new Publication_History_Admin(
+                $peertube_events,
+                $peertube_remote_assets,
+                $video_serving,
+                $this->backend_registry
+            );
             $peertube_overview = new PeerTube_Overview_Admin(
                 $peertube_upload_operations,
                 $peertube_incomplete_work,
@@ -290,7 +296,8 @@ final class Plugin
                 $video_publishing_admin,
                 $peertube_migration_admin,
                 $local_retention_admin,
-                $peertube_overview
+                $peertube_overview,
+                $publication_history
             );
 
             add_action('admin_init', array($admin, 'register'));

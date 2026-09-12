@@ -365,7 +365,11 @@ final class PeerTube_Migration_Admin
                 <tr><th><label for="awvp-migration-title"><?php esc_html_e('PeerTube title', 'argentwolf-video-processor'); ?></label></th><td><input id="awvp-migration-title" class="regular-text" name="publication[title]" value="<?php echo esc_attr((string)$plan['title']); ?>" required></td></tr>
                 <tr><th><label for="awvp-migration-description"><?php esc_html_e('Markdown description', 'argentwolf-video-processor'); ?></label></th><td><textarea id="awvp-migration-description" class="large-text" rows="5" name="publication[description_markdown]"><?php echo esc_textarea((string)$plan['description_markdown']); ?></textarea></td></tr>
                 <tr><th><label for="awvp-migration-tags"><?php esc_html_e('PeerTube tags', 'argentwolf-video-processor'); ?></label></th><td><input id="awvp-migration-tags" class="regular-text" name="publication[tags]" value="<?php echo esc_attr(implode(', ', $plan['tags'])); ?>"><p class="description"><?php esc_html_e('Comma-separated; maximum five. An empty value is valid only when you explicitly review the zero-tag choice below.', 'argentwolf-video-processor'); ?></p></td></tr>
-                <?php $this->provider_select('final_privacy_id', __('Final privacy', 'argentwolf-video-processor'), (string)$plan['final_privacy_id'], is_array($catalog)?$catalog['privacies']??array():array(), false); ?>
+                <?php if (PeerTube_Publication_Plan::DISPATCH_SEND_NOW === ($plan['dispatch_policy'] ?? null)) : ?>
+                    <?php $this->provider_select('pre_publish_privacy_id', __('Before WordPress publishes', 'argentwolf-video-processor'), PeerTube_Publication_Plan::pre_publish_privacy_id($plan), is_array($catalog)?array_intersect_key($catalog['privacies']??array(),array(PeerTube_Publication_Plan::PRE_PUBLISH_PRIVATE=>true,PeerTube_Publication_Plan::PRE_PUBLISH_UNLISTED=>true)):array(), false); ?>
+                    <tr><th></th><td><p class="description"><?php esc_html_e('Private is the safe default. Unlisted allows a direct PeerTube link to work after processing finishes while the WordPress post is still scheduled; final visibility is applied only after WordPress actually publishes.', 'argentwolf-video-processor'); ?></p></td></tr>
+                <?php endif; ?>
+                <?php $this->provider_select('final_privacy_id', __('After WordPress publishes', 'argentwolf-video-processor'), (string)$plan['final_privacy_id'], is_array($catalog)?$catalog['privacies']??array():array(), false); ?>
                 <?php $this->provider_select('licence_id', __('Licence', 'argentwolf-video-processor'), (string)$plan['licence_id'], is_array($catalog)?$catalog['licences']??array():array(), true); ?>
                 <?php $this->provider_select('category_id', __('Category', 'argentwolf-video-processor'), (string)$plan['category_id'], is_array($catalog)?$catalog['categories']??array():array(), true); ?>
                 <?php $this->provider_select('language', __('Language', 'argentwolf-video-processor'), (string)$plan['language'], is_array($catalog)?$catalog['languages']??array():array(), true); ?>
@@ -380,7 +384,7 @@ final class PeerTube_Migration_Admin
                 </td></tr>
                 <tr><th><?php esc_html_e('Explicit review', 'argentwolf-video-processor'); ?></th><td>
                     <?php $all_reviewed = ! in_array(false, array_map(static fn(string $field): bool => true === ($plan['review'][$field] ?? false), array('title','channel','tags','privacy','moderation')), true); ?>
-                    <label style="display:block"><input type="checkbox" name="publication[review_all]" value="1" <?php checked(true, $all_reviewed); ?>> <?php esc_html_e('I reviewed the PeerTube title, target channel, tags (including zero tags if applicable), final privacy, and sensitive-content declaration.', 'argentwolf-video-processor'); ?></label>
+                    <label style="display:block"><input type="checkbox" name="publication[review_all]" value="1" <?php checked(true, $all_reviewed); ?>> <?php esc_html_e('I reviewed the PeerTube title, target channel, tags (including zero tags if applicable), pre-publication and final visibility, and sensitive-content declaration.', 'argentwolf-video-processor'); ?></label>
                 </td></tr>
             </table>
             <?php submit_button(__('Save migration review', 'argentwolf-video-processor')); ?>
@@ -395,7 +399,7 @@ final class PeerTube_Migration_Admin
     private function form_to_plan(array $before, array $input): array
     {
         $next = $before;
-        foreach (array('title','description_markdown','final_privacy_id','licence_id','category_id','language','comments_policy') as $field) {
+        foreach (array('title','description_markdown','pre_publish_privacy_id','final_privacy_id','licence_id','category_id','language','comments_policy') as $field) {
             if (isset($input[$field]) && is_string($input[$field])) {
                 $next[$field] = $input[$field];
             }

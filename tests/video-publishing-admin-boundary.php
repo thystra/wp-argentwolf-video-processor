@@ -22,6 +22,9 @@ $assert(str_contains($admin, "check_admin_referer(self::NONCE_REFRESH . ':' . \$
 $assert(str_contains($admin, 'wp_safe_redirect('), 'Publishing mutation must terminate through a safe redirect.');
 $assert(str_contains($admin, 'Existing videos keep their current destination and are not migrated automatically.'), 'Upgrade-safe destination guidance disappeared from publishing page.');
 $assert(str_contains($admin, 'Videos sent to PeerTube remain locally playable while they upload and process.'), 'Prepublication privacy guidance disappeared from publishing page.');
+$assert(str_contains($admin, "esc_html_e('Before WordPress publishes'"), 'Publishing settings do not expose pre-publication visibility.');
+$assert(str_contains($admin, 'PeerTube_Publication_Plan::PRE_PUBLISH_PRIVATE') && str_contains($admin, 'PeerTube_Publication_Plan::PRE_PUBLISH_UNLISTED'), 'Publishing settings do not constrain pre-publication visibility to Private/Unlisted.');
+$assert(str_contains($admin, 'Private is the safe default. Unlisted allows the ready PeerTube copy to be shared by direct link before WordPress publishes.'), 'Publishing settings do not explain scheduled Send-now pre-publication visibility.');
 $assert(str_contains($admin, 'Every PeerTube video still requires an explicit sensitive-content review'), 'Moderation review guidance disappeared from publishing page.');
 $assert(str_contains($admin, 'The support Markdown is attached to the video when the video publish operation is created'), 'Support-preset guidance is not written in user-facing publish terminology.');
 $assert(str_contains($admin, 'before AWVP will publish the video to the PeerTube server'), 'Sensitive-content guidance is not written in user-facing publish terminology.');

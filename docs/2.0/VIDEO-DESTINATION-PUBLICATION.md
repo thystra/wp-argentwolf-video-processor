@@ -118,18 +118,21 @@ the post waits.
 
 ## 6. Prepublication PeerTube visibility
 
-Early upload must not spoil scheduled content. A video whose final PeerTube
-privacy will expose it publicly is uploaded/kept in a private prepublication
-state while the WordPress post is draft, pending, or scheduled.
+Early upload must not spoil scheduled content. Private is the default
+prepublication state. RC13.2 adds an explicitly reviewed exception for **Send
+now** videos whose anchor is actually `future`: the ready PeerTube copy may be
+set Unlisted before WordPress publishes. Draft/pending/private/unknown states
+remain Private, and `Send when scheduled or published` does not use the Unlisted
+staging choice.
 
-The actual WordPress post-status transition is authoritative for reveal. A
-scheduled timestamp by itself must not expose the PeerTube video because
-WordPress cron/publication may be delayed.
+The actual WordPress post-status transition remains authoritative for final
+visibility. A scheduled timestamp by itself never applies final privacy because
+WordPress cron/publication may be delayed. Unlisted staging is not final
+publication evidence and never establishes frontend serving authority.
 
 At actual WordPress publication:
 
-1. enqueue a durable remote-visibility update; do not call PeerTube inline from
-   a post-status hook;
+1. supersede any pre-publication staging generation and enqueue a durable final-visibility update; do not call PeerTube inline from a post-status hook;
 2. keep serving the local copy during the visibility mutation;
 3. verify the remote video has the intended final privacy and is ready;
 4. only then switch serving authority to PeerTube.
@@ -369,6 +372,15 @@ PUTs could obscure what the provider actually accepted. Edits requiring ambiguou
 provider clear semantics fail closed. R46.5b does not switch the block/player to
 PeerTube even after successful publication; verified local-first serving cutover
 is the separate R46.6 checkpoint.
+
+RC13.2 extends this qualified baseline without weakening it: a current `future` +
+`Send now` lifecycle may target only Private or Unlisted according to the reviewed
+plan. The finalizer rechecks that the anchor is still `future` before applying
+Unlisted. This stage is recorded as pre-publication only, never marks the final
+manifest applied, never performs public-serving qualification/cutover, and is
+superseded by the actual publish generation. If processing finishes only after
+WordPress has published, the stale scheduled generation stops and the publish
+generation applies final privacy directly.
 ### R46.6 verified serving cutover
 
 R46.5b is qualified at commit `8a7685b`, tree `c6b0db36226bf17738840b3474afdb05af3529c5`, Forgejo CI run 132. R46.6 changes serving authority only after that executor has positively verified the exact ready remote asset and intended publication privacy. The local cutover record is evidence, not authority by itself: every frontend render revalidates the current lifecycle generation and plan, destination/channel, applied execution, published anchor, and durable remote-asset row. If any evidence is missing, stale, malformed, or no longer verified, the local WordPress video remains authoritative.

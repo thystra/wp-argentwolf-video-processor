@@ -73,6 +73,8 @@ jobs:
           php tests/local-retention-default-policy.php
           php tests/local-delivery-evidence.php
           php tests/peertube-event-repository.php
+          php tests/publication-history-admin.php
+          php tests/operator-event-language.php
           php tests/video-destination-publication-plan.php
           php tests/video-publishing-defaults.php
           php tests/video-publishing-admin-boundary.php
@@ -242,6 +244,7 @@ jobs:
           grep -qx 'argentwolf-video-processor/includes/Serving_Viability.php' "${MANIFEST}"
           grep -qx 'argentwolf-video-processor/includes/Video_Reference_Index.php' "${MANIFEST}"
           grep -qx 'argentwolf-video-processor/includes/Video_Routing_Admin.php' "${MANIFEST}"
+          grep -qx 'argentwolf-video-processor/includes/Publication_History_Admin.php' "${MANIFEST}"
           ! grep -qx 'argentwolf-video-processor/assets/vendor/hls.VERSION' "${MANIFEST}"
           ! grep -qx 'argentwolf-video-processor/assets/vendor/hls.SHA256' "${MANIFEST}"
           ! grep -Eq '/(AGENTS|ARCHITECTURE|TODO|tests|build|ops|\.github|\.forgejo)' "${MANIFEST}"

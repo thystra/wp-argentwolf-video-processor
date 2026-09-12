@@ -12,6 +12,7 @@ final class Settings_Hub
 {
     public const PAGE_SLUG = 'argent-video-processor';
     public const TAB_OVERVIEW = 'overview';
+    public const TAB_HISTORY = 'publication-history';
     public const TAB_VIDEOS = 'videos-routing';
     public const TAB_LOCAL = 'local-processing';
     public const TAB_PEERTUBE = 'peertube-servers';
@@ -26,7 +27,8 @@ final class Settings_Hub
         private readonly Video_Publishing_Admin $publishing,
         private readonly PeerTube_Migration_Admin $migration,
         private readonly Local_Retention_Admin $retention,
-        private readonly ?PeerTube_Overview_Admin $overview = null
+        private readonly ?PeerTube_Overview_Admin $overview = null,
+        private readonly ?Publication_History_Admin $history = null
     ) {
     }
 
@@ -66,6 +68,13 @@ final class Settings_Hub
                             $this->local->render_tab();
                         }
                         break;
+                    case self::TAB_HISTORY:
+                        if (null !== $this->history) {
+                            $this->history->render_tab();
+                        } else {
+                            $this->local->render_tab();
+                        }
+                        break;
                     case self::TAB_VIDEOS:
                         $this->routing->render_tab();
                         break;
@@ -96,6 +105,7 @@ final class Settings_Hub
     {
         return array(
             self::TAB_OVERVIEW => __('Overview', 'argentwolf-video-processor'),
+            self::TAB_HISTORY => __('History & Logs', 'argentwolf-video-processor'),
             self::TAB_VIDEOS => __('Videos & Routing', 'argentwolf-video-processor'),
             self::TAB_LOCAL => __('Local Processing', 'argentwolf-video-processor'),
             self::TAB_PEERTUBE => __('PeerTube Servers', 'argentwolf-video-processor'),

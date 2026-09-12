@@ -15,7 +15,7 @@ namespace ArgentVideo {
         public function insert(string $table,array $data,array $format): int|false { if('wp_argent_video_events'!==$table||count($data)!==count($format))return false; $data['id']=++$this->insert_id; $GLOBALS['awvp_event_rows'][]=$data; return 1; }
         public function prepare(string $query,mixed ...$args): string { return json_encode(array('query'=>$query,'args'=>$args),JSON_THROW_ON_ERROR); }
         public function get_row(string $prepared,string $output): ?array { unset($output); $decoded=json_decode($prepared,true,8,JSON_THROW_ON_ERROR); $args=$decoded['args']; $task=(int)($args[1]??0); $rows=array_values(array_filter($GLOBALS['awvp_event_rows'],static fn(array $row):bool=>(int)($row['task_id']??0)===$task)); usort($rows,static fn(array $a,array $b):int=>(int)$b['id']<=>(int)$a['id']); return $rows[0]??null; }
-        public function get_results(string $prepared,string $output): array { unset($output); $decoded=json_decode($prepared,true,8,JSON_THROW_ON_ERROR); $args=$decoded['args']; $video=(int)($args[1]??0); $limit=(int)($args[2]??20); $rows=array_values(array_filter($GLOBALS['awvp_event_rows'],static fn(array $row):bool=>(int)$row['video_post_id']===$video)); usort($rows,static fn(array $a,array $b):int=>(int)$b['id']<=>(int)$a['id']); return array_slice($rows,0,$limit); }
+        public function get_results(string $prepared,string $output): array { unset($output); $decoded=json_decode($prepared,true,8,JSON_THROW_ON_ERROR); $args=$decoded['args']; $query=(string)$decoded['query']; $rows=$GLOBALS['awvp_event_rows']; if(str_contains($query,'WHERE video_post_id = %d')){ $video=(int)($args[1]??0); $limit=(int)($args[2]??20); $rows=array_values(array_filter($rows,static fn(array $row):bool=>(int)$row['video_post_id']===$video)); } else { $limit=(int)($args[1]??100); } usort($rows,static fn(array $a,array $b):int=>(int)$b['id']<=>(int)$a['id']); return array_slice($rows,0,$limit); }
     }
 }
 
@@ -64,6 +64,9 @@ namespace {
     $assert(500===($row['context']['confirmed_bytes']??null)&&1000===($row['context']['source_bytes']??null),'Bounded byte progress context was not preserved.');
     $assert(7===($row['context']['operator_user_id']??null),'Bounded operator actor identity was not preserved.');
     $assert(!array_key_exists('access_token',$row['context']??array()),'Sensitive context key survived the allow-list.');
+    $assert($repo->record(102,6,'verified','info','Second video completed.',2010,78,'',56,'pt-secondary',200),'Second video event did not persist.');
+    $global=$repo->recent_global(10);
+    $assert(2===count($global)&&102===($global[0]['video_post_id']??0)&&101===($global[1]['video_post_id']??0),'Global bounded history did not return newest retained events across videos.');
     $task_row=$repo->latest_for_task(77);
     $assert(is_array($task_row)&&'transfer_interrupted'===($task_row['event_code']??''),'Exact task event lookup did not return the latest event.');
     $assert(null===$repo->latest_for_task(999),'Unknown task event lookup did not return null.');

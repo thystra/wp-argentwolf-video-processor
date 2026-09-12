@@ -84,7 +84,7 @@ shared hosting.
 - bounded database-backed worker diagnostic history and retention controls.
 
 The 2.0 line consolidates administration into the same **Settings > ArgentWolf
-Video Processor** page with tabs for **Overview**, **Videos & Routing**, **Local Processing**, **PeerTube Servers**,
+Video Processor** page with tabs for **Overview**, **History & Logs**, **Videos & Routing**, **Local Processing**, **PeerTube Servers**,
 **Publishing**, **Video Migration**, and **Local Retention**. The PeerTube Servers
 tab is available only to authenticated administrators with `manage_options`; its
 connection and credential actions are nonce-protected and explicitly initiated.
@@ -98,14 +98,16 @@ metadata as explicit per-video state. Existing/legacy videos with no destination
 metadata resolve to WordPress/local regardless of later site-default changes.
 PeerTube-bound videos retain a local serving fallback until remote readiness and
 the intended visibility are verified. PeerTube tags are reviewed independently
-from WordPress post tags, and early/scheduled uploads remain private on PeerTube
-until the WordPress post actually reaches its publication state. See
+from WordPress post tags. Early uploads remain Private by default; a scheduled
+**Send now** video may explicitly use Unlisted pre-publication visibility after
+processing, but final visibility and frontend cutover still wait for the actual
+WordPress `publish` transition. See
 `docs/2.0/VIDEO-DESTINATION-PUBLICATION.md` for the frozen development contract.
 
 R46.2 publishing defaults are exposed on the **Publishing** tab for new-video
 authoring defaults. Its upgrade-safe default destination is WordPress/local. The
-page can select a default active PeerTube backend, final privacy, licence/category
-IDs, language, comments/download policy, send timing, reusable Markdown support
+page can select a default active PeerTube backend, pre-publication visibility for
+scheduled Send-now work, final privacy, licence/category IDs, language, comments/download policy, send timing, reusable Markdown support
 presets, moderation prefills, and per-backend channel/provider overrides. These
 values only prefill new/unfrozen videos: they never rewrite existing video state,
 and moderation/tags still require explicit per-video review.
@@ -130,9 +132,11 @@ planning state. This checkpoint still renders the local WordPress attachment and
 does not start a PeerTube upload, publish a remote video, or switch serving
 authority. The detailed PeerTube publication/review wizard follows separately.
 
-R46.7 migration controls are exposed on the **Video Migration** tab for planning existing local AWVP Videos. The active migration review queue appears before the longer discovery list. The planner can select individual videos or a bounded select-all batch, choose an owned PeerTube channel from the last-known-good catalog, and review per-video publication metadata. WordPress tags are suggestions only and more than five are never silently truncated. One explicit review acknowledgement covers the title, channel, tags, privacy, and sensitive-content declaration while the durable plan retains those individual review fields. Once a review is saved as ready, the one-way acknowledgement and **Start migration** action are offered inline. Planning writes only inert migration state; it does not change the live destination/publication plan, enqueue PeerTube work, or switch frontend serving.
+R46.7 migration controls are exposed on the **Video Migration** tab for planning existing local AWVP Videos. The active migration review queue appears before the longer discovery list. The planner can select individual videos or a bounded select-all batch, choose an owned PeerTube channel from the last-known-good catalog, and review per-video publication metadata. WordPress tags are suggestions only and more than five are never silently truncated. One explicit review acknowledgement covers the title, channel, tags, pre-publication/final visibility, and sensitive-content declaration while the durable plan retains those individual review fields. Once a review is saved as ready, the one-way acknowledgement and **Start migration** action are offered inline. Planning writes only inert migration state; it does not change the live destination/publication plan, enqueue PeerTube work, or switch frontend serving.
 
 The **Videos & Routing** tab is a read-only inventory of every AWVP Video, its Media Library attachment, every boundedly discovered WordPress post that references it, its configured primary destination, and its current serving source. The view also shows the site default primary destination for new videos and local source/retention state. Existing videos retain their concrete stored destination rather than following later default changes. A Backups column is present as a future-facing matrix surface, but this release still configures only one publication destination per video and does not enable multi-backend publishing.
+
+The **History & Logs** tab is a read-only view of bounded retained publication events. It groups recent publication activity by video/upload task, shows the current serving source and remote identity when available, and expands to the preserved seven-step event log. Filtering never resumes work or performs provider HTTP.
 
 R46.8 adds the explicit **Start migration** step for a `ready` plan. Starting is a one-way local commitment: AWVP revalidates current source/provider/default/thumbnail evidence, journals the exact migration plan, promotes its publication plan and target destination, and then invokes the existing durable publication synchronizer. Remote upload/publication and verified serving cutover continue through the already-qualified R46.5/R46.6 paths; R46.8 adds no parallel uploader or frontend path.
 
@@ -291,6 +295,8 @@ RC10 followed controlled RC9 live testing. It preserved RC9 package bytes and ha
 RC13.2 adds a read-only **Videos & Routing** matrix and streamlines explicit legacy migration review while retaining one active publishing destination per video in this release. The routing view already separates configured primary destination from the source actually serving visitors so later ordered backup destinations can be represented without conflating routing intent with health/failover state. Local Retention now supports Never (`0`) and selected per-video finite delays, plus a local-backend mode that removes the WordPress original only while preserving positively verified AWVP-managed HLS delivery.
 
 Overview also gains bounded administrator recovery controls. **Check now** runs the existing visitor-facing health probe for the exact current remote asset and records the result without uploading or changing the remote publication. A fresh successful check can expose **Restore remote serving now**, which may satisfy the recovery-confirmation threshold immediately without allowing a blind health override. **Rebuild local delivery** durably prepares and queues the existing local FFmpeg/HLS pipeline from the retained WordPress source; FFmpeg still runs only in the detached worker, and remote publication history/routing is not erased or retargeted. Readiness telemetry is labeled **Estimated readiness** and remains advisory.
+
+RC13.2 also adds reviewed **Before WordPress publishes** visibility for scheduled Send-now videos. Private remains the default; Unlisted may be selected for a scheduled post so a direct PeerTube link can work after processing finishes. That staging state never counts as final publication or serving cutover, and the actual WordPress `future` -> `publish` transition creates the generation that applies final visibility. **History & Logs** exposes the bounded retained publication/event evidence without adding replay controls, and operator-facing event copy describes concrete checks and outcomes instead of internal boundary/authority terminology.
 
 ### RC13.1 scheduled-publication generation fencing (development)
 

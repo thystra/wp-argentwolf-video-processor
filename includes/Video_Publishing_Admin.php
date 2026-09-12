@@ -179,6 +179,16 @@ final class Video_Publishing_Admin
                         </tr>
                         <?php $site = $settings['site']; ?>
                         <tr>
+                            <th scope="row"><label for="awvp-pre-publish-privacy"><?php esc_html_e('Before WordPress publishes', 'argentwolf-video-processor'); ?></label></th>
+                            <td>
+                                <select id="awvp-pre-publish-privacy" name="awvp_publishing[site][pre_publish_privacy_id]">
+                                    <option value="<?php echo esc_attr(PeerTube_Publication_Plan::PRE_PUBLISH_PRIVATE); ?>" <?php selected((string) ($site['pre_publish_privacy_id'] ?? PeerTube_Publication_Plan::PRE_PUBLISH_PRIVATE), PeerTube_Publication_Plan::PRE_PUBLISH_PRIVATE); ?>><?php esc_html_e('Private', 'argentwolf-video-processor'); ?></option>
+                                    <option value="<?php echo esc_attr(PeerTube_Publication_Plan::PRE_PUBLISH_UNLISTED); ?>" <?php selected((string) ($site['pre_publish_privacy_id'] ?? PeerTube_Publication_Plan::PRE_PUBLISH_PRIVATE), PeerTube_Publication_Plan::PRE_PUBLISH_UNLISTED); ?>><?php esc_html_e('Unlisted', 'argentwolf-video-processor'); ?></option>
+                                </select>
+                                <p class="description"><?php esc_html_e('Used only when a reviewed video is sent early and the WordPress post is actually scheduled. Private is the safe default. Unlisted allows the ready PeerTube copy to be shared by direct link before WordPress publishes.', 'argentwolf-video-processor'); ?></p>
+                            </td>
+                        </tr>
+                        <tr>
                             <th scope="row"><label for="awvp-final-privacy"><?php esc_html_e('Default final PeerTube visibility', 'argentwolf-video-processor'); ?></label></th>
                             <td>
                                 <select id="awvp-final-privacy" name="awvp_publishing[site][final_privacy_id]">
@@ -186,7 +196,7 @@ final class Video_Publishing_Admin
                                         <option value="<?php echo esc_attr($id); ?>" <?php selected((string) $site['final_privacy_id'], $id); ?>><?php echo esc_html($label); ?></option>
                                     <?php endforeach; ?>
                                 </select>
-                                <p class="description"><?php esc_html_e('This is the final visibility after WordPress publication. Early uploads are held private first.', 'argentwolf-video-processor'); ?></p>
+                                <p class="description"><?php esc_html_e('This visibility is applied after the WordPress post actually publishes.', 'argentwolf-video-processor'); ?></p>
                             </td>
                         </tr>
                         <tr>
@@ -440,6 +450,7 @@ final class Video_Publishing_Admin
             'version'             => Video_Publishing_Defaults::VERSION,
             'default_destination' => $destination,
             'site'                => array(
+                'pre_publish_privacy_id' => is_string($site_input['pre_publish_privacy_id'] ?? null) ? $site_input['pre_publish_privacy_id'] : PeerTube_Publication_Plan::PRE_PUBLISH_PRIVATE,
                 'final_privacy_id'  => is_string($site_input['final_privacy_id'] ?? null) ? $site_input['final_privacy_id'] : '',
                 'licence_id'        => is_string($site_input['licence_id'] ?? null) ? $site_input['licence_id'] : '',
                 'category_id'       => is_string($site_input['category_id'] ?? null) ? $site_input['category_id'] : '',

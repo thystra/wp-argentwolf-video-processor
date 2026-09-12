@@ -142,6 +142,7 @@ final class Remote_Republish_Service
             if(array()===$effective)return null;
             $plan=$current;
             $plan['backend_id']=$backend_id;$plan['channel_id']=(string)$effective['channel_id'];
+            $plan['pre_publish_privacy_id']=(string)($effective['pre_publish_privacy_id']??PeerTube_Publication_Plan::PRE_PUBLISH_PRIVATE);
             $plan['final_privacy_id']=(string)$effective['final_privacy_id'];$plan['licence_id']=(string)$effective['licence_id'];
             $plan['category_id']=(string)$effective['category_id'];$plan['language']=(string)$effective['language'];
             $plan['review']['channel']=true;$plan['review']['privacy']=true;

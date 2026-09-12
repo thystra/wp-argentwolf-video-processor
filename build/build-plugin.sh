@@ -155,6 +155,7 @@ for required_runtime_file in \
     Local_Delivery_Evidence.php \
     Local_Retention_Default_Policy_Store.php \
     Overview_Disposition_Store.php \
+    Publication_History_Admin.php \
     PeerTube_Daily_Maintenance_Service.php \
     PeerTube_Publication_Health_Probe.php \
     PeerTube_Publication_Finalizer_Recovery.php \

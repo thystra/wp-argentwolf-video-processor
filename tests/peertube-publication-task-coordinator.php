@@ -244,6 +244,22 @@ namespace {
     $assert(Coordinator::STATUS_COMPLETE===$privateStage['status']&&'staged_private'===$privateStage['service_status'],'Pre-publication private staging did not complete at its non-serving boundary.');
     $assert(''===($privateAfter['applied_manifest_sha256']??''),'Pre-publication Private staging falsely stamped the reviewed final manifest as applied.');
 
+    // RC13.2: Send-now may explicitly stage a scheduled WordPress post as
+    // Unlisted before publication. This is not final publication, must not stamp
+    // the final manifest as applied, and must not cut over frontend serving.
+    $stagePlan=$plan; $stagePlan['pre_publish_privacy_id']=Plan::PRE_PUBLISH_UNLISTED; $stagePlan['final_privacy_id']=Plan::PRE_PUBLISH_UNLISTED; $stagePlan=Plan::sanitize($stagePlan);
+    $stageHash=Lifecycle::plan_sha256($stagePlan);
+    $stageLife=array('version'=>1,'generation'=>1,'backend_id'=>'pt-primary','anchor_post_id'=>$anchor,'plan_sha256'=>$stageHash,'dispatch_policy'=>Plan::DISPATCH_SEND_NOW,'wordpress_status'=>'future','upload_authorized'=>true,'reveal_authorized'=>false,'target_privacy_id'=>Plan::PRE_PUBLISH_UNLISTED,'task_pending'=>true,'updated_at'=>1901);
+    $GLOBALS['awvp_pub_meta']=array($video=>array(Video_Meta::PEERTUBE_PUBLICATION_PLAN=>$stagePlan,Video_Meta::DESTINATION=>array('version'=>1,'backend_id'=>'pt-primary','channel_id'=>'41'),Video_Meta::PEERTUBE_PUBLICATION_LIFECYCLE=>$stageLife));
+    $GLOBALS['awvp_pub_meta_stale']=array(); $GLOBALS['awvp_pub_posts']=array($video=>(object)array('ID'=>$video,'post_author'=>9,'post_status'=>'publish'),$anchor=>(object)array('ID'=>$anchor,'post_author'=>7,'post_status'=>'future')); $GLOBALS['awvp_pub_posts_stale']=array(); $GLOBALS['awvp_pub_options']=array();
+    $stageManifest=Manifest::build($stagePlan,$catalog,array()); $stageExec=Execution::with_operation(Execution::create($stageManifest,1900),'upload_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',1910); $GLOBALS['awvp_pub_meta'][$video][Video_Meta::PEERTUBE_PUBLICATION_EXECUTION]=$stageExec;
+    $stageTask=array('id'=>42,'task_type'=>Coordinator::TASK_FINALIZE,'video_post_id'=>$video,'lock_token'=>'00000000-0000-4000-8000-000000000042','payload_json'=>json_encode(array('version'=>1,'generation'=>1,'plan_sha256'=>$stageHash),JSON_THROW_ON_ERROR));
+    $x=$factory(); $x['operations']->records[$stageExec['operation_id']]=array('phase'=>'ready_verified','remote_asset_id'=>56,'remote_identity'=>array('uuid'=>$uuid)); $x['api']->remote_privacy='3';
+    $unlistedStage=$x['coord']->advance_claimed($stageTask,$now); $unlistedAfter=$GLOBALS['awvp_pub_meta'][$video][Video_Meta::PEERTUBE_PUBLICATION_EXECUTION]??array();
+    $assert(Coordinator::STATUS_COMPLETE===$unlistedStage['status']&&'staged_prepublication'===$unlistedStage['service_status'],'Scheduled Send-now Unlisted staging did not complete at its non-serving boundary.');
+    $assert(1===count($x['api']->publication_calls)&&Plan::PRE_PUBLISH_UNLISTED===$x['api']->publication_calls[0]['privacy'],'Pre-publication finalizer did not apply reviewed Unlisted visibility.');
+    $assert(''===($unlistedAfter['applied_manifest_sha256']??''),'Pre-publication Unlisted staging falsely stamped the reviewed final manifest as applied.');
+
     // Finalize a ready private upload while actually published: final privacy is applied, verified, and recorded.
     $reset($makeLife(1,'publish','1',true,true),'publish'); $manifest=Manifest::build($plan,$catalog,array()); $exec=Execution::with_operation(Execution::create($manifest,1900),'upload_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',1910); $GLOBALS['awvp_pub_meta'][$video][Video_Meta::PEERTUBE_PUBLICATION_EXECUTION]=$exec;
     $ready=array('phase'=>'ready_verified','remote_asset_id'=>55,'remote_identity'=>array('uuid'=>$uuid)); $x=$factory(); $x['operations']->records[$exec['operation_id']]=$ready; $x['api']->remote_privacy='3';

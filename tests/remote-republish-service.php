@@ -66,6 +66,7 @@ final class Video_Destination {
 }
 
 final class PeerTube_Publication_Plan {
+    public const PRE_PUBLISH_PRIVATE = '3';
     public static function sanitize(mixed $value): array {
         if (! is_array($value)) return array();
         $backend = Backend_Identity::sanitize($value['backend_id'] ?? null);

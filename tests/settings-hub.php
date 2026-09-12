@@ -67,6 +67,7 @@ $tabs = Settings_Hub::tabs();
 $assert(
     array(
         Settings_Hub::TAB_OVERVIEW,
+        Settings_Hub::TAB_HISTORY,
         Settings_Hub::TAB_VIDEOS,
         Settings_Hub::TAB_LOCAL,
         Settings_Hub::TAB_PEERTUBE,
@@ -77,6 +78,7 @@ $assert(
     'Unified settings tabs changed or are incomplete.'
 );
 $assert('Overview' === $tabs[Settings_Hub::TAB_OVERVIEW], 'Overview tab label changed.');
+$assert('History & Logs' === $tabs[Settings_Hub::TAB_HISTORY], 'History & Logs tab label changed.');
 $assert('Videos & Routing' === $tabs[Settings_Hub::TAB_VIDEOS], 'Videos & Routing tab label changed.');
 $assert('Local Processing' === $tabs[Settings_Hub::TAB_LOCAL], 'Local Processing tab label changed.');
 $assert('PeerTube Servers' === $tabs[Settings_Hub::TAB_PEERTUBE], 'PeerTube Servers tab label changed.');

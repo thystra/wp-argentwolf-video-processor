@@ -9,7 +9,7 @@ $executor=(string)file_get_contents(dirname(__DIR__).'/includes/PeerTube_Migrati
 $plugin=(string)file_get_contents(dirname(__DIR__).'/includes/Plugin.php');
 $bootstrap=(string)file_get_contents(dirname(__DIR__).'/argentwolf-video-processor.php');
 
-foreach (array('manage_options','check_admin_referer','ACTION_PLAN','ACTION_REVIEW','ACTION_EXECUTE','Plan selected','Plan all eligible','Migration review queue','Save migration review','Start migration','I understand this migration is one-way','Resume migration','Referenced by','I reviewed the PeerTube title, target channel, tags (including zero tags if applicable), final privacy, and sensitive-content declaration.','Review saved. This video is ready to migrate.') as $needle) {
+foreach (array('manage_options','check_admin_referer','ACTION_PLAN','ACTION_REVIEW','ACTION_EXECUTE','Plan selected','Plan all eligible','Migration review queue','Save migration review','Start migration','Before WordPress publishes','After WordPress publishes','I understand this migration is one-way','Resume migration','Referenced by','I reviewed the PeerTube title, target channel, tags (including zero tags if applicable), pre-publication and final visibility, and sensitive-content declaration.','Review saved. This video is ready to migrate.') as $needle) {
     $a(str_contains($admin,$needle),'Migration admin missing required boundary/UI marker: '.$needle);
 }
 foreach (array('wp_remote_','PeerTube_Api_Client','wp_publish_post','transition_post_status','delete_attachment','wp_delete_post') as $forbidden) {

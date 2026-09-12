@@ -95,6 +95,7 @@ require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Connection_Admin_Service.php'
 require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Connection_Admin.php';
 require_once ARGENT_VIDEO_DIR . 'includes/Model_Activator.php';
 require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Event_Repository.php';
+require_once ARGENT_VIDEO_DIR . 'includes/Publication_History_Admin.php';
 require_once ARGENT_VIDEO_DIR . 'includes/Task_Repository.php';
 require_once ARGENT_VIDEO_DIR . 'includes/Local_Retention_Policy.php';
 require_once ARGENT_VIDEO_DIR . 'includes/Local_Delivery_Evidence.php';

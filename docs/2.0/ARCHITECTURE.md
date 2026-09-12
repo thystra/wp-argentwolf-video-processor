@@ -843,8 +843,7 @@ rules:
   upload/transcoding/readiness never does; local playback remains available until
   verified cutover;
 - authors choose `Send now` or `Send when scheduled or published` after review;
-- early/scheduled PeerTube preparation remains private, and actual WordPress
-  publication is authoritative for later remote reveal;
+- early PeerTube preparation remains Private by default; RC13.2 may use a separately reviewed Unlisted staging state only for an actual scheduled (`future`) Send-now post, while actual WordPress publication remains authoritative for final visibility and serving cutover;
 - post-status hooks enqueue durable visibility work only and perform no remote HTTP
   inline;
 - existing-video migration is explicit, local-first during transfer, and logically
@@ -956,13 +955,15 @@ one strict `PeerTube_Publication_Lifecycle` record per anchored AWVP Video and
 queues a `peertube_publication_sync` task keyed by video + lifecycle generation +
 plan commitment.
 
-The status projection is deliberately asymmetric. `future` may authorize upload
-but always targets PeerTube private. Actual WordPress `publish` is the only state
-that can set `reveal_authorized=true` and target the reviewed final privacy.
-`private`, draft/pending, reschedule/revert, trash, and unknown statuses target
-remote private. Generation increments make stale scheduled/reveal tasks harmless
-once R46.5b consumes them: the worker must re-read the current lifecycle generation
-before mutation.
+The status projection is deliberately asymmetric. The qualified baseline makes
+non-published work Private. RC13.2 adds one narrow reviewed staging exception:
+`future` + `Send now` may target Unlisted while keeping
+`reveal_authorized=false`. Actual WordPress `publish` is still the only state that
+sets `reveal_authorized=true` and targets the reviewed final privacy. `private`,
+draft/pending, reschedule/revert, trash, unknown statuses, and non-Send-now future
+work target remote Private. Generation increments make stale scheduled/final
+visibility tasks harmless once R46.5b consumes them: the worker re-reads the
+current lifecycle generation and actual anchor status before mutation.
 
 This sub-checkpoint has no PeerTube API dependency and does not own its new task
 type in `PeerTube_Task_Worker`/launcher yet. Post hooks therefore cannot perform

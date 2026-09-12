@@ -31,6 +31,7 @@ final class PeerTube_Publication_Manifest
             || $plan['backend_id'] !== $catalog['backend_id']
             || ! self::channel_owned((string) $plan['channel_id'], $catalog['channels'])
             || ! isset($catalog['privacies'][(string) $plan['final_privacy_id']])
+            || ! isset($catalog['privacies'][PeerTube_Publication_Plan::pre_publish_privacy_id($plan)])
             || '5' === (string) $plan['final_privacy_id']
             || true === ($plan['embed']['restricted'] ?? false)
         ) {

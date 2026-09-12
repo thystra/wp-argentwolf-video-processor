@@ -87,6 +87,12 @@ $assert(PeerTube_Publication_Plan::ready_for_dispatch($sanitized), 'Fully review
 $assert(array() === PeerTube_Publication_Plan::missing_review($sanitized), 'Ready plan reported missing review.');
 $assert(array('Farm', 'Colorado') === ($sanitized['tags'] ?? null), 'PeerTube tags were silently rewritten.');
 $assert('when_wordpress_published' === ($sanitized['release_policy'] ?? ''), 'Release policy changed.');
+$assert(! array_key_exists('pre_publish_privacy_id', $sanitized), 'Legacy version-1 plan gained a field that would change its existing lifecycle hash.');
+$unlisted_stage = $base_plan; $unlisted_stage['pre_publish_privacy_id'] = PeerTube_Publication_Plan::PRE_PUBLISH_UNLISTED;
+$unlisted_stage = PeerTube_Publication_Plan::sanitize($unlisted_stage);
+$assert(PeerTube_Publication_Plan::PRE_PUBLISH_UNLISTED === PeerTube_Publication_Plan::pre_publish_privacy_id($unlisted_stage), 'Reviewed Unlisted pre-publication visibility was not preserved.');
+$bad_stage = $base_plan; $bad_stage['pre_publish_privacy_id'] = '1';
+$assert(array() === PeerTube_Publication_Plan::sanitize($bad_stage), 'Pre-publication visibility allowed a value other than Private or Unlisted.');
 
 $zero_tag_plan = $base_plan;
 $zero_tag_plan['tags'] = array();
