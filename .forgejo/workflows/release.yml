@@ -115,6 +115,23 @@ jobs:
           bash tests/version-validator.sh
           php tests/version-policy.php
           php tests/model-persistence.php
+          php tests/remote-health-operator.php
+          php tests/local-delivery-rebuild-service.php
+          php tests/local-delivery-evidence.php
+          php tests/local-retention-policy.php
+          php tests/archive-of-record-policy.php
+          php tests/local-retention-service.php
+          php tests/video-reference-index.php
+          php tests/video-routing-admin.php
+          php tests/publication-history-admin.php
+          php tests/operator-event-language.php
+          php tests/video-destination-publication-plan.php
+          php tests/video-publishing-defaults.php
+          php tests/video-publishing-admin-boundary.php
+          php tests/peertube-publication-lifecycle.php
+          php tests/peertube-publication-manifest.php
+          php tests/peertube-publication-synchronizer.php
+          php tests/peertube-publication-task-coordinator.php
           php tests/backend-local.php
           php tests/peertube-capability-activation.php
           php tests/peertube-connection-foundation.php
@@ -173,6 +190,8 @@ jobs:
           php tests/ffmpeg-integration.php
           bash tests/vendor-fetch.sh
           node --check assets/js/argent-video-player.js
+          node --check assets/js/local-retention-admin.js
+          node --check blocks/video/index.js
 
       - name: Check whitespace errors
         run: git diff --check
