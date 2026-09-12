@@ -975,10 +975,13 @@ uninstall must not silently issue destructive remote API calls. Operators
 should remove remote assets through explicit AWVP operations before uninstall
 if desired.
 
-A destructive local uninstall may remove plugin-owned local tables/options,
-managed secrets, AWVP Video objects/meta, and plugin-owned derivative/staging
-files after confinement checks. It must not delete ordinary WordPress
-attachments or arbitrary external archive files.
+The RC13.5 destructive local uninstall removes plugin-owned local tables/options,
+managed secrets/lock state, scheduled hooks/transient locks, AWVP Video objects,
+and AWVP-owned post metadata. It deliberately preserves plugin-owned
+derivative/staging files on disk; those remain subject to the normal confined
+local-retention/cleanup paths rather than a new recursive uninstall deletion. It
+must not delete ordinary WordPress attachments or arbitrary external archive
+files.
 
 If live remote assets remain, the administrator must be warned before enabling
 destructive local-data removal that deleting local AWVP records will leave those

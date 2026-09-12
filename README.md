@@ -278,7 +278,7 @@ the same advisory registry with their own capability and NVD link.
 
 Public WordPress.org stable release: `1.0.0`.
 
-Current controlled development candidate: `2.0.0-rc13.4`. RC packages are built
+Current controlled development candidate: `2.0.0-rc13.5`. RC packages are built
 from reviewed Forgejo commits and are not published to WordPress.org SVN. The
 public Stable tag remains `1.0.0` until final `2.0.0` promotion.
 
@@ -289,6 +289,10 @@ archives are not canonical installable artifacts.
 ### RC10 live-test hardening
 
 RC10 followed controlled RC9 live testing. It preserved RC9 package bytes and hardened the live PeerTube path: automatic credential/catalog authority repair, fresh reads in long-lived workers, dependency deferral without attempt exhaustion, semantic tag and short-embed verification, local-only recovery of already-applied publications, seven-step operator diagnostics, route-before-FFmpeg behavior, responsive no-autoplay rendering, explicit legacy 1.x migration/adoption, and a site-wide WordPress archive-of-record policy. Canonical RC10 candidate #2 was qualified and installed live; its bytes remain immutable historical evidence.
+
+### RC13.5 destructive-uninstall completion (development)
+
+RC13.5 preserves the fully qualified RC13.4 source/package as release evidence but corrects the post-qualification manual-review blocker in destructive uninstall. Default uninstall remains non-destructive. When `ARGENT_VIDEO_REMOVE_DATA_ON_UNINSTALL` is explicitly enabled, AWVP now removes its complete current database/state ownership surface: all six plugin tables, fixed and per-backend/namespaced options including managed secrets and lock state, scheduled hooks/transient locks, AWVP-owned post metadata, and AWVP Video objects. The operation remains deliberately local-only: it makes no PeerTube API calls, leaves ordinary Media Library attachments and external archives untouched, and does not recursively remove managed derivative/staging files from disk. Exact-package qualification now runs this destructive-uninstall proof after normal clean/upgrade assertions on every database fixture.
 
 ### RC13.4 serving recovery and retention controls (development)
 

@@ -115,6 +115,7 @@ jobs:
           bash tests/version-validator.sh
           php tests/version-policy.php
           php tests/model-persistence.php
+          php tests/uninstall-data.php
           php tests/remote-health-operator.php
           php tests/local-delivery-rebuild-service.php
           php tests/local-delivery-evidence.php
@@ -212,6 +213,7 @@ jobs:
           unzip -Z1 "${ZIP}" > "${MANIFEST}"
           test "$(awk -F/ 'NF {print $1}' "${MANIFEST}" | sort -u)" = 'argentwolf-video-processor'
           grep -qx 'argentwolf-video-processor/argentwolf-video-processor.php' "${MANIFEST}"
+          grep -qx 'argentwolf-video-processor/includes/Uninstall_Data.php' "${MANIFEST}"
           grep -qx 'argentwolf-video-processor/assets/vendor/hls.min.js' "${MANIFEST}"
           grep -qx 'argentwolf-video-processor/assets/vendor/hls.LICENSE' "${MANIFEST}"
           ! grep -qx 'argentwolf-video-processor/assets/vendor/hls.VERSION' "${MANIFEST}"

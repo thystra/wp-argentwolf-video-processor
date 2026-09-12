@@ -227,7 +227,16 @@ CLEAN_PHASES=(
     assert-diagnostics.php
     assert-repeat-repair.php
 )
+UNINSTALL_PHASES=(
+    assert-uninstall.php
+)
 ```
+
+`UNINSTALL_PHASES` is optional. When declared, the runner executes those phases
+only after a clean/upgrade case has completed its ordinary final-state and
+`WP_DEBUG` checks. Destructive-uninstall validation therefore cannot replace or
+hide the normal release assertions, and older payloads remain unchanged when
+the array is absent.
 
 Each phase must:
 
@@ -467,9 +476,10 @@ For a WordPress.org candidate, the preferred sequence is:
 7. clean-install matrix;
 8. prior-release upgrade matrix;
 9. focused real WordPress/database payload tests;
-10. package/manual review;
-11. tag/release only after all required gates pass;
-12. promote already-validated bytes without rebuilding.
+10. declared default/destructive uninstall phases where the release owns uninstall behavior;
+11. package/manual review;
+12. tag/release only after all required gates pass;
+13. promote already-validated bytes without rebuilding.
 
 If a runtime/distributed source file changes after step 2, rebuild and restart
 artifact validation.

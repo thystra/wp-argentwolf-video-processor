@@ -1,3 +1,10 @@
+## 2.0.0-rc13.5 - 2026-09-12
+
+- Repair the opt-in destructive uninstall path found during RC13.4 manual release review. The cleanup manifest now covers all six current AWVP-owned tables, fixed and namespaced options including managed PeerTube secrets/locks, AWVP cron/transient state, plugin-owned post metadata, and AWVP Video objects.
+- Keep destructive uninstall strictly local: it does not contact PeerTube, delete ordinary WordPress Media Library attachments, remove external archives, or recursively delete managed derivative/staging files from disk. Default uninstall remains non-destructive.
+- Add drift-resistant uninstall regression coverage plus an exact-package post-validation uninstall phase. Every clean/upgrade matrix fixture now proves the installed candidate can remove its owned database/state surface while preserving ordinary source attachments and media files.
+- Preserve RC13.4 as qualified-but-release-blocked evidence: source commit `d0bf6f81cd3d070301671bdf91d5daeea5d0e926`, tree `30c8c7ccf510a595cf8107b6147f40648f248774`, canonical ZIP SHA-256 `48770fd7ecef743d1232ec24b3ed3cef7be7d2a5d5bfb5fdc0878e86164e8009`, and 7/7 exact-package qualification cases passed before manual uninstall review found the stale cleanup contract.
+
 ## 2.0.0-rc13.4 - 2026-09-12
 
 - Replace the fragmented Videos & Routing primary/backups/serving presentation with one ordered **Serving backends** inventory that reports verified remote copies and local original/delivery availability. Intentional local-source cleanup is shown as unavailable storage, not a serving error while a verified remote remains active.

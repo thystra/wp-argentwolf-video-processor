@@ -586,8 +586,10 @@ Before release:
 
 Default uninstall preserves data.
 
-An explicitly destructive local uninstall may remove AWVP-owned local data
-after confinement checks.
+An explicitly destructive local uninstall removes AWVP-owned database/state
+(tables, options/secrets/locks, scheduled state, AWVP Video objects, and
+AWVP-owned post metadata). Managed derivative/staging files remain on disk for
+normal confined cleanup rather than recursive deletion during uninstall.
 
 Uninstall must not silently:
 

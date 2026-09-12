@@ -106,7 +106,11 @@ The plugin stores:
   `wp_upload_dir()['basedir']/argentwolf-video-processor/<attachment-id>/`.
 
 Uninstall preserves data and derivative files by default. Destructive uninstall
-requires an explicit operator-defined constant.
+requires an explicit operator-defined constant. That local-only mode removes the
+plugin-owned database/state surface (tables, options/secrets/locks, scheduled
+hooks, AWVP-owned post metadata, and AWVP Video objects) while preserving
+ordinary WordPress attachments, external archives, PeerTube assets, and managed
+derivative/staging files on disk.
 
 ## Security model
 

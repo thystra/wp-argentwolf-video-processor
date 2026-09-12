@@ -30,6 +30,7 @@ PAYLOAD_REL="${PAYLOAD_DIR#"$HARNESS_ROOT"/}"
 # Optional payload-scoped Plugin Check findings that are expected by design.
 # Keep this empty by default; prerelease payloads may allow only narrowly reviewed codes.
 PLUGIN_CHECK_ALLOWED_CODES=()
+UNINSTALL_PHASES=()
 
 # shellcheck disable=SC1090
 source "$PAYLOAD_DIR/payload.sh"
@@ -123,6 +124,7 @@ echo "payload_dir=$PAYLOAD_DIR"
 echo "upgrade_pre_phases=${UPGRADE_PRE_PHASES[*]}"
 echo "upgrade_post_phases=${UPGRADE_POST_PHASES[*]}"
 echo "clean_phases=${CLEAN_PHASES[*]}"
+echo "uninstall_phases=${UNINSTALL_PHASES[*]:-NONE}"
 echo "plugin_check_format=$PLUGIN_CHECK_FORMAT"
 echo "plugin_check_static_modes=${PLUGIN_CHECK_STATIC_MODES[*]:-}"
 echo "plugin_check_runtime_modes=${PLUGIN_CHECK_RUNTIME_MODES[*]:-}"
@@ -133,6 +135,10 @@ for phase in \
     "${UPGRADE_PRE_PHASES[@]}" \
     "${UPGRADE_POST_PHASES[@]}" \
     "${CLEAN_PHASES[@]}"; do
+    [[ "$phase" != */* ]] || fail "Payload phase must be a basename: $phase"
+    [[ -f "$PAYLOAD_DIR/$phase" ]] || fail "Payload phase missing: $phase"
+done
+for phase in "${UNINSTALL_PHASES[@]}"; do
     [[ "$phase" != */* ]] || fail "Payload phase must be a basename: $phase"
     [[ -f "$PAYLOAD_DIR/$phase" ]] || fail "Payload phase missing: $phase"
 done
@@ -688,6 +694,13 @@ run_case() {
             grep -Ei "$DEBUG_PATTERN"; then
             fail "Plugin-related WP_DEBUG/database diagnostics detected in $CURRENT_CASE"
         fi
+    fi
+
+    if [[ "$mode" == "upgrade" || "$mode" == "clean" ]]; then
+        local uninstall_phase
+        for uninstall_phase in "${UNINSTALL_PHASES[@]}"; do
+            run_case_assertion "$uninstall_phase" run_payload_phase "$uninstall_phase"
+        done
     fi
 
     CURRENT_PHASE="case-cleanup"

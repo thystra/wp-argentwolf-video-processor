@@ -33,6 +33,14 @@ require_text "$RUNNER" 'run_case_collect "$label" "upgrade"' \
     'Upgrade matrix cases are not collected independently.'
 require_text "$RUNNER" 'run_case_collect "$label" "clean"' \
     'Clean matrix cases are not collected independently.'
+require_text "$RUNNER" 'UNINSTALL_PHASES=()' \
+    'Runner does not provide backward-compatible empty uninstall phases.'
+require_text "$RUNNER" 'uninstall_phases=${UNINSTALL_PHASES[*]:-NONE}' \
+    'Runner does not report declared uninstall phases.'
+require_text "$RUNNER" 'for uninstall_phase in "${UNINSTALL_PHASES[@]}"' \
+    'Runner does not execute declared uninstall phases.'
+require_text "$DOC" 'only after a clean/upgrade case has completed its ordinary final-state' \
+    'Testing contract does not keep destructive uninstall after ordinary release assertions.'
 require_text "$DOC" 'keep running later independent Plugin Check modes and disposable matrix cases' \
     'Testing contract does not document exhaustive independent failure collection.'
 require_text "$DOC" 'exit nonzero after the aggregate summary if any case or assertion failed' \
