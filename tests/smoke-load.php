@@ -130,6 +130,7 @@ foreach (
         ArgentVideo\Settings_Hub::class,
         ArgentVideo\Video_Reference_Index::class,
         ArgentVideo\Video_Routing_Admin::class,
+        ArgentVideo\Local_Delivery_Evidence::class,
         ArgentVideo\PeerTube_Backend_Adapter::class,
         ArgentVideo\PeerTube_Backend_Activation_Service::class,
         ArgentVideo\PeerTube_Token_Lifecycle_Store::class,

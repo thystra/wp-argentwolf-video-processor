@@ -357,7 +357,7 @@ final class Video_Meta
     {
         return self::enum(
             $value,
-            array('none', 'pending', 'eligible', 'running', 'complete', 'blocked', 'failed'),
+            array('none', 'held', 'pending', 'eligible', 'running', 'complete', 'blocked', 'failed'),
             'none'
         );
     }

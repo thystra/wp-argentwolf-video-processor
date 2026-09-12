@@ -76,7 +76,12 @@ final class Local_Retention_Default_Policy_Store
     {
         return is_string($value) && in_array(
             $value,
-            array(Local_Retention_Policy::MODE_KEEP, Local_Retention_Policy::MODE_DELETE_MANAGED, Local_Retention_Policy::MODE_DELETE_ALL),
+            array(
+                Local_Retention_Policy::MODE_KEEP,
+                Local_Retention_Policy::MODE_DELETE_MANAGED,
+                Local_Retention_Policy::MODE_DELETE_SOURCE_KEEP_DELIVERY,
+                Local_Retention_Policy::MODE_DELETE_ALL,
+            ),
             true
         ) ? $value : '';
     }

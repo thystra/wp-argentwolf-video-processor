@@ -152,6 +152,7 @@ for required_runtime_file in \
     Backend_Maintenance_Status_Store.php \
     Backend_Processing_Estimator.php \
     Backend_Serving_Priority_Store.php \
+    Local_Delivery_Evidence.php \
     Local_Retention_Default_Policy_Store.php \
     Overview_Disposition_Store.php \
     PeerTube_Daily_Maintenance_Service.php \

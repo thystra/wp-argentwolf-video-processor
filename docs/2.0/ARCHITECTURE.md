@@ -74,17 +74,23 @@ Media Library video. Explicit deletion through the WordPress Media Library remai
 WordPress-authoritative.
 
 Changing the site to **WordPress is not the archive of record for original videos**
-requires one administrator acknowledgement at that transition. A physical WordPress
-source may then be deleted only when all of the following are true:
+requires one administrator acknowledgement at that transition. A site cleanup delay
+of `0` means **Never automatically delete**; applying retention to selected videos may
+snapshot a finite 1-365 day delay without changing that site default. A physical
+WordPress source may then be deleted only when all of the following are true:
 
 1. the site-wide archive policy still permits source deletion at execution time;
-2. the per-video retention choice requests original-source deletion;
-3. every currently required remote publication has been positively verified;
-4. required backend processing and verified serving cutover are complete;
-5. the AWVP record contains sufficient remote identity/state for later reconciliation;
-6. the configured site-wide grace period has expired;
-7. exclusive attachment ownership, exact source identity, and absence of active
-   local processing are re-proved immediately before deletion; and
+2. the per-video retention choice requests original-source deletion and has a finite
+   non-zero cleanup delay;
+3. the delivery representation that will survive deletion is positively verified:
+   either all currently required remote publications/serving evidence for full local
+   cleanup, or the exact plugin-managed HLS delivery set for local-delivery retention;
+4. required processing for that retained delivery representation is complete;
+5. the cleanup journal contains sufficient immutable proof to revalidate the retained
+   delivery immediately before source deletion;
+6. the per-video cleanup delay has expired;
+7. exclusive attachment ownership, exact source identity, retained-delivery proof,
+   and absence of active local processing are re-proved immediately before deletion; and
 8. cleanup is performed by a bounded, auditable detached job rather than inline in
    an editor or settings request.
 
@@ -1082,19 +1088,23 @@ destination blocks local processing. Existing/racing local work still rechecks r
 at execution boundaries and fails closed on malformed destination state.
 
 Per-video retention defaults to keep. Generated-copy cleanup may remove the
-attachment's AWVP-managed storage tree and `_argent_video_outputs` projection after
-verified serving while preserving the physical WordPress source. Original-source
-removal is configurable only while WordPress is not the archive of record. The
-production service derives the site grace period and rechecks archive authority at
-configuration, scheduling, claimed-task execution, and immediately before physical
-deletion.
+attachment's AWVP-managed storage tree and `_argent_video_outputs` projection while
+preserving the physical WordPress source. RC13.2 adds a separate source-prune mode
+that keeps the plugin-managed HLS delivery tree and output projection while deleting
+only the original. Original-source removal is configurable only while WordPress is not
+the archive of record. The site delay may be `0` (Never); selected videos can snapshot
+a finite 1-365 day override. Archive authority is rechecked at configuration,
+scheduling, claimed-task execution, and immediately before physical deletion.
 
-A destructive choice is never deletion authority by itself. Cleanup requires current
-R46.6 public/unlisted serving authority and all currently required remote publications
-to be positively verified. The cleanup journal freezes serving generation/plan/
-manifest/remote asset and, for source deletion, a confined uploads-relative
-size/device/inode/mtime/ctime source identity. Cleanup runs only as
-`peertube_local_retention_cleanup` in the existing detached `--drain` worker.
+A destructive choice is never deletion authority by itself. Remote-backed cleanup
+freezes the current public/unlisted serving generation/plan/manifest/remote asset.
+Local-HLS source pruning instead freezes a bounded identity of the managed HLS master,
+rendition playlists, and referenced initialization/media segments. Source-deleting
+executions also freeze the confined uploads-relative size/device/inode/mtime/ctime
+identity of the WordPress original. The retained delivery proof is re-proved immediately
+before source deletion. Cleanup continues to run only as the historical
+`peertube_local_retention_cleanup` task type in the existing detached `--drain` worker;
+the task name is retained for compatibility even when the proof is local HLS.
 
 Immediately before deletion the worker re-proves the live non-trash AWVP Video, exact
 attachment binding and exclusive ownership, serving authority, archive policy, grace

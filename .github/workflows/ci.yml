@@ -66,6 +66,7 @@ jobs:
           php tests/rc10-overview-resolution-health.php
           php tests/remote-republish-service.php
           php tests/local-retention-default-policy.php
+          php tests/local-delivery-evidence.php
           php tests/peertube-event-repository.php
           php tests/video-destination-publication-plan.php
           php tests/video-publishing-defaults.php
@@ -212,6 +213,7 @@ jobs:
           grep -qx 'argentwolf-video-processor/includes/Backend_Maintenance_Status_Store.php' "${MANIFEST}"
           grep -qx 'argentwolf-video-processor/includes/Backend_Processing_Estimator.php' "${MANIFEST}"
           grep -qx 'argentwolf-video-processor/includes/Backend_Serving_Priority_Store.php' "${MANIFEST}"
+          grep -qx 'argentwolf-video-processor/includes/Local_Delivery_Evidence.php' "${MANIFEST}"
           grep -qx 'argentwolf-video-processor/includes/Local_Retention_Default_Policy_Store.php' "${MANIFEST}"
           grep -qx 'argentwolf-video-processor/includes/Overview_Disposition_Store.php' "${MANIFEST}"
           grep -qx 'argentwolf-video-processor/includes/PeerTube_Daily_Maintenance_Service.php' "${MANIFEST}"

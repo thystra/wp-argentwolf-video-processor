@@ -27,8 +27,9 @@ $p=$store->get();$a(7===$p['confirmed_by']&&1000===$p['confirmed_at'],'Grace-per
 $r=$store->save(Store::WORDPRESS,30,7,1200,false);
 $a(Store::APPLIED===$r['status']&&$store->wordpress_is_archive()&&!$store->source_deletion_allowed(),'Switching back to WordPress archive did not immediately prohibit automatic source deletion.');
 $p=$store->get();$a(0===$p['confirmed_by']&&0===$p['confirmed_at'],'Safe WordPress-archive policy retained stale destructive acknowledgement fields.');
+$r=$store->save(Store::NOT_WORDPRESS,0,7,1250,true);
+$a(Store::APPLIED===$r['status']&&0===$store->grace_days(),'Zero-day site grace must persist as Never rather than immediate deletion.');
 $GLOBALS['awvp_archive_options'][Store::OPTION]=array('garbage'=>true);
 $a(Store::WORDPRESS===$store->get()['archive_of_record'],'Malformed archive policy did not fail closed to WordPress-as-archive.');
-$a(Store::REFUSED===$store->save(Store::NOT_WORDPRESS,0,7,1300,true)['status'],'Unbounded/zero source-deletion grace was accepted.');
 if($f>0)exit(1);echo "Archive-of-record policy tests passed.\n";
 }

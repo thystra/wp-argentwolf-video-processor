@@ -392,17 +392,20 @@ Starting migration does not itself perform PeerTube HTTP. R46.5b remains the onl
 
 ## R46.9 post-cutover local retention
 
-Verified PeerTube serving makes local bytes *eligible for a separately confirmed
-policy*; it never deletes them automatically. R46.9 defaults every video to KEEP.
-Operators may remove AWVP-managed copies after a grace period while retaining the
-WordPress source, or explicitly choose full local cleanup after changing the
-master-authority decision away from `wordpress_source`. Full cleanup removes the
-physical video file only; the WordPress attachment object survives.
+Retention defaults every video to KEEP and never infers deletion permission from a
+destination or completed publish. RC13.2 treats cleanup delay `0` as **Never
+automatically delete** and lets selected videos snapshot a finite 1-365 day delay.
+Operators may remove AWVP-managed delivery copies while retaining the WordPress
+source, remove the WordPress original while retaining a positively verified
+plugin-managed HLS delivery set, or choose full local cleanup after verified remote
+publication. Source deletion is never offered while WordPress remains the Archive of
+Record, and physical cleanup preserves the WordPress attachment object.
 
-Cleanup is local-only and detached. It revalidates the exact R46.6 serving
-commitment and current published anchor, refuses private/internal or otherwise
-non-serving targets, fences local FFmpeg queue work, and re-proves filesystem
-confinement/identity immediately before deletion. No PeerTube API request, remote
-asset deletion, destination rollback, or frontend cutover mutation occurs in the
-cleanup worker. If serving evidence is superseded or any check is uncertain,
-local bytes are retained and the attempt is blocked/failed for explicit review.
+Cleanup is local-only and detached. Full local cleanup revalidates the exact R46.6
+remote-serving commitment. The local-delivery/source-prune path instead freezes and
+re-proves the managed HLS master, each rendition playlist, and every referenced
+initialization/media segment; it does not require PeerTube. Both paths fence local
+FFmpeg queue work and re-prove attachment ownership, filesystem confinement, exact
+source identity, grace expiry, and the retained delivery proof immediately before
+source deletion. No PeerTube API request, remote asset deletion, destination rollback,
+or frontend cutover mutation occurs in the cleanup worker. Any uncertainty means KEEP.

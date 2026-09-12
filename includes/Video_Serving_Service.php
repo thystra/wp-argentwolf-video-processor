@@ -189,10 +189,13 @@ final class Video_Serving_Service implements Video_Serving_Resolver
     private function local_candidate(int $video_id): array
     {
         $attachment_id = Video_Meta::sanitize_positive_id(get_post_meta($video_id, Video_Meta::ATTACHMENT_ID, true));
-        if ($attachment_id < 1 || array() === WordPress_Source_File::capture($attachment_id)) {
+        if ($attachment_id < 1) {
             return array();
         }
-        $url = wp_get_attachment_url($attachment_id);
+        $source = WordPress_Source_File::capture($attachment_id);
+        $url = array() !== $source
+            ? wp_get_attachment_url($attachment_id)
+            : Local_Delivery_Evidence::available_hls_url($attachment_id);
         if (! is_string($url) || '' === $url) {
             return array();
         }

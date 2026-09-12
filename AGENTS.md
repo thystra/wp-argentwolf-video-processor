@@ -426,23 +426,29 @@ Do not add PeerTube HTTP, upload session creation, task enqueueing, remote-asset
 Local retention is destructive and must remain fail-closed. KEEP is the default.
 Never infer deletion authority from destination, remote readiness, serving
 cutover, cleanup-state enum, or migration completion alone. A destructive
-operation requires the explicit versioned per-video retention policy, its grace
-period, current R46.6 serving evidence, and a durable cleanup execution journal.
+operation requires the explicit versioned per-video retention policy, a finite
+non-zero cleanup delay (zero means Never), a durable cleanup execution journal,
+and positive proof of the delivery representation that will remain afterward.
+Full local cleanup requires current R46.6 remote-serving evidence. Removing only
+the WordPress original while keeping local delivery instead requires positively
+verified AWVP-managed HLS evidence; that mode must not require provider HTTP.
 
-`delete_all` must not run while `wordpress_source` is master. Physical source
-deletion must preserve the WordPress attachment object, use a confined uploads
-path, reject symlinks/escapes, compare exact file identity immediately before
-`wp_delete_file()`, and verify absence afterward. The normal local FFmpeg queue
-must be fenced while cleanup is running, with active jobs checked on both sides
-of that fence. The cleanup journal's attachment must still be the video's current
-attachment and must be exclusively owned by that one AWVP Video; duplicate or
-ambiguous attachment references fail closed because managed output storage is
-attachment-scoped. Bounded attachment-reference scans must fail closed when the
-bound is exceeded, and trash must not bypass the fence. Source-file identity
-includes relative path plus size/device/inode/mtime/ctime and is revalidated
-immediately before physical deletion. Any mismatch means KEEP. Do not add
-provider HTTP, remote deletion, a new scheduler, or retention work to the
-qualified `--once` task set.
+Source-deleting cleanup must not run while `wordpress_source` is authoritative.
+Physical source deletion must preserve the WordPress attachment object, use a
+confined uploads path, reject symlinks/escapes, compare exact file identity
+immediately before `wp_delete_file()`, and verify absence afterward. When local
+HLS is the retained delivery, its master, rendition playlists, and referenced
+media/init files must remain confined and must be re-proved immediately before
+source deletion. The normal local FFmpeg queue must be fenced while cleanup is
+running, with active jobs checked on both sides of that fence. The cleanup
+journal's attachment must still be the video's current attachment and must be
+exclusively owned by that one AWVP Video; duplicate or ambiguous attachment
+references fail closed because managed output storage is attachment-scoped.
+Bounded attachment-reference scans must fail closed when the bound is exceeded,
+and trash must not bypass the fence. Source-file identity includes relative path
+plus size/device/inode/mtime/ctime and is revalidated immediately before physical
+deletion. Any mismatch means KEEP. Do not add provider HTTP, remote deletion, a
+new scheduler, or retention work to the qualified `--once` task set.
 
 
 ## R45.6 / RC PeerTube capability boundary

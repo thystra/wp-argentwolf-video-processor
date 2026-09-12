@@ -3,11 +3,12 @@
 declare(strict_types=1);
 namespace ArgentVideo {
     if(!defined('ARRAY_A'))define('ARRAY_A','ARRAY_A');
-    $GLOBALS['awvp_health_rows']=array();$GLOBALS['awvp_options']=array();$GLOBALS['awvp_local_available']=true;
+    $GLOBALS['awvp_health_rows']=array();$GLOBALS['awvp_options']=array();$GLOBALS['awvp_local_available']=true;$GLOBALS['awvp_local_hls_available']=false;
     final class Backend_Registry { public const LOCAL_ID='local'; }
     final class Remote_Asset_Repository { public const TABLE_SUFFIX='argent_video_remote_assets'; }
     final class Video_Meta { public const SERVING_AUTHORITY='_authority'; public const ATTACHMENT_ID='_attachment'; public static function sanitize_positive_id(mixed $v):int{return is_numeric($v)&&((int)$v)>0?(int)$v:0;} }
     final class WordPress_Source_File { public static function capture(int $id):array{unset($id);return $GLOBALS['awvp_local_available']?array('ok'=>true):array();} }
+    final class Local_Delivery_Evidence { public static function available_hls_url(int $id):string{unset($id);return $GLOBALS['awvp_local_hls_available']?'https://site.example/managed/master.m3u8':'';} }
     interface PeerTube_Publication_Asset_Store { public function find(int $id):?array; public function record_publication_observation(int $a,int $b,string $c,string $d,string $e,string $f,int $g):string; }
     final class FakeAssets implements PeerTube_Publication_Asset_Store {
         public function __construct(public array $rows){}
@@ -45,5 +46,6 @@ namespace {
     $GLOBALS['awvp_health_rows'][1]['eligible']=0;$GLOBALS['awvp_health_rows'][1]['status']='temporarily_unavailable';
     $c=$service->serving_candidate(77);$a('local'===$c['backend_id']&&'local'===$c['kind'],'Resolver did not fall back to WordPress original.');
     $GLOBALS['awvp_local_available']=false;$a(array()===$service->serving_candidate(77),'Resolver invented a serving source when all candidates were unavailable.');
+    $GLOBALS['awvp_local_hls_available']=true;$c=$service->serving_candidate(77);$a('local'===$c['backend_id']&&'https://site.example/managed/master.m3u8'===$c['url'],'Resolver did not retain local-HLS serving viability after original-source pruning.');
     fwrite(STDOUT,"Multi-backend serving failover tests passed.\n");
 }

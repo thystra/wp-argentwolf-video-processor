@@ -78,7 +78,8 @@ final class Local_Retention_Admin
         $mode = isset($_POST['mode']) && is_string($_POST['mode'])
             ? sanitize_key(wp_unslash($_POST['mode']))
             : '';
-        $result = $this->service->configure_for_site_policy($video_id, $mode, get_current_user_id(), time());
+        $grace_override = $this->posted_grace_override();
+        $result = $this->service->configure_for_site_policy($video_id, $mode, get_current_user_id(), time(), $grace_override);
 
         wp_safe_redirect(
             Settings_Hub::tab_url(
@@ -124,7 +125,8 @@ final class Local_Retention_Admin
         $mode = isset($_POST['default_retention_mode']) && is_string($_POST['default_retention_mode'])
             ? Local_Retention_Default_Policy_Store::sanitize_mode(sanitize_key(wp_unslash($_POST['default_retention_mode'])))
             : '';
-        if (Local_Retention_Policy::MODE_DELETE_ALL === $mode && $this->archive_policy->wordpress_is_archive()) {
+        if (in_array($mode, array(Local_Retention_Policy::MODE_DELETE_SOURCE_KEEP_DELIVERY, Local_Retention_Policy::MODE_DELETE_ALL), true)
+            && $this->archive_policy->wordpress_is_archive()) {
             $result = array('status'=>Local_Retention_Default_Policy_Store::REFUSED);
         } else {
             $result = $this->default_policy->save($mode, get_current_user_id(), time());
@@ -159,7 +161,9 @@ final class Local_Retention_Admin
 
         $counts = array('applied'=>0, 'present'=>0, 'refused'=>0, 'indeterminate'=>0);
         $mode = $this->default_policy->mode();
-        if (Local_Retention_Policy::MODE_DELETE_ALL === $mode && $this->archive_policy->wordpress_is_archive()) {
+        $grace_override = $this->posted_grace_override();
+        if (in_array($mode, array(Local_Retention_Policy::MODE_DELETE_SOURCE_KEEP_DELIVERY, Local_Retention_Policy::MODE_DELETE_ALL), true)
+            && $this->archive_policy->wordpress_is_archive()) {
             $counts['refused'] = count($ids);
         } else {
             foreach ($ids as $video_id) {
@@ -167,7 +171,7 @@ final class Local_Retention_Admin
                     ++$counts['refused'];
                     continue;
                 }
-                $result = $this->service->configure_for_site_policy($video_id, $mode, get_current_user_id(), time());
+                $result = $this->service->configure_for_site_policy($video_id, $mode, get_current_user_id(), time(), $grace_override);
                 $status = (string) ($result['status'] ?? Local_Retention_Service::INDETERMINATE);
                 if (! array_key_exists($status, $counts)) {
                     $status = 'indeterminate';
@@ -232,10 +236,11 @@ final class Local_Retention_Admin
             <p><label><input type="radio" name="archive_of_record" value="wordpress" <?php checked(Archive_Of_Record_Policy_Store::WORDPRESS, $site_policy['archive_of_record']); ?>> <strong><?php esc_html_e('WordPress is the archive of record for original videos.', 'argentwolf-video-processor'); ?></strong></label><br>
             <span class="description"><?php esc_html_e('AWVP will never automatically delete the physical original Media Library video. Explicit Media Library deletion remains under normal WordPress control.', 'argentwolf-video-processor'); ?></span></p>
             <p><label><input type="radio" name="archive_of_record" value="not_wordpress" <?php checked(Archive_Of_Record_Policy_Store::NOT_WORDPRESS, $site_policy['archive_of_record']); ?>> <strong><?php esc_html_e('WordPress is not the archive of record for original videos.', 'argentwolf-video-processor'); ?></strong></label><br>
-            <span class="description"><?php esc_html_e('This permits delayed removal of WordPress originals only after all currently required remote publications are positively verified.', 'argentwolf-video-processor'); ?></span></p>
-            <p><label><?php esc_html_e('Original-source grace period (days)', 'argentwolf-video-processor'); ?> <input type="number" name="grace_days" min="1" max="365" value="<?php echo esc_attr((string) $site_policy['grace_days']); ?>" style="width:5em"></label></p>
+            <span class="description"><?php esc_html_e('This permits delayed removal of WordPress originals only after the delivery source being retained has been positively verified.', 'argentwolf-video-processor'); ?></span></p>
+            <p><label><?php esc_html_e('Default original-source cleanup delay (days)', 'argentwolf-video-processor'); ?> <input type="number" name="grace_days" min="0" max="365" value="<?php echo esc_attr((string) $site_policy['grace_days']); ?>" style="width:5em"></label><br>
+            <span class="description"><?php esc_html_e('0 means Never automatically delete an original. Selected videos may use a different delay when you apply the retention policy below.', 'argentwolf-video-processor'); ?></span></p>
             <?php if ($wordpress_archive) : ?>
-                <p><label><input type="checkbox" name="confirm_archive_change" value="1"> <?php esc_html_e('Check this to enable saving WordPress as NOT your Archive of Record. I understand that this enables AWVP to remove original Media Library video files after verified remote publication and the configured grace period. Media retention policies are set by your chosen backend servers, and are not controlled or editable by the ArgentWolf Video Processor plugin.', 'argentwolf-video-processor'); ?></label></p>
+                <p><label><input type="checkbox" name="confirm_archive_change" value="1"> <?php esc_html_e('Check this to enable saving WordPress as NOT your Archive of Record. I understand that this permits AWVP to remove original Media Library video files only after the configured delay and the retained delivery source has been positively verified. A delay of 0 means Never. Media retention policies on remote servers are controlled by those servers, not by ArgentWolf Video Processor.', 'argentwolf-video-processor'); ?></label></p>
             <?php else : ?>
                 <p class="description"><?php esc_html_e('The one-time destructive-policy acknowledgement has already been recorded. Changing the grace period does not require repeated per-video confirmations.', 'argentwolf-video-processor'); ?></p>
             <?php endif; ?>
@@ -250,13 +255,14 @@ final class Local_Retention_Admin
             <label><strong><?php esc_html_e('Default retention policy', 'argentwolf-video-processor'); ?></strong>
                 <select name="default_retention_mode">
                     <option value="keep"<?php selected((string) $default_policy['mode'], Local_Retention_Policy::MODE_KEEP); ?>><?php esc_html_e('Keep all local copies', 'argentwolf-video-processor'); ?></option>
-                    <option value="delete_managed"<?php selected((string) $default_policy['mode'], Local_Retention_Policy::MODE_DELETE_MANAGED); ?>><?php esc_html_e('Delete generated local copies after the site grace period', 'argentwolf-video-processor'); ?></option>
+                    <option value="delete_managed"<?php selected((string) $default_policy['mode'], Local_Retention_Policy::MODE_DELETE_MANAGED); ?>><?php esc_html_e('Keep original; remove generated local delivery copies', 'argentwolf-video-processor'); ?></option>
                     <?php if (! $wordpress_archive) : ?>
-                        <option value="delete_all"<?php selected((string) $default_policy['mode'], Local_Retention_Policy::MODE_DELETE_ALL); ?>><?php esc_html_e('Delete generated copies and the WordPress original after the site grace period', 'argentwolf-video-processor'); ?></option>
+                        <option value="delete_source_keep_delivery"<?php selected((string) $default_policy['mode'], Local_Retention_Policy::MODE_DELETE_SOURCE_KEEP_DELIVERY); ?>><?php esc_html_e('Remove original; keep verified local HLS delivery copies', 'argentwolf-video-processor'); ?></option>
+                        <option value="delete_all"<?php selected((string) $default_policy['mode'], Local_Retention_Policy::MODE_DELETE_ALL); ?>><?php esc_html_e('Remove original and generated local delivery copies after verified remote publication', 'argentwolf-video-processor'); ?></option>
                     <?php endif; ?>
                 </select>
             </label>
-            <?php if ($wordpress_archive && Local_Retention_Policy::MODE_DELETE_ALL === $default_policy['mode']) : ?>
+            <?php if ($wordpress_archive && in_array((string) $default_policy['mode'], array(Local_Retention_Policy::MODE_DELETE_SOURCE_KEEP_DELIVERY, Local_Retention_Policy::MODE_DELETE_ALL), true)) : ?>
                 <p class="description"><strong><?php esc_html_e('The stored default requests original-source deletion, but it is currently blocked because WordPress is the Archive of Record. Choose another default or change the archive policy first.', 'argentwolf-video-processor'); ?></strong></p>
             <?php endif; ?>
             <?php submit_button(__('Save AWVP Default Policy', 'argentwolf-video-processor'), 'secondary', 'submit', false); ?>
@@ -269,6 +275,12 @@ final class Local_Retention_Admin
         <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" id="awvp-retention-bulk-form">
             <input type="hidden" name="action" value="<?php echo esc_attr(self::ACTION_BULK_APPLY); ?>">
             <?php wp_nonce_field(self::NONCE_BULK_APPLY); ?>
+            <fieldset style="margin:1em 0"><legend><strong><?php esc_html_e('Cleanup delay for selected videos', 'argentwolf-video-processor'); ?></strong></legend>
+                <label><input type="radio" name="grace_mode" value="site" checked> <?php echo esc_html($this->site_grace_label((int) $site_policy['grace_days'])); ?></label><br>
+                <label><input type="radio" name="grace_mode" value="never"> <?php esc_html_e('Never automatically clean up these selected videos', 'argentwolf-video-processor'); ?></label><br>
+                <label><input type="radio" name="grace_mode" value="custom"> <?php esc_html_e('Override for selected videos:', 'argentwolf-video-processor'); ?> <input type="number" name="grace_days_override" min="1" max="365" value="7" style="width:5em"> <?php esc_html_e('days', 'argentwolf-video-processor'); ?></label>
+                <p class="description"><?php esc_html_e('The selected value is saved into each selected video. Changing the site default later does not silently rewrite existing video retention policies.', 'argentwolf-video-processor'); ?></p>
+            </fieldset>
             <table class="widefat striped" id="awvp-retention-table">
                 <thead><tr>
                     <th class="check-column"><input type="checkbox" id="awvp-retention-select-visible"><span class="screen-reader-text"><?php esc_html_e('Select all filtered videos', 'argentwolf-video-processor'); ?></span></th>
@@ -287,6 +299,39 @@ final class Local_Retention_Admin
             <?php submit_button(__('Apply AWVP Default Policy to selected videos', 'argentwolf-video-processor'), 'primary', 'submit', false); ?>
         </form>
         <?php
+    }
+
+    private function posted_grace_override(): ?int
+    {
+        $mode = isset($_POST['grace_mode']) && is_string($_POST['grace_mode'])
+            ? sanitize_key(wp_unslash($_POST['grace_mode']))
+            : 'site';
+        if ('never' === $mode) {
+            return 0;
+        }
+        if ('custom' !== $mode) {
+            return null;
+        }
+        $raw = isset($_POST['grace_days_override']) && is_string($_POST['grace_days_override'])
+            ? sanitize_text_field(wp_unslash($_POST['grace_days_override']))
+            : '';
+        if (1 !== preg_match('/^[1-9][0-9]{0,2}$/D', $raw)) {
+            return Local_Retention_Policy::MAX_GRACE_DAYS + 1;
+        }
+        $days = (int) $raw;
+        return $days <= Local_Retention_Policy::MAX_GRACE_DAYS ? $days : Local_Retention_Policy::MAX_GRACE_DAYS + 1;
+    }
+
+    private function site_grace_label(int $days): string
+    {
+        if (0 === $days) {
+            return __('Use site default: Never automatically clean up', 'argentwolf-video-processor');
+        }
+        return sprintf(
+            /* translators: %d: site default cleanup delay in days. */
+            __('Use site default: %d days', 'argentwolf-video-processor'),
+            $days
+        );
     }
 
     private function render_notice(string $notice): void
@@ -325,13 +370,14 @@ final class Local_Retention_Admin
         $cleanup = Video_Meta::sanitize_cleanup_state(get_post_meta($video_id, Video_Meta::CLEANUP_STATE, true));
         $source = Video_Meta::sanitize_source_state(get_post_meta($video_id, Video_Meta::SOURCE_STATE, true));
         $frozen = 'removed' === $source
-            || ('complete' === $cleanup && array() !== $execution && Local_Retention_Policy::MODE_DELETE_ALL === ($execution['mode'] ?? null));
+            || ('complete' === $cleanup && array() !== $execution && in_array((string) ($execution['mode'] ?? ''), array(Local_Retention_Policy::MODE_DELETE_SOURCE_KEEP_DELIVERY, Local_Retention_Policy::MODE_DELETE_ALL), true));
         $search = strtolower(trim($video_title . ' ' . $origin_title . ' ' . $source . ' ' . $cleanup));
         $mode = (string) ($policy['mode'] ?? '');
         $policy_label = match ($mode) {
             Local_Retention_Policy::MODE_KEEP => __('Keep all local copies', 'argentwolf-video-processor'),
-            Local_Retention_Policy::MODE_DELETE_MANAGED => __('Delete generated local copies', 'argentwolf-video-processor'),
-            Local_Retention_Policy::MODE_DELETE_ALL => __('Delete generated copies and original', 'argentwolf-video-processor'),
+            Local_Retention_Policy::MODE_DELETE_MANAGED => __('Keep original; remove generated local delivery copies', 'argentwolf-video-processor'),
+            Local_Retention_Policy::MODE_DELETE_SOURCE_KEEP_DELIVERY => __('Remove original; keep local HLS delivery copies', 'argentwolf-video-processor'),
+            Local_Retention_Policy::MODE_DELETE_ALL => __('Remove original and generated local delivery copies', 'argentwolf-video-processor'),
             default => __('Not set', 'argentwolf-video-processor'),
         };
         ?>
@@ -345,8 +391,13 @@ final class Local_Retention_Admin
             <td><?php if ($origin_id > 0) : ?>#<?php echo esc_html((string) $origin_id); ?> — <?php echo esc_html('' !== $origin_title ? $origin_title : __('Untitled post', 'argentwolf-video-processor')); ?><?php else : ?><em><?php esc_html_e('No origin post', 'argentwolf-video-processor'); ?></em><?php endif; ?></td>
             <td><?php echo esc_html(array() === $authority ? __('Local serving', 'argentwolf-video-processor') : __('Verified remote serving', 'argentwolf-video-processor')); ?><br><span class="description"><?php echo esc_html('Source: ' . $source . '; cleanup: ' . $cleanup); ?></span></td>
             <td><strong><?php echo esc_html($policy_label); ?></strong>
-                <?php if ($frozen) : ?><br><span class="description"><?php esc_html_e('Physical full cleanup is complete; this row is read-only.', 'argentwolf-video-processor'); ?></span><?php endif; ?>
-                <?php if ($wordpress_archive && Local_Retention_Policy::MODE_DELETE_ALL === $mode) : ?><br><span class="description"><strong><?php esc_html_e('Original deletion is currently blocked by the Archive of Record policy.', 'argentwolf-video-processor'); ?></strong></span><?php endif; ?>
+                <?php if (array() !== $policy && Local_Retention_Policy::destructive($policy)) : ?><br><span class="description"><?php echo esc_html(0 === (int) $policy['grace_days'] ? __('Never automatically clean up', 'argentwolf-video-processor') : sprintf(
+                    /* translators: %d: per-video cleanup delay in days. */
+                    __('Cleanup after %d days', 'argentwolf-video-processor'),
+                    (int) $policy['grace_days']
+                )); ?></span><?php endif; ?>
+                <?php if ($frozen) : ?><br><span class="description"><?php esc_html_e('Original-source cleanup is complete; this row is read-only.', 'argentwolf-video-processor'); ?></span><?php endif; ?>
+                <?php if ($wordpress_archive && array() !== $policy && Local_Retention_Policy::deletes_source($policy)) : ?><br><span class="description"><strong><?php esc_html_e('Original deletion is currently blocked by the Archive of Record policy.', 'argentwolf-video-processor'); ?></strong></span><?php endif; ?>
             </td>
         </tr>
         <?php

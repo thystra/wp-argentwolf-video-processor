@@ -1396,26 +1396,34 @@ R46.8 version-1 non-secret, crash-recoverable migration-promotion journal. It st
 
 ### R46.9 local retention policy and cleanup execution
 
-`_argent_video_local_retention_policy` is a strict version-1 non-secret per-video
-record with `mode`, `grace_days`, `confirmed_by`, and `confirmed_at`. Modes are
-`keep`, `delete_managed`, and `delete_all`. KEEP forces zero grace; destructive
-modes require 1-365 days. Changing a policy creates a new commitment hash, so an
-older queued cleanup task becomes stale rather than inheriting new authority.
+`_argent_video_local_retention_policy` remains a strict version-1 non-secret
+per-video record with `mode`, `grace_days`, `confirmed_by`, and `confirmed_at`. Modes
+are `keep`, `delete_managed`, `delete_source_keep_delivery`, and `delete_all`. KEEP
+forces zero grace. Destructive modes may also store zero, which means **Never
+automatically clean up**; only 1-365 represents a finite automatic cleanup delay.
+Changing a policy creates a new commitment hash, so an older queued cleanup task
+becomes stale rather than inheriting new authority.
 
-`_argent_video_local_retention_execution` is the durable audit journal for one
-cleanup attempt. It freezes video/attachment identity, policy hash, serving-
-authority hash/generation, plan and manifest commitments, remote asset/UUID,
-eligibility time, attempt number, and (for `delete_all`) the exact confined
-WordPress source identity: uploads-relative path plus size, device, inode, mtime,
-and ctime. Mutable fields track task ID, queued/running/terminal
-status, completion time, and a bounded local error. The generic task row is not
-sole deletion authority; the worker must re-read and match current policy,
-execution journal, the video's still-current attachment binding and exclusive
-attachment ownership, serving authority, source/master state, and local job state.
+`_argent_video_local_retention_execution` version 2 is the durable audit journal for
+one cleanup attempt. It freezes video/attachment identity, policy hash, proof kind and
+proof hash, eligibility time, attempt number, and—when the source may be removed—the
+exact confined WordPress source identity (uploads-relative path plus size, device,
+inode, mtime, and ctime). A remote proof also freezes serving generation/plan/manifest,
+backend, remote asset, and UUID. A `local_hls` proof instead freezes a bounded identity
+of the managed HLS master/rendition playlists and referenced initialization/media
+segments while requiring the HLS tree to remain inside the AWVP uploads boundary.
+Version-1 remote-proof journals remain accepted unchanged so upgrades do not reinterpret
+already queued cleanup evidence. Mutable fields track task ID, queued/running/terminal
+status, completion time, and a bounded local error. The generic task row is never sole
+deletion authority; the worker must re-read and match the current policy, execution
+journal, attachment ownership, archive/source state, retained-delivery proof, and local
+job state.
 
-`_argent_video_cleanup_state` remains a projection (`none`, `pending`, `eligible`,
-`running`, `complete`, `blocked`, `failed`) and cannot authorize deletion by
-itself. `_argent_video_source_state=removed` is written only after physical source
-absence is positively verified. `_argent_video_outputs` is removed only after
-the corresponding AWVP-managed storage tree has been removed. The attachment
-object and its identity metadata remain present after physical source deletion.
+`_argent_video_cleanup_state` remains a projection (`none`, `held`, `pending`,
+`eligible`, `running`, `complete`, `blocked`, `failed`) and cannot authorize deletion
+by itself. `held` means the destructive policy is saved with a zero/Never delay and no
+automatic cleanup task is authorized. `_argent_video_source_state=removed` is written
+only after physical source absence is positively verified. `_argent_video_outputs` is
+removed only when the selected policy removes managed delivery copies; it is preserved
+for `delete_source_keep_delivery`. The attachment object and its identity metadata
+remain present after physical source deletion.

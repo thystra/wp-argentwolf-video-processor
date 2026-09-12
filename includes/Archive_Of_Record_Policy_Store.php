@@ -30,6 +30,7 @@ final class Archive_Of_Record_Policy_Store
     /**
      * Changing from WordPress-as-archive to not-WordPress requires one explicit
      * acknowledgement. Subsequent grace edits do not repeat that confirmation.
+     * A zero-day grace is a durable Never-delete default, not immediate deletion.
      *
      * @return array{status:string,policy:array<string,mixed>}
      */

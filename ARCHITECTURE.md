@@ -161,7 +161,7 @@ Republish is an explicit recovery operation available only when the authoritativ
 
 ### Local retention at scale
 
-WordPress is the archive of record by default, and automatic original-source deletion is prohibited while that policy is active. Serving choice and source retention are separate. Local Retention provides one site-wide AWVP Default Policy plus a searchable/filterable compact video list for bounded bulk application. Every destructive application still passes through the same archive-of-record, grace-period, verified-remote, source-confinement, and execution-journal safety checks.
+WordPress is the archive of record by default, and automatic original-source deletion is prohibited while that policy is active. Serving choice and source retention are separate. Local Retention provides one site-wide AWVP Default Policy plus a searchable/filterable compact video list for bounded bulk application. A cleanup delay of 0 means Never; selected videos may snapshot a finite 1-365 day override. RC13.2 can also remove only the original while preserving positively verified AWVP-managed HLS delivery, so destructive execution proves either the remote delivery that will remain or the exact local HLS delivery set. Every destructive application still passes through archive-of-record, finite-delay, source-confinement, ownership, retained-delivery, and execution-journal safety checks.
 
 ## Compatibility and renaming
 
