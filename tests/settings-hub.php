@@ -67,6 +67,7 @@ $tabs = Settings_Hub::tabs();
 $assert(
     array(
         Settings_Hub::TAB_OVERVIEW,
+        Settings_Hub::TAB_VIDEOS,
         Settings_Hub::TAB_LOCAL,
         Settings_Hub::TAB_PEERTUBE,
         Settings_Hub::TAB_PUBLISHING,
@@ -76,6 +77,7 @@ $assert(
     'Unified settings tabs changed or are incomplete.'
 );
 $assert('Overview' === $tabs[Settings_Hub::TAB_OVERVIEW], 'Overview tab label changed.');
+$assert('Videos & Routing' === $tabs[Settings_Hub::TAB_VIDEOS], 'Videos & Routing tab label changed.');
 $assert('Local Processing' === $tabs[Settings_Hub::TAB_LOCAL], 'Local Processing tab label changed.');
 $assert('PeerTube Servers' === $tabs[Settings_Hub::TAB_PEERTUBE], 'PeerTube Servers tab label changed.');
 $assert('Publishing' === $tabs[Settings_Hub::TAB_PUBLISHING], 'Publishing tab label changed.');
@@ -117,7 +119,7 @@ $assert(
     str_contains($plugin, "add_action('admin_menu', array(\$settings_hub, 'menu'))"),
     'Unified settings hub is not the registered admin-menu surface.'
 );
-foreach (array('$admin', '$peertube_admin', '$video_publishing_admin', '$peertube_migration_admin', '$local_retention_admin') as $legacy_admin) {
+foreach (array('$admin', '$video_routing_admin', '$peertube_admin', '$video_publishing_admin', '$peertube_migration_admin', '$local_retention_admin') as $legacy_admin) {
     $assert(
         ! str_contains($plugin, "add_action('admin_menu', array({$legacy_admin}, 'menu'))"),
         "A legacy separate admin-menu surface is still registered: {$legacy_admin}."

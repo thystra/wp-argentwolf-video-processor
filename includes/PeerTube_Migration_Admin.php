@@ -22,7 +22,8 @@ final class PeerTube_Migration_Admin
         private readonly PeerTube_Migration_Planner $planner,
         private readonly PeerTube_Migration_Executor $executor,
         private readonly Backend_Registry $registry,
-        private readonly PeerTube_Publication_Catalog_Store $catalogs
+        private readonly PeerTube_Publication_Catalog_Store $catalogs,
+        private readonly Video_Reference_Index $references
     ) {
     }
 
@@ -172,8 +173,8 @@ final class PeerTube_Migration_Admin
             <?php if ($review_video_id > 0) : ?>
                 <?php $this->review_form($review_video_id); ?>
             <?php else : ?>
-                <?php $this->planner_form(); ?>
                 <?php $this->planned_table(); ?>
+                <?php $this->planner_form(); ?>
             <?php endif; ?>
         <?php
     }
@@ -237,7 +238,13 @@ final class PeerTube_Migration_Admin
                                     ?></code>
                                 <?php endif; ?>
                             </td>
-                            <td>#<?php echo esc_html((string)$item['anchor_post_id']); ?> — <?php echo esc_html((string)$item['post_status']); ?></td>
+                            <td><?php $this->render_post_links(
+                                $this->references->posts_for(
+                                    (int) ($item['video_id'] ?? 0),
+                                    (int) ($item['attachment_id'] ?? 0),
+                                    (int) ($item['anchor_post_id'] ?? 0)
+                                )
+                            ); ?></td>
                             <td><?php echo esc_html($legacy_candidate ? __('legacy — ready for explicit adoption', 'argentwolf-video-processor') : (string)$item['plan_status']); ?></td>
                         </tr>
                     <?php endforeach; ?>
@@ -267,7 +274,16 @@ final class PeerTube_Migration_Admin
             <tbody>
             <?php foreach ($plans as $plan) : ?>
                 <tr>
-                    <td>#<?php echo esc_html((string)($plan['video_id'] ?? 0)); ?></td>
+                    <td>
+                        <?php
+                        $planned_video_id = Video_Meta::sanitize_positive_id($plan['video_id'] ?? 0);
+                        $planned_attachment_id = $planned_video_id > 0 ? Video_Meta::sanitize_positive_id(get_post_meta($planned_video_id, Video_Meta::ATTACHMENT_ID, true)) : 0;
+                        $planned_anchor_id = $planned_video_id > 0 ? Video_Meta::sanitize_positive_id(get_post_meta($planned_video_id, Video_Meta::ORIGIN_POST_ID, true)) : 0;
+                        $planned_title = $planned_video_id > 0 ? trim((string) get_the_title($planned_video_id)) : '';
+                        ?>
+                        <strong>#<?php echo esc_html((string)$planned_video_id); ?><?php if ('' !== $planned_title) : ?> — <?php echo esc_html($planned_title); ?><?php endif; ?></strong>
+                        <br><?php $this->render_post_links($this->references->posts_for($planned_video_id, $planned_attachment_id, $planned_anchor_id)); ?>
+                    </td>
                     <td><?php echo esc_html((string)($plan['backend_id'] ?? '')); ?> / <?php echo esc_html((string)($plan['channel_id'] ?? '')); ?></td>
                     <td><strong><?php echo esc_html((string)($plan['status'] ?? 'invalid')); ?></strong></td>
                     <td><?php echo esc_html(implode(', ', is_array($plan['issues'] ?? null) ? $plan['issues'] : array())); ?></td>
@@ -333,6 +349,13 @@ final class PeerTube_Migration_Admin
             $video_id
         )); ?></h2>
         <p><strong><?php esc_html_e('Target', 'argentwolf-video-processor'); ?>:</strong> <?php echo esc_html((string)$migration['backend_id']); ?> / <?php echo esc_html((string)$migration['channel_id']); ?></p>
+        <p><strong><?php esc_html_e('Referenced by', 'argentwolf-video-processor'); ?>:</strong><br>
+            <?php $this->render_post_links($this->references->posts_for(
+                $video_id,
+                (int) $migration['attachment_id'],
+                (int) $migration['anchor_post_id']
+            )); ?>
+        </p>
         <?php if (array() !== $migration['suggested_tags']) : ?><p><strong><?php esc_html_e('WordPress tag suggestions', 'argentwolf-video-processor'); ?>:</strong> <?php echo esc_html(implode(', ', $migration['suggested_tags'])); ?></p><?php endif; ?>
         <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
             <input type="hidden" name="action" value="<?php echo esc_attr(self::ACTION_REVIEW); ?>">
@@ -356,13 +379,15 @@ final class PeerTube_Migration_Admin
                     <label><?php esc_html_e('Summary', 'argentwolf-video-processor'); ?> <input class="regular-text" name="publication[sensitive_reason]" value="<?php echo esc_attr((string)$plan['moderation']['reason']); ?>"></label>
                 </td></tr>
                 <tr><th><?php esc_html_e('Explicit review', 'argentwolf-video-processor'); ?></th><td>
-                    <?php foreach(array('title'=>__('I reviewed the PeerTube title','argentwolf-video-processor'),'channel'=>__('I reviewed the target channel','argentwolf-video-processor'),'tags'=>__('I reviewed the PeerTube tags, including zero tags if applicable','argentwolf-video-processor'),'privacy'=>__('I reviewed final privacy','argentwolf-video-processor'),'moderation'=>__('I reviewed the sensitive-content declaration','argentwolf-video-processor')) as $field=>$label): ?>
-                        <label style="display:block"><input type="checkbox" name="publication[review][<?php echo esc_attr($field); ?>]" value="1" <?php checked(true,(bool)($plan['review'][$field]??false)); ?>> <?php echo esc_html($label); ?></label>
-                    <?php endforeach; ?>
+                    <?php $all_reviewed = ! in_array(false, array_map(static fn(string $field): bool => true === ($plan['review'][$field] ?? false), array('title','channel','tags','privacy','moderation')), true); ?>
+                    <label style="display:block"><input type="checkbox" name="publication[review_all]" value="1" <?php checked(true, $all_reviewed); ?>> <?php esc_html_e('I reviewed the PeerTube title, target channel, tags (including zero tags if applicable), final privacy, and sensitive-content declaration.', 'argentwolf-video-processor'); ?></label>
                 </td></tr>
             </table>
             <?php submit_button(__('Save migration review', 'argentwolf-video-processor')); ?>
         </form>
+        <?php if (PeerTube_Migration_Plan::STATUS_READY === ($migration['status'] ?? null)) : ?>
+            <?php $this->render_start_migration_form($video_id); ?>
+        <?php endif; ?>
         <?php
     }
 
@@ -380,15 +405,18 @@ final class PeerTube_Migration_Admin
         $next['download_enabled'] = isset($input['download_enabled']) && '1' === (string)$input['download_enabled'];
         $next['thumbnail_attachment_id'] = isset($input['thumbnail_attachment_id']) ? max(0, (int)$input['thumbnail_attachment_id']) : 0;
         $sensitive = isset($input['sensitive']) && '1' === (string)$input['sensitive'];
+        $review_all = isset($input['review_all']) && '1' === (string) $input['review_all'];
+        $legacy_review = is_array($input['review'] ?? null) ? $input['review'] : array();
+        $moderation_reviewed = $review_all || (isset($legacy_review['moderation']) && '1' === (string) $legacy_review['moderation']);
         $next['moderation'] = array(
-            'reviewed'=>isset($input['review']['moderation']) && '1' === (string)$input['review']['moderation'],
+            'reviewed'=>$moderation_reviewed,
             'sensitive'=>$sensitive,
             'reason'=>$sensitive && isset($input['sensitive_reason']) && is_string($input['sensitive_reason']) ? $input['sensitive_reason'] : '',
             'violent'=>$sensitive && isset($input['violent']) && '1' === (string)$input['violent'],
             'sexually_explicit'=>$sensitive && isset($input['sexually_explicit']) && '1' === (string)$input['sexually_explicit'],
         );
         foreach (array('title','channel','tags','privacy','moderation') as $field) {
-            $next['review'][$field] = isset($input['review'][$field]) && '1' === (string)$input['review'][$field];
+            $next['review'][$field] = $review_all || (isset($legacy_review[$field]) && '1' === (string) $legacy_review[$field]);
         }
         return $next;
     }
@@ -407,6 +435,53 @@ final class PeerTube_Migration_Admin
             echo '<option value="' . esc_attr((string)$value) . '" ' . selected($selected_value,(string)$value,false) . '>' . esc_html((string)$choice_label) . '</option>';
         }
         echo '</select></td></tr>';
+    }
+
+    private function render_start_migration_form(int $video_id): void
+    {
+        if ($video_id < 1 || metadata_exists('post', $video_id, Video_Meta::PEERTUBE_MIGRATION_EXECUTION)) {
+            return;
+        }
+        ?>
+        <div class="notice notice-info inline" style="margin-top:1em"><p><strong><?php esc_html_e('Review saved. This video is ready to migrate.', 'argentwolf-video-processor'); ?></strong></p>
+            <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" style="margin-bottom:.75em">
+                <input type="hidden" name="action" value="<?php echo esc_attr(self::ACTION_EXECUTE); ?>">
+                <input type="hidden" name="video_id" value="<?php echo esc_attr((string) $video_id); ?>">
+                <?php wp_nonce_field(self::NONCE_EXECUTE . ':' . $video_id); ?>
+                <label style="display:block;margin-bottom:6px"><input required type="checkbox" name="confirm_one_way" value="1"> <?php esc_html_e('I understand this migration is one-way.', 'argentwolf-video-processor'); ?></label>
+                <button class="button button-primary" type="submit"><?php esc_html_e('Start migration', 'argentwolf-video-processor'); ?></button>
+            </form>
+        </div>
+        <?php
+    }
+
+    /** @param list<array{id:int,title:string,status:string,post_type:string,is_origin:bool}> $references */
+    private function render_post_links(array $references): void
+    {
+        if (array() === $references) {
+            echo '<em>' . esc_html__('No referencing posts found', 'argentwolf-video-processor') . '</em>';
+            return;
+        }
+        foreach ($references as $index => $reference) {
+            if ($index > 0) {
+                echo '<br>';
+            }
+            $post_id = (int) $reference['id'];
+            $edit = get_edit_post_link($post_id, '');
+            if (is_string($edit) && '' !== $edit) {
+                echo '<a href="' . esc_url($edit) . '">' . esc_html((string) $reference['title']) . '</a>';
+            } else {
+                echo esc_html((string) $reference['title']);
+            }
+            echo ' <span class="description">#' . esc_html((string) $post_id);
+            if (true === $reference['is_origin']) {
+                echo ' · ' . esc_html__('origin', 'argentwolf-video-processor');
+            }
+            if ('' !== (string) $reference['status']) {
+                echo ' · ' . esc_html((string) $reference['status']);
+            }
+            echo '</span>';
+        }
     }
 
     /** @return array<string,string> */

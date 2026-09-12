@@ -74,6 +74,8 @@ jobs:
           php tests/video-publishing-defaults.php
           php tests/video-publishing-admin-boundary.php
           php tests/settings-hub.php
+          php tests/video-reference-index.php
+          php tests/video-routing-admin.php
           php tests/peertube-publication-catalog.php
           php tests/peertube-publication-authority-repair.php
           php tests/peertube-publication-editor.php
@@ -230,6 +232,8 @@ jobs:
           grep -qx 'argentwolf-video-processor/includes/Serving_Health_Adapter.php' "${MANIFEST}"
           grep -qx 'argentwolf-video-processor/includes/Serving_Health_Adapter_Factory.php' "${MANIFEST}"
           grep -qx 'argentwolf-video-processor/includes/Serving_Viability.php' "${MANIFEST}"
+          grep -qx 'argentwolf-video-processor/includes/Video_Reference_Index.php' "${MANIFEST}"
+          grep -qx 'argentwolf-video-processor/includes/Video_Routing_Admin.php' "${MANIFEST}"
           ! grep -qx 'argentwolf-video-processor/assets/vendor/hls.VERSION' "${MANIFEST}"
           ! grep -qx 'argentwolf-video-processor/assets/vendor/hls.SHA256' "${MANIFEST}"
           ! grep -Eq '/(AGENTS|ARCHITECTURE|TODO|tests|build|ops|\.github|\.forgejo)' "${MANIFEST}"

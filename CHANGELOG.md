@@ -1,3 +1,10 @@
+## 2.0.0-rc13.2 - 2026-09-12
+
+- Add a read-only **Videos & Routing** inventory that lists every AWVP Video, its attachment, boundedly discovered referencing WordPress posts, configured primary destination, current serving source/fallback state, and local source/retention state. The matrix reserves backup columns for future ordered multi-backend routing without enabling multi-backend publication in RC13.2.
+- Add bounded shared post-reference discovery for AWVP blocks, Core Video blocks, supported `[video]` shortcodes, and direct video/source markup. Stored origin posts remain visible even when the bounded content scan reaches its safety limit.
+- Put the active **Migration review queue** above the longer migration discovery list, show referencing-post links in candidate/review rows, consolidate the five visible publication-review checkboxes into one acknowledgement while preserving the five durable review flags, and offer the one-way **Start migration** action inline as soon as a saved review becomes ready.
+- Preserve canonical RC13.1 as immutable live-test evidence: commit `d27a76f80128bf522a878722b251e40c2c4af957`, tree `a0f6caa9bb767a3279bbeaf1f4ce59bd3e748d89`, exact qualified ZIP SHA-256 `05f0909fcd4756650a91281f5634552c10d1bc0e6b01ed8139e75319934ed744`.
+
 ## 2.0.0-rc13.1 - 2026-09-11
 
 - Preserve canonical RC12 candidate #4 as immutable live-test evidence: commit `ffb6f3cf1a1ed277ad4c8d0cacd483d3776cc8bd`, tree `75bff45fb2198fda22bed13887a7baabbe263544`, exact ZIP SHA-256 `6f8c82a6653aacbe285aa8575ee1fc666e2529418f2dd3ca55034392477e4607`. RC13.1 is a new package identity after scheduled Test 8 exposed a generation race.

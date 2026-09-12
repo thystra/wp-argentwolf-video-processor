@@ -232,11 +232,20 @@ final class Plugin
             );
             $local_retention_default = new Local_Retention_Default_Policy_Store();
             $local_retention_admin = new Local_Retention_Admin($local_retention_service, $archive_of_record_policy, $local_retention_default);
+            $video_references = new Video_Reference_Index();
+            $video_routing_admin = new Video_Routing_Admin(
+                $this->backend_registry,
+                $video_publishing_defaults,
+                $peertube_publication_catalogs,
+                $video_serving,
+                $video_references
+            );
             $peertube_migration_admin = new PeerTube_Migration_Admin(
                 $peertube_migration_planner,
                 $peertube_migration_executor,
                 $this->backend_registry,
-                $peertube_publication_catalogs
+                $peertube_publication_catalogs,
+                $video_references
             );
             $peertube_admin = new PeerTube_Connection_Admin(
                 new PeerTube_Connection_Admin_Service(
@@ -266,6 +275,7 @@ final class Plugin
             );
             $settings_hub = new Settings_Hub(
                 $admin,
+                $video_routing_admin,
                 $peertube_admin,
                 $video_publishing_admin,
                 $peertube_migration_admin,

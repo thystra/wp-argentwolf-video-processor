@@ -182,7 +182,7 @@ The existing settings keys, queue table, attachment metadata, hook names, cron
 identifiers, Settings page slug, and `wp argent-video` command are retained for
 upgrade compatibility.
 
-This Forgejo release-candidate package identifies itself as `2.0.0-rc13.1` in the
+This Forgejo release-candidate package identifies itself as `2.0.0-rc13.2` in the
 plugin header while `Stable tag: 1.0.0` deliberately continues to identify the
 public WordPress.org release. RC packages are not published to WordPress.org SVN.
 The Stable tag moves to `2.0.0` only when the final release is promoted.
@@ -192,6 +192,9 @@ Administrators upgrading from version 0.2.3 should use the normal WordPress
 plugin-update workflow and confirm the plugin remains active.
 
 == Upgrade Notice ==
+
+= 2.0.0-rc13.2 =
+RC13 series build 2. Adds a read-only video/routing matrix with post links and streamlines migration review/start controls while preserving one primary publication target per video. WordPress.org remains on 1.0.0.
 
 = 2.0.0-rc13.1 =
 RC13 series build 1. Fixes scheduled Send-now generation races: stale finalizers cannot mutate current state, publish transitions recover the existing verified remote, and stranded finalization stays visible/recoverable. WordPress.org remains on 1.0.0.
@@ -254,6 +257,13 @@ Renames the public plugin and package to ArgentWolf Video Processor and prepares
 the project for WordPress.org review while retaining existing data identifiers.
 
 == Changelog ==
+
+= 2.0.0-rc13.2 =
+* Add a read-only Videos & Routing matrix for AWVP videos, attachments, referencing WordPress posts, configured primary destination, actual serving source/fallback, and local source/retention state.
+* Reserve the Backups matrix column for future ordered multi-backend routing without enabling multi-backend publication in this build.
+* Add bounded shared post-reference discovery for AWVP/Core Video blocks, supported video shortcodes, and direct video/source markup, while always retaining the stored origin-post link.
+* Move the Migration review queue above discovery, show referencing-post links, consolidate publication review into one acknowledgement while preserving the five durable review flags, and show Start migration inline once review is ready.
+* Preserve qualified RC13.1 commit `d27a76f80128bf522a878722b251e40c2c4af957`, tree `a0f6caa9bb767a3279bbeaf1f4ce59bd3e748d89`, and ZIP SHA-256 `05f0909fcd4756650a91281f5634552c10d1bc0e6b01ed8139e75319934ed744` as immutable evidence.
 
 = 2.0.0-rc13.1 =
 * Fence publication finalizers to fresh lifecycle/post state before provider mutation, local execution writes, public-health qualification, and serving cutover so a superseded generation cannot mutate current publication state.

@@ -9,7 +9,7 @@ $executor=(string)file_get_contents(dirname(__DIR__).'/includes/PeerTube_Migrati
 $plugin=(string)file_get_contents(dirname(__DIR__).'/includes/Plugin.php');
 $bootstrap=(string)file_get_contents(dirname(__DIR__).'/argentwolf-video-processor.php');
 
-foreach (array('manage_options','check_admin_referer','ACTION_PLAN','ACTION_REVIEW','ACTION_EXECUTE','Plan selected','Plan all eligible','Migration review queue','Save migration review','Start migration','I understand this migration is one-way','Resume migration') as $needle) {
+foreach (array('manage_options','check_admin_referer','ACTION_PLAN','ACTION_REVIEW','ACTION_EXECUTE','Plan selected','Plan all eligible','Migration review queue','Save migration review','Start migration','I understand this migration is one-way','Resume migration','Referenced by','I reviewed the PeerTube title, target channel, tags (including zero tags if applicable), final privacy, and sensitive-content declaration.','Review saved. This video is ready to migrate.') as $needle) {
     $a(str_contains($admin,$needle),'Migration admin missing required boundary/UI marker: '.$needle);
 }
 foreach (array('wp_remote_','PeerTube_Api_Client','wp_publish_post','transition_post_status','delete_attachment','wp_delete_post') as $forbidden) {
@@ -35,5 +35,13 @@ $a(!str_contains($planner,'update_post_meta($video_id, Video_Meta::SERVING_AUTHO
 $a(str_contains($executor,'Video_Meta::PEERTUBE_MIGRATION_EXECUTION'),'Executor lacks crash-recoverable migration journal.');
 $a(str_contains($executor,'Video_Meta::PEERTUBE_PUBLICATION_PLAN') && str_contains($executor,'Video_Meta::DESTINATION'),'Executor does not explicitly promote reviewed migration state.');
 $a(str_contains($executor,'PeerTube_Publication_Manifest::build'),'Executor does not revalidate the reviewed plan against execution-time provider/default/thumbnail state before commitment.');
+
+$a(str_contains($admin, '$this->planned_table();') && str_contains($admin, '$this->planner_form();'), 'Migration page does not render both queue and planner.');
+$a(strpos($admin, '$this->planned_table();') < strpos($admin, '$this->planner_form();'), 'Migration review queue must render before the long candidate planner.');
+foreach (array('publication[review][title]','publication[review][channel]','publication[review][tags]','publication[review][privacy]','publication[review][moderation]') as $legacy_checkbox) {
+    $a(!str_contains($admin, 'name="' . $legacy_checkbox . '"'), 'Migration UI still renders separate review checkbox: ' . $legacy_checkbox);
+}
+$a(str_contains($admin, 'name="publication[review_all]"'), 'Migration UI lacks the consolidated review checkbox.');
+$a(str_contains($admin, '$this->references->posts_for('), 'Migration UI does not expose referencing post links.');
 
 echo "PeerTube migration admin structural test passed.\n";

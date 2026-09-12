@@ -84,7 +84,7 @@ shared hosting.
 - bounded database-backed worker diagnostic history and retention controls.
 
 The 2.0 line consolidates administration into the same **Settings > ArgentWolf
-Video Processor** page with tabs for **Local Processing**, **PeerTube Servers**,
+Video Processor** page with tabs for **Overview**, **Videos & Routing**, **Local Processing**, **PeerTube Servers**,
 **Publishing**, **Video Migration**, and **Local Retention**. The PeerTube Servers
 tab is available only to authenticated administrators with `manage_options`; its
 connection and credential actions are nonce-protected and explicitly initiated.
@@ -130,7 +130,9 @@ planning state. This checkpoint still renders the local WordPress attachment and
 does not start a PeerTube upload, publish a remote video, or switch serving
 authority. The detailed PeerTube publication/review wizard follows separately.
 
-R46.7 migration controls are exposed on the **Video Migration** tab for planning existing local AWVP Videos. The planner can select individual videos or a bounded select-all batch, choose an owned PeerTube channel from the last-known-good catalog, and review per-video publication metadata. WordPress tags are suggestions only and more than five are never silently truncated. Planning writes only inert migration state; it does not change the live destination/publication plan, enqueue PeerTube work, or switch frontend serving.
+R46.7 migration controls are exposed on the **Video Migration** tab for planning existing local AWVP Videos. The active migration review queue appears before the longer discovery list. The planner can select individual videos or a bounded select-all batch, choose an owned PeerTube channel from the last-known-good catalog, and review per-video publication metadata. WordPress tags are suggestions only and more than five are never silently truncated. One explicit review acknowledgement covers the title, channel, tags, privacy, and sensitive-content declaration while the durable plan retains those individual review fields. Once a review is saved as ready, the one-way acknowledgement and **Start migration** action are offered inline. Planning writes only inert migration state; it does not change the live destination/publication plan, enqueue PeerTube work, or switch frontend serving.
+
+The **Videos & Routing** tab is a read-only inventory of every AWVP Video, its Media Library attachment, every boundedly discovered WordPress post that references it, its configured primary destination, and its current serving source. The view also shows the site default primary destination for new videos and local source/retention state. Existing videos retain their concrete stored destination rather than following later default changes. A Backups column is present as a future-facing matrix surface, but this release still configures only one publication destination per video and does not enable multi-backend publishing.
 
 R46.8 adds the explicit **Start migration** step for a `ready` plan. Starting is a one-way local commitment: AWVP revalidates current source/provider/default/thumbnail evidence, journals the exact migration plan, promotes its publication plan and target destination, and then invokes the existing durable publication synchronizer. Remote upload/publication and verified serving cutover continue through the already-qualified R46.5/R46.6 paths; R46.8 adds no parallel uploader or frontend path.
 
@@ -272,7 +274,7 @@ the same advisory registry with their own capability and NVD link.
 
 Public WordPress.org stable release: `1.0.0`.
 
-Current controlled development candidate: `2.0.0-rc13.1`. RC packages are built
+Current controlled development candidate: `2.0.0-rc13.2`. RC packages are built
 from reviewed Forgejo commits and are not published to WordPress.org SVN. The
 public Stable tag remains `1.0.0` until final `2.0.0` promotion.
 
