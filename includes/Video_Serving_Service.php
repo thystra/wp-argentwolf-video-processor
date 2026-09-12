@@ -137,6 +137,8 @@ final class Video_Serving_Service implements Video_Serving_Resolver
         $execution = PeerTube_Publication_Execution::sanitize(
             get_post_meta($video_id, Video_Meta::PEERTUBE_PUBLICATION_EXECUTION, true)
         );
+        $authority_basis = Video_Serving_Authority::basis($authority);
+        $requires_finalizer_proof = Video_Serving_Authority::BASIS_FINALIZER === $authority_basis;
         if (array() === $lifecycle || array() === $destination || array() === $plan || array() === $execution
             || true !== $lifecycle['reveal_authorized']
             || (int) $authority['generation'] !== (int) $lifecycle['generation']
@@ -144,7 +146,8 @@ final class Video_Serving_Service implements Video_Serving_Resolver
             || ! hash_equals((string) $lifecycle['plan_sha256'], PeerTube_Publication_Lifecycle::plan_sha256($plan))
             || ! hash_equals((string) $lifecycle['plan_sha256'], (string) ($execution['manifest']['plan_sha256'] ?? ''))
             || ! hash_equals((string) $authority['manifest_sha256'], (string) $execution['manifest_sha256'])
-            || ! hash_equals((string) $execution['manifest_sha256'], (string) $execution['applied_manifest_sha256'])
+            || ($requires_finalizer_proof
+                && ! hash_equals((string) $execution['manifest_sha256'], (string) $execution['applied_manifest_sha256']))
             || $authority['backend_id'] !== ($destination['backend_id'] ?? null)
             || $authority['backend_id'] !== ($plan['backend_id'] ?? null)
             || $authority['backend_id'] !== ($execution['backend_id'] ?? null)

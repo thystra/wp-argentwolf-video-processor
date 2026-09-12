@@ -95,7 +95,7 @@ final class PeerTube_Overview_Admin
             <?php $health_notice = sanitize_key((string) wp_unslash($_GET['awvp_health_check'])); // phpcs:ignore WordPress.Security.NonceVerification.Recommended ?>
             <div class="notice <?php echo 'healthy' === $health_notice ? 'notice-success' : ('checked' === $health_notice ? 'notice-warning' : 'notice-error'); ?>" style="margin:1em 0;padding:.5em 1em"><p>
                 <?php echo esc_html(match ($health_notice) {
-                    'healthy' => __('The remote publication passed a fresh visitor-facing check. If automatic recovery is still waiting for confirmation, you can restore remote serving immediately from this verified result.', 'argentwolf-video-processor'),
+                    'healthy' => __('The remote publication passed a fresh visitor-facing check. You can now use this verified remote publication immediately if AWVP still needs serving authority or recovery confirmation.', 'argentwolf-video-processor'),
                     'checked' => __('The remote publication was checked again and is still not ready for remote serving.', 'argentwolf-video-processor'),
                     default => __('The remote serving check could not be completed safely. No serving change was made.', 'argentwolf-video-processor'),
                 }); ?>
@@ -105,9 +105,9 @@ final class PeerTube_Overview_Admin
             <?php $restore_notice = sanitize_key((string) wp_unslash($_GET['awvp_health_restore'])); // phpcs:ignore WordPress.Security.NonceVerification.Recommended ?>
             <div class="notice <?php echo in_array($restore_notice, array('restored','already'), true) ? 'notice-success' : 'notice-error'; ?>" style="margin:1em 0;padding:.5em 1em"><p>
                 <?php echo esc_html(match ($restore_notice) {
-                    'restored' => __('Remote serving eligibility was restored from the fresh successful check.', 'argentwolf-video-processor'),
-                    'already' => __('Remote serving is already eligible again; no additional serving override was needed.', 'argentwolf-video-processor'),
-                    default => __('Remote serving was not restored. Run Check now again and require a fresh successful result before retrying.', 'argentwolf-video-processor'),
+                    'restored' => __('The fresh successful check was applied and the verified remote publication is available for serving.', 'argentwolf-video-processor'),
+                    'already' => __('The verified remote publication is already available for serving; no additional change was needed.', 'argentwolf-video-processor'),
+                    default => __('The verified remote could not be selected safely. Run Check now again; if it still cannot be adopted, use Republish only when a new remote publication is intended.', 'argentwolf-video-processor'),
                 }); ?>
             </p></div>
         <?php endif; ?>
@@ -639,7 +639,7 @@ final class PeerTube_Overview_Admin
                                 <input type="hidden" name="video_id" value="<?php echo esc_attr((string) $row['video_id']); ?>">
                                 <input type="hidden" name="remote_asset_id" value="<?php echo esc_attr((string) $row['remote_asset_id']); ?>">
                                 <?php wp_nonce_field(self::ACTION_RESTORE_HEALTH . ':' . (string) $row['video_id'] . ':' . (string) $row['remote_asset_id']); ?>
-                                <?php submit_button(__('Restore remote serving now', 'argentwolf-video-processor'), 'primary small', 'submit', false); ?>
+                                <?php submit_button(__('Use verified remote now', 'argentwolf-video-processor'), 'primary small', 'submit', false); ?>
                             </form>
                         <?php endif; ?>
                         <?php if (true === ($row['local_rebuild_available'] ?? false)) : ?>
@@ -664,7 +664,7 @@ final class PeerTube_Overview_Admin
                                     </select>
                                 </label>
                                 <?php wp_nonce_field(self::ACTION_REPUBLISH . ':' . (string) $row['video_id']); ?>
-                                <?php submit_button(__('Republish', 'argentwolf-video-processor'), 'secondary small', 'submit', false); ?>
+                                <?php submit_button(__('Republish as new publication', 'argentwolf-video-processor'), 'secondary small', 'submit', false); ?>
                             </form>
                         <?php elseif (true === ($row['republish_source_missing'] ?? false)) : ?>
                             <p><em><?php esc_html_e('Republish unavailable: the original WordPress source is not retained.', 'argentwolf-video-processor'); ?></em></p>
@@ -984,7 +984,11 @@ final class PeerTube_Overview_Admin
         $authority = Video_Serving_Authority::sanitize(
             get_post_meta($video_id, Video_Meta::SERVING_AUTHORITY, true)
         );
-        $problems = array_values(array_filter($rows, static function (array $row) use ($video_id, $authority): bool {
+        $execution = PeerTube_Publication_Execution::sanitize(
+            get_post_meta($video_id, Video_Meta::PEERTUBE_PUBLICATION_EXECUTION, true)
+        );
+        $execution_asset_id = (int) ($execution['remote_asset_id'] ?? 0);
+        $problems = array_values(array_filter($rows, static function (array $row) use ($video_id, $authority, $execution_asset_id): bool {
             $status = (string) ($row['status'] ?? '');
             $backend_id = Backend_Identity::sanitize((string) ($row['backend_id'] ?? ''));
             $remote_asset_id = (int) ($row['remote_asset_id'] ?? 0);
@@ -996,9 +1000,14 @@ final class PeerTube_Overview_Admin
                     && $video_id === (int) ($row['video_post_id'] ?? 0)
                     && $remote_asset_id === (int) ($authority['remote_asset_id'] ?? 0)
                     && $backend_id === (string) ($authority['backend_id'] ?? ''));
+            $authority_gap = Serving_Viability::HEALTHY === $status
+                && 1 === (int) ($row['eligible'] ?? 0)
+                && $execution_asset_id > 0
+                && $execution_asset_id === $remote_asset_id
+                && (array() === $authority || $remote_asset_id !== (int) ($authority['remote_asset_id'] ?? 0));
             return $previously_qualified
                 && Serving_Viability::PROCESSING !== $status
-                && (Serving_Viability::HEALTHY !== $status || 1 !== (int) ($row['eligible'] ?? 0));
+                && (Serving_Viability::HEALTHY !== $status || 1 !== (int) ($row['eligible'] ?? 0) || $authority_gap);
         }));
         if (null !== $this->backend_incidents) {
             $problems = array_values(array_filter($problems, function (array $row): bool {
@@ -1083,7 +1092,11 @@ final class PeerTube_Overview_Admin
         $republish_statuses = array(Serving_Viability::MISSING, Serving_Viability::PRIVATE_OR_RESTRICTED, Serving_Viability::EMBED_DISALLOWED);
         $upload_resolution_available = self::operator_resolution_available($operation);
         $upload_resolution_complete = PeerTube_Staged_Upload_State_Machine::PHASE_OPERATOR_ABANDONED === $phase;
+        $authority_gap = is_array($health_issue)
+            && Serving_Viability::HEALTHY === (string) ($health_issue['status'] ?? '')
+            && 1 === (int) ($health_issue['eligible'] ?? 0);
         $republish_problem = (is_array($health_issue) && in_array((string) ($health_issue['status'] ?? ''), $republish_statuses, true))
+            || $authority_gap
             || $upload_resolution_complete;
         $republish_source = $republish_problem && null !== $this->republish ? $this->republish->source_available($video_id) : false;
         $republish_targets = $republish_source && null !== $this->republish ? $this->republish->targets() : array();
@@ -1197,6 +1210,9 @@ final class PeerTube_Overview_Admin
             $status = (string) ($health['status'] ?? '');
             if (Serving_Viability::HEALTHY === $status && 1 !== (int) ($health['eligible'] ?? 0)) {
                 return __('Remote publication recovering; fallback remains active', 'argentwolf-video-processor');
+            }
+            if (Serving_Viability::HEALTHY === $status && 1 === (int) ($health['eligible'] ?? 0)) {
+                return __('Verified remote publication needs serving authority', 'argentwolf-video-processor');
             }
             return match ($status) {
                 Serving_Viability::MISSING => __('Remote publication is missing; fallback is active', 'argentwolf-video-processor'),

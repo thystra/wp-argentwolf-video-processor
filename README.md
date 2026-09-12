@@ -140,7 +140,7 @@ The **History & Logs** tab is a read-only view of bounded retained publication e
 
 R46.8 adds the explicit **Start migration** step for a `ready` plan. Starting is a one-way local commitment: AWVP revalidates current source/provider/default/thumbnail evidence, journals the exact migration plan, promotes its publication plan and target destination, and then invokes the existing durable publication synchronizer. Remote upload/publication and verified serving cutover continue through the already-qualified R46.5/R46.6 paths; R46.8 adds no parallel uploader or frontend path.
 
-R46.9 retention controls are exposed on the **Local Retention** tab. WordPress is the Archive of Record by default, so automatic deletion of original Media Library videos is blocked unless an administrator explicitly changes that site-wide authority policy. The tab provides one **AWVP Default Policy** plus a compact searchable/filterable video list for bounded bulk application instead of requiring a full policy form for every video. RC13.2 gives the cleanup delay an explicit **Never** value (`0` days) and lets a selected batch snapshot a finite per-video delay without changing the site default. An operator may keep all local copies, remove only generated local delivery copies while retaining the original, remove the original while retaining positively verified AWVP-managed HLS delivery, or—only after verified remote publication—remove both the original and generated local delivery copies. Original-source deletion is still available only while WordPress is NOT the Archive of Record. Destructive work remains detached and fail-closed: the worker revalidates archive authority, the exact retained delivery proof (remote serving or local HLS), local-job quiescence, attachment ownership, grace expiry, and exact source identity immediately before deletion. Physical-source cleanup never deletes the WordPress attachment record; any uncertainty keeps local data.
+R46.9 retention controls are exposed on the **Local Retention** tab. WordPress is the Archive of Record by default, so deletion of original Media Library videos is blocked unless an administrator explicitly changes that site-wide authority policy. The tab provides one **Server default retention policy** plus a compact searchable/filterable video list for bounded bulk application instead of requiring a full policy form for every video. A cleanup delay of `0` days means **Manual cleanup only**; a selected batch can snapshot the server delay, manual-only behavior, or a finite per-video delay without changing the site default. **Clean up selected now** may bypass only that waiting period. An operator may keep all local copies, remove only generated local delivery copies while retaining the original, remove the original while retaining positively verified AWVP-managed HLS delivery, or—only after verified remote publication—remove both the original and generated local delivery copies. Original-source deletion is still available only while WordPress is NOT the Archive of Record. Destructive work remains detached and fail-closed: the worker revalidates archive authority, the exact retained delivery proof (remote serving or local HLS), local-job quiescence, attachment ownership, effective policy, and exact source identity immediately before deletion. Physical-source cleanup never deletes the WordPress attachment record; any uncertainty keeps local data.
 
 ## WP-CLI
 
@@ -278,7 +278,7 @@ the same advisory registry with their own capability and NVD link.
 
 Public WordPress.org stable release: `1.0.0`.
 
-Current controlled development candidate: `2.0.0-rc13.3`. RC packages are built
+Current controlled development candidate: `2.0.0-rc13.4`. RC packages are built
 from reviewed Forgejo commits and are not published to WordPress.org SVN. The
 public Stable tag remains `1.0.0` until final `2.0.0` promotion.
 
@@ -289,6 +289,14 @@ archives are not canonical installable artifacts.
 ### RC10 live-test hardening
 
 RC10 followed controlled RC9 live testing. It preserved RC9 package bytes and hardened the live PeerTube path: automatic credential/catalog authority repair, fresh reads in long-lived workers, dependency deferral without attempt exhaustion, semantic tag and short-embed verification, local-only recovery of already-applied publications, seven-step operator diagnostics, route-before-FFmpeg behavior, responsive no-autoplay rendering, explicit legacy 1.x migration/adoption, and a site-wide WordPress archive-of-record policy. Canonical RC10 candidate #2 was qualified and installed live; its bytes remain immutable historical evidence.
+
+### RC13.4 serving recovery and retention controls (development)
+
+RC13.4 closes operator recovery and retention gaps exposed by RC13.3 live testing. **Videos & Routing** now presents one ordered **Serving backends** inventory rather than separate Primary/Backups/Serving-now columns, and it distinguishes remote verification, local original/delivery artifacts, and an intentionally removed local source without treating that intentional cleanup as a serving error.
+
+Overview can recover an already-known remote publication whose historical finalizer never established serving authority. **Check now** must first record a fresh visitor-facing healthy observation for the exact remote asset; **Use verified remote now** can then create a separately identified operator-verified serving authority without replaying the terminal/indeterminate finalizer or uploading anything. Automatic finalizer cutover remains strict. When health was previously ineligible, provisional authority is established before eligibility is restored so a failed authority adoption cannot accidentally enable remote serving.
+
+Local Retention now reports the effective **Server default** or per-video **Override** instead of `Not set`. A destructive zero-day policy means **Manual cleanup only**. **Clean up selected now** bypasses only the waiting period and still requires the existing archive-of-record, serving-proof, processing, source-identity, policy, and WordPress filesystem-confinement checks in the detached worker. Fresh/unconfigured installations default to zero retention days; an explicitly saved existing nonzero value is not rewritten.
 
 ### RC13.3 release-gate hardening (development)
 

@@ -14,7 +14,7 @@ final class Archive_Of_Record_Policy_Store
     public const VERSION = 1;
     public const WORDPRESS = 'wordpress';
     public const NOT_WORDPRESS = 'not_wordpress';
-    public const DEFAULT_GRACE_DAYS = 7;
+    public const DEFAULT_GRACE_DAYS = 0;
     public const APPLIED = 'applied';
     public const PRESENT = 'present';
     public const REFUSED = 'refused';

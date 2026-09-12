@@ -14,7 +14,7 @@ use ArgentVideo\Archive_Of_Record_Policy_Store as Store;
 $f=0;$a=function(bool $ok,string $m)use(&$f){if(!$ok){fwrite(STDERR,"FAIL: {$m}\n");$f++;}};
 $store=new Store();
 $default=$store->get();
-$a(Store::WORDPRESS===$default['archive_of_record']&&7===$default['grace_days'],'Archive policy must default fail-closed to WordPress as archive of record.');
+$a(Store::WORDPRESS===$default['archive_of_record']&&0===$default['grace_days'],'Archive policy must default fail-closed to WordPress as archive of record.');
 $a(!$store->source_deletion_allowed(),'Default archive policy unexpectedly permits automatic original deletion.');
 $r=$store->save(Store::NOT_WORDPRESS,14,7,1000,false);
 $a(Store::REFUSED===$r['status']&&Store::WORDPRESS===$store->get()['archive_of_record'],'Transition away from WordPress archive did not require one-time acknowledgement.');

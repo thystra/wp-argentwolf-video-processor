@@ -184,7 +184,7 @@ The existing settings keys, queue table, attachment metadata, hook names, cron
 identifiers, Settings page slug, and `wp argent-video` command are retained for
 upgrade compatibility.
 
-This Forgejo release-candidate package identifies itself as `2.0.0-rc13.3` in the
+This Forgejo release-candidate package identifies itself as `2.0.0-rc13.4` in the
 plugin header while `Stable tag: 1.0.0` deliberately continues to identify the
 public WordPress.org release. RC packages are not published to WordPress.org SVN.
 The Stable tag moves to `2.0.0` only when the final release is promoted.
@@ -194,6 +194,9 @@ Administrators upgrading from version 0.2.3 should use the normal WordPress
 plugin-update workflow and confirm the plugin remains active.
 
 == Upgrade Notice ==
+
+= 2.0.0-rc13.4 =
+RC13 series build 4. Adds guarded adoption of freshly verified existing remotes, a consolidated serving-backend inventory, effective retention status, manual cleanup-now controls, and a fresh-install manual-only retention default. WordPress.org remains on 1.0.0.
 
 = 2.0.0-rc13.3 =
 RC13 series build 3. Fixes Local Retention Plugin Check nonce-analysis findings and makes canonical validation collect independent failures before returning one aggregate result. WordPress.org remains on 1.0.0.
@@ -262,6 +265,15 @@ Renames the public plugin and package to ArgentWolf Video Processor and prepares
 the project for WordPress.org review while retaining existing data identifiers.
 
 == Changelog ==
+
+= 2.0.0-rc13.4 =
+* Consolidate Videos & Routing into an ordered Serving backends inventory with remote verification and local artifact availability; intentional local-source cleanup is not an error while verified remote serving remains active.
+* Let Check now followed by Use verified remote now establish distinct operator-verified serving authority for an already-known healthy remote without replaying or rewriting a failed historical finalizer; automatic cutover remains finalizer-proof strict.
+* Establish provisional authority before restoring an ineligible remote's serving eligibility, so failed authority adoption cannot enable remote serving.
+* Show effective Local Retention as Server default or Override, including Manual cleanup only for destructive zero-day policies, instead of Not set.
+* Add Clean up selected now, bypassing only the waiting period while retaining archive-of-record, serving-proof, processing, exact-source, policy, and confined WordPress deletion gates.
+* Default fresh/unconfigured retention grace to 0/manual-only while preserving explicitly saved existing nonzero settings and existing queued version-1 retention task payloads.
+* Preserve RC13.3 as immutable base evidence at Forgejo commit `f65d9ab9cb973b3bd30788ae9c453b873325725c`, tree `15f6a7c92d17e678c020b00f93f69391f90d1c50`.
 
 = 2.0.0-rc13.3 =
 * Keep Local Retention grace-period request reads inside the nonce-verified administrator actions and pass only sanitized values into the shared parser, resolving canonical Plugin Check nonce-analysis warnings without changing retention semantics.

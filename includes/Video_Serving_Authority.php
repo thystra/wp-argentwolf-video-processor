@@ -11,7 +11,10 @@ namespace ArgentVideo;
 final class Video_Serving_Authority
 {
     public const VERSION = 1;
+    public const OPERATOR_VERSION = 2;
     public const MODE_PEERTUBE = 'peertube';
+    public const BASIS_FINALIZER = 'finalizer';
+    public const BASIS_OPERATOR_VERIFIED = 'operator_verified_remote';
 
     /** @return array<string,mixed> */
     public static function create(
@@ -20,6 +23,53 @@ final class Video_Serving_Authority
         array $execution,
         array $asset,
         int $now
+    ): array {
+        $fields = self::validated_fields($video_post_id, $lifecycle, $execution, $asset, $now, true);
+        if (array() === $fields) {
+            return array();
+        }
+        return self::sanitize(array_merge(
+            array('version'=>self::VERSION, 'mode'=>self::MODE_PEERTUBE),
+            $fields
+        ));
+    }
+
+    /**
+     * Create explicit authority for an already-known publication after a fresh
+     * visitor-facing operator check. This intentionally does not claim that a
+     * historical finalizer/applied-manifest step succeeded.
+     *
+     * @return array<string,mixed>
+     */
+    public static function create_operator_adopted(
+        int $video_post_id,
+        array $lifecycle,
+        array $execution,
+        array $asset,
+        int $now
+    ): array {
+        $fields = self::validated_fields($video_post_id, $lifecycle, $execution, $asset, $now, false);
+        if (array() === $fields) {
+            return array();
+        }
+        return self::sanitize(array_merge(
+            array(
+                'version'=>self::OPERATOR_VERSION,
+                'mode'=>self::MODE_PEERTUBE,
+                'basis'=>self::BASIS_OPERATOR_VERIFIED,
+            ),
+            $fields
+        ));
+    }
+
+    /** @return array<string,mixed> */
+    private static function validated_fields(
+        int $video_post_id,
+        array $lifecycle,
+        array $execution,
+        array $asset,
+        int $now,
+        bool $require_applied_manifest
     ): array {
         $lifecycle = PeerTube_Publication_Lifecycle::sanitize($lifecycle);
         $execution = PeerTube_Publication_Execution::sanitize($execution);
@@ -32,8 +82,8 @@ final class Video_Serving_Authority
             || $execution['backend_id'] !== ($lifecycle['backend_id'] ?? null)
             || $execution['anchor_post_id'] !== ($lifecycle['anchor_post_id'] ?? null)
             || ! hash_equals((string) $lifecycle['plan_sha256'], (string) ($execution['manifest']['plan_sha256'] ?? ''))
-            || '' === (string) $execution['applied_manifest_sha256']
-            || ! hash_equals((string) $execution['manifest_sha256'], (string) $execution['applied_manifest_sha256'])) {
+            || ($require_applied_manifest && ('' === (string) $execution['applied_manifest_sha256']
+                || ! hash_equals((string) $execution['manifest_sha256'], (string) $execution['applied_manifest_sha256'])))) {
             return array();
         }
         $remote_asset_id = self::positive_int($asset['id'] ?? null);
@@ -55,34 +105,47 @@ final class Video_Serving_Authority
             || '' === $embed_url) {
             return array();
         }
-        return self::sanitize(array(
-            'version' => self::VERSION,
-            'mode' => self::MODE_PEERTUBE,
-            'backend_id' => $execution['backend_id'],
-            'channel_id' => $execution['channel_id'],
-            'anchor_post_id' => $execution['anchor_post_id'],
-            'generation' => $lifecycle['generation'],
-            'plan_sha256' => $lifecycle['plan_sha256'],
-            'manifest_sha256' => $execution['manifest_sha256'],
-            'remote_asset_id' => $remote_asset_id,
-            'remote_uuid' => $remote_uuid,
-            'embed_url' => $embed_url,
-            'privacy_id' => $privacy_id,
-            'verified_at' => $now,
-        ));
+        return array(
+            'backend_id'=>$execution['backend_id'],
+            'channel_id'=>$execution['channel_id'],
+            'anchor_post_id'=>$execution['anchor_post_id'],
+            'generation'=>$lifecycle['generation'],
+            'plan_sha256'=>$lifecycle['plan_sha256'],
+            'manifest_sha256'=>$execution['manifest_sha256'],
+            'remote_asset_id'=>$remote_asset_id,
+            'remote_uuid'=>$remote_uuid,
+            'embed_url'=>$embed_url,
+            'privacy_id'=>$privacy_id,
+            'verified_at'=>$now,
+        );
     }
 
     /** @return array<string,mixed> */
     public static function sanitize(mixed $value): array
     {
-        $keys = array(
-            'version','mode','backend_id','channel_id','anchor_post_id','generation',
-            'plan_sha256','manifest_sha256','remote_asset_id','remote_uuid','embed_url',
-            'privacy_id','verified_at',
-        );
-        if (! is_array($value) || $keys !== array_keys($value)
-            || self::VERSION !== ($value['version'] ?? null)
-            || self::MODE_PEERTUBE !== ($value['mode'] ?? null)) {
+        if (! is_array($value) || ! is_int($value['version'] ?? null)) {
+            return array();
+        }
+        if (self::VERSION === $value['version']) {
+            $keys = array(
+                'version','mode','backend_id','channel_id','anchor_post_id','generation',
+                'plan_sha256','manifest_sha256','remote_asset_id','remote_uuid','embed_url',
+                'privacy_id','verified_at',
+            );
+            if ($keys !== array_keys($value) || self::MODE_PEERTUBE !== ($value['mode'] ?? null)) {
+                return array();
+            }
+        } elseif (self::OPERATOR_VERSION === $value['version']) {
+            $keys = array(
+                'version','mode','basis','backend_id','channel_id','anchor_post_id','generation',
+                'plan_sha256','manifest_sha256','remote_asset_id','remote_uuid','embed_url',
+                'privacy_id','verified_at',
+            );
+            if ($keys !== array_keys($value) || self::MODE_PEERTUBE !== ($value['mode'] ?? null)
+                || self::BASIS_OPERATOR_VERIFIED !== ($value['basis'] ?? null)) {
+                return array();
+            }
+        } else {
             return array();
         }
         $backend = Backend_Identity::sanitize($value['backend_id'] ?? null);
@@ -102,12 +165,26 @@ final class Video_Serving_Authority
             || 1 !== preg_match('/^[a-f0-9]{64}$/D', $manifest_sha)) {
             return array();
         }
-        return array(
-            'version'=>self::VERSION,'mode'=>self::MODE_PEERTUBE,'backend_id'=>$backend,
-            'channel_id'=>$channel,'anchor_post_id'=>$anchor,'generation'=>$generation,
+        $out = array('version'=>$value['version'],'mode'=>self::MODE_PEERTUBE);
+        if (self::OPERATOR_VERSION === $value['version']) {
+            $out['basis'] = self::BASIS_OPERATOR_VERIFIED;
+        }
+        return array_merge($out, array(
+            'backend_id'=>$backend,'channel_id'=>$channel,'anchor_post_id'=>$anchor,'generation'=>$generation,
             'plan_sha256'=>$plan_sha,'manifest_sha256'=>$manifest_sha,'remote_asset_id'=>$asset,
             'remote_uuid'=>$uuid,'embed_url'=>$embed,'privacy_id'=>$privacy,'verified_at'=>$verified,
-        );
+        ));
+    }
+
+    public static function basis(array $authority): string
+    {
+        $authority = self::sanitize($authority);
+        if (array() === $authority) {
+            return '';
+        }
+        return self::OPERATOR_VERSION === $authority['version']
+            ? self::BASIS_OPERATOR_VERIFIED
+            : self::BASIS_FINALIZER;
     }
 
     public static function privacy_name(string $privacy_id): string

@@ -13,10 +13,12 @@ $hub = (string) file_get_contents(dirname(__DIR__) . '/includes/Settings_Hub.php
 $plugin = (string) file_get_contents(dirname(__DIR__) . '/includes/Plugin.php');
 $bootstrap = (string) file_get_contents(dirname(__DIR__) . '/argentwolf-video-processor.php');
 
-foreach (array('Videos & Routing','Referenced by','Primary','Backups','Serving now','Default primary destination for new videos','Fallback serving is active.') as $needle) {
+foreach (array('Videos & Routing','Referenced by','Serving backends','Status / recovery','Default primary destination for new videos','local source intentionally removed','No verified serving backend is currently available') as $needle) {
     $assert(str_contains($admin, $needle), 'Routing matrix missing required operator marker: ' . $needle);
 }
 $assert(str_contains($admin, '$this->serving->serving_candidate($video_id)'), 'Routing matrix does not resolve actual current serving source.');
+$assert(str_contains($admin, '$this->remote_assets->serving_candidates_for_video($video_id)')&&str_contains($admin, '$this->health->for_video($video_id)'), 'Routing matrix does not inventory verified remote artifacts and health.');
+$assert(str_contains($admin, 'WordPress_Source_File::capture($attachment_id)')&&str_contains($admin, 'Local_Delivery_Evidence::available_hls_url($attachment_id)'), 'Routing matrix does not inventory local original/delivery artifacts.');
 $assert(str_contains($admin, '$this->references->posts_for('), 'Routing matrix does not use shared post-reference discovery.');
 $assert(str_contains($admin, 'Video_Publishing_Defaults::effective_for_backend'), 'Routing matrix does not resolve the new-video default channel.');
 $assert(str_contains($hub, "TAB_VIDEOS = 'videos-routing'"), 'Settings hub lacks Videos & Routing tab.');

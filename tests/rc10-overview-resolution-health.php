@@ -112,6 +112,18 @@ namespace {
     $assert(true===($rows[0]['local_rebuild_available']??false),'Retained-source local rebuild was not surfaced for the incident.');
     $assert(64===strlen((string)$rows[0]['issue_fingerprint']),'Overview issue fingerprint is not stable SHA-256 presentation state.');
 
+    // RC13.4 regression: the provider health row may already be healthy/eligible
+    // while the historical finalizer never established serving authority. This
+    // must remain recoverable through Check now -> Use verified remote now.
+    $GLOBALS['awvp_overview_meta'][101][Video_Meta::PEERTUBE_PUBLICATION_EXECUTION]['remote_asset_id']=55;
+    $healthyGap=new Remote_Publication_Health_Repository(array(55=>array('remote_asset_id'=>55,'video_post_id'=>101,'backend_id'=>'pt-primary','status'=>'healthy','eligible'=>1,'failure_since'=>'','last_healthy_at'=>'2026-09-12 15:00:00','http_status'=>200,'message'=>'Visitor-facing embed is healthy.')));
+    $overviewGap=new PeerTube_Overview_Admin($store,new PeerTube_Incomplete_Work_Reconciler(),new PeerTube_Event_Repository(),$healthyGap,new Video_Serving_Service(),null,null,null,new Remote_Republish_Service(),null,null,new \ArgentVideo\Remote_Health_Operator_Service(),new \ArgentVideo\Local_Delivery_Rebuild_Service());
+    $gapRows=$overviewGap->rows(1002);
+    $assert(1===count($gapRows)&&str_contains((string)($gapRows[0]['status_label']??''),'serving authority'),'Healthy remote without serving authority disappeared from Needs Attention.');
+    $assert(55===(int)($gapRows[0]['remote_asset_id']??0)&&true===($gapRows[0]['health_check_available']??false),'Healthy authority gap did not expose Check now for the exact known remote asset.');
+    $assert(true===($gapRows[0]['health_restore_available']??false),'Fresh verified remote adoption action was not exposed for the authority gap.');
+    $assert(true===($gapRows[0]['republish_available']??false),'Guarded full Republish fallback was not available for an unrecoverable authority gap with retained source.');
+
     // A health failure that has never crossed first public-serving cutover is
     // publication/finalizer state, not a broken-publication incident. Older
     // prerelease rows must therefore disappear from Needs Attention unless
@@ -184,7 +196,7 @@ namespace {
     $assert(str_contains($source,"__('Mark reviewed'")&&str_contains($source,"__('Remove from list'")&&str_contains($source,'Reviewed items'),'Overview review/remove/collapsed-reviewed controls are missing.');
     $assert(str_contains($source,"__('Retire uncertain upload'")&&str_contains($source,'confirmed_no_remote')&&str_contains($source,'I checked PeerTube and confirmed that no matching remote video exists'),'Overview uncertain-upload confirmation boundary is missing.');
     $assert(str_contains($source,'upload_indeterminate_operator_abandoned')&&str_contains($source,'no remote request was sent'),'Overview uncertain-upload audit evidence is missing.');
-    $assert(str_contains($source,"__('Check now'")&&str_contains($source,"__('Restore remote serving now'")&&str_contains($source,"__('Rebuild local delivery'"),'Overview explicit recovery controls are missing.');
+    $assert(str_contains($source,"__('Check now'")&&str_contains($source,"__('Use verified remote now'")&&str_contains($source,"__('Rebuild local delivery'"),'Overview explicit recovery controls are missing.');
     $assert(str_contains($source,'Backend Summary')&&str_contains($source,'PeerTube Estimated Readiness')&&str_contains($source,'Reset all readiness statistics'),'Overview backend/readiness operational summaries or reset control are missing.');
     $assert(str_contains($source,'does not delete publication events, task history, upload journals, remote assets, or serving-health records'),'Readiness reset copy does not preserve the audit-history boundary.');
     fwrite(STDOUT,"RC10 Overview resolution/health tests passed.\n");

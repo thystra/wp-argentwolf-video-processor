@@ -122,7 +122,8 @@ final class Plugin
             $publication_health,
             $remote_publication_health,
             $peertube_events,
-            $remote_health_notifications
+            $remote_health_notifications,
+            $peertube_cutover
         );
         $peertube_lifecycle = new PeerTube_Token_Lifecycle_Service(
             new PeerTube_Token_Lifecycle_Store(),
@@ -247,7 +248,9 @@ final class Plugin
                 $video_publishing_defaults,
                 $peertube_publication_catalogs,
                 $video_serving,
-                $video_references
+                $video_references,
+                $peertube_remote_assets,
+                $publication_health
             );
             $peertube_migration_admin = new PeerTube_Migration_Admin(
                 $peertube_migration_planner,
@@ -385,6 +388,10 @@ final class Plugin
             add_action(
                 'admin_post_' . Local_Retention_Admin::ACTION_BULK_APPLY,
                 array($local_retention_admin, 'bulk_apply_action')
+            );
+            add_action(
+                'admin_post_' . Local_Retention_Admin::ACTION_BULK_CLEANUP,
+                array($local_retention_admin, 'bulk_cleanup_action')
             );
             add_action(
                 'admin_post_' . PeerTube_Migration_Admin::ACTION_PLAN,

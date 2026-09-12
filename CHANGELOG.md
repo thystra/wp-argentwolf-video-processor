@@ -1,3 +1,13 @@
+## 2.0.0-rc13.4 - 2026-09-12
+
+- Replace the fragmented Videos & Routing primary/backups/serving presentation with one ordered **Serving backends** inventory that reports verified remote copies and local original/delivery availability. Intentional local-source cleanup is shown as unavailable storage, not a serving error while a verified remote remains active.
+- Close the healthy-remote/no-serving-authority recovery gap exposed by live RC13.3 testing. **Check now** can freshly verify the exact known remote asset and **Use verified remote now** can establish a distinct operator-verified serving-authority record without replaying or rewriting a historical failed/indeterminate finalizer. Normal automatic cutover continues to require finalizer/applied-manifest proof.
+- Fail closed across recovery ordering: an ineligible remote receives provisional operator authority before serving eligibility is restored, and an authority-adoption failure does not enable the remote. Later reconciliation removes operator authority if health eligibility is withdrawn.
+- Show the effective Local Retention behavior per video as **Server default** or **Override**, including **Manual cleanup only** for zero-day destructive policies, instead of exposing the implementation detail `Not set`.
+- Add **Clean up selected now** as an explicit bulk operation. It bypasses only the retention waiting period; archive-of-record, serving-proof, processing, exact-source, policy, and confined WordPress filesystem deletion gates remain mandatory in the detached worker. Existing version-1 queued retention task payloads remain readable.
+- Change the fresh/unconfigured retention grace default from seven days to `0` (manual cleanup only). Explicitly saved existing nonzero site settings remain unchanged.
+- Preserve RC13.3 as the immutable patch base: Forgejo commit `f65d9ab9cb973b3bd30788ae9c453b873325725c`, tree `15f6a7c92d17e678c020b00f93f69391f90d1c50`.
+
 ## 2.0.0-rc13.3 - 2026-09-12
 
 - Fix canonical Plugin Check nonce-analysis findings in Local Retention by keeping raw grace-period request reads inside the already nonce-verified administrator actions and passing only sanitized values into the shared parser; retention behavior is unchanged.

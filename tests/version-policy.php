@@ -70,6 +70,7 @@ $assert(version_compare('2.0.0-rc12', '2.0.0-rc13.1', '<'), 'RC13.1 must compare
 $assert(version_compare('2.0.0-rc13', '2.0.0-rc13.1', '<'), 'Dotted RC build 1 must compare newer than its undotted RC series version.');
 $assert(version_compare('2.0.0-rc13.1', '2.0.0-rc13.2', '<'), 'Later dotted RC builds must compare newer than earlier builds.');
 $assert(version_compare('2.0.0-rc13.2', '2.0.0-rc13.3', '<'), 'RC13.3 must compare newer than RC13.2.');
+$assert(version_compare('2.0.0-rc13.3', '2.0.0-rc13.4', '<'), 'RC13.4 must compare newer than RC13.3.');
 $assert(version_compare('2.0.0-rc99.99', '2.0.0', '<'), 'Final 2.0.0 must compare newer than every numbered/dotted 2.0.0 RC.');
 $assert(version_compare('1.0.0', '2.0.0', '<'), 'Public 1.0.0 must compare older than final 2.0.0.');
 

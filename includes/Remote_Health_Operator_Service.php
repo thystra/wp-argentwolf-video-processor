@@ -17,7 +17,8 @@ final class Remote_Health_Operator_Service
         private readonly Remote_Publication_Health_Repository $health,
         private readonly Remote_Publication_Health_Service $probes,
         private readonly ?PeerTube_Event_Repository $events = null,
-        private readonly ?Remote_Health_Notification_Service $notifications = null
+        private readonly ?Remote_Health_Notification_Service $notifications = null,
+        private readonly ?PeerTube_Serving_Cutover_Service $cutover = null
     ) {}
 
     /** @return array{status:string,viability_status:string,restore_available:bool,message:string} */
@@ -31,7 +32,7 @@ final class Remote_Health_Operator_Service
             return self::result(self::REFUSED, '', false, 'The selected remote publication is no longer available for checking.');
         }
         $before = $this->health->find($remote_asset_id);
-        if (! self::incident_checkable($before)) {
+        if (! self::incident_checkable($before) && ! $this->authority_missing_for_asset($video_id, $remote_asset_id)) {
             return self::result(self::REFUSED, '', false, 'This remote publication does not currently have a checkable serving incident.');
         }
 
@@ -66,7 +67,7 @@ final class Remote_Health_Operator_Service
             $status,
             $restore,
             Serving_Viability::HEALTHY === $status
-                ? ($restore ? 'The remote publication passed a fresh visitor-facing check. You may restore remote serving now.' : 'The remote publication passed a fresh visitor-facing check.')
+                ? ($restore ? 'The remote publication passed a fresh visitor-facing check. You may use this verified remote now.' : 'The remote publication passed a fresh visitor-facing check.')
                 : (string) ($probe['message'] ?? 'The remote publication check completed.')
         );
     }
@@ -83,13 +84,16 @@ final class Remote_Health_Operator_Service
             return false;
         }
         $row = $this->health->find($remote_asset_id);
-        return is_array($row)
-            && $video_id === (int) ($row['video_post_id'] ?? 0)
-            && $check['backend_id'] === (string) ($row['backend_id'] ?? '')
-            && Serving_Viability::HEALTHY === (string) ($row['status'] ?? '')
-            && 0 === (int) ($row['eligible'] ?? 0)
-            && (int) ($row['success_streak'] ?? 0) >= 1
-            && gmdate('Y-m-d H:i:s', (int) $check['checked_at']) === (string) ($row['last_checked_at'] ?? '');
+        if (! is_array($row)
+            || $video_id !== (int) ($row['video_post_id'] ?? 0)
+            || $check['backend_id'] !== (string) ($row['backend_id'] ?? '')
+            || Serving_Viability::HEALTHY !== (string) ($row['status'] ?? '')
+            || (int) ($row['success_streak'] ?? 0) < 1
+            || gmdate('Y-m-d H:i:s', (int) $check['checked_at']) !== (string) ($row['last_checked_at'] ?? '')) {
+            return false;
+        }
+        return 0 === (int) ($row['eligible'] ?? 0)
+            || $this->authority_missing_for_asset($video_id, $remote_asset_id);
     }
 
     /** @return array{status:string,viability_status:string,restore_available:bool,message:string} */
@@ -105,31 +109,65 @@ final class Remote_Health_Operator_Service
         $check = Remote_Health_Operator_Check::sanitize(get_post_meta($video_id, Video_Meta::REMOTE_HEALTH_OPERATOR_CHECK, true));
         if (array() !== $check && (int) ($check['restored_at'] ?? 0) > 0
             && $remote_asset_id === (int) ($check['remote_asset_id'] ?? 0)) {
-            return self::result(self::PRESENT, Serving_Viability::HEALTHY, false, 'Remote serving was already restored from this operator check.');
+            return self::result(self::PRESENT, Serving_Viability::HEALTHY, false, 'This verified remote publication was already selected from this operator check.');
         }
         if (! $this->restore_available($video_id, $remote_asset_id, $now)) {
-            return self::result(self::REFUSED, '', false, 'A recent successful operator check is required before remote serving can be restored immediately.');
+            return self::result(self::REFUSED, '', false, 'A recent successful operator check is required before this verified remote publication can be used.');
         }
         $expected = gmdate('Y-m-d H:i:s', (int) $check['checked_at']);
-        $written = $this->health->operator_restore_eligible(
-            $remote_asset_id,
-            $video_id,
-            (string) $check['backend_id'],
-            $expected,
-            $now
-        );
-        if (Remote_Publication_Health_Repository::PRESENT === $written) {
-            return self::result(self::PRESENT, Serving_Viability::HEALTHY, false, 'Remote serving became eligible before this restore request needed to change it.');
+        $before_health = $this->health->find($remote_asset_id);
+        if (! is_array($before_health)) {
+            return self::result(self::INDETERMINATE, '', false, 'The remote serving health record disappeared before the verified result could be applied.');
         }
-        if (Remote_Publication_Health_Repository::APPLIED !== $written) {
-            return self::result(self::INDETERMINATE, '', false, 'Serving eligibility changed while the restore was being applied. No blind override was performed.');
+
+        $authority_missing = $this->authority_missing_for_asset($video_id, $remote_asset_id);
+        $adoption = PeerTube_Serving_Cutover_Service::PRESENT;
+        if ($authority_missing) {
+            if (null === $this->cutover) {
+                return self::result(self::INDETERMINATE, Serving_Viability::HEALTHY, false, 'Verified remote serving authority could not be established. No serving eligibility was changed.');
+            }
+            // Establish authority before restoring eligibility. When this asset is
+            // currently ineligible, the normal serving resolver will continue to
+            // ignore it until the guarded health-row transition below succeeds.
+            $adoption = $this->cutover->adopt_verified_remote(
+                $video_id,
+                $remote_asset_id,
+                $expected,
+                $now,
+                0 === (int) ($before_health['eligible'] ?? 0)
+            );
+            if (! in_array($adoption, array(PeerTube_Serving_Cutover_Service::APPLIED, PeerTube_Serving_Cutover_Service::PRESENT), true)) {
+                return self::result(self::INDETERMINATE, Serving_Viability::HEALTHY, false, 'The remote publication passed verification, but its serving authority could not be established safely. No serving eligibility was changed.');
+            }
         }
+
+        if (0 === (int) ($before_health['eligible'] ?? 0)) {
+            $written = $this->health->operator_restore_eligible(
+                $remote_asset_id,
+                $video_id,
+                (string) $check['backend_id'],
+                $expected,
+                $now
+            );
+            if (! in_array($written, array(
+                Remote_Publication_Health_Repository::APPLIED,
+                Remote_Publication_Health_Repository::PRESENT,
+            ), true)) {
+                if ($authority_missing && null !== $this->cutover) {
+                    // The asset is still ineligible, so normal reconciliation must
+                    // remove any provisional operator authority created above.
+                    $this->cutover->reconcile($video_id, $now);
+                }
+                return self::result(self::INDETERMINATE, '', false, 'Serving eligibility changed while the verified result was being applied. No blind override was performed.');
+            }
+        }
+
         $check['restored_by'] = $actor_id;
         $check['restored_at'] = $now;
         $check = Remote_Health_Operator_Check::sanitize($check);
         update_post_meta($video_id, Video_Meta::REMOTE_HEALTH_OPERATOR_CHECK, $check);
         if ($check !== Remote_Health_Operator_Check::sanitize(get_post_meta($video_id, Video_Meta::REMOTE_HEALTH_OPERATOR_CHECK, true))) {
-            return self::result(self::INDETERMINATE, Serving_Viability::HEALTHY, false, 'Remote serving is eligible again, but the operator audit record could not be finalized.');
+            return self::result(self::INDETERMINATE, Serving_Viability::HEALTHY, false, 'The verified remote is usable, but the operator audit record could not be finalized.');
         }
         $after = $this->health->find($remote_asset_id);
         if (null !== $this->notifications && is_array($after)) {
@@ -141,7 +179,7 @@ final class Remote_Health_Operator_Service
                 7,
                 'serving_health_operator_restored',
                 'info',
-                'A fresh visitor-facing check passed and an administrator restored this remote publication to serving eligibility.',
+                'A fresh visitor-facing check passed and an administrator selected this verified remote publication for serving.',
                 $now,
                 0,
                 '',
@@ -149,11 +187,15 @@ final class Remote_Health_Operator_Service
                 (string) $asset['backend_id'],
                 0,
                 '',
-                'Restore remote serving now',
-                array('serving_health' => 'operator_restored', 'operator_user_id' => $actor_id)
+                'Use verified remote now',
+                array(
+                    'serving_health' => 'operator_restored',
+                    'operator_user_id' => $actor_id,
+                    'serving_authority' => $adoption,
+                )
             );
         }
-        return self::result(self::APPLIED, Serving_Viability::HEALTHY, false, 'Remote serving eligibility was restored from the fresh successful check.');
+        return self::result(self::APPLIED, Serving_Viability::HEALTHY, false, 'The fresh successful check was applied and the verified remote publication is available for serving.');
     }
 
     /** @param array<string,mixed>|null $row */
@@ -173,6 +215,15 @@ final class Remote_Health_Operator_Service
             Serving_Viability::TEMPORARILY_UNAVAILABLE,
             Serving_Viability::PROBE_INDETERMINATE,
         ), true);
+    }
+
+    private function authority_missing_for_asset(int $video_id, int $remote_asset_id): bool
+    {
+        $authority = Video_Serving_Authority::sanitize(
+            get_post_meta($video_id, Video_Meta::SERVING_AUTHORITY, true)
+        );
+        return array() === $authority
+            || $remote_asset_id !== (int) ($authority['remote_asset_id'] ?? 0);
     }
 
     /** @return array<string,mixed>|null */

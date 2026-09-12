@@ -15,7 +15,9 @@ final class Video_Routing_Admin
         private readonly Video_Publishing_Defaults_Store $defaults,
         private readonly PeerTube_Publication_Catalog_Store $catalogs,
         private readonly Video_Serving_Service $serving,
-        private readonly Video_Reference_Index $references
+        private readonly Video_Reference_Index $references,
+        private readonly ?Remote_Asset_Repository $remote_assets = null,
+        private readonly ?Remote_Publication_Health_Repository $health = null
     ) {
     }
 
@@ -26,7 +28,7 @@ final class Video_Routing_Admin
         $default = $this->site_default_target();
         ?>
         <h2><?php esc_html_e('Videos & Routing', 'argentwolf-video-processor'); ?></h2>
-        <p><?php esc_html_e('This read-only matrix shows each AWVP Video, the WordPress posts that reference it, its configured primary destination, and the source that is actually serving now. New videos start from the site publishing default, then keep a concrete per-video destination so later default changes do not silently reroute existing videos.', 'argentwolf-video-processor'); ?></p>
+        <p><?php esc_html_e('This read-only matrix shows each AWVP Video, the posts that reference it, and the ordered backends that can currently serve it. The list distinguishes configured routing from verified artifact availability, so an intentionally removed local source is not reported as an error while a viable remote backend is serving.', 'argentwolf-video-processor'); ?></p>
 
         <p><strong><?php esc_html_e('Default primary destination for new videos:', 'argentwolf-video-processor'); ?></strong>
             <?php if (null === $default) : ?>
@@ -35,8 +37,6 @@ final class Video_Routing_Admin
                 <span><?php echo esc_html($this->target_label($default)); ?></span>
             <?php endif; ?>
         </p>
-        <p class="description"><?php esc_html_e('This routing view does not enable multi-backend publication. Each video currently has one configured primary target; the Backups column is reserved for future ordered PeerTube/other-backend targets.', 'argentwolf-video-processor'); ?></p>
-
         <?php if ($this->references->truncated()) : ?>
             <div class="notice notice-warning inline"><p><?php echo esc_html(sprintf(
                 /* translators: %d: maximum number of WordPress posts scanned for references. */
@@ -54,10 +54,8 @@ final class Video_Routing_Admin
             <thead><tr>
                 <th><?php esc_html_e('Video', 'argentwolf-video-processor'); ?></th>
                 <th><?php esc_html_e('Referenced by', 'argentwolf-video-processor'); ?></th>
-                <th><?php esc_html_e('Primary', 'argentwolf-video-processor'); ?></th>
-                <th><?php esc_html_e('Backups', 'argentwolf-video-processor'); ?></th>
-                <th><?php esc_html_e('Serving now', 'argentwolf-video-processor'); ?></th>
-                <th><?php esc_html_e('Local source / retention', 'argentwolf-video-processor'); ?></th>
+                <th><?php esc_html_e('Serving backends', 'argentwolf-video-processor'); ?></th>
+                <th><?php esc_html_e('Status / recovery', 'argentwolf-video-processor'); ?></th>
             </tr></thead>
             <tbody>
                 <?php foreach ($rows as $row) : ?>
@@ -101,6 +99,10 @@ final class Video_Routing_Admin
             );
             $serving = $this->serving->serving_candidate($video_id);
             $policy = Local_Retention_Policy::sanitize(get_post_meta($video_id, Video_Meta::LOCAL_RETENTION_POLICY, true));
+            $remote_assets = null !== $this->remote_assets ? $this->remote_assets->serving_candidates_for_video($video_id) : array();
+            $health = null !== $this->health ? $this->health->for_video($video_id) : array();
+            $original_present = $attachment_id > 0 && array() !== WordPress_Source_File::capture($attachment_id);
+            $local_delivery_present = $attachment_id > 0 && '' !== Local_Delivery_Evidence::available_hls_url($attachment_id);
             $rows[] = array(
                 'video_id'          => $video_id,
                 'video_title'       => sanitize_text_field((string) ($post->post_title ?? '')),
@@ -113,6 +115,10 @@ final class Video_Routing_Admin
                 'serving'           => $serving,
                 'source_state'      => Video_Meta::sanitize_source_state(get_post_meta($video_id, Video_Meta::SOURCE_STATE, true)),
                 'retention'         => $policy,
+                'remote_assets'      => $remote_assets,
+                'health'             => $health,
+                'original_present'   => $original_present,
+                'local_delivery_present' => $local_delivery_present,
             );
         }
         return $rows;
@@ -124,16 +130,8 @@ final class Video_Routing_Admin
         $video_id = (int) $row['video_id'];
         $title = '' !== (string) $row['video_title'] ? (string) $row['video_title'] : __('Untitled video', 'argentwolf-video-processor');
         $destination = is_array($row['destination']) ? $row['destination'] : array();
-        $primary = array() === $destination
-            ? __('Invalid / needs repair', 'argentwolf-video-processor')
-            : $this->target_label($destination);
-        $serving = is_array($row['serving']) ? $row['serving'] : array();
-        $serving_label = $this->serving_label($serving);
-        $configured_backend = Backend_Identity::sanitize((string) ($destination['backend_id'] ?? ''));
-        $serving_backend = Backend_Identity::sanitize((string) ($serving['backend_id'] ?? ''));
-        $fallback = '' !== $configured_backend && '' !== $serving_backend && $configured_backend !== $serving_backend;
-        $retention = is_array($row['retention']) ? $row['retention'] : array();
-        $retention_label = $this->retention_label($retention);
+        $backend_rows = $this->serving_backends($row);
+        $status = $this->routing_status($row, $backend_rows);
         ?>
         <tr>
             <td>
@@ -149,23 +147,19 @@ final class Video_Routing_Admin
             </td>
             <td><?php $this->render_references(is_array($row['references']) ? $row['references'] : array()); ?></td>
             <td>
-                <strong><?php echo esc_html($primary); ?></strong>
-                <br><span class="description"><?php echo esc_html(true === $row['destination_saved']
-                    ? __('Stored per-video assignment', 'argentwolf-video-processor')
-                    : __('Legacy Local default; no destination metadata stored', 'argentwolf-video-processor')); ?></span>
+                <ol style="margin:0 0 0 1.4em">
+                    <?php foreach ($backend_rows as $backend) : ?>
+                        <li>
+                            <strong><?php echo esc_html((string) $backend['label']); ?></strong>
+                            <?php if (true === ($backend['primary'] ?? false)) : ?> <span class="description"><?php esc_html_e('Primary', 'argentwolf-video-processor'); ?></span><?php endif; ?>
+                            <br><span class="description"><?php echo esc_html((string) $backend['detail']); ?></span>
+                        </li>
+                    <?php endforeach; ?>
+                </ol>
             </td>
-            <td><span aria-label="<?php echo esc_attr__('No configured backup targets', 'argentwolf-video-processor'); ?>">—</span></td>
             <td>
-                <strong><?php echo esc_html($serving_label); ?></strong>
-                <?php if ($fallback) : ?><br><span class="description"><strong><?php esc_html_e('Fallback serving is active.', 'argentwolf-video-processor'); ?></strong></span><?php endif; ?>
-            </td>
-            <td>
-                <?php echo esc_html(sprintf(
-                    /* translators: %s: bounded source-state name. */
-                    __('Source: %s', 'argentwolf-video-processor'),
-                    (string) $row['source_state']
-                )); ?>
-                <br><span class="description"><?php echo esc_html($retention_label); ?></span>
+                <strong><?php echo esc_html((string) $status['label']); ?></strong>
+                <?php if ('' !== (string) $status['detail']) : ?><br><span class="description"><?php echo esc_html((string) $status['detail']); ?></span><?php endif; ?>
             </td>
         </tr>
         <?php
@@ -255,17 +249,139 @@ final class Video_Routing_Admin
         );
     }
 
-    /** @param array<string,mixed> $serving */
-    private function serving_label(array $serving): string
+    /** @param array<string,mixed> $row @return list<array{label:string,detail:string,primary:bool}> */
+    private function serving_backends(array $row): array
     {
+        $destination = is_array($row['destination'] ?? null) ? $row['destination'] : array();
+        $configured = Backend_Identity::sanitize((string) ($destination['backend_id'] ?? ''));
+        $serving = is_array($row['serving'] ?? null) ? $row['serving'] : array();
+        $serving_backend = Backend_Identity::sanitize((string) ($serving['backend_id'] ?? ''));
+        $serving_asset = (int) ($serving['remote_asset_id'] ?? 0);
+        $health = is_array($row['health'] ?? null) ? $row['health'] : array();
+        $out = array();
+        $seen = array();
+
+        foreach ((array) ($row['remote_assets'] ?? array()) as $asset) {
+            if (! is_array($asset)) {
+                continue;
+            }
+            $asset_id = (int) ($asset['id'] ?? 0);
+            $backend_id = Backend_Identity::sanitize((string) ($asset['backend_id'] ?? ''));
+            if ($asset_id < 1 || '' === $backend_id || Backend_Registry::LOCAL_ID === $backend_id) {
+                continue;
+            }
+            $observation = is_array($health[$asset_id] ?? null) ? $health[$asset_id] : array();
+            $status = (string) ($observation['status'] ?? '');
+            $eligible = 1 === (int) ($observation['eligible'] ?? 0);
+            $is_serving = $asset_id === $serving_asset && $backend_id === $serving_backend;
+            if ($is_serving) {
+                $detail = __('Serving now · remote verified', 'argentwolf-video-processor');
+            } elseif (Serving_Viability::HEALTHY === $status && $eligible) {
+                $detail = __('Available · remote verified', 'argentwolf-video-processor');
+            } elseif ('' !== $status) {
+                $detail = sprintf(
+                    /* translators: %s: bounded remote serving-health status. */
+                    __('Remote present · health: %s', 'argentwolf-video-processor'),
+                    $status
+                );
+            } else {
+                $detail = __('Remote present · serving health not yet qualified', 'argentwolf-video-processor');
+            }
+            $out[] = array(
+                'label' => $this->backend_label($backend_id),
+                'detail' => $detail,
+                'primary' => $backend_id === $configured,
+                '_serving' => $is_serving,
+            );
+            $seen[$backend_id] = true;
+        }
+
+        if ('' !== $configured && Backend_Registry::LOCAL_ID !== $configured && ! isset($seen[$configured])) {
+            $out[] = array(
+                'label' => $this->backend_label($configured),
+                'detail' => __('Configured · no verified remote publication available', 'argentwolf-video-processor'),
+                'primary' => true,
+                '_serving' => false,
+            );
+        }
+
+        $source_removed = 'removed' === (string) ($row['source_state'] ?? '');
+        $original = true === ($row['original_present'] ?? false);
+        $delivery = true === ($row['local_delivery_present'] ?? false);
+        $local_serving = Backend_Registry::LOCAL_ID === $serving_backend || 'local' === (string) ($serving['kind'] ?? '');
+        if ($local_serving) {
+            $local_detail = __('Serving now', 'argentwolf-video-processor');
+            if ($original) {
+                $local_detail .= ' · ' . __('original present', 'argentwolf-video-processor');
+            } elseif ($delivery) {
+                $local_detail .= ' · ' . __('local delivery present', 'argentwolf-video-processor');
+            }
+        } elseif ($original || $delivery) {
+            $parts = array();
+            if ($original) {
+                $parts[] = __('original present', 'argentwolf-video-processor');
+            }
+            if ($delivery) {
+                $parts[] = __('local delivery present', 'argentwolf-video-processor');
+            }
+            $local_detail = __('Available', 'argentwolf-video-processor') . ' · ' . implode(' · ', $parts);
+        } elseif ($source_removed) {
+            $local_detail = __('Not available · local source intentionally removed', 'argentwolf-video-processor');
+        } else {
+            $local_detail = __('Not available · no local serving artifact found', 'argentwolf-video-processor');
+        }
+        $out[] = array(
+            'label' => __('Local AWVP / WordPress', 'argentwolf-video-processor'),
+            'detail' => $local_detail,
+            'primary' => Backend_Registry::LOCAL_ID === $configured,
+            '_serving' => $local_serving,
+        );
+
+        usort($out, static function (array $a, array $b): int {
+            $as = true === ($a['_serving'] ?? false) ? 1 : 0;
+            $bs = true === ($b['_serving'] ?? false) ? 1 : 0;
+            if ($as !== $bs) {
+                return $bs <=> $as;
+            }
+            if ((bool) $a['primary'] !== (bool) $b['primary']) {
+                return ((int) $b['primary']) <=> ((int) $a['primary']);
+            }
+            return 0;
+        });
+        foreach ($out as &$entry) {
+            unset($entry['_serving']);
+        }
+        unset($entry);
+        return $out;
+    }
+
+    /** @param list<array{label:string,detail:string,primary:bool}> $backend_rows @return array{label:string,detail:string} */
+    private function routing_status(array $row, array $backend_rows): array
+    {
+        $serving = is_array($row['serving'] ?? null) ? $row['serving'] : array();
         if (array() === $serving) {
-            return __('No verified serving source', 'argentwolf-video-processor');
+            return array(
+                'label'=>__('Needs attention', 'argentwolf-video-processor'),
+                'detail'=>__('No verified serving backend is currently available. Use Overview for Check now, rebuild, or republish recovery actions.', 'argentwolf-video-processor'),
+            );
         }
         $backend_id = Backend_Identity::sanitize((string) ($serving['backend_id'] ?? ''));
-        if (Backend_Registry::LOCAL_ID === $backend_id || 'local' === ($serving['kind'] ?? null)) {
-            return __('Local AWVP / WordPress', 'argentwolf-video-processor');
+        $source_removed = 'removed' === (string) ($row['source_state'] ?? '');
+        if (Backend_Registry::LOCAL_ID !== $backend_id && $source_removed) {
+            return array(
+                'label'=>__('Healthy', 'argentwolf-video-processor'),
+                'detail'=>__('Verified remote serving is active; the local source was intentionally removed.', 'argentwolf-video-processor'),
+            );
         }
-        return '' !== $backend_id ? $this->backend_label($backend_id) : __('Unknown source', 'argentwolf-video-processor');
+        $destination = is_array($row['destination'] ?? null) ? $row['destination'] : array();
+        $configured = Backend_Identity::sanitize((string) ($destination['backend_id'] ?? ''));
+        if ('' !== $configured && $configured !== $backend_id) {
+            return array(
+                'label'=>__('Fallback serving active', 'argentwolf-video-processor'),
+                'detail'=>__('The configured primary is not serving now. Use Overview if recovery is required.', 'argentwolf-video-processor'),
+            );
+        }
+        return array('label'=>__('Healthy', 'argentwolf-video-processor'), 'detail'=>'');
     }
 
     private function backend_label(string $backend_id): string
@@ -310,20 +426,6 @@ final class Video_Routing_Admin
         }
         $title = sanitize_text_field((string) get_the_title($attachment_id));
         return '' !== $title ? $title : __('Attachment', 'argentwolf-video-processor');
-    }
-
-    /** @param array<string,mixed> $policy */
-    private function retention_label(array $policy): string
-    {
-        if (array() === $policy) {
-            return __('Retention: site/default Keep behavior', 'argentwolf-video-processor');
-        }
-        return match ((string) $policy['mode']) {
-            Local_Retention_Policy::MODE_KEEP => __('Retention: Keep all local copies', 'argentwolf-video-processor'),
-            Local_Retention_Policy::MODE_DELETE_MANAGED => __('Retention: remove generated local copies', 'argentwolf-video-processor'),
-            Local_Retention_Policy::MODE_DELETE_ALL => __('Retention: remove generated copies and original', 'argentwolf-video-processor'),
-            default => __('Retention: invalid / needs repair', 'argentwolf-video-processor'),
-        };
     }
 
     private function require_admin(): void

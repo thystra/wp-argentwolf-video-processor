@@ -9,7 +9,8 @@ use Throwable;
 final class Local_Retention_Service
 {
     public const TASK_TYPE='peertube_local_retention_cleanup';
-    public const PAYLOAD_VERSION=1;
+    public const PAYLOAD_VERSION=2;
+    public const LEGACY_PAYLOAD_VERSION=1;
     public const APPLIED='applied';
     public const PRESENT='present';
     public const REFUSED='refused';
@@ -94,9 +95,29 @@ final class Local_Retention_Service
     /** @return array{status:string,task_id:int,eligible_at:int} */
     public function schedule(int $video_id,int $now):array
     {
-        if($video_id<1||$now<1)return self::schedule_result(self::REFUSED);
+        return $this->schedule_internal($video_id,$now,false,0);
+    }
+
+    /**
+     * Explicit administrator cleanup. This bypasses only the retention wait;
+     * every archive, ownership, serving-proof, processing, source-identity and
+     * filesystem safety gate remains enforced by scheduling and the worker.
+     *
+     * @return array{status:string,task_id:int,eligible_at:int}
+     */
+    public function cleanup_now(int $video_id,int $user_id,int $now):array
+    {
+        if($user_id<1)return self::schedule_result(self::REFUSED);
+        return $this->schedule_internal($video_id,$now,true,$user_id);
+    }
+
+    /** @return array{status:string,task_id:int,eligible_at:int} */
+    private function schedule_internal(int $video_id,int $now,bool $manual,int $actor_id):array
+    {
+        if($video_id<1||$now<1||($manual&&$actor_id<1))return self::schedule_result(self::REFUSED);
         $policy=Local_Retention_Policy::sanitize(get_post_meta($video_id,Video_Meta::LOCAL_RETENTION_POLICY,true));
-        if(array()===$policy||!Local_Retention_Policy::automatic_cleanup_enabled($policy))return self::schedule_result(self::REFUSED);
+        if(array()===$policy||!Local_Retention_Policy::destructive($policy)
+            ||(!$manual&&!Local_Retention_Policy::automatic_cleanup_enabled($policy)))return self::schedule_result(self::REFUSED);
         $master=Video_Meta::sanitize_master_authority(get_post_meta($video_id,Video_Meta::MASTER_AUTHORITY,true));
         if(Local_Retention_Policy::deletes_source($policy)&&null!==$this->archive_policy&&!$this->archive_policy->source_deletion_allowed())return self::schedule_result(self::REFUSED);
         if(!$this->master_allows_policy($policy,$master))return self::schedule_result(self::REFUSED);
@@ -124,10 +145,11 @@ final class Local_Retention_Service
 
         $grace=(int)$policy['grace_days']*86400;
         if($baseline>PHP_INT_MAX-$grace)return self::schedule_result(self::REFUSED);
-        $eligible=$baseline+$grace;
+        $eligible=$manual?$now:$baseline+$grace;
         $existing=metadata_exists('post',$video_id,Video_Meta::LOCAL_RETENTION_EXECUTION)
             ?Local_Retention_Execution::sanitize(get_post_meta($video_id,Video_Meta::LOCAL_RETENTION_EXECUTION,true)):array();
-        if(array()!==$existing&&in_array($existing['status'],array(Local_Retention_Execution::STATUS_QUEUED,Local_Retention_Execution::STATUS_RUNNING),true)
+        if($manual&&array()!==$existing&&Local_Retention_Execution::STATUS_RUNNING===$existing['status'])return self::schedule_result(self::REFUSED);
+        if(!$manual&&array()!==$existing&&in_array($existing['status'],array(Local_Retention_Execution::STATUS_QUEUED,Local_Retention_Execution::STATUS_RUNNING),true)
             &&hash_equals((string)$existing['policy_sha256'],Local_Retention_Policy::sha256($policy))
             &&hash_equals(Local_Retention_Execution::proof_sha256($existing),$proof_sha))return self::schedule_result(self::PRESENT,(int)$existing['task_id'],(int)$existing['eligible_at']);
         $attempt=array()!==$existing?(int)$existing['attempt']+1:1;
@@ -139,7 +161,14 @@ final class Local_Retention_Service
         update_post_meta($video_id,Video_Meta::CLEANUP_STATE,$eligible<=$now?'eligible':'pending');
         if($execution!==Local_Retention_Execution::sanitize(get_post_meta($video_id,Video_Meta::LOCAL_RETENTION_EXECUTION,true)))return self::schedule_result(self::INDETERMINATE);
         $exec_sha=Local_Retention_Execution::immutable_sha256($execution);
-        $payload=array('version'=>self::PAYLOAD_VERSION,'policy_sha256'=>$execution['policy_sha256'],'execution_sha256'=>$exec_sha);
+        $payload=array(
+            'version'=>self::PAYLOAD_VERSION,
+            'policy_sha256'=>$execution['policy_sha256'],
+            'execution_sha256'=>$exec_sha,
+            'manual_cleanup'=>$manual,
+            'requested_by'=>$manual?$actor_id:0,
+            'requested_at'=>$manual?$now:0,
+        );
         $key=hash('sha256','awvp-task:v1:'.self::TASK_TYPE.':'.$video_id.':'.$exec_sha);
         $queued=$this->tasks->enqueue(
             self::TASK_TYPE,
@@ -178,7 +207,7 @@ final class Local_Retention_Service
         if(array()===$running||!$this->save_execution($video,$running,'running'))return self::worker_result(self::STATUS_FAILED,$id,$type,$this->tasks->fail($id,$lock,'Cleanup journal could not enter running state.',$now),0,'journal_indeterminate');
         if($this->local_job_active((int)$running['attachment_id']))return $this->block($id,$lock,$running,$now,'A local processing job raced with cleanup and local bytes were kept.');
         if(!self::video_context_valid($video,(int)$running['attachment_id'])||!self::attachment_exclusive_to_video((int)$running['attachment_id'],$video))return $this->block($id,$lock,$running,$now,'AWVP Video or attachment ownership changed after the cleanup fence.');
-        $current_policy=$this->current_policy_for_execution($video,$running,$now);
+        $current_policy=$this->current_policy_for_execution($video,$running,$now,(bool)$payload['manual_cleanup']);
         if(array()===$current_policy)return $this->block($id,$lock,$running,$now,'Retention policy or archive authority changed after the cleanup fence; local bytes were kept.');
         $policy=$current_policy;
         try{
@@ -189,7 +218,7 @@ final class Local_Retention_Service
                 if(metadata_exists('post',(int)$running['attachment_id'],'_argent_video_outputs'))throw new \RuntimeException('Managed output metadata could not be cleared.');
             }
             if(Local_Retention_Policy::deletes_source($policy)){
-                $source_policy=$this->current_policy_for_execution($video,$running,$now);
+                $source_policy=$this->current_policy_for_execution($video,$running,$now,(bool)$payload['manual_cleanup']);
                 if(array()===$source_policy||!Local_Retention_Policy::deletes_source($source_policy))return $this->block($id,$lock,$running,$now,'Source-deletion policy or archive authority changed immediately before physical source deletion.');
                 if(!$this->proof_matches($video,$running))return $this->block($id,$lock,$running,$now,'Required serving evidence changed immediately before physical source deletion.');
                 if(!WordPress_Source_File::matches((int)$running['attachment_id'],$running['source'])&&!(Local_Retention_Execution::STATUS_RUNNING===$execution['status']&&WordPress_Source_File::absent((int)$running['attachment_id'],$running['source'])))return $this->block($id,$lock,$running,$now,'WordPress source identity changed immediately before physical source deletion.');
@@ -265,12 +294,13 @@ final class Local_Retention_Service
     }
 
     /** @return array<string,mixed> */
-    private function current_policy_for_execution(int $video_id,array $execution,int $now):array
+    private function current_policy_for_execution(int $video_id,array $execution,int $now,bool $manual_cleanup=false):array
     {
         $execution=Local_Retention_Execution::sanitize($execution);
         if($video_id<1||$now<1||array()===$execution||$now<(int)$execution['eligible_at'])return array();
         $policy=Local_Retention_Policy::sanitize(get_post_meta($video_id,Video_Meta::LOCAL_RETENTION_POLICY,true));
-        if(array()===$policy||!Local_Retention_Policy::automatic_cleanup_enabled($policy)
+        if(array()===$policy||!Local_Retention_Policy::destructive($policy)
+            ||(!$manual_cleanup&&!Local_Retention_Policy::automatic_cleanup_enabled($policy))
             ||!hash_equals((string)$execution['policy_sha256'],Local_Retention_Policy::sha256($policy)))return array();
         $master=Video_Meta::sanitize_master_authority(get_post_meta($video_id,Video_Meta::MASTER_AUTHORITY,true));
         if(!$this->master_allows_policy($policy,$master))return array();
@@ -318,8 +348,32 @@ final class Local_Retention_Service
     }
     private function block(int $task_id,string $lock,array $execution,int $now,string $reason):array{$blocked=Local_Retention_Execution::transition($execution,Local_Retention_Execution::STATUS_BLOCKED,$now,$reason);if(array()!==$blocked)$this->save_execution((int)$execution['video_id'],$blocked,'blocked');update_post_meta((int)$execution['video_id'],Video_Meta::CLEANUP_STATE,'blocked');return self::worker_result(self::STATUS_COMPLETE,$task_id,self::TASK_TYPE,$this->tasks->complete($task_id,$lock,$now),0,'blocked_keep');}
     private function save_execution(int $video,array $record,string $cleanup):bool{update_post_meta($video,Video_Meta::LOCAL_RETENTION_EXECUTION,$record);update_post_meta($video,Video_Meta::CLEANUP_STATE,$cleanup);return $record===Local_Retention_Execution::sanitize(get_post_meta($video,Video_Meta::LOCAL_RETENTION_EXECUTION,true));}
-    /** @return array{version:int,policy_sha256:string,execution_sha256:string}|null */
-    private static function payload(mixed $json):?array{if(!is_string($json)||''===$json||strlen($json)>16384)return null;try{$v=json_decode($json,true,6,JSON_THROW_ON_ERROR);}catch(Throwable){return null;}if(!is_array($v)||array('version','policy_sha256','execution_sha256')!==array_keys($v)||self::PAYLOAD_VERSION!==($v['version']??null))return null;foreach(array('policy_sha256','execution_sha256') as $k){if(!is_string($v[$k]??null)||1!==preg_match('/^[a-f0-9]{64}$/D',$v[$k]))return null;}return $v;}
+    /** @return array{version:int,policy_sha256:string,execution_sha256:string,manual_cleanup:bool,requested_by:int,requested_at:int}|null */
+    private static function payload(mixed $json):?array
+    {
+        if(!is_string($json)||''===$json||strlen($json)>16384)return null;
+        try{$v=json_decode($json,true,6,JSON_THROW_ON_ERROR);}catch(Throwable){return null;}
+        if(!is_array($v)||!is_int($v['version']??null))return null;
+        if(self::LEGACY_PAYLOAD_VERSION===$v['version']){
+            if(array('version','policy_sha256','execution_sha256')!==array_keys($v))return null;
+            $v=array(
+                'version'=>self::LEGACY_PAYLOAD_VERSION,
+                'policy_sha256'=>$v['policy_sha256'],
+                'execution_sha256'=>$v['execution_sha256'],
+                'manual_cleanup'=>false,
+                'requested_by'=>0,
+                'requested_at'=>0,
+            );
+        }elseif(self::PAYLOAD_VERSION===$v['version']){
+            if(array('version','policy_sha256','execution_sha256','manual_cleanup','requested_by','requested_at')!==array_keys($v)
+                ||!is_bool($v['manual_cleanup']??null)||!is_int($v['requested_by']??null)||!is_int($v['requested_at']??null)
+                ||$v['requested_by']<0||$v['requested_at']<0
+                ||($v['manual_cleanup']&&($v['requested_by']<1||$v['requested_at']<1))
+                ||(!$v['manual_cleanup']&&(0!==$v['requested_by']||0!==$v['requested_at'])))return null;
+        }else{return null;}
+        foreach(array('policy_sha256','execution_sha256') as $k){if(!is_string($v[$k]??null)||1!==preg_match('/^[a-f0-9]{64}$/D',$v[$k]))return null;}
+        return $v;
+    }
     private static function positive(mixed $v):int{if(is_int($v))return$v>0?$v:0;if(!is_string($v)||1!==preg_match('/^[1-9][0-9]*$/D',$v))return 0;$n=(int)$v;return$n>0&&(string)$n===$v?$n:0;}
     /** @return array{status:string,task_id:int,eligible_at:int} */ private static function schedule_result(string $s,int $id=0,int $eligible=0):array{return array('status'=>$s,'task_id'=>$id,'eligible_at'=>$eligible);}
     /** @return array<string,mixed> */ private static function worker_result(string $s,int $id,string $type,string $repo,int $after,string $service):array{return array('status'=>$s,'task_id'=>$id,'task_type'=>$type,'service_status'=>$service,'repository_status'=>$repo,'run_after'=>$after);}
