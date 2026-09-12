@@ -13,13 +13,13 @@ awvp_r45_run_drain() {
     fi
     case "$expected" in
         wait)
-            [[ "$output" == *'PeerTube task worker stopped at a durable boundary after 4 bounded step(s);'* ]] \
+            [[ "$output" == *'PeerTube task worker stopped at a durable boundary after 4 step(s);'* ]] \
                 || fail "The drain worker did not cross the expected init/upload/handoff/reconcile boundaries for $CURRENT_CASE."
             [[ "$output" == *'peertube_remote_reconcile): requeued;'* ]] \
                 || fail "The drain worker did not stop at the durable reconciliation wait for $CURRENT_CASE."
             ;;
         ready)
-            [[ "$output" == *'PeerTube task worker stopped at a durable boundary after 1 bounded step(s);'* ]] \
+            [[ "$output" == *'PeerTube task worker stopped at a durable boundary after 1 step(s);'* ]] \
                 || fail "The drain worker did not complete the post-wait readiness step for $CURRENT_CASE."
             [[ "$output" == *'peertube_remote_reconcile): complete;'* ]] \
                 || fail "The drain worker did not report reconciliation completion for $CURRENT_CASE."

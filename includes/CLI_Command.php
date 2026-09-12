@@ -121,7 +121,7 @@ final class CLI_Command
                 ? $this->peertube_task_worker->run_drain($started_at)
                 : $this->peertube_task_worker->run_once($started_at);
         } catch (Throwable $error) {
-            WP_CLI::error('PeerTube task worker failed before a bounded result: ' . $this->error_summary($error->getMessage()));
+            WP_CLI::error('PeerTube task worker failed before producing a result: ' . $this->error_summary($error->getMessage()));
             return;
         } finally {
             if (class_exists(PeerTube_Task_Worker_Launcher::class)) {
@@ -142,7 +142,7 @@ final class CLI_Command
 
         if ($drain && in_array($status, array(PeerTube_Task_Worker::STATUS_ADVANCED, PeerTube_Task_Worker::STATUS_YIELDED), true)) {
             WP_CLI::success(sprintf(
-                'PeerTube task worker %s after %d bounded step(s); last task %d (%s): %s; elapsed %ds of %ds budget; %d stale recovered.',
+                'PeerTube task worker %s after %d step(s); last task %d (%s): %s; elapsed %ds of %ds budget; %d stale recovered.',
                 PeerTube_Task_Worker::STATUS_YIELDED === $status ? 'yielded safely' : 'stopped at a durable boundary',
                 max(0, (int) ($result['steps'] ?? 0)),
                 max(0, (int) ($result['task_id'] ?? 0)),

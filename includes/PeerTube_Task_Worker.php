@@ -359,7 +359,7 @@ final class PeerTube_Task_Worker
             $message = self::event_message($task_type, $step, $status, $service, $phase, $http_status);
         }
         $automatic_action = match ($status) {
-            'requeued' => 'AWVP queued the next bounded retry or continuation.',
+            'requeued' => 'AWVP queued the next retry or continuation step.',
             'failed' => 'Automatic processing stopped at this task boundary.',
             'indeterminate', 'conflict' => 'Automatic replay stopped until the recorded state can be checked safely.',
             default => 'AWVP saved the current task result.',

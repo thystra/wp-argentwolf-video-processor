@@ -218,7 +218,7 @@ namespace {
     $assert(
         1 === count(WP_CLI::$successes)
             && str_contains(WP_CLI::$successes[0], 'yielded safely')
-            && str_contains(WP_CLI::$successes[0], '3 bounded step(s)')
+            && str_contains(WP_CLI::$successes[0], '3 step(s)')
             && str_contains(WP_CLI::$successes[0], '3600s of 3600s budget'),
         'Drain CLI result lost safe-boundary progress/budget evidence.'
     );

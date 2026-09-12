@@ -166,7 +166,7 @@ final class Remote_Health_Notification_Service
             if(is_string($url)&&''!==trim($url))$line.=': '.trim($url);
             $lines[]=$line;
         }
-        if(null!==$this->references&&$this->references->truncated())$lines[]='- Additional references may exist beyond the bounded site scan.';
+        if(null!==$this->references&&$this->references->truncated())$lines[]='- Additional references may exist beyond the limited site scan.';
         return $lines;
     }
     private static function site_name():string{$v=function_exists('get_bloginfo')?(string)get_bloginfo('name'):'';return ''!==trim($v)?trim($v):'WordPress';}

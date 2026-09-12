@@ -278,7 +278,7 @@ the same advisory registry with their own capability and NVD link.
 
 Public WordPress.org stable release: `1.0.0`.
 
-Current controlled development candidate: `2.0.0-rc13.5`. RC packages are built
+Current controlled development candidate: `2.0.0-rc13.6`. RC packages are built
 from reviewed Forgejo commits and are not published to WordPress.org SVN. The
 public Stable tag remains `1.0.0` until final `2.0.0` promotion.
 
@@ -289,6 +289,19 @@ archives are not canonical installable artifacts.
 ### RC10 live-test hardening
 
 RC10 followed controlled RC9 live testing. It preserved RC9 package bytes and hardened the live PeerTube path: automatic credential/catalog authority repair, fresh reads in long-lived workers, dependency deferral without attempt exhaustion, semantic tag and short-embed verification, local-only recovery of already-applied publications, seven-step operator diagnostics, route-before-FFmpeg behavior, responsive no-autoplay rendering, explicit legacy 1.x migration/adoption, and a site-wide WordPress archive-of-record policy. Canonical RC10 candidate #2 was qualified and installed live; its bytes remain immutable historical evidence.
+
+### RC13.6 verified-remote recovery correction (development)
+
+RC13.6 corrects the live recovery case where a fresh visitor-facing PeerTube check
+proves the existing publication is serving-safe but the durable remote-asset row
+still carries the private upload-stage visibility left behind by an earlier
+indeterminate finalizer. Before operator adoption, AWVP now re-reads the exact
+PeerTube publication without mutating it, proves UUID/channel/final visibility/
+published state/embed identity against the current reviewed WordPress publication,
+and only then refreshes the local remote-asset observation. Restore refusal and
+Check-now outcomes are retained in operator history with explicit pass/fail text and
+stable reason codes. Operator-facing engineering wording such as "bounded" is also
+replaced with plain-language wording where it appears in normal UI or CLI output.
 
 ### RC13.5 destructive-uninstall completion (development)
 

@@ -444,7 +444,7 @@ final class PeerTube_Publication_Task_Coordinator
                 }
                 $cleanup=$this->derivative_cleanup->cleanup($video_id);
                 if (! in_array($cleanup,array(PeerTube_Derivative_Cleanup_Service::APPLIED,PeerTube_Derivative_Cleanup_Service::PRESENT),true)) {
-                    return $this->reschedule($task_id,self::TASK_FINALIZE,$lock,$now+60,'PeerTube serving is verified; waiting for bounded cleanup of local AWVP derivatives.',$now);
+                    return $this->reschedule($task_id,self::TASK_FINALIZE,$lock,$now+60,'PeerTube serving is verified; waiting for cleanup of local AWVP derivatives.',$now);
                 }
                 $service.=':cleanup_'.$cleanup;
             }

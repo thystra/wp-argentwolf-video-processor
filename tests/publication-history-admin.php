@@ -9,7 +9,7 @@ $settings=(string)file_get_contents(dirname(__DIR__).'/includes/Settings_Hub.php
 $plugin=(string)file_get_contents(dirname(__DIR__).'/includes/Plugin.php');
 $bootstrap=(string)file_get_contents(dirname(__DIR__).'/argentwolf-video-processor.php');
 
-foreach(array('Publication History & Logs','Details & log','Current serving','Last event','Filter history','Open remote video','recent_global','Event retention remains bounded') as $needle){
+foreach(array('Publication History & Logs','Details & log','Current serving','Last event','Filter history','Open remote video','recent_global','Event retention remains limited') as $needle){
     $assert(str_contains($admin,$needle),'Publication history UI is missing: '.$needle);
 }
 foreach(array('admin_post_','update_post_meta(','delete_post_meta(','->enqueue(','wp_remote_','PeerTube_Api_Client') as $forbidden){

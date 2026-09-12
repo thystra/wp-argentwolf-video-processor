@@ -32,7 +32,7 @@ final class Publication_History_Admin
         $days = self::query_token('history_days', 3);
         ?>
         <h2><?php esc_html_e('Publication History & Logs', 'argentwolf-video-processor'); ?></h2>
-        <p><?php esc_html_e('This read-only view shows the newest retained AWVP publication events, including completed, failed, and recovered work. It does not resume tasks or change remote media. Event retention remains bounded by AWVP diagnostics policy.', 'argentwolf-video-processor'); ?></p>
+        <p><?php esc_html_e('This read-only view shows the newest retained AWVP publication events, including completed, failed, and recovered work. It does not resume tasks or change remote media. Event retention remains limited by AWVP diagnostics policy.', 'argentwolf-video-processor'); ?></p>
         <form method="get" action="<?php echo esc_url(admin_url('options-general.php')); ?>" style="margin:1em 0">
             <input type="hidden" name="page" value="<?php echo esc_attr(Settings_Hub::PAGE_SLUG); ?>">
             <input type="hidden" name="tab" value="<?php echo esc_attr(Settings_Hub::TAB_HISTORY); ?>">

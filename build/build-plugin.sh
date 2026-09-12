@@ -169,6 +169,8 @@ for required_runtime_file in \
     Remote_Publication_Health_Service.php \
     Remote_Health_Operator_Check.php \
     Remote_Health_Operator_Service.php \
+    Verified_Remote_Asset_Refresher.php \
+    PeerTube_Verified_Remote_Asset_Refresher.php \
     Local_Delivery_Rebuild_Request.php \
     Local_Delivery_Rebuild_Service.php \
     Remote_Republish_Request.php \

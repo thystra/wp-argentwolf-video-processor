@@ -184,7 +184,7 @@ The existing settings keys, queue table, attachment metadata, hook names, cron
 identifiers, Settings page slug, and `wp argent-video` command are retained for
 upgrade compatibility.
 
-This Forgejo release-candidate package identifies itself as `2.0.0-rc13.5` in the
+This Forgejo release-candidate package identifies itself as `2.0.0-rc13.6` in the
 plugin header while `Stable tag: 1.0.0` deliberately continues to identify the
 public WordPress.org release. RC packages are not published to WordPress.org SVN.
 The Stable tag moves to `2.0.0` only when the final release is promoted.
@@ -194,6 +194,9 @@ Administrators upgrading from version 0.2.3 should use the normal WordPress
 plugin-update workflow and confirm the plugin remains active.
 
 == Upgrade Notice ==
+
+= 2.0.0-rc13.6 =
+RC13 series build 6. Fixes adoption of a freshly verified PeerTube publication when local remote visibility is stale, records explicit recovery pass/fail/refusal history, and replaces customer-facing engineering terminology with plain language. WordPress.org remains on 1.0.0.
 
 = 2.0.0-rc13.5 =
 RC13 series build 5. Completes opt-in destructive uninstall for all current AWVP database/state ownership while preserving ordinary attachments, local media files, external archives, and remote PeerTube assets. WordPress.org remains on 1.0.0.
@@ -268,6 +271,13 @@ Renames the public plugin and package to ArgentWolf Video Processor and prepares
 the project for WordPress.org review while retaining existing data identifiers.
 
 == Changelog ==
+
+= 2.0.0-rc13.6 =
+* Re-verifies exact PeerTube provider state before operator adoption and refreshes stale local remote-asset visibility only after UUID, channel, reviewed final privacy, published state, and embed identity all match.
+* Keeps the recovery path read-only toward PeerTube and fail-closed on provider/catalog uncertainty; historical failed/indeterminate finalizer evidence is not rewritten.
+* Records explicit Check-now pass/fail outcomes and durable restore-refusal events with stable reason codes.
+* Replaces customer-facing engineering wording such as “bounded” with plain-language alternatives.
+* Adds regression coverage for the stale-private local catalog / freshly healthy public remote condition found during RC13.5 live acceptance.
 
 = 2.0.0-rc13.5 =
 * Completes explicit destructive uninstall across all six current AWVP-owned tables, fixed/namespaced options and managed secrets, cron/transient state, plugin-owned post metadata, and AWVP Video objects.

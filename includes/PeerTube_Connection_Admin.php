@@ -802,7 +802,7 @@ final class PeerTube_Connection_Admin
                     . esc_html(
                         sprintf(
                             /* translators: %s: local WordPress date/time after which verification may be retried. */
-                            __('PeerTube requested a bounded delay. A fresh explicit verification is unavailable until %s.', 'argentwolf-video-processor'),
+                            __('PeerTube requested a temporary delay. A fresh explicit verification is unavailable until %s.', 'argentwolf-video-processor'),
                             Settings_Hub::format_datetime((int) ($operation['updated_at'] + $operation['retry_after']))
                         )
                     )
@@ -882,7 +882,7 @@ final class PeerTube_Connection_Admin
         )) {
             if ($operation['grant_attempt_no'] >= PeerTube_Connection_Input::MAX_GRANT_ATTEMPTS) {
                 echo '<div class="notice notice-error inline"><p>'
-                    . esc_html__('This operation has exhausted its bounded password-grant attempts. No further credential submission is available.', 'argentwolf-video-processor')
+                    . esc_html__('This operation has reached its password-grant attempt limit. No further credential submission is available.', 'argentwolf-video-processor')
                     . '</p></div>';
                 return;
             }
@@ -897,7 +897,7 @@ final class PeerTube_Connection_Admin
                     . esc_html(
                         sprintf(
                             /* translators: %s: local WordPress date/time after which another explicit attempt may be made. */
-                            __('PeerTube requested a bounded delay. A fresh explicit credential attempt is unavailable until %s.', 'argentwolf-video-processor'),
+                            __('PeerTube requested a temporary delay. A fresh explicit credential attempt is unavailable until %s.', 'argentwolf-video-processor'),
                             Settings_Hub::format_datetime((int) $retry_at)
                         )
                     )

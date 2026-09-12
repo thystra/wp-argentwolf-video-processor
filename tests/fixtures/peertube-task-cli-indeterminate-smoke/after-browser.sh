@@ -75,7 +75,7 @@ if ! AWVP_R45_NOTIFICATION_OUTPUT="$(wp_cli --context=cli --no-color argent-vide
     echo "$AWVP_R45_NOTIFICATION_OUTPUT" >&2
     fail "The durable PeerTube failure-notification drain failed for $CURRENT_CASE."
 fi
-[[ "$AWVP_R45_NOTIFICATION_OUTPUT" == *'PeerTube task worker stopped at a durable boundary after 1 bounded step(s);'* ]] \
+[[ "$AWVP_R45_NOTIFICATION_OUTPUT" == *'PeerTube task worker stopped at a durable boundary after 1 step(s);'* ]] \
     || fail "The notification drain did not stop after exactly one bounded step for $CURRENT_CASE."
 [[ "$AWVP_R45_NOTIFICATION_OUTPUT" == *'(peertube_upload_failure_notify): complete;'* ]] \
     || fail "The durable failure-notification task did not complete for $CURRENT_CASE."

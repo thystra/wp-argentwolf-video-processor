@@ -1,3 +1,11 @@
+## 2.0.0-rc13.6 - 2026-09-12
+
+- Fix the live operator-verified remote recovery case exposed by video 7961: after a fresh healthy visitor-facing check, re-read the exact PeerTube publication and refresh stale local remote-asset visibility facts only when UUID, channel, reviewed final privacy, published state, and embed identity all match. The provider check is read-only and historical finalizer/applied-manifest state remains untouched.
+- Keep restore fail-closed across provider reads and local catalog races. A mismatch, missing remote, unavailable credentials/backend, provider read uncertainty, or compare-and-swap conflict refuses adoption before serving authority or eligibility can change.
+- Make operator recovery history explicit: Check now records passed/failed outcomes, and every refused Use verified remote now path records a durable refusal event with a stable reason code and operator-readable explanation.
+- Replace customer/operator-facing uses of engineering terminology such as “bounded” with plain-language wording such as “limited”, “temporary delay”, or ordinary step/attempt language while retaining technical terminology in internal comments/tests where appropriate.
+- Add regression coverage for the exact stale-private-catalog / freshly-public-provider state that escaped RC13.5 live acceptance, and preserve RC13.5 canonical qualification evidence unchanged.
+
 ## 2.0.0-rc13.5 - 2026-09-12
 
 - Repair the opt-in destructive uninstall path found during RC13.4 manual release review. The cleanup manifest now covers all six current AWVP-owned tables, fixed and namespaced options including managed PeerTube secrets/locks, AWVP cron/transient state, plugin-owned post metadata, and AWVP Video objects.

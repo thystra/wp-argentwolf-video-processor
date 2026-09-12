@@ -1579,7 +1579,7 @@ $_GET = array(
 ob_start();
 $controller->page();
 $exhausted_html = (string) ob_get_clean();
-awvp_admin_assert(str_contains($exhausted_html, 'exhausted its bounded password-grant attempts'), 'Attempt exhaustion warning is missing.');
+awvp_admin_assert(str_contains($exhausted_html, 'reached its password-grant attempt limit'), 'Attempt exhaustion warning is missing.');
 awvp_admin_assert(
     ! str_contains(
         $exhausted_html,

@@ -280,7 +280,7 @@ final class PeerTube_Upload_Task_Coordinator
                 self::TASK_UPLOAD_ADVANCE,
                 $lock_token,
                 $run_after,
-                'PeerTube upload is durably waiting before its next bounded advancement.',
+                'PeerTube upload is durably waiting before its next continuation step.',
                 $now,
                 $service_status
             );
@@ -311,7 +311,7 @@ final class PeerTube_Upload_Task_Coordinator
                 self::TASK_UPLOAD_ADVANCE,
                 $lock_token,
                 $now,
-                'PeerTube upload advanced one bounded step.',
+                'PeerTube upload advanced one processing step.',
                 $now,
                 $service_status
             );
@@ -418,7 +418,7 @@ final class PeerTube_Upload_Task_Coordinator
                 self::TASK_REMOTE_RECONCILE,
                 $lock_token,
                 $now,
-                'Remote identity was committed; readiness observation remains a later bounded step.',
+                'Remote identity was committed; readiness observation remains a later step.',
                 $now,
                 $service_status
             );

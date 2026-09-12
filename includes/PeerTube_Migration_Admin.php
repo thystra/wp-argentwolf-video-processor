@@ -197,7 +197,7 @@ final class PeerTube_Migration_Admin
                 (int) $legacy['anchor_missing'],
                 (int) $legacy['anchor_ambiguous'],
                 (int) $legacy['incomplete'] + (int) $legacy['invalid']
-            )); ?><?php if (true === $legacy['more']) : ?> <?php esc_html_e('The census is bounded; additional legacy rows exist beyond this scan.', 'argentwolf-video-processor'); ?><?php endif; ?></p>
+            )); ?><?php if (true === $legacy['more']) : ?> <?php esc_html_e('The census is limited; additional legacy rows exist beyond this scan.', 'argentwolf-video-processor'); ?><?php endif; ?></p>
         <?php endif; ?>
         <?php if (array() === $targets) : ?>
             <div class="notice notice-warning inline"><p><?php esc_html_e('No connected PeerTube server has current channel information. Refresh the PeerTube publishing choices on the Publishing tab first.', 'argentwolf-video-processor'); ?></p></div>
@@ -258,7 +258,7 @@ final class PeerTube_Migration_Admin
                             PeerTube_Migration_Planner::MAX_SELECT_ALL
                         )); ?></button>
                 </p>
-                <?php if (true === $scan['more']) : ?><p class="description"><?php esc_html_e('More candidates exist beyond the first displayed batch. “Plan all eligible” processes the first bounded migration batch; repeat after reviewing/planning that batch.', 'argentwolf-video-processor'); ?></p><?php endif; ?>
+                <?php if (true === $scan['more']) : ?><p class="description"><?php esc_html_e('More candidates exist beyond the first displayed batch. “Plan all eligible” processes the first migration batch; repeat after reviewing/planning that batch.', 'argentwolf-video-processor'); ?></p><?php endif; ?>
             </form>
         <?php endif;
     }
@@ -566,7 +566,7 @@ final class PeerTube_Migration_Admin
             : '';
         // phpcs:enable WordPress.Security.NonceVerification.Recommended
         if ('1' === $more) {
-            echo '<div class="notice notice-info"><p>' . esc_html__('More than one bounded select-all batch is eligible. Repeat planning after this batch is reviewed.', 'argentwolf-video-processor') . '</p></div>';
+            echo '<div class="notice notice-info"><p>' . esc_html__('More than one select-all batch is eligible. Repeat planning after this batch is reviewed.', 'argentwolf-video-processor') . '</p></div>';
         }
     }
 }

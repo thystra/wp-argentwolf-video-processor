@@ -40,7 +40,7 @@ final class Video_Routing_Admin
         <?php if ($this->references->truncated()) : ?>
             <div class="notice notice-warning inline"><p><?php echo esc_html(sprintf(
                 /* translators: %d: maximum number of WordPress posts scanned for references. */
-                __('Post-reference discovery reached its safety limit of %d posts. Stored origin-post links are still shown, but additional content references may exist beyond the bounded scan.', 'argentwolf-video-processor'),
+                __('Post-reference discovery reached its safety limit of %d posts. Stored origin-post links are still shown, but additional content references may exist beyond the limited scan.', 'argentwolf-video-processor'),
                 Video_Reference_Index::MAX_POSTS
             )); ?></p></div>
         <?php endif; ?>

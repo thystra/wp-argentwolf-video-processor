@@ -43,6 +43,15 @@ namespace ArgentVideo {
         }
         public function reconcile(int $video,int $now):string{unset($now);unset($GLOBALS['awvp_health_operator_meta'][$video][Video_Meta::SERVING_AUTHORITY]);return self::REFUSED;}
     }
+    interface Verified_Remote_Asset_Refresher {
+        public const APPLIED='applied'; public const PRESENT='present'; public const REFUSED='refused'; public const INDETERMINATE='indeterminate';
+        public function refresh(int $video_id,int $remote_asset_id,int $now):array;
+    }
+    final class RHORefresher implements Verified_Remote_Asset_Refresher {
+        public array $calls=array();
+        public array $next=array('status'=>self::APPLIED,'reason_code'=>'','message'=>'Refreshed');
+        public function refresh(int $video_id,int $remote_asset_id,int $now):array{$this->calls[]=compact('video_id','remote_asset_id','now');return $this->next;}
+    }
     final class Remote_Publication_Health_Service {
         public function __construct(private readonly Remote_Publication_Health_Repository $repo, public string $next='healthy'){}
         public function probe_and_record(array $asset,int $now,bool $initial=false,array $ctx=array()):array{
@@ -64,12 +73,12 @@ namespace {
     $a=static function(bool $ok,string $m):void{if(!$ok){fwrite(STDERR,"FAIL: $m\n");exit(1);}};
     $now=2000000;$asset=array('id'=>7,'video_post_id'=>99,'backend_id'=>'pt1','state'=>'ready','embed_url'=>'https://pt.example/videos/embed/x');
     $health=new Remote_Publication_Health_Repository(array(7=>array('remote_asset_id'=>7,'video_post_id'=>99,'backend_id'=>'pt1','status'=>'private_or_restricted','eligible'=>0,'success_streak'=>0,'failure_streak'=>1,'last_checked_at'=>gmdate('Y-m-d H:i:s',$now-30),'last_healthy_at'=>gmdate('Y-m-d H:i:s',$now-60))));
-    $probe=new Remote_Publication_Health_Service($health);$events=new PeerTube_Event_Repository();$notifications=new Remote_Health_Notification_Service();$cutover=new PeerTube_Serving_Cutover_Service();$svc=new Remote_Health_Operator_Service(new Remote_Asset_Repository(array(7=>$asset)),$health,$probe,$events,$notifications,$cutover);
+    $probe=new Remote_Publication_Health_Service($health);$events=new PeerTube_Event_Repository();$notifications=new Remote_Health_Notification_Service();$cutover=new PeerTube_Serving_Cutover_Service();$refresher=new \ArgentVideo\RHORefresher();$svc=new Remote_Health_Operator_Service(new Remote_Asset_Repository(array(7=>$asset)),$health,$probe,$events,$notifications,$cutover,$refresher);
     $r=$svc->check_now(99,7,5,$now);$a(Remote_Health_Operator_Service::APPLIED===$r['status']&&'healthy'===$r['viability_status']&&true===$r['restore_available'],'Fresh successful check did not expose immediate restore.');
-    $stored=$GLOBALS['awvp_health_operator_meta'][99][Video_Meta::REMOTE_HEALTH_OPERATOR_CHECK]??array();$a(5===($stored['checked_by']??0)&&$now===($stored['checked_at']??0),'Operator check audit identity was not persisted.');
+    $stored=$GLOBALS['awvp_health_operator_meta'][99][Video_Meta::REMOTE_HEALTH_OPERATOR_CHECK]??array();$a(5===($stored['checked_by']??0)&&$now===($stored['checked_at']??0),'Operator check audit identity was not persisted.');$first_event=end($events->events);$a(str_contains((string)($first_event['message']??''),'passed'),'Successful Check now event did not state that the check passed.');
     $a($svc->restore_available(99,7,$now+1),'Fresh successful check was not accepted for restore.');
     $r=$svc->restore_now(99,7,6,$now+2);$a(Remote_Health_Operator_Service::APPLIED===$r['status']&&1===(int)$health->rows[7]['eligible']&&2===(int)$health->rows[7]['success_streak'],'Immediate restore did not set serving eligibility through the guarded repository boundary.');
-    $a(1===count($cutover->calls),'Immediate restore did not establish serving authority from the fresh verification.');
+    $a(1===count($cutover->calls),'Immediate restore did not establish serving authority from the fresh verification.');$a(1===count($refresher->calls),'Immediate restore did not refresh current provider-backed remote facts before adoption.');
     $a(true===($cutover->calls[0]['allow_ineligible_health']??false),'Ineligible recovery did not establish authority before enabling remote serving eligibility.');
     $stored=$GLOBALS['awvp_health_operator_meta'][99][Video_Meta::REMOTE_HEALTH_OPERATOR_CHECK]??array();$a(6===($stored['restored_by']??0)&&$now+2===($stored['restored_at']??0),'Restore actor/time audit was not persisted.');
     $a(1===count($notifications->calls),'Serving recovery notification was not emitted after eligibility restore.');
@@ -90,7 +99,17 @@ namespace {
     $restore_calls=$health->restore_calls;$r=$svc->restore_now(99,7,6,$now+16);$a(Remote_Health_Operator_Service::INDETERMINATE===$r['status'],'Failed authority adoption did not fail closed.');$a(0===(int)$health->rows[7]['eligible']&&$restore_calls===$health->restore_calls,'Failed authority adoption changed serving eligibility before authority was safe.');
     $cutover->result=PeerTube_Serving_Cutover_Service::APPLIED;
 
+    // A provider/catalog refresh refusal must stop before serving authority or eligibility changes
+    // and must leave an operator-facing durable refusal event.
+    unset($GLOBALS['awvp_health_operator_meta'][99][Video_Meta::REMOTE_HEALTH_OPERATOR_CHECK],$GLOBALS['awvp_health_operator_meta'][99][Video_Meta::SERVING_AUTHORITY]);
+    $health->rows[7]=array('remote_asset_id'=>7,'video_post_id'=>99,'backend_id'=>'pt1','status'=>'healthy','eligible'=>1,'success_streak'=>2,'failure_streak'=>0,'last_checked_at'=>gmdate('Y-m-d H:i:s',$now+17),'last_healthy_at'=>gmdate('Y-m-d H:i:s',$now+17));$probe->next='healthy';
+    $r=$svc->check_now(99,7,5,$now+18);$a(Remote_Health_Operator_Service::APPLIED===$r['status']&&true===$r['restore_available'],'Refresh-refusal precondition did not become recoverable.');
+    $before_cutover=count($cutover->calls);$refresher->next=array('status'=>\ArgentVideo\Verified_Remote_Asset_Refresher::REFUSED,'reason_code'=>'operator.remote_refresh.privacy_mismatch','message'=>'PeerTube reports a different visibility than the current reviewed WordPress publication state.');
+    $r=$svc->restore_now(99,7,6,$now+19);$a(Remote_Health_Operator_Service::REFUSED===$r['status'],'Provider-state refresh refusal did not fail closed.');$a($before_cutover===count($cutover->calls),'Provider-state refresh refusal reached serving cutover.');
+    $last=end($events->events);$a('serving_health_operator_restore_refused'===($last['code']??''),'Provider-state refresh refusal was not retained in operator history.');$a('operator.remote_refresh.privacy_mismatch'===($last['ctx']['reason_code']??''),'Restore-refusal history lost its stable reason code.');
+    $refresher->next=array('status'=>\ArgentVideo\Verified_Remote_Asset_Refresher::APPLIED,'reason_code'=>'','message'=>'Refreshed');
+
     $health->rows[7]=array('remote_asset_id'=>7,'video_post_id'=>99,'backend_id'=>'pt1','status'=>'private_or_restricted','eligible'=>0,'success_streak'=>0,'failure_streak'=>1,'last_checked_at'=>gmdate('Y-m-d H:i:s',$now+10),'last_healthy_at'=>gmdate('Y-m-d H:i:s',$now));$probe->next='private_or_restricted';
-    $r=$svc->check_now(99,7,5,$now+20);$a(Remote_Health_Operator_Service::APPLIED===$r['status']&&!$r['restore_available']&&!$svc->restore_available(99,7,$now+21),'Failed fresh check incorrectly enabled serving restore.');
+    $r=$svc->check_now(99,7,5,$now+20);$a(Remote_Health_Operator_Service::APPLIED===$r['status']&&!$r['restore_available']&&!$svc->restore_available(99,7,$now+21),'Failed fresh check incorrectly enabled serving restore.');$failed_event=end($events->events);$a(str_contains((string)($failed_event['message']??''),'failed'),'Failed Check now event did not state that the check failed.');
     fwrite(STDOUT,"Remote health operator recovery tests passed.\n");
 }

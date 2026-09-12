@@ -117,13 +117,20 @@ final class Plugin
             $backend_health_incidents,
             $remote_health_notifications
         );
+        $verified_remote_refresher = new PeerTube_Verified_Remote_Asset_Refresher(
+            $peertube_remote_assets,
+            $this->backend_registry,
+            $peertube_secrets,
+            $peertube_api_factory
+        );
         $remote_health_operator = new Remote_Health_Operator_Service(
             $peertube_remote_assets,
             $publication_health,
             $remote_publication_health,
             $peertube_events,
             $remote_health_notifications,
-            $peertube_cutover
+            $peertube_cutover,
+            $verified_remote_refresher
         );
         $peertube_lifecycle = new PeerTube_Token_Lifecycle_Service(
             new PeerTube_Token_Lifecycle_Store(),

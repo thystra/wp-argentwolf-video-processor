@@ -117,6 +117,7 @@ jobs:
           php tests/model-persistence.php
           php tests/uninstall-data.php
           php tests/remote-health-operator.php
+          php tests/peertube-verified-remote-asset-refresher.php
           php tests/local-delivery-rebuild-service.php
           php tests/local-delivery-evidence.php
           php tests/local-retention-policy.php
@@ -214,6 +215,8 @@ jobs:
           test "$(awk -F/ 'NF {print $1}' "${MANIFEST}" | sort -u)" = 'argentwolf-video-processor'
           grep -qx 'argentwolf-video-processor/argentwolf-video-processor.php' "${MANIFEST}"
           grep -qx 'argentwolf-video-processor/includes/Uninstall_Data.php' "${MANIFEST}"
+          grep -qx 'argentwolf-video-processor/includes/Verified_Remote_Asset_Refresher.php' "${MANIFEST}"
+          grep -qx 'argentwolf-video-processor/includes/PeerTube_Verified_Remote_Asset_Refresher.php' "${MANIFEST}"
           grep -qx 'argentwolf-video-processor/assets/vendor/hls.min.js' "${MANIFEST}"
           grep -qx 'argentwolf-video-processor/assets/vendor/hls.LICENSE' "${MANIFEST}"
           ! grep -qx 'argentwolf-video-processor/assets/vendor/hls.VERSION' "${MANIFEST}"
