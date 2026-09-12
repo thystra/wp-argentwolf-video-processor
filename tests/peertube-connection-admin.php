@@ -202,6 +202,7 @@ require_once dirname(__DIR__) . '/includes/PeerTube_Backend_Activation_Service.p
 require_once dirname(__DIR__) . '/includes/PeerTube_Upload_Policy.php';
 require_once dirname(__DIR__) . '/includes/PeerTube_Upload_Policy_Store.php';
 require_once dirname(__DIR__) . '/includes/PeerTube_Connection_Admin_Actions.php';
+require_once dirname(__DIR__) . '/includes/Operator_Time.php';
 require_once dirname(__DIR__) . '/includes/Settings_Hub.php';
 require_once dirname(__DIR__) . '/includes/PeerTube_Connection_Admin.php';
 
