@@ -550,7 +550,7 @@ final class PeerTube_Overview_Admin
                                 <?php if ('' !== (string) ($health['message'] ?? '')) : ?><p><?php echo esc_html((string) $health['message']); ?></p><?php endif; ?>
                             <?php endif; ?>
                             <?php if (is_array($row['latest_event'])) : $event = $row['latest_event']; ?>
-                                <?php if ('' !== (string) $event['created_at']) : ?><p><strong><?php esc_html_e('Latest event:', 'argentwolf-video-processor'); ?></strong> <?php echo esc_html((string) $event['created_at']); ?></p><?php endif; ?>
+                                <?php if ('' !== (string) $event['created_at']) : ?><p><strong><?php esc_html_e('Latest event:', 'argentwolf-video-processor'); ?></strong> <?php echo esc_html(Settings_Hub::format_mysql_utc((string) $event['created_at'])); ?></p><?php endif; ?>
                                 <p><strong><?php echo esc_html(sprintf(
                                     /* translators: 1: pipeline step number, 2: pipeline step name */
                                     __('Step %1$d of 7 — %2$s', 'argentwolf-video-processor'),
@@ -569,7 +569,7 @@ final class PeerTube_Overview_Admin
                                             <li><?php echo esc_html(sprintf(
                                                 /* translators: 1: timestamp, 2: pipeline step, 3: event message */
                                                 __('%1$s — Step %2$d of 7 — %3$s', 'argentwolf-video-processor'),
-                                                (string) $history['created_at'],
+                                                Settings_Hub::format_mysql_utc((string) $history['created_at']),
                                                 (int) $history['pipeline_step'],
                                                 (string) $history['message']
                                             )); ?></li>

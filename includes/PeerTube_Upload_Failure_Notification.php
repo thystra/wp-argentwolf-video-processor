@@ -230,14 +230,14 @@ final class PeerTube_Upload_Failure_Notification
     private static function message(string $site, string $title, array $operation, array $failure, int $now): string
     {
         $lines = array(
-            'A PeerTube upload requires attention.',
+            'ArgentWolf Video Processor (AWVP) detected a PeerTube upload that requires attention.',
             '',
             'Site: ' . $site,
             'Video: ' . $title . ' (#' . (int) $operation['video_post_id'] . ')',
             'Upload operation: ' . (string) $operation['operation_id'],
             'PeerTube backend: ' . (string) $operation['backend_id'] . ' (' . (string) $operation['origin'] . ')',
             'State: ' . (string) $failure['state'],
-            'Failure time (UTC): ' . gmdate('Y-m-d H:i:s', (int) $failure['failed_at']),
+            'Failure time: ' . Operator_Time::format((int) $failure['failed_at'], true),
             'Progress: ' . (int) $failure['confirmed_bytes'] . ' of ' . (int) $failure['source_bytes'] . ' bytes confirmed',
             'AWVP error code: ' . ('' !== $failure['awvp_error_code'] ? $failure['awvp_error_code'] : '(none)'),
             'HTTP status: ' . ((int) $failure['http_status'] > 0 ? (string) $failure['http_status'] : '(none)'),

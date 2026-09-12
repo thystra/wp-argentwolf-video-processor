@@ -78,6 +78,7 @@ jobs:
           php tests/video-destination-publication-plan.php
           php tests/video-publishing-defaults.php
           php tests/video-publishing-admin-boundary.php
+          php tests/operator-time.php
           php tests/settings-hub.php
           php tests/video-reference-index.php
           php tests/video-routing-admin.php

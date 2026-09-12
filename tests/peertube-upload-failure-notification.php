@@ -21,6 +21,18 @@ namespace {
         unset($show);
         return 'AWVP Test Site';
     }
+    function get_option(string $name, mixed $default = false): mixed
+    {
+        return 'date_format' === $name ? 'Y-m-d' : ('time_format' === $name ? 'H:i' : $default);
+    }
+    function wp_timezone(): DateTimeZone
+    {
+        return new DateTimeZone('America/New_York');
+    }
+    function wp_date(string $format, int $timestamp, ?DateTimeZone $timezone = null): string
+    {
+        return (new DateTimeImmutable('@' . $timestamp))->setTimezone($timezone ?? new DateTimeZone('UTC'))->format($format);
+    }
     function admin_url(string $path = ''): string
     {
         return 'https://wp.example.test/wp-admin/' . ltrim($path, '/');
@@ -127,6 +139,7 @@ namespace ArgentVideo {
 }
 
 namespace {
+    require_once dirname(__DIR__) . '/includes/Operator_Time.php';
     require_once dirname(__DIR__) . '/includes/PeerTube_Upload_Failure_Notification.php';
 
     use ArgentVideo\PeerTube_Upload_Failure_Notification as Notification;
@@ -219,6 +232,8 @@ namespace {
     $assert(1 === count($GLOBALS['awvp_failure_mail']) && 'creator@example.com' === $GLOBALS['awvp_failure_mail'][0]['to'], 'Failure email did not prefer the initiating user.');
     $mail = $GLOBALS['awvp_failure_mail'][0]['message'];
     foreach (array(
+        'ArgentWolf Video Processor (AWVP) detected a PeerTube upload that requires attention.',
+        'Failure time: 1969-12-31 19:33 EST',
         'A Test Video (#77)',
         'Upload operation: ' . $operation_id,
         'peertube-primary (https://video.example.test)',

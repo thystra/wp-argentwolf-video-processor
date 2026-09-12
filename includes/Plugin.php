@@ -54,6 +54,7 @@ final class Plugin
         $serving_priorities = new Backend_Serving_Priority_Store();
         $processing_estimator = new Backend_Processing_Estimator();
         $video_serving = new Video_Serving_Service($peertube_remote_assets, $publication_health, $serving_priorities);
+        $video_references = new Video_Reference_Index();
         $backend_health_incidents = new Backend_Health_Incident_Store();
         $remote_health_notification_policy = new Remote_Health_Notification_Policy_Store();
         $remote_health_notification_state = new Remote_Health_Notification_State_Store();
@@ -62,7 +63,8 @@ final class Plugin
             $remote_health_notification_state,
             $video_serving,
             array($peertube_upload_operations, 'get'),
-            $peertube_events
+            $peertube_events,
+            $video_references
         );
         $legacy_video_serving_bridge = new Legacy_Video_Serving_Bridge($video_serving);
         $archive_of_record_policy = new Archive_Of_Record_Policy_Store();
@@ -240,7 +242,6 @@ final class Plugin
             );
             $local_retention_default = new Local_Retention_Default_Policy_Store();
             $local_retention_admin = new Local_Retention_Admin($local_retention_service, $archive_of_record_policy, $local_retention_default);
-            $video_references = new Video_Reference_Index();
             $video_routing_admin = new Video_Routing_Admin(
                 $this->backend_registry,
                 $video_publishing_defaults,

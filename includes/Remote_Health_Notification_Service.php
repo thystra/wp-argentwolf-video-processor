@@ -21,7 +21,8 @@ final class Remote_Health_Notification_Service
         private readonly Remote_Health_Notification_State_Store $state,
         private readonly Video_Serving_Service $serving,
         callable $operation_reader,
-        private readonly ?PeerTube_Event_Repository $events = null
+        private readonly ?PeerTube_Event_Repository $events = null,
+        private readonly ?Video_Reference_Index $references = null
     ) {
         $this->operation_reader = Closure::fromCallable($operation_reader);
     }
@@ -124,13 +125,50 @@ final class Remote_Health_Notification_Service
     private function publication_body(array $asset,array $health,int $failure_since,bool $recovered):string
     {
         $video_id=(int)($asset['video_post_id']??0);$backend=(string)($asset['backend_id']??'');$serving=$this->serving->serving_candidate($video_id);$fallback=Backend_Registry::LOCAL_ID===(string)($serving['backend_id']??'')?'WordPress original':((string)($serving['backend_id']??'')?:'no verified fallback');
-        $lines=array($recovered?'A previously unhealthy remote video is serving-eligible again.':'AWVP detected that a remote video is not currently viable for public serving.','', 'Site: '.self::site_name(),'Video: '.self::video_title($video_id).' (#'.$video_id.')','Backend: '.$backend,'Current serving source: '.$fallback,'Incident began (UTC): '.gmdate('Y-m-d H:i:s',$failure_since));
+        $lines=array(
+            $recovered
+                ? 'ArgentWolf Video Processor (AWVP) detected that a previously unhealthy remote video is serving-eligible again.'
+                : 'ArgentWolf Video Processor (AWVP) detected that a remote video is not currently viable for public serving.',
+            '',
+            'Site: '.self::site_name(),
+            'Video: '.self::video_title($video_id).' (#'.$video_id.')',
+        );
+        foreach($this->affected_post_lines($video_id) as $line){$lines[]=$line;}
+        $lines[]='Backend: '.$backend;
+        $lines[]='Current serving source: '.$fallback;
+        $lines[]='Incident began: '.Operator_Time::format($failure_since,true);
         if(!$recovered){$lines[]='Health state: '.(string)($health['status']??'unknown');$lines[]='Reason: '.(string)($health['message']??'Remote serving check failed.');$http=(int)($health['http_status']??0);if($http>0)$lines[]='HTTP status: '.$http;$lines[]='AWVP will continue periodic public-serving checks and use the highest-priority viable fallback.';}
         return implode("\n",$lines)."\n";
     }
     private function backend_subject(string $backend,bool $recovered):string{return sprintf('[%s] Backend %s %s',self::site_name(),$backend,$recovered?'recovered':'is unavailable');}
     /** @param array<string,mixed>|null $incident */
-    private function backend_body(string $backend,?array $incident,bool $recovered):string{$lines=array($recovered?'A remote video backend is responding again.':'AWVP detected a backend-wide serving outage.','', 'Site: '.self::site_name(),'Backend: '.$backend);if(!$recovered&&is_array($incident)){$lines[]='Incident began (UTC): '.gmdate('Y-m-d H:i:s',(int)$incident['failure_since']);$lines[]='Reason: '.(string)$incident['message'];$h=(int)$incident['http_status'];if($h>0)$lines[]='HTTP status: '.$h;$lines[]='Affected videos are using their next viable serving source by priority.';}return implode("\n",$lines)."\n";}
+    private function backend_body(string $backend,?array $incident,bool $recovered):string{$lines=array($recovered?'ArgentWolf Video Processor (AWVP) detected that a remote video backend is responding again.':'ArgentWolf Video Processor (AWVP) detected a backend-wide serving outage.','', 'Site: '.self::site_name(),'Backend: '.$backend);if(!$recovered&&is_array($incident)){$lines[]='Incident began: '.Operator_Time::format((int)$incident['failure_since'],true);$lines[]='Reason: '.(string)$incident['message'];$h=(int)$incident['http_status'];if($h>0)$lines[]='HTTP status: '.$h;$lines[]='Affected videos are using their next viable serving source by priority.';}return implode("\n",$lines)."\n";}
+
+    /** @return list<string> */
+    private function affected_post_lines(int $video_id):array
+    {
+        $attachment_id=Video_Meta::sanitize_positive_id(get_post_meta($video_id,Video_Meta::ATTACHMENT_ID,true));
+        $origin_id=Video_Meta::sanitize_positive_id(get_post_meta($video_id,Video_Meta::ORIGIN_POST_ID,true));
+        $posts=null!==$this->references?$this->references->posts_for($video_id,$attachment_id,$origin_id):array();
+        $lines=array('Affected posts:');
+        if(array()===$posts){
+            $lines[]='- No referencing WordPress posts were found.';
+            return $lines;
+        }
+        foreach($posts as $post){
+            $post_id=(int)($post['id']??0);
+            if($post_id<1)continue;
+            $title=is_string($post['title']??null)?trim((string)$post['title']):'';
+            if(''===$title)$title='Post #'.$post_id;
+            $url=function_exists('get_permalink')?get_permalink($post_id):false;
+            if((!is_string($url)||''===trim($url))&&function_exists('get_edit_post_link'))$url=get_edit_post_link($post_id,'');
+            $line='- '.$title.' (#'.$post_id.')';
+            if(is_string($url)&&''!==trim($url))$line.=': '.trim($url);
+            $lines[]=$line;
+        }
+        if(null!==$this->references&&$this->references->truncated())$lines[]='- Additional references may exist beyond the bounded site scan.';
+        return $lines;
+    }
     private static function site_name():string{$v=function_exists('get_bloginfo')?(string)get_bloginfo('name'):'';return ''!==trim($v)?trim($v):'WordPress';}
     private static function video_title(int $video_id):string{$v=$video_id>0?(string)get_the_title($video_id):'';return ''!==trim($v)?trim($v):'Video #'.$video_id;}
     private static function mysql_timestamp(mixed $value):int{if(!is_string($value)||''===$value)return 0;$d=\DateTimeImmutable::createFromFormat('!Y-m-d H:i:s',$value,new \DateTimeZone('UTC'));return false===$d?0:$d->getTimestamp();}

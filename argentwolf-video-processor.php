@@ -87,6 +87,7 @@ require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Publication_Health_Probe.php'
 require_once ARGENT_VIDEO_DIR . 'includes/Remote_Publication_Health_Service.php';
 require_once ARGENT_VIDEO_DIR . 'includes/Remote_Health_Operator_Check.php';
 require_once ARGENT_VIDEO_DIR . 'includes/Remote_Health_Operator_Service.php';
+require_once ARGENT_VIDEO_DIR . 'includes/Operator_Time.php';
 require_once ARGENT_VIDEO_DIR . 'includes/Remote_Health_Notification_Service.php';
 require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Daily_Maintenance_Service.php';
 require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Remote_Asset_Reconciliation_Service.php';

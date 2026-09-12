@@ -143,30 +143,12 @@ final class Settings_Hub
 
     public static function format_datetime(int $timestamp): string
     {
-        if ($timestamp < 1) {
-            return '';
-        }
-        return wp_date(
-            get_option('date_format') . ' ' . get_option('time_format'),
-            $timestamp,
-            wp_timezone()
-        );
+        return Operator_Time::format($timestamp);
     }
 
     public static function format_mysql_utc(string $value): string
     {
-        if ('' === $value) {
-            return '';
-        }
-        $date = \DateTimeImmutable::createFromFormat(
-            '!Y-m-d H:i:s',
-            $value,
-            new \DateTimeZone('UTC')
-        );
-        if (false === $date) {
-            return $value;
-        }
-        return self::format_datetime($date->getTimestamp());
+        return Operator_Time::mysql_utc($value);
     }
 }
 

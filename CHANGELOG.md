@@ -1,5 +1,6 @@
 ## 2.0.0-rc13.2 - 2026-09-12
 
+- Improve operator-facing time and health-notification presentation: retain UTC in durable storage but render timestamps in the WordPress-configured site timezone, spell out **ArgentWolf Video Processor (AWVP)** on first use in email bodies, and list all boundedly discovered WordPress posts affected by a per-video remote-serving incident.
 - Add a read-only **Videos & Routing** inventory that lists every AWVP Video, its attachment, boundedly discovered referencing WordPress posts, configured primary destination, current serving source/fallback state, and local source/retention state. The matrix reserves backup columns for future ordered multi-backend routing without enabling multi-backend publication in RC13.2.
 - Add bounded shared post-reference discovery for AWVP blocks, Core Video blocks, supported `[video]` shortcodes, and direct video/source markup. Stored origin posts remain visible even when the bounded content scan reaches its safety limit.
 - Put the active **Migration review queue** above the longer migration discovery list, show referencing-post links in candidate/review rows, consolidate the five visible publication-review checkboxes into one acknowledgement while preserving the five durable review flags, and offer the one-way **Start migration** action inline as soon as a saved review becomes ready.

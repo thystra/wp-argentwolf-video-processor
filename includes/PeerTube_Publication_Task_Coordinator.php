@@ -423,7 +423,7 @@ final class PeerTube_Publication_Task_Coordinator
                     if($retry>0){$delay=max(60,min(900,$retry));}
                     $eta=is_int($public['estimated_ready_at']??null)?(int)$public['estimated_ready_at']:0;
                     if($eta>$now){
-                        $message.=' Estimated readiness: '.gmdate('Y-m-d H:i:s',$eta).' UTC ('.(string)($public['estimate_confidence']??'low').' confidence).';
+                        $message.=' Estimated readiness: '.Operator_Time::format($eta,true).' ('.(string)($public['estimate_confidence']??'low').' confidence).';
                     }
                 }
                 return $this->reschedule($task_id,self::TASK_FINALIZE,$lock,$now+$delay,'Publication metadata is verified, but public serving qualification has not passed: '.$message,$now);

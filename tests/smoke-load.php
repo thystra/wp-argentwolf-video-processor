@@ -128,6 +128,7 @@ foreach (
         ArgentVideo\PeerTube_Connection_Admin_Service::class,
         ArgentVideo\PeerTube_Connection_Admin::class,
         ArgentVideo\Settings_Hub::class,
+        ArgentVideo\Operator_Time::class,
         ArgentVideo\Publication_History_Admin::class,
         ArgentVideo\Video_Reference_Index::class,
         ArgentVideo\Video_Routing_Admin::class,

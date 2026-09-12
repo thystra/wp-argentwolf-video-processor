@@ -7,6 +7,8 @@ Keep administrator/editor copy in plain WordPress publishing language. Prefer **
 
 Normal operator event messages must likewise describe what AWVP checked, what happened, what it is waiting for, and what happens next. Do not lead ordinary event/status copy with implementation concepts such as *durable boundary*, *publication authority*, *lifecycle generation*, or *idempotency*; keep those details in nested technical diagnostics when they are useful.
 
+Store operational timestamps in UTC where appropriate, but render administrator- and email-facing times in the WordPress-configured site timezone. Email copy should spell out **ArgentWolf Video Processor (AWVP)** on first use before using the abbreviation. Per-video serving-health notifications should identify the boundedly discovered WordPress posts affected by that video.
+
 This file contains public, project-specific guidance for contributors and coding
 agents. Private hostnames, user names, deployment paths, credentials, and
 production state do not belong in this repository.

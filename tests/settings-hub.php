@@ -52,6 +52,7 @@ function wp_date(string $format, int $timestamp, ?DateTimeZone $timezone = null)
     return $date->format($format);
 }
 
+require_once dirname(__DIR__) . '/includes/Operator_Time.php';
 require_once dirname(__DIR__) . '/includes/Settings_Hub.php';
 
 use ArgentVideo\Settings_Hub;

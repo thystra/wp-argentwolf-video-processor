@@ -155,6 +155,7 @@ for required_runtime_file in \
     Local_Delivery_Evidence.php \
     Local_Retention_Default_Policy_Store.php \
     Overview_Disposition_Store.php \
+    Operator_Time.php \
     Publication_History_Admin.php \
     Video_Reference_Index.php \
     Video_Routing_Admin.php \

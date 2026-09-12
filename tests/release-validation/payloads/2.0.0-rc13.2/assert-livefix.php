@@ -29,6 +29,7 @@ $required_classes = array(
     \ArgentVideo\Video_Reference_Index::class,
     \ArgentVideo\Video_Routing_Admin::class,
     \ArgentVideo\Publication_History_Admin::class,
+    \ArgentVideo\Operator_Time::class,
     \ArgentVideo\Remote_Health_Operator_Check::class,
     \ArgentVideo\Remote_Health_Operator_Service::class,
     \ArgentVideo\Local_Delivery_Rebuild_Request::class,
