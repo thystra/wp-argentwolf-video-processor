@@ -73,6 +73,10 @@ ACTIVE_NETWORKS=()
 ACTIVE_VOLUMES=()
 CURRENT_CASE="preflight"
 CURRENT_PHASE="preflight"
+CASE_FINISHED=0
+CASE_PASSES=()
+CASE_FAILURES=()
+TOTAL_CASES=0
 
 exec > >(tee "$REPORT") 2>&1
 
@@ -123,6 +127,7 @@ echo "plugin_check_format=$PLUGIN_CHECK_FORMAT"
 echo "plugin_check_static_modes=${PLUGIN_CHECK_STATIC_MODES[*]:-}"
 echo "plugin_check_runtime_modes=${PLUGIN_CHECK_RUNTIME_MODES[*]:-}"
 echo "plugin_check_allowed_codes=${PLUGIN_CHECK_ALLOWED_CODES[*]:-NONE}"
+echo "failure_collection=INDEPENDENT_CASES_AND_ASSERTION_PHASES"
 
 for phase in \
     "${UPGRADE_PRE_PHASES[@]}" \
@@ -347,7 +352,39 @@ run_case() {
 
     CURRENT_CASE="${matrix_label}-${mode}"
     CURRENT_PHASE="case-setup"
+    CASE_FINISHED=0
     section "CASE $CURRENT_CASE"
+
+    local assertion_failures=0
+    local -a assertion_failure_phases=()
+
+    run_case_assertion() {
+        local phase="$1"
+        shift
+        local rc
+
+        CURRENT_PHASE="$phase"
+        set +e
+        (
+            trap - EXIT
+            set -Eeuo pipefail
+            "$@"
+        )
+        rc=$?
+        set -e
+
+        if (( rc != 0 )); then
+            ((assertion_failures += 1))
+            assertion_failure_phases+=("$phase")
+            echo "ASSERTION_RESULT=$CURRENT_CASE/$phase FAIL rc=$rc"
+        else
+            echo "ASSERTION_RESULT=$CURRENT_CASE/$phase PASS"
+        fi
+
+        # Assertion failures are recorded and do not abort an otherwise viable
+        # disposable case. Prerequisite/setup failures still fail the case.
+        return 0
+    }
 
     local suffix network db_name wp_name wp_volume db_password root_password
     suffix="$(printf '%s-%s' "$RUN_ID" "$CURRENT_CASE" | tr -cd '[:alnum:]_.-')"
@@ -585,7 +622,7 @@ run_case() {
         verify_installed_package "$CANDIDATE_ARTIFACT" "$CANDIDATE_SHA256" "$CANDIDATE_VERSION"
 
         for phase in "${UPGRADE_POST_PHASES[@]}"; do
-            run_payload_phase "$phase"
+            run_case_assertion "$phase" run_payload_phase "$phase"
         done
     elif [[ "$mode" == "clean" ]]; then
         CURRENT_PHASE="install-candidate"
@@ -594,7 +631,7 @@ run_case() {
         verify_installed_package "$CANDIDATE_ARTIFACT" "$CANDIDATE_SHA256" "$CANDIDATE_VERSION"
 
         for phase in "${CLEAN_PHASES[@]}"; do
-            run_payload_phase "$phase"
+            run_case_assertion "$phase" run_payload_phase "$phase"
         done
     elif [[ "$mode" == "plugin-check" ]]; then
         CURRENT_PHASE="plugin-check-install"
@@ -608,15 +645,17 @@ run_case() {
 
         local check_mode
         for check_mode in "${PLUGIN_CHECK_STATIC_MODES[@]:-}"; do
-            CURRENT_PHASE="plugin-check-static-$check_mode"
             echo "--- Plugin Check static installed-exact-package mode=$check_mode"
-            run_plugin_check_gate "$check_mode" "no"
+            run_case_assertion \
+                "plugin-check-static-$check_mode" \
+                run_plugin_check_gate "$check_mode" "no"
         done
 
         for check_mode in "${PLUGIN_CHECK_RUNTIME_MODES[@]:-}"; do
-            CURRENT_PHASE="plugin-check-runtime-$check_mode"
             echo "--- Plugin Check installed/runtime mode=$check_mode"
-            run_plugin_check_gate "$check_mode" "yes"
+            run_case_assertion \
+                "plugin-check-runtime-$check_mode" \
+                run_plugin_check_gate "$check_mode" "yes"
         done
     else
         fail "Unknown case mode: $mode"
@@ -651,15 +690,56 @@ run_case() {
         fi
     fi
 
-    echo "CASE_RESULT=$CURRENT_CASE PASS"
-
-    docker rm -f "$wp_name" "$db_name" >/dev/null
-    docker network rm "$network" >/dev/null
-    docker volume rm -f "$wp_volume" >/dev/null
-    ACTIVE_CONTAINERS=()
-    ACTIVE_NETWORKS=()
-    ACTIVE_VOLUMES=()
+    CURRENT_PHASE="case-cleanup"
+    cleanup_resources
     CURRENT_PHASE="case-complete"
+    CASE_FINISHED=1
+
+    if (( assertion_failures > 0 )); then
+        local joined_failure_phases
+        joined_failure_phases="$(IFS=,; printf '%s' "${assertion_failure_phases[*]}")"
+        echo "CASE_RESULT=$CURRENT_CASE FAIL assertions=$assertion_failures"
+        echo "CASE_FAILURE_PHASES=$joined_failure_phases"
+        return 1
+    fi
+
+    echo "CASE_RESULT=$CURRENT_CASE PASS"
+}
+
+run_case_collect() {
+    local matrix_label="$1"
+    local mode="$2"
+    local case_name="${matrix_label}-${mode}"
+    local rc
+
+    ((TOTAL_CASES += 1))
+
+    set +e
+    (
+        trap - EXIT
+        trap '
+            rc=$?
+            if (( rc != 0 )) && [[ "${CASE_FINISHED:-0}" != "1" ]]; then
+                echo "CASE_ABORTED=$CURRENT_CASE phase=$CURRENT_PHASE rc=$rc"
+            fi
+            cleanup_resources
+        ' EXIT
+        set -Eeuo pipefail
+        run_case "$@"
+    )
+    rc=$?
+    set -e
+
+    if (( rc == 0 )); then
+        CASE_PASSES+=("$case_name")
+        echo "CASE_EXECUTION_RESULT=$case_name PASS"
+    else
+        CASE_FAILURES+=("$case_name")
+        echo "CASE_EXECUTION_RESULT=$case_name FAIL rc=$rc"
+    fi
+
+    # An individual disposable case must never stop later independent cases.
+    return 0
 }
 
 plugin_entry=""
@@ -673,16 +753,34 @@ done
 [[ -n "$plugin_entry" ]] || fail "PLUGIN_CHECK_CASE is not present in MATRIX: $PLUGIN_CHECK_CASE"
 
 IFS='|' read -r pc_label pc_wp pc_cli pc_db pc_kind <<<"$plugin_entry"
-run_case "$pc_label" "plugin-check" "$pc_wp" "$pc_cli" "$pc_db" "$pc_kind"
+run_case_collect "$pc_label" "plugin-check" "$pc_wp" "$pc_cli" "$pc_db" "$pc_kind"
 
 for entry in "${MATRIX[@]}"; do
     IFS='|' read -r label wp_image cli_image db_image db_kind <<<"$entry"
-    run_case "$label" "upgrade" "$wp_image" "$cli_image" "$db_image" "$db_kind"
-    run_case "$label" "clean" "$wp_image" "$cli_image" "$db_image" "$db_kind"
+    run_case_collect "$label" "upgrade" "$wp_image" "$cli_image" "$db_image" "$db_kind"
+    run_case_collect "$label" "clean" "$wp_image" "$cli_image" "$db_image" "$db_kind"
 done
 
 CURRENT_CASE="complete"
 CURRENT_PHASE="complete"
+
+if (( ${#CASE_FAILURES[@]} > 0 )); then
+    section "RESULT"
+    echo "RESULT=AWVP_RELEASE_VALIDATION_FAILED"
+    echo "PAYLOAD_RESULT=AWVP_${PAYLOAD_TOKEN}_RELEASE_VALIDATION_FAILED"
+    echo "Payload=$PAYLOAD_ID"
+    echo "Candidate version=$CANDIDATE_VERSION"
+    echo "Candidate SHA256=$CANDIDATE_SHA256"
+    echo "Case executions=$TOTAL_CASES"
+    echo "Passed cases=${#CASE_PASSES[@]}"
+    echo "Failed cases=${#CASE_FAILURES[@]}"
+    printf 'Failed case=%s\n' "${CASE_FAILURES[@]}"
+    echo "Report=$REPORT"
+
+    trap - EXIT
+    cleanup_resources
+    exit 1
+fi
 
 section "RESULT"
 echo "RESULT=AWVP_RELEASE_VALIDATION_PASS"
@@ -696,6 +794,9 @@ echo "Plugin Check version=$PLUGIN_CHECK_VERSION"
 echo "Plugin Check SHA256=$plugin_check_sha"
 echo "Plugin Check cases=1"
 echo "Matrix cases=$((${#MATRIX[@]} * 2))"
+echo "Case executions=$TOTAL_CASES"
+echo "Passed cases=${#CASE_PASSES[@]}"
+echo "Failed cases=0"
 echo "Upgrade fixtures=${#MATRIX[@]}"
 echo "Clean activation fixtures=${#MATRIX[@]}"
 echo "WordPress runtime networks=INTERNAL"

@@ -1,3 +1,9 @@
+## 2.0.0-rc13.3 - 2026-09-12
+
+- Fix canonical Plugin Check nonce-analysis findings in Local Retention by keeping raw grace-period request reads inside the already nonce-verified administrator actions and passing only sanitized values into the shared parser; retention behavior is unchanged.
+- Make release validation exhaustive across independent checks: after global candidate/setup gates pass, record all Plugin Check modes and disposable clean/upgrade assertion phases, continue later independent cases, and return one aggregate nonzero result with every observed failure.
+- Preserve rejected canonical RC13.2 as immutable evidence: source commit `2123d60a32eb9012a836f312bf6d89ef2b4d39ce`, tree `cc070fd771dddf268c12e4d14143e1e9e11680fe`, and inner ZIP SHA-256 `59898407857cb0576bebbd0c631b481b0ca4ac8fa62a39cbe8ace1ab6543bf57`. Its six clean/upgrade matrix cases passed; Plugin Check failed only on Local Retention nonce-analysis warnings.
+
 ## 2.0.0-rc13.2 - 2026-09-12
 
 - Improve operator-facing time and health-notification presentation: retain UTC in durable storage but render timestamps in the WordPress-configured site timezone, spell out **ArgentWolf Video Processor (AWVP)** on first use in email bodies, and list all boundedly discovered WordPress posts affected by a per-video remote-serving incident.

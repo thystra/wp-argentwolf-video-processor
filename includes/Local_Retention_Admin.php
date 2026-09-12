@@ -78,7 +78,13 @@ final class Local_Retention_Admin
         $mode = isset($_POST['mode']) && is_string($_POST['mode'])
             ? sanitize_key(wp_unslash($_POST['mode']))
             : '';
-        $grace_override = $this->posted_grace_override();
+        $grace_mode = isset($_POST['grace_mode']) && is_string($_POST['grace_mode'])
+            ? sanitize_key(wp_unslash($_POST['grace_mode']))
+            : 'site';
+        $grace_days_override = isset($_POST['grace_days_override']) && is_string($_POST['grace_days_override'])
+            ? sanitize_text_field(wp_unslash($_POST['grace_days_override']))
+            : '';
+        $grace_override = $this->grace_override_from_values($grace_mode, $grace_days_override);
         $result = $this->service->configure_for_site_policy($video_id, $mode, get_current_user_id(), time(), $grace_override);
 
         wp_safe_redirect(
@@ -161,7 +167,13 @@ final class Local_Retention_Admin
 
         $counts = array('applied'=>0, 'present'=>0, 'refused'=>0, 'indeterminate'=>0);
         $mode = $this->default_policy->mode();
-        $grace_override = $this->posted_grace_override();
+        $grace_mode = isset($_POST['grace_mode']) && is_string($_POST['grace_mode'])
+            ? sanitize_key(wp_unslash($_POST['grace_mode']))
+            : 'site';
+        $grace_days_override = isset($_POST['grace_days_override']) && is_string($_POST['grace_days_override'])
+            ? sanitize_text_field(wp_unslash($_POST['grace_days_override']))
+            : '';
+        $grace_override = $this->grace_override_from_values($grace_mode, $grace_days_override);
         if (in_array($mode, array(Local_Retention_Policy::MODE_DELETE_SOURCE_KEEP_DELIVERY, Local_Retention_Policy::MODE_DELETE_ALL), true)
             && $this->archive_policy->wordpress_is_archive()) {
             $counts['refused'] = count($ids);
@@ -301,20 +313,14 @@ final class Local_Retention_Admin
         <?php
     }
 
-    private function posted_grace_override(): ?int
+    private function grace_override_from_values(string $mode, string $raw): ?int
     {
-        $mode = isset($_POST['grace_mode']) && is_string($_POST['grace_mode'])
-            ? sanitize_key(wp_unslash($_POST['grace_mode']))
-            : 'site';
         if ('never' === $mode) {
             return 0;
         }
         if ('custom' !== $mode) {
             return null;
         }
-        $raw = isset($_POST['grace_days_override']) && is_string($_POST['grace_days_override'])
-            ? sanitize_text_field(wp_unslash($_POST['grace_days_override']))
-            : '';
         if (1 !== preg_match('/^[1-9][0-9]{0,2}$/D', $raw)) {
             return Local_Retention_Policy::MAX_GRACE_DAYS + 1;
         }

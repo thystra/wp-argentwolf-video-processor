@@ -184,7 +184,7 @@ The existing settings keys, queue table, attachment metadata, hook names, cron
 identifiers, Settings page slug, and `wp argent-video` command are retained for
 upgrade compatibility.
 
-This Forgejo release-candidate package identifies itself as `2.0.0-rc13.2` in the
+This Forgejo release-candidate package identifies itself as `2.0.0-rc13.3` in the
 plugin header while `Stable tag: 1.0.0` deliberately continues to identify the
 public WordPress.org release. RC packages are not published to WordPress.org SVN.
 The Stable tag moves to `2.0.0` only when the final release is promoted.
@@ -194,6 +194,9 @@ Administrators upgrading from version 0.2.3 should use the normal WordPress
 plugin-update workflow and confirm the plugin remains active.
 
 == Upgrade Notice ==
+
+= 2.0.0-rc13.3 =
+RC13 series build 3. Fixes Local Retention Plugin Check nonce-analysis findings and makes canonical validation collect independent failures before returning one aggregate result. WordPress.org remains on 1.0.0.
 
 = 2.0.0-rc13.2 =
 RC13 series build 2. Adds video/routing and migration UX, flexible retention, verified remote recovery, local-delivery rebuild, publication history, and scheduled pre-publication visibility. WordPress.org remains on 1.0.0.
@@ -259,6 +262,11 @@ Renames the public plugin and package to ArgentWolf Video Processor and prepares
 the project for WordPress.org review while retaining existing data identifiers.
 
 == Changelog ==
+
+= 2.0.0-rc13.3 =
+* Keep Local Retention grace-period request reads inside the nonce-verified administrator actions and pass only sanitized values into the shared parser, resolving canonical Plugin Check nonce-analysis warnings without changing retention semantics.
+* Continue independent Plugin Check modes and disposable clean/upgrade assertion phases after individual findings, then fail once with an aggregate summary; global candidate/harness identity gates remain fail-closed.
+* Preserve rejected canonical RC13.2 source/package identity as immutable evidence rather than rebuilding under the same prerelease version.
 
 = 2.0.0-rc13.2 =
 * Add a read-only Videos & Routing matrix for AWVP videos, attachments, referencing WordPress posts, configured primary destination, actual serving source/fallback, and local source/retention state.

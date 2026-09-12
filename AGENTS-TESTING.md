@@ -384,8 +384,10 @@ Durable regression lesson from the 0.3.2 release-validation r3 harness:
   completion as equivalent to a clean Plugin Check result;
 - prevention rule: use the payload-declared strict output format for every
   canonical static/runtime Plugin Check invocation;
-- regression guard: a known Plugin Check finding must terminate the case
-  before matrix execution continues.
+- regression guard: a known Plugin Check finding must fail the release gate, but
+  after candidate identity/setup succeeds the runner should continue independent
+  Plugin Check modes and disposable matrix cases so one canonical run captures all
+  observable failure states.
 
 Do not enable AI-based Plugin Check analysis for the canonical release gate.
 
@@ -442,10 +444,14 @@ Each run records:
 
 On failure:
 
-- identify the exact failing case and phase;
+- identify every failing case and assertion phase reached by the run;
 - retain the report;
-- clean disposable Docker resources;
-- stop the canonical run;
+- clean disposable Docker resources after each case;
+- keep running later independent Plugin Check modes and disposable matrix cases when
+  the candidate package/setup remains viable;
+- abort only the affected case on case-local prerequisite/setup failures, and abort
+  the whole run on global preflight/identity/harness failures;
+- exit nonzero after the aggregate summary if any case or assertion failed;
 - classify harness/validator defects separately from product defects.
 
 ## 15. Release sequence

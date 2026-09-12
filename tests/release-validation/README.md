@@ -78,24 +78,24 @@ immediately before completion and then survives database persistence.
 
 ## 2.0 RC validation
 
-The active `2.0.0-rc13.2` payload upgrades from the exact public `1.0.0` package and
+The active `2.0.0-rc13.3` payload upgrades from the exact public `1.0.0` package and
 requires the exact candidate SHA-256 at invocation time until the canonical
-Forgejo RC artifact is selected. RC13.2 extends the qualified clean/upgrade
+Forgejo RC artifact is selected. RC13.3 carries forward the RC13.2 clean/upgrade
 contract while exercising the RC9 live-test fixes, model DB schema version 3 /
 `argent_video_events` + `argent_video_publication_health`, explicit legacy 1.x
 migration adoption, visitor-facing public-URL serving qualification, and runtime
 serving cutover/failover foundations. RC9 and earlier RC packages remain immutable qualification or
-live-test evidence; creating RC13.2 does not rewrite their payloads, including the frozen RC10 payload.
+live-test evidence; creating RC13.3 does not rewrite their payloads, including the frozen RC13.2 and RC10 payloads.
 
 ```bash
 AWVP_RC_CANDIDATE_SHA256=<sha256-of-exact-candidate-zip> \
 ARTIFACT_DIR=/path/to/release-zips \
-bash tests/release-validation/run.sh 2.0.0-rc13.2
+bash tests/release-validation/run.sh 2.0.0-rc13.3
 ```
 
 The upgrade fixture creates a real WordPress `core/video` block while 1.0 is
 active, backed by a real uploads-tree attachment and an existing AWVP-managed
-local derivative. The RC13.2 upgrade must preserve the block's stored
+local derivative. The RC13.3 upgrade must preserve the block's stored
 `post_content`, attachment relationship and legacy processing metadata,
 source/derivative bytes, and completed legacy queue row. Merely upgrading must
 not mass-convert the Core Video block, create an AWVP Video object for it,
@@ -107,7 +107,9 @@ remote publication so the unchanged historical Core Video block must render the
 verified short-ID PeerTube iframe at runtime without altering stored content or
 the WordPress original source.
 
-RC13.2 additionally asserts the packaged operator-facing routing/history surfaces, zero-day Never retention semantics, source-prune/keep-HLS mode, explicit Check now / Restore remote serving now / Rebuild local delivery recovery actions, registered durable recovery metadata, and separate Private/Unlisted pre-publication visibility. These assertions are runtime/package contracts only; the release harness does not contact PeerTube or production WordPress.
+RC13.3 additionally asserts the packaged operator-facing routing/history surfaces, zero-day Never retention semantics, source-prune/keep-HLS mode, explicit Check now / Restore remote serving now / Rebuild local delivery recovery actions, registered durable recovery metadata, and separate Private/Unlisted pre-publication visibility. These assertions are runtime/package contracts only; the release harness does not contact PeerTube or production WordPress.
+
+The shared runner now collects independent Plugin Check modes and disposable case assertion failures through the end of the viable matrix, then exits nonzero with an aggregate summary. Global artifact/harness identity failures still stop immediately, and a case-local setup failure aborts only that disposable case.
 
 The candidate-only phase separately creates and renders the 2.0 dynamic
 `argentwolf-video-processor/video` block. This proves the new block is packaged,
