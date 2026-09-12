@@ -196,7 +196,7 @@ plugin-update workflow and confirm the plugin remains active.
 == Upgrade Notice ==
 
 = 2.0.0-rc13.2 =
-RC13 series build 2. Adds video/routing and migration UX plus Local Retention Never/per-video delay controls and original removal while keeping verified local HLS. WordPress.org remains on 1.0.0.
+RC13 series build 2. Adds video/routing and migration UX, flexible retention, verified remote recovery controls, and explicit local-delivery rebuild from a retained source. WordPress.org remains on 1.0.0.
 
 = 2.0.0-rc13.1 =
 RC13 series build 1. Fixes scheduled Send-now generation races: stale finalizers cannot mutate current state, publish transitions recover the existing verified remote, and stranded finalization stays visible/recoverable. WordPress.org remains on 1.0.0.
@@ -268,6 +268,9 @@ the project for WordPress.org review while retaining existing data identifiers.
 * Let Local Retention use 0 as Never, and let selected videos snapshot the site delay, Never, or a finite 1-365 day cleanup delay.
 * Add a local-backend retention mode that removes the WordPress original while retaining and re-verifying AWVP-managed HLS delivery; no PeerTube publication is required for this mode.
 * Keep existing version-1 cleanup journals readable while new version-2 journals distinguish remote-serving proof from local-HLS proof.
+* Add Check now for exact visitor-facing remote serving verification and Restore remote serving now only after a fresh successful check; no blind health override, upload, republish, or PeerTube publication change is performed by these controls.
+* Add Rebuild local delivery from a retained WordPress source through the existing detached FFmpeg/HLS worker while preserving remote publication history and routing.
+* Send recovery email only when a remote publication is serving-eligible again and label advisory Overview timing as Estimated readiness.
 * Preserve qualified RC13.1 commit `d27a76f80128bf522a878722b251e40c2c4af957`, tree `a0f6caa9bb767a3279bbeaf1f4ce59bd3e748d89`, and ZIP SHA-256 `05f0909fcd4756650a91281f5634552c10d1bc0e6b01ed8139e75319934ed744` as immutable evidence.
 
 = 2.0.0-rc13.1 =

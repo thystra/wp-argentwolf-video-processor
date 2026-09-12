@@ -163,6 +163,10 @@ for required_runtime_file in \
     Remote_Health_Notification_State_Store.php \
     Remote_Publication_Health_Repository.php \
     Remote_Publication_Health_Service.php \
+    Remote_Health_Operator_Check.php \
+    Remote_Health_Operator_Service.php \
+    Local_Delivery_Rebuild_Request.php \
+    Local_Delivery_Rebuild_Service.php \
     Remote_Republish_Request.php \
     Remote_Republish_Service.php \
     Serving_Health_Adapter.php \

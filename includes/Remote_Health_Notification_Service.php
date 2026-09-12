@@ -37,6 +37,7 @@ final class Remote_Health_Notification_Service
         $journal=$this->state->asset($asset_id);
 
         if(Serving_Viability::HEALTHY===$status){
+            if(1!==(int)($health['eligible']??0))return;
             if($journal['failure_since']>0&&array()!==$journal['notified_roles']){
                 $this->send_publication_recovery($asset,$journal,$now);
             }elseif($journal['failure_since']>0){
@@ -123,7 +124,7 @@ final class Remote_Health_Notification_Service
     private function publication_body(array $asset,array $health,int $failure_since,bool $recovered):string
     {
         $video_id=(int)($asset['video_post_id']??0);$backend=(string)($asset['backend_id']??'');$serving=$this->serving->serving_candidate($video_id);$fallback=Backend_Registry::LOCAL_ID===(string)($serving['backend_id']??'')?'WordPress original':((string)($serving['backend_id']??'')?:'no verified fallback');
-        $lines=array($recovered?'A previously unhealthy remote video is publicly usable again.':'AWVP detected that a remote video is not currently viable for public serving.','', 'Site: '.self::site_name(),'Video: '.self::video_title($video_id).' (#'.$video_id.')','Backend: '.$backend,'Current serving source: '.$fallback,'Incident began (UTC): '.gmdate('Y-m-d H:i:s',$failure_since));
+        $lines=array($recovered?'A previously unhealthy remote video is serving-eligible again.':'AWVP detected that a remote video is not currently viable for public serving.','', 'Site: '.self::site_name(),'Video: '.self::video_title($video_id).' (#'.$video_id.')','Backend: '.$backend,'Current serving source: '.$fallback,'Incident began (UTC): '.gmdate('Y-m-d H:i:s',$failure_since));
         if(!$recovered){$lines[]='Health state: '.(string)($health['status']??'unknown');$lines[]='Reason: '.(string)($health['message']??'Remote serving check failed.');$http=(int)($health['http_status']??0);if($http>0)$lines[]='HTTP status: '.$http;$lines[]='AWVP will continue periodic public-serving checks and use the highest-priority viable fallback.';}
         return implode("\n",$lines)."\n";
     }

@@ -35,10 +35,11 @@ final class Plugin
         $runner = new Process_Runner();
         $probe = new Probe($runner);
         $transcoder = new Transcoder($runner, $probe);
-        $worker = new Worker($jobs, $transcoder, $queue);
         $launcher = new Worker_Launcher($jobs, $worker_logs);
         $peertube_tasks = new Task_Repository();
         $peertube_events = new PeerTube_Event_Repository();
+        $local_delivery_rebuild = new Local_Delivery_Rebuild_Service($jobs, $launcher, $peertube_events);
+        $worker = new Worker($jobs, $transcoder, $queue, $local_delivery_rebuild);
         $peertube_upload_operations = new PeerTube_Staged_Upload_Operation_Store();
         $peertube_task_launcher = new PeerTube_Task_Worker_Launcher($peertube_tasks);
         $player = new Player();
@@ -112,6 +113,13 @@ final class Plugin
             $peertube_events,
             $processing_estimator,
             $backend_health_incidents,
+            $remote_health_notifications
+        );
+        $remote_health_operator = new Remote_Health_Operator_Service(
+            $peertube_remote_assets,
+            $publication_health,
+            $remote_publication_health,
+            $peertube_events,
             $remote_health_notifications
         );
         $peertube_lifecycle = new PeerTube_Token_Lifecycle_Service(
@@ -271,7 +279,9 @@ final class Plugin
                 $backend_health_incidents,
                 $remote_republish,
                 $processing_estimator,
-                $this->backend_registry
+                $this->backend_registry,
+                $remote_health_operator,
+                $local_delivery_rebuild
             );
             $settings_hub = new Settings_Hub(
                 $admin,
@@ -301,6 +311,9 @@ final class Plugin
             add_action('admin_post_' . PeerTube_Overview_Admin::ACTION_REPUBLISH, array($peertube_overview, 'republish_action'));
             add_action('admin_post_' . PeerTube_Overview_Admin::ACTION_RESOLVE_UPLOAD, array($peertube_overview, 'resolve_indeterminate_upload_action'));
             add_action('admin_post_' . PeerTube_Overview_Admin::ACTION_RESET_READINESS, array($peertube_overview, 'reset_readiness_action'));
+            add_action('admin_post_' . PeerTube_Overview_Admin::ACTION_CHECK_HEALTH, array($peertube_overview, 'check_health_action'));
+            add_action('admin_post_' . PeerTube_Overview_Admin::ACTION_RESTORE_HEALTH, array($peertube_overview, 'restore_health_action'));
+            add_action('admin_post_' . PeerTube_Overview_Admin::ACTION_REBUILD_LOCAL, array($peertube_overview, 'rebuild_local_action'));
             add_action(
                 'admin_post_' . PeerTube_Connection_Admin::ACTION_START,
                 array($peertube_admin, 'start_action')

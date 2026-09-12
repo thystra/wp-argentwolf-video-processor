@@ -42,6 +42,7 @@ namespace {
             'error_code'=>'curl_28',
             'confirmed_bytes'=>500,
             'source_bytes'=>1000,
+            'operator_user_id'=>7,
             'access_token'=>'must-not-persist',
             'refresh_token'=>'must-not-persist',
             'authorization'=>'must-not-persist',
@@ -61,6 +62,7 @@ namespace {
     $row=$rows[0];
     $assert('transfer_interrupted'===($row['event_code']??'')&&'pt-primary'===($row['backend_id']??''),'Recent event identity drifted.');
     $assert(500===($row['context']['confirmed_bytes']??null)&&1000===($row['context']['source_bytes']??null),'Bounded byte progress context was not preserved.');
+    $assert(7===($row['context']['operator_user_id']??null),'Bounded operator actor identity was not preserved.');
     $assert(!array_key_exists('access_token',$row['context']??array()),'Sensitive context key survived the allow-list.');
     $task_row=$repo->latest_for_task(77);
     $assert(is_array($task_row)&&'transfer_interrupted'===($task_row['event_code']??''),'Exact task event lookup did not return the latest event.');

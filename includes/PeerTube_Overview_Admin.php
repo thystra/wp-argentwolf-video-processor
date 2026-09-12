@@ -17,6 +17,9 @@ final class PeerTube_Overview_Admin
     public const ACTION_REPUBLISH = 'argentwolf_video_processor_overview_republish';
     public const ACTION_RESOLVE_UPLOAD = 'argentwolf_video_processor_overview_resolve_upload';
     public const ACTION_RESET_READINESS = 'argentwolf_video_processor_overview_reset_readiness';
+    public const ACTION_CHECK_HEALTH = 'argentwolf_video_processor_overview_check_health';
+    public const ACTION_RESTORE_HEALTH = 'argentwolf_video_processor_overview_restore_health';
+    public const ACTION_REBUILD_LOCAL = 'argentwolf_video_processor_overview_rebuild_local';
     private const MAX_ROWS = 100;
 
     public function __construct(
@@ -30,7 +33,9 @@ final class PeerTube_Overview_Admin
         private readonly ?Backend_Health_Incident_Store $backend_incidents = null,
         private readonly ?Remote_Republish_Service $republish = null,
         private readonly ?Backend_Processing_Estimator $processing_estimator = null,
-        private readonly ?Backend_Registry $backend_registry = null
+        private readonly ?Backend_Registry $backend_registry = null,
+        private readonly ?Remote_Health_Operator_Service $health_operator = null,
+        private readonly ?Local_Delivery_Rebuild_Service $local_rebuild = null
     ) {
     }
 
@@ -84,6 +89,36 @@ final class PeerTube_Overview_Admin
                 <?php echo esc_html('resolved' === $resolution_notice
                     ? __('The uncertain upload was retired after administrator confirmation. No remote request was sent; Republish is now available if the retained source and backend are usable.', 'argentwolf-video-processor')
                     : __('The uncertain upload was not retired. No new publication was started.', 'argentwolf-video-processor')); ?>
+            </p></div>
+        <?php endif; ?>
+        <?php if (isset($_GET['awvp_health_check'])) : // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only notice after nonce-protected POST. ?>
+            <?php $health_notice = sanitize_key((string) wp_unslash($_GET['awvp_health_check'])); // phpcs:ignore WordPress.Security.NonceVerification.Recommended ?>
+            <div class="notice <?php echo 'healthy' === $health_notice ? 'notice-success' : ('checked' === $health_notice ? 'notice-warning' : 'notice-error'); ?>" style="margin:1em 0;padding:.5em 1em"><p>
+                <?php echo esc_html(match ($health_notice) {
+                    'healthy' => __('The remote publication passed a fresh visitor-facing check. If automatic recovery is still waiting for confirmation, you can restore remote serving immediately from this verified result.', 'argentwolf-video-processor'),
+                    'checked' => __('The remote publication was checked again and is still not ready for remote serving.', 'argentwolf-video-processor'),
+                    default => __('The remote serving check could not be completed safely. No serving change was made.', 'argentwolf-video-processor'),
+                }); ?>
+            </p></div>
+        <?php endif; ?>
+        <?php if (isset($_GET['awvp_health_restore'])) : // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only notice after nonce-protected POST. ?>
+            <?php $restore_notice = sanitize_key((string) wp_unslash($_GET['awvp_health_restore'])); // phpcs:ignore WordPress.Security.NonceVerification.Recommended ?>
+            <div class="notice <?php echo in_array($restore_notice, array('restored','already'), true) ? 'notice-success' : 'notice-error'; ?>" style="margin:1em 0;padding:.5em 1em"><p>
+                <?php echo esc_html(match ($restore_notice) {
+                    'restored' => __('Remote serving eligibility was restored from the fresh successful check.', 'argentwolf-video-processor'),
+                    'already' => __('Remote serving is already eligible again; no additional serving override was needed.', 'argentwolf-video-processor'),
+                    default => __('Remote serving was not restored. Run Check now again and require a fresh successful result before retrying.', 'argentwolf-video-processor'),
+                }); ?>
+            </p></div>
+        <?php endif; ?>
+        <?php if (isset($_GET['awvp_local_rebuild'])) : // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only notice after nonce-protected POST. ?>
+            <?php $rebuild_notice = sanitize_key((string) wp_unslash($_GET['awvp_local_rebuild'])); // phpcs:ignore WordPress.Security.NonceVerification.Recommended ?>
+            <div class="notice <?php echo in_array($rebuild_notice, array('queued','present'), true) ? 'notice-success' : 'notice-error'; ?>" style="margin:1em 0;padding:.5em 1em"><p>
+                <?php echo esc_html(match ($rebuild_notice) {
+                    'queued' => __('Local AWVP delivery rebuilding was queued from the retained WordPress source.', 'argentwolf-video-processor'),
+                    'present' => __('Local AWVP delivery rebuilding is already queued or running.', 'argentwolf-video-processor'),
+                    default => __('Local AWVP delivery rebuilding could not be queued. The remote publication history was not changed.', 'argentwolf-video-processor'),
+                }); ?>
             </p></div>
         <?php endif; ?>
         <?php $this->render_backend_maintenance_issues(); ?>
@@ -155,13 +190,13 @@ final class PeerTube_Overview_Admin
                     : __('Readiness statistics could not be reset.', 'argentwolf-video-processor')); ?>
             </p></div>
         <?php endif; ?>
-        <h2><?php esc_html_e('PeerTube Readiness Estimates', 'argentwolf-video-processor'); ?></h2>
-        <p><?php esc_html_e('Typical readiness estimates use recent upload-accepted to remote-ready observations. They are advisory: source duration, codec complexity, runner load, and server load can change actual processing time.', 'argentwolf-video-processor'); ?></p>
+        <h2><?php esc_html_e('PeerTube Estimated Readiness', 'argentwolf-video-processor'); ?></h2>
+        <p><?php esc_html_e('Estimated readiness uses recent upload-accepted to remote-ready observations. It is advisory: source duration, codec complexity, runner load, and server load can change actual processing time.', 'argentwolf-video-processor'); ?></p>
         <table class="widefat striped" style="max-width:1050px">
             <thead><tr>
                 <th><?php esc_html_e('Backend', 'argentwolf-video-processor'); ?></th>
                 <th><?php esc_html_e('Source size', 'argentwolf-video-processor'); ?></th>
-                <th><?php esc_html_e('Typical readiness', 'argentwolf-video-processor'); ?></th>
+                <th><?php esc_html_e('Estimated readiness', 'argentwolf-video-processor'); ?></th>
                 <th><?php esc_html_e('Samples in band', 'argentwolf-video-processor'); ?></th>
                 <th><?php esc_html_e('Confidence', 'argentwolf-video-processor'); ?></th>
             </tr></thead>
@@ -589,6 +624,33 @@ final class PeerTube_Overview_Admin
                             </div>
                         <?php endif; ?>
 
+                        <?php if (true === ($row['health_check_available'] ?? false)) : ?>
+                            <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" style="margin:.35em 0 .4em">
+                                <input type="hidden" name="action" value="<?php echo esc_attr(self::ACTION_CHECK_HEALTH); ?>">
+                                <input type="hidden" name="video_id" value="<?php echo esc_attr((string) $row['video_id']); ?>">
+                                <input type="hidden" name="remote_asset_id" value="<?php echo esc_attr((string) $row['remote_asset_id']); ?>">
+                                <?php wp_nonce_field(self::ACTION_CHECK_HEALTH . ':' . (string) $row['video_id'] . ':' . (string) $row['remote_asset_id']); ?>
+                                <?php submit_button(__('Check now', 'argentwolf-video-processor'), 'secondary small', 'submit', false); ?>
+                            </form>
+                        <?php endif; ?>
+                        <?php if (true === ($row['health_restore_available'] ?? false)) : ?>
+                            <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" style="margin:.35em 0 .6em">
+                                <input type="hidden" name="action" value="<?php echo esc_attr(self::ACTION_RESTORE_HEALTH); ?>">
+                                <input type="hidden" name="video_id" value="<?php echo esc_attr((string) $row['video_id']); ?>">
+                                <input type="hidden" name="remote_asset_id" value="<?php echo esc_attr((string) $row['remote_asset_id']); ?>">
+                                <?php wp_nonce_field(self::ACTION_RESTORE_HEALTH . ':' . (string) $row['video_id'] . ':' . (string) $row['remote_asset_id']); ?>
+                                <?php submit_button(__('Restore remote serving now', 'argentwolf-video-processor'), 'primary small', 'submit', false); ?>
+                            </form>
+                        <?php endif; ?>
+                        <?php if (true === ($row['local_rebuild_available'] ?? false)) : ?>
+                            <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" style="margin:.35em 0 .6em">
+                                <input type="hidden" name="action" value="<?php echo esc_attr(self::ACTION_REBUILD_LOCAL); ?>">
+                                <input type="hidden" name="video_id" value="<?php echo esc_attr((string) $row['video_id']); ?>">
+                                <?php wp_nonce_field(self::ACTION_REBUILD_LOCAL . ':' . (string) $row['video_id']); ?>
+                                <?php submit_button(__('Rebuild local delivery', 'argentwolf-video-processor'), 'secondary small', 'submit', false); ?>
+                            </form>
+                        <?php endif; ?>
+
                         <?php if (true === ($row['republish_available'] ?? false) && is_array($row['republish_targets'] ?? null) && array() !== $row['republish_targets']) : ?>
                             <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" style="margin:.35em 0 .6em">
                                 <input type="hidden" name="action" value="<?php echo esc_attr(self::ACTION_REPUBLISH); ?>">
@@ -669,6 +731,66 @@ final class PeerTube_Overview_Admin
             : array('status'=>Remote_Republish_Service::REFUSED);
         $queued = in_array((string) ($result['status'] ?? ''), array(Remote_Republish_Service::APPLIED, Remote_Republish_Service::PRESENT), true);
         wp_safe_redirect(Settings_Hub::tab_url(Settings_Hub::TAB_OVERVIEW, array('awvp_republish' => $queued ? 'queued' : 'refused')));
+        exit;
+    }
+
+    public function check_health_action(): void
+    {
+        if (! current_user_can('manage_options') || null === $this->health_operator) {
+            wp_die(esc_html__('You are not allowed to run remote serving checks.', 'argentwolf-video-processor'));
+        }
+        $video_id = isset($_POST['video_id']) ? absint(wp_unslash($_POST['video_id'])) : 0;
+        $remote_asset_id = isset($_POST['remote_asset_id']) ? absint(wp_unslash($_POST['remote_asset_id'])) : 0;
+        if ($video_id < 1 || $remote_asset_id < 1 || ! current_user_can('edit_post', $video_id)) {
+            wp_die(esc_html__('The selected remote publication cannot be checked.', 'argentwolf-video-processor'));
+        }
+        check_admin_referer(self::ACTION_CHECK_HEALTH . ':' . (string) $video_id . ':' . (string) $remote_asset_id);
+        $result = $this->health_operator->check_now($video_id, $remote_asset_id, get_current_user_id(), time());
+        $notice = Remote_Health_Operator_Service::APPLIED === ($result['status'] ?? '')
+            ? (Serving_Viability::HEALTHY === ($result['viability_status'] ?? '') ? 'healthy' : 'checked')
+            : 'refused';
+        wp_safe_redirect(Settings_Hub::tab_url(Settings_Hub::TAB_OVERVIEW, array('awvp_health_check' => $notice)));
+        exit;
+    }
+
+    public function restore_health_action(): void
+    {
+        if (! current_user_can('manage_options') || null === $this->health_operator) {
+            wp_die(esc_html__('You are not allowed to restore remote serving.', 'argentwolf-video-processor'));
+        }
+        $video_id = isset($_POST['video_id']) ? absint(wp_unslash($_POST['video_id'])) : 0;
+        $remote_asset_id = isset($_POST['remote_asset_id']) ? absint(wp_unslash($_POST['remote_asset_id'])) : 0;
+        if ($video_id < 1 || $remote_asset_id < 1 || ! current_user_can('edit_post', $video_id)) {
+            wp_die(esc_html__('The selected remote publication cannot be restored.', 'argentwolf-video-processor'));
+        }
+        check_admin_referer(self::ACTION_RESTORE_HEALTH . ':' . (string) $video_id . ':' . (string) $remote_asset_id);
+        $result = $this->health_operator->restore_now($video_id, $remote_asset_id, get_current_user_id(), time());
+        $notice = match ((string) ($result['status'] ?? '')) {
+            Remote_Health_Operator_Service::APPLIED => 'restored',
+            Remote_Health_Operator_Service::PRESENT => 'already',
+            default => 'refused',
+        };
+        wp_safe_redirect(Settings_Hub::tab_url(Settings_Hub::TAB_OVERVIEW, array('awvp_health_restore' => $notice)));
+        exit;
+    }
+
+    public function rebuild_local_action(): void
+    {
+        if (! current_user_can('manage_options') || null === $this->local_rebuild) {
+            wp_die(esc_html__('You are not allowed to rebuild local video delivery.', 'argentwolf-video-processor'));
+        }
+        $video_id = isset($_POST['video_id']) ? absint(wp_unslash($_POST['video_id'])) : 0;
+        if ($video_id < 1 || ! current_user_can('edit_post', $video_id)) {
+            wp_die(esc_html__('The selected AWVP Video cannot be rebuilt locally.', 'argentwolf-video-processor'));
+        }
+        check_admin_referer(self::ACTION_REBUILD_LOCAL . ':' . (string) $video_id);
+        $result = $this->local_rebuild->request($video_id, get_current_user_id(), time());
+        $notice = match ((string) ($result['status'] ?? '')) {
+            Local_Delivery_Rebuild_Service::APPLIED => 'queued',
+            Local_Delivery_Rebuild_Service::PRESENT => 'present',
+            default => 'refused',
+        };
+        wp_safe_redirect(Settings_Hub::tab_url(Settings_Hub::TAB_OVERVIEW, array('awvp_local_rebuild' => $notice)));
         exit;
     }
 
@@ -847,7 +969,7 @@ final class PeerTube_Overview_Admin
             if (! $attention && ! $active) {
                 continue;
             }
-            $rows[] = $this->row($video_id, $execution, $operation, $recovery, $health_issue, $attention);
+            $rows[] = $this->row($video_id, $execution, $operation, $recovery, $health_issue, $attention, $now);
         }
         return $rows;
     }
@@ -903,7 +1025,7 @@ final class PeerTube_Overview_Admin
     }
 
     /** @param array<string,mixed> $execution @param array<string,mixed>|null $operation @param array<string,mixed> $recovery @param array<string,mixed>|null $health_issue @return array<string,mixed> */
-    private function row(int $video_id, array $execution, ?array $operation, array $recovery, ?array $health_issue, bool $attention): array
+    private function row(int $video_id, array $execution, ?array $operation, array $recovery, ?array $health_issue, bool $attention, int $now): array
     {
         $attachment_id = Video_Meta::sanitize_positive_id(get_post_meta($video_id, Video_Meta::ATTACHMENT_ID, true));
         $media_title = $attachment_id > 0 ? (string) get_the_title($attachment_id) : '';
@@ -977,9 +1099,26 @@ final class PeerTube_Overview_Admin
             $backend_id = Backend_Identity::sanitize((string) ($destination['backend_id'] ?? ''));
         }
 
+        $remote_asset_id = is_array($health_issue) ? (int) ($health_issue['remote_asset_id'] ?? 0) : 0;
+        $checkable_statuses = array(
+            Serving_Viability::HEALTHY,
+            Serving_Viability::MISSING,
+            Serving_Viability::PRIVATE_OR_RESTRICTED,
+            Serving_Viability::EMBED_DISALLOWED,
+            Serving_Viability::TEMPORARILY_UNAVAILABLE,
+            Serving_Viability::PROBE_INDETERMINATE,
+        );
+        $health_check_available = null !== $this->health_operator && $remote_asset_id > 0 && is_array($health_issue)
+            && in_array((string) ($health_issue['status'] ?? ''), $checkable_statuses, true);
+        $health_restore_available = null !== $this->health_operator && $remote_asset_id > 0
+            && $this->health_operator->restore_available($video_id, $remote_asset_id, $now);
+        $local_rebuild_available = null !== $this->local_rebuild && is_array($health_issue)
+            && $this->local_rebuild->source_available($video_id);
+
         return array(
             'video_id' => $video_id,
             'backend_id' => $backend_id,
+            'remote_asset_id' => $remote_asset_id,
             'media_title' => $media_title,
             'filename' => $filename,
             'size' => $size,
@@ -1002,6 +1141,9 @@ final class PeerTube_Overview_Admin
             'republish_available' => $republish_problem && $republish_source && array() !== $republish_targets,
             'republish_source_missing' => $republish_problem && ! $republish_source,
             'republish_targets' => $republish_targets,
+            'health_check_available' => $health_check_available,
+            'health_restore_available' => $health_restore_available,
+            'local_rebuild_available' => $local_rebuild_available,
             'issue_fingerprint' => $fingerprint,
             'action_url' => '',
             'action_label' => '',

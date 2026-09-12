@@ -63,6 +63,8 @@ jobs:
           php tests/remote-health-notification-policy.php
           php tests/remote-health-notification-state.php
           php tests/remote-health-notification-service.php
+          php tests/remote-health-operator.php
+          php tests/local-delivery-rebuild-service.php
           php tests/peertube-daily-maintenance.php
           php tests/multi-backend-serving-failover.php
           php tests/overview-disposition-store.php
@@ -229,6 +231,10 @@ jobs:
           grep -qx 'argentwolf-video-processor/includes/Remote_Health_Notification_State_Store.php' "${MANIFEST}"
           grep -qx 'argentwolf-video-processor/includes/Remote_Publication_Health_Repository.php' "${MANIFEST}"
           grep -qx 'argentwolf-video-processor/includes/Remote_Publication_Health_Service.php' "${MANIFEST}"
+          grep -qx 'argentwolf-video-processor/includes/Remote_Health_Operator_Check.php' "${MANIFEST}"
+          grep -qx 'argentwolf-video-processor/includes/Remote_Health_Operator_Service.php' "${MANIFEST}"
+          grep -qx 'argentwolf-video-processor/includes/Local_Delivery_Rebuild_Request.php' "${MANIFEST}"
+          grep -qx 'argentwolf-video-processor/includes/Local_Delivery_Rebuild_Service.php' "${MANIFEST}"
           grep -qx 'argentwolf-video-processor/includes/Remote_Republish_Request.php' "${MANIFEST}"
           grep -qx 'argentwolf-video-processor/includes/Remote_Republish_Service.php' "${MANIFEST}"
           grep -qx 'argentwolf-video-processor/includes/Serving_Health_Adapter.php' "${MANIFEST}"

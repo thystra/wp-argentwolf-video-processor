@@ -17,7 +17,8 @@ final class Worker
     public function __construct(
         private readonly Job_Repository $jobs,
         private readonly Transcoder $transcoder,
-        private readonly ?Queue $queue = null
+        private readonly ?Queue $queue = null,
+        private readonly ?Local_Delivery_Rebuild_Service $local_rebuild = null
     ) {
     }
 
@@ -52,7 +53,22 @@ final class Worker
                 $attachment_id = (int) $job['attachment_id'];
                 $job_id = (int) ($job['id'] ?? 0);
                 $job_lock = is_string($job['lock_token'] ?? null) ? $job['lock_token'] : '';
-                if (null !== $this->queue && ! $this->queue->local_processing_allowed($attachment_id)) {
+                $rebuild_requested = null !== $this->local_rebuild
+                    && $this->local_rebuild->matches_active_request($job);
+                $rebuild_authorized = $rebuild_requested && null !== $this->local_rebuild
+                    && $this->local_rebuild->authorize_claimed_job($job, time());
+                $ordinary_local_allowed = null === $this->queue || $this->queue->local_processing_allowed($attachment_id);
+                if ($rebuild_requested && ! $rebuild_authorized && null !== $this->local_rebuild) {
+                    $message = 'Local delivery rebuild authorization was no longer valid when the background worker claimed the job.';
+                    $this->local_rebuild->fail_claimed_job($job, time(), $message);
+                    if ($this->jobs->discard_claimed($job_id, $job_lock)) {
+                        update_post_meta($attachment_id, '_argent_video_status', 'failed');
+                        update_post_meta($attachment_id, '_argent_video_last_error', $message);
+                        continue;
+                    }
+                    throw new RuntimeException($message);
+                }
+                if (! $ordinary_local_allowed && ! $rebuild_authorized) {
                     if ($this->jobs->discard_claimed($job_id, $job_lock)) {
                         delete_post_meta($attachment_id, '_argent_video_job_id');
                         if ('queued' === (string) get_post_meta($attachment_id, '_argent_video_status', true)) {
@@ -63,7 +79,7 @@ final class Worker
                     }
                     throw new RuntimeException('Local processing destination authority changed after the job was claimed.');
                 }
-                if (class_exists(Local_Retention_Service::class)
+                if (! $rebuild_authorized && class_exists(Local_Retention_Service::class)
                     && Local_Retention_Service::attachment_local_processing_blocked($attachment_id)) {
                     if ($this->jobs->cancel_claimed($job_id, $job_lock)) {
                         update_post_meta($attachment_id, '_argent_video_status', 'cancelled');
@@ -77,11 +93,17 @@ final class Worker
                 try {
                     $outputs = $this->transcoder->process($job);
                     $this->jobs->complete((int) $job['id'], $outputs);
+                    if ($rebuild_authorized && null !== $this->local_rebuild) {
+                        $this->local_rebuild->complete_claimed_job($job, time());
+                    }
                     delete_post_meta($attachment_id, '_argent_video_last_error');
                     $processed++;
                 } catch (Throwable $error) {
                     $message = $error->getMessage();
                     $this->jobs->fail((int) $job['id'], $message);
+                    if ($rebuild_authorized && null !== $this->local_rebuild) {
+                        $this->local_rebuild->fail_claimed_job($job, time(), $message);
+                    }
                     update_post_meta($attachment_id, '_argent_video_status', 'failed');
                     update_post_meta($attachment_id, '_argent_video_last_error', $message);
                     $errors[] = array(

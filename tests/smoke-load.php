@@ -131,6 +131,10 @@ foreach (
         ArgentVideo\Video_Reference_Index::class,
         ArgentVideo\Video_Routing_Admin::class,
         ArgentVideo\Local_Delivery_Evidence::class,
+        ArgentVideo\Remote_Health_Operator_Check::class,
+        ArgentVideo\Remote_Health_Operator_Service::class,
+        ArgentVideo\Local_Delivery_Rebuild_Request::class,
+        ArgentVideo\Local_Delivery_Rebuild_Service::class,
         ArgentVideo\PeerTube_Backend_Adapter::class,
         ArgentVideo\PeerTube_Backend_Activation_Service::class,
         ArgentVideo\PeerTube_Token_Lifecycle_Store::class,
@@ -185,6 +189,17 @@ $expected_admin_posts = array(
 foreach ($expected_admin_posts as $hook) {
     if (1 !== count(array_keys($registered_actions, $hook, true))) {
         fwrite(STDERR, "Plugin smoke load missed or duplicated connection action {$hook}.\n");
+        exit(1);
+    }
+}
+$expected_recovery_posts = array(
+    'admin_post_' . ArgentVideo\PeerTube_Overview_Admin::ACTION_CHECK_HEALTH,
+    'admin_post_' . ArgentVideo\PeerTube_Overview_Admin::ACTION_RESTORE_HEALTH,
+    'admin_post_' . ArgentVideo\PeerTube_Overview_Admin::ACTION_REBUILD_LOCAL,
+);
+foreach ($expected_recovery_posts as $hook) {
+    if (1 !== count(array_keys($registered_actions, $hook, true))) {
+        fwrite(STDERR, "Plugin smoke load missed or duplicated explicit recovery action {$hook}.\n");
         exit(1);
     }
 }

@@ -38,6 +38,7 @@ final class PeerTube_Event_Repository
         'phase',
         'serving_health',
         'fallback_backend',
+        'operator_user_id',
     );
 
     /**
@@ -223,7 +224,7 @@ final class PeerTube_Event_Repository
                 continue;
             }
             $value = $context[$key];
-            if (in_array($key, array('confirmed_bytes','source_bytes','request_start','request_bytes'), true)) {
+            if (in_array($key, array('confirmed_bytes','source_bytes','request_start','request_bytes','operator_user_id'), true)) {
                 if (is_int($value) && $value >= 0) {
                     $clean[$key] = $value;
                 }

@@ -1427,3 +1427,11 @@ only after physical source absence is positively verified. `_argent_video_output
 removed only when the selected policy removes managed delivery copies; it is preserved
 for `delete_source_keep_delivery`. The attachment object and its identity metadata
 remain present after physical source deletion.
+
+### `_argentwolf_video_processor_remote_health_operator_check`
+
+RC13.2 version-1 non-secret audit evidence for the most recent explicit **Check now** on one AWVP Video. It stores the exact remote-asset/backend identity, administrator user ID, check time, resulting visitor-facing viability/reason/HTTP status, and optional actor/time for a successful explicit serving restore. A restore is valid only for a recent healthy check whose exact health-row `last_checked_at`, video, backend, and remote asset still match and whose serving eligibility is still waiting on recovery hysteresis. The record cannot authorize provider publication mutation, upload, Republish, or remote deletion.
+
+### `_argentwolf_video_processor_local_delivery_rebuild_request`
+
+RC13.2 version-1 non-secret one-job authorization for **Rebuild local delivery**. Before a local job becomes claimable, AWVP persists `prepared` state containing a random request ID, video/attachment identity, exact confined WordPress source identity, source signature, HLS-capable profile, requesting administrator, and timestamps. After enqueue it records the job ID and advances through `queued|processing|complete|failed`. A detached worker may bypass ordinary remote-destination local-processing suppression only when the claimed job exactly matches this current prepared/queued request and the retained source/retention fences still match. The request does not modify destination, remote assets, publication execution, or serving authority.

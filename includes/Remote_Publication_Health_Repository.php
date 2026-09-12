@@ -228,6 +228,56 @@ final class Remote_Publication_Health_Repository
         return $written ? self::CONFLICT : self::INDETERMINATE;
     }
 
+    public function operator_restore_eligible(
+        int $remote_asset_id,
+        int $video_post_id,
+        string $backend_id,
+        string $expected_last_checked_at,
+        int $now
+    ): string {
+        $backend_id = Backend_Identity::sanitize($backend_id);
+        if ($remote_asset_id < 1 || $video_post_id < 1 || '' === $backend_id
+            || Backend_Registry::LOCAL_ID === $backend_id || $now < 1
+            || 1 !== preg_match('/^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}$/D', $expected_last_checked_at)) {
+            return self::CONFLICT;
+        }
+        $next = gmdate('Y-m-d H:i:s', $now + self::HEALTHY_INTERVAL);
+        $updated = gmdate('Y-m-d H:i:s', $now);
+        global $wpdb;
+        try {
+            $written = $wpdb->query(
+                $wpdb->prepare(
+                    "UPDATE %i
+                     SET eligible = 1, success_streak = GREATEST(success_streak, %d),
+                         failure_streak = 0, failure_since = NULL, next_check_at = %s, updated_at = %s
+                     WHERE remote_asset_id = %d AND video_post_id = %d AND backend_id = %s
+                       AND status = %s AND eligible = 0 AND success_streak >= 1 AND last_checked_at = %s",
+                    $this->table,
+                    self::RECOVERY_SUCCESSES,
+                    $next,
+                    $updated,
+                    $remote_asset_id,
+                    $video_post_id,
+                    $backend_id,
+                    Serving_Viability::HEALTHY,
+                    $expected_last_checked_at
+                )
+            );
+        } catch (Throwable) {
+            return self::INDETERMINATE;
+        }
+        $after = $this->find($remote_asset_id);
+        if (is_array($after)
+            && $video_post_id === (int) ($after['video_post_id'] ?? 0)
+            && $backend_id === (string) ($after['backend_id'] ?? '')
+            && Serving_Viability::HEALTHY === (string) ($after['status'] ?? '')
+            && 1 === (int) ($after['eligible'] ?? 0)
+            && (int) ($after['success_streak'] ?? 0) >= self::RECOVERY_SUCCESSES) {
+            return 1 === $written ? self::APPLIED : self::PRESENT;
+        }
+        return 0 === $written ? self::CONFLICT : self::INDETERMINATE;
+    }
+
     /** @param array<string,mixed>|null $row @param array<string,mixed> $expected */
     private static function matches(?array $row, array $expected): bool
     {

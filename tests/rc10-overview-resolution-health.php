@@ -54,6 +54,12 @@ namespace ArgentVideo {
         public function source_available(int $id):bool{unset($id);return true;}
         public function targets():array{return array('pt-primary'=>'PeerTube primary');}
     }
+    final class Remote_Health_Operator_Service {
+        public function restore_available(int $video_id,int $asset_id,int $now):bool{unset($video_id,$now);return 55===$asset_id;}
+    }
+    final class Local_Delivery_Rebuild_Service {
+        public function source_available(int $video_id):bool{return 101===$video_id;}
+    }
     final class Overview_Disposition_Store { public const REVIEWED='reviewed'; public const DISMISSED='dismissed'; }
     final class Settings_Hub { public const TAB_OVERVIEW='overview'; public static function tab_url(string $tab,array $args=array()):string{unset($tab,$args);return '/overview';} }
     function get_posts(array $args):array{unset($args);return array(101);}
@@ -94,12 +100,16 @@ namespace {
     $assert(1===count($terminalRows)&&true===($terminalRows[0]['needs_attention']??false)&&str_contains((string)($terminalRows[0]['status_label']??''),'stopped before serving'),'Terminal finalization gap disappeared from Overview.');
 
     $health=new Remote_Publication_Health_Repository(array(55=>array('remote_asset_id'=>55,'video_post_id'=>101,'backend_id'=>'pt-primary','status'=>'missing','eligible'=>0,'failure_since'=>'2026-09-10 20:00:00','last_healthy_at'=>'2026-09-10 19:00:00','http_status'=>404,'message'=>'The published URL returned 404.')));
-    $overview=new PeerTube_Overview_Admin($store,new PeerTube_Incomplete_Work_Reconciler(),new PeerTube_Event_Repository(),$health,new Video_Serving_Service());
+    $overview=new PeerTube_Overview_Admin($store,new PeerTube_Incomplete_Work_Reconciler(),new PeerTube_Event_Repository(),$health,new Video_Serving_Service(),null,null,null,null,null,null,new \ArgentVideo\Remote_Health_Operator_Service(),new \ArgentVideo\Local_Delivery_Rebuild_Service());
     $rows=$overview->rows(1000);
     $assert(1===count($rows),'A missing remote publication was not surfaced in Needs Attention.');
     $assert(true===($rows[0]['needs_attention']??false),'Remote health issue was not marked as needing attention.');
     $assert(str_contains((string)$rows[0]['status_label'],'missing'),'Remote missing status was not human-readable.');
     $assert(str_contains((string)$rows[0]['serving_label'],'WordPress original'),'Overview did not report the active local fallback.');
+    $assert(55===(int)($rows[0]['remote_asset_id']??0),'Overview did not preserve the exact remote asset for operator recovery actions.');
+    $assert(true===($rows[0]['health_check_available']??false),'Check now was not exposed for a missing remote publication.');
+    $assert(true===($rows[0]['health_restore_available']??false),'Fresh operator restore availability was not surfaced.');
+    $assert(true===($rows[0]['local_rebuild_available']??false),'Retained-source local rebuild was not surfaced for the incident.');
     $assert(64===strlen((string)$rows[0]['issue_fingerprint']),'Overview issue fingerprint is not stable SHA-256 presentation state.');
 
     // A health failure that has never crossed first public-serving cutover is
@@ -174,7 +184,8 @@ namespace {
     $assert(str_contains($source,"__('Mark reviewed'")&&str_contains($source,"__('Remove from list'")&&str_contains($source,'Reviewed items'),'Overview review/remove/collapsed-reviewed controls are missing.');
     $assert(str_contains($source,"__('Retire uncertain upload'")&&str_contains($source,'confirmed_no_remote')&&str_contains($source,'I checked PeerTube and confirmed that no matching remote video exists'),'Overview uncertain-upload confirmation boundary is missing.');
     $assert(str_contains($source,'upload_indeterminate_operator_abandoned')&&str_contains($source,'no remote request was sent'),'Overview uncertain-upload audit evidence is missing.');
-    $assert(str_contains($source,'Backend Summary')&&str_contains($source,'PeerTube Readiness Estimates')&&str_contains($source,'Reset all readiness statistics'),'Overview backend/readiness operational summaries or reset control are missing.');
+    $assert(str_contains($source,"__('Check now'")&&str_contains($source,"__('Restore remote serving now'")&&str_contains($source,"__('Rebuild local delivery'"),'Overview explicit recovery controls are missing.');
+    $assert(str_contains($source,'Backend Summary')&&str_contains($source,'PeerTube Estimated Readiness')&&str_contains($source,'Reset all readiness statistics'),'Overview backend/readiness operational summaries or reset control are missing.');
     $assert(str_contains($source,'does not delete publication events, task history, upload journals, remote assets, or serving-health records'),'Readiness reset copy does not preserve the audit-history boundary.');
     fwrite(STDOUT,"RC10 Overview resolution/health tests passed.\n");
 }

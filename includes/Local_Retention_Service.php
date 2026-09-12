@@ -216,9 +216,39 @@ final class Local_Retention_Service
         return self::worker_result(self::STATUS_COMPLETE,$id,$type,$this->tasks->complete($id,$lock,$now),0,'cleanup_complete');
     }
 
+    public static function attachment_rebuild_blocked(int $attachment_id):bool
+    {
+        $ids=self::attachment_video_ids($attachment_id);if(null===$ids)return true;
+        foreach($ids as $raw){
+            $video_id=Video_Meta::sanitize_positive_id($raw);if($video_id<1)continue;
+            $state=Video_Meta::sanitize_source_state(get_post_meta($video_id,Video_Meta::SOURCE_STATE,true));
+            $cleanup=Video_Meta::sanitize_cleanup_state(get_post_meta($video_id,Video_Meta::CLEANUP_STATE,true));
+            $policy=Local_Retention_Policy::sanitize(get_post_meta($video_id,Video_Meta::LOCAL_RETENTION_POLICY,true));
+            if('removed'===$state||in_array($cleanup,array('pending','eligible','running'),true)||('complete'===$cleanup&&array()!==$policy&&Local_Retention_Policy::destructive($policy)))return true;
+        }
+        return false;
+    }
+
     public static function attachment_local_processing_blocked(int $attachment_id):bool
     {
-        if($attachment_id<1)return true;
+        $ids=self::attachment_video_ids($attachment_id);if(null===$ids)return true;
+        foreach($ids as $raw){
+            $video_id=Video_Meta::sanitize_positive_id($raw);if($video_id<1)continue;
+            $state=Video_Meta::sanitize_source_state(get_post_meta($video_id,Video_Meta::SOURCE_STATE,true));
+            $cleanup=Video_Meta::sanitize_cleanup_state(get_post_meta($video_id,Video_Meta::CLEANUP_STATE,true));
+            $policy=Local_Retention_Policy::sanitize(get_post_meta($video_id,Video_Meta::LOCAL_RETENTION_POLICY,true));
+            if('removed'===$state||'running'===$cleanup||('complete'===$cleanup&&array()!==$policy&&Local_Retention_Policy::destructive($policy)))return true;
+            $destination_exists=metadata_exists('post',$video_id,Video_Meta::DESTINATION);
+            $destination=Video_Destination::resolve(get_post_meta($video_id,Video_Meta::DESTINATION,true),$destination_exists);
+            if(array()===$destination||!Video_Destination::is_local($destination))return true;
+        }
+        return false;
+    }
+
+    /** @return list<int>|null */
+    private static function attachment_video_ids(int $attachment_id):?array
+    {
+        if($attachment_id<1)return null;
         // phpcs:disable WordPress.DB.SlowDBQuery.slow_db_query_meta_key,WordPress.DB.SlowDBQuery.slow_db_query_meta_value -- Bounded local-processing fence intentionally queries the private attachment-id meta.
         $ids=get_posts(array(
             'post_type'=>Video_Post_Type::POST_TYPE,
@@ -230,21 +260,8 @@ final class Local_Retention_Service
             'meta_compare'=>'=',
         ));
         // phpcs:enable WordPress.DB.SlowDBQuery.slow_db_query_meta_key,WordPress.DB.SlowDBQuery.slow_db_query_meta_value
-        if(!is_array($ids))return true;
-        if(count($ids)>self::MAX_ATTACHMENT_REFERENCES)return true;
-        foreach($ids as $raw){
-            $video_id=Video_Meta::sanitize_positive_id($raw);
-            if($video_id<1)continue;
-            $state=Video_Meta::sanitize_source_state(get_post_meta($video_id,Video_Meta::SOURCE_STATE,true));
-            $cleanup=Video_Meta::sanitize_cleanup_state(get_post_meta($video_id,Video_Meta::CLEANUP_STATE,true));
-            $policy=Local_Retention_Policy::sanitize(get_post_meta($video_id,Video_Meta::LOCAL_RETENTION_POLICY,true));
-            if('removed'===$state||'running'===$cleanup||('complete'===$cleanup&&array()!==$policy&&Local_Retention_Policy::destructive($policy)))return true;
-
-            $destination_exists=metadata_exists('post',$video_id,Video_Meta::DESTINATION);
-            $destination=Video_Destination::resolve(get_post_meta($video_id,Video_Meta::DESTINATION,true),$destination_exists);
-            if(array()===$destination||!Video_Destination::is_local($destination))return true;
-        }
-        return false;
+        if(!is_array($ids)||count($ids)>self::MAX_ATTACHMENT_REFERENCES)return null;
+        return array_values(array_map('intval',$ids));
     }
 
     /** @return array<string,mixed> */

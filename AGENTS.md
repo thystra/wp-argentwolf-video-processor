@@ -415,6 +415,12 @@ Readiness estimation is advisory telemetry, not publication authority or audit e
 
 The normal PeerTube send boundary must not freeze a manifest or open an upload against an old provider catalog. When the current backend catalog is more than five minutes old, refresh it after credential repair and before upload staging/begin; if that refresh cannot establish current generation-bound provider choices, fail/wait closed before file transfer. Do not repeat this freshness refresh for every upload chunk or finalizer/processing poll.
 
+## RC13.2 explicit recovery boundary
+
+**Check now** may run the existing visitor-facing remote health probe from an authenticated administrator action, but it must not upload, republish, mutate provider publication/privacy state, or add frontend/render-time provider HTTP. **Restore remote serving now** is not a blind override: it is valid only after a recent successful exact-asset Check now whose health row still matches and is waiting solely on recovery hysteresis. Record operator identity/time through bounded event/meta evidence.
+
+**Rebuild local delivery** is an explicit retained-source recovery operation, not a destination change. The administrator request must durably freeze the exact source identity/signature and HLS-capable profile before the local job can be processed. FFmpeg remains detached. The worker may bypass ordinary remote-destination suppression only for the exact prepared/queued rebuild request after revalidating source and retention fences. Preserve all remote publication, asset, destination, serving, task, and event history.
+
 ## R46.8 migration execution boundary
 
 `PeerTube_Migration_Executor` is a local promotion coordinator, not a provider executor. A fresh Start migration action must require a strict `ready` R46.7 plan and revalidate the hidden video/attachment/anchor identity, canonical-local destination, active PeerTube backend/origin, a non-stale current-secret-generation publication catalog, provider vocabulary, support preset resolution, and immutable thumbnail identity by successfully building the existing `PeerTube_Publication_Manifest`. It writes `_argent_video_peertube_migration_execution` before live promotion, then converges only forward: exact publication plan first, exact PeerTube destination second, journal `promoted`, and finally `PeerTube_Publication_Synchronizer::sync_video()`.

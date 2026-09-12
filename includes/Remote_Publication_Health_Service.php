@@ -99,6 +99,7 @@ final class Remote_Publication_Health_Service
      * estimation and recent performance learning; it is never publication
      * authority.
      *
+     * @param array<string,mixed>|null $after
      * @param array<string,mixed> $asset
      * @param array{source_bytes?:int,processing_started_at?:int,processing_verified_at?:int} $processing_context
      * @return array{
@@ -182,7 +183,8 @@ final class Remote_Publication_Health_Service
         );
 
         if ($recorded) {
-            $this->record_transition($before, $asset, $observation, $now, $estimate, $context);
+            $after_health = $this->health->find($asset_id);
+            $this->record_transition($before, $after_health, $asset, $observation, $now, $estimate, $context);
             $backend_outage = false;
             if (null !== $this->backend_incidents) {
                 $incident_before = $this->backend_incidents->get($backend_id);
@@ -202,7 +204,6 @@ final class Remote_Publication_Health_Service
             }
             if (null !== $this->notifications
                 && ($previously_qualified || Serving_Viability::HEALTHY === $observation->status())) {
-                $after_health = $this->health->find($asset_id);
                 if (is_array($after_health)) {
                     $this->notifications->publication_observed($asset, $after_health, $now, $backend_outage);
                 }
@@ -320,6 +321,7 @@ final class Remote_Publication_Health_Service
      */
     private function record_transition(
         ?array $before,
+        ?array $after,
         array $asset,
         Serving_Viability $observation,
         int $now,
@@ -341,21 +343,28 @@ final class Remote_Publication_Health_Service
             if ('' === $previous) {
                 return;
             }
+            $eligible = is_array($after) && 1 === (int) ($after['eligible'] ?? 0);
             $this->events->record(
                 $video_id,
                 7,
-                'serving_health_recovered',
+                $eligible ? 'serving_health_recovered' : 'serving_health_probe_recovered',
                 'info',
-                'Remote publication serving health recovered.',
+                $eligible
+                    ? 'The remote publication passed visitor-facing checks and is serving-eligible again.'
+                    : 'The remote publication passed a visitor-facing check; automatic serving recovery still requires another healthy observation.',
                 $now,
                 0,
                 '',
                 $asset_id,
                 $backend_id,
                 200,
-                'AWVP will restore this backend after the recovery-confirmation threshold is satisfied.',
-                'No action is required unless the publication continues to flap.',
-                array('serving_health' => $status)
+                $eligible
+                    ? 'AWVP may use this remote publication again according to serving priority.'
+                    : 'AWVP will keep the current serving source until the recovery threshold is satisfied or an administrator explicitly restores remote serving after a fresh successful check.',
+                $eligible
+                    ? 'No action is required.'
+                    : 'You may wait for automatic confirmation or, after a fresh successful administrator check, restore remote serving immediately.',
+                array('serving_health' => $eligible ? 'recovered' : 'healthy_pending_restore')
             );
             return;
         }
