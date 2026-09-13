@@ -78,8 +78,10 @@ into delayed cleanup. A cleanup delay of 0 means Never automatically delete;
 selected videos may instead snapshot a finite 1-365 day delay. When WordPress is
 not the Archive of Record, AWVP can remove an original while keeping verified
 local HLS delivery, or remove both original and generated local copies after a
-verified remote publication. The WordPress attachment record itself is
-preserved.
+verified remote publication. Source-prune keeps the Media Library attachment.
+Delete-all records source provenance and retires the attachment through the
+normal WordPress attachment lifecycle so a broken local-media item is not left
+behind; the AWVP Video and verified remote serving identity remain available.
 
 = Does metadata stripping sanitize the original? =
 
@@ -184,7 +186,7 @@ The existing settings keys, queue table, attachment metadata, hook names, cron
 identifiers, Settings page slug, and `wp argent-video` command are retained for
 upgrade compatibility.
 
-This Forgejo release-candidate package identifies itself as `2.0.0-rc13.7` in the
+This Forgejo release-candidate package identifies itself as `2.0.0-rc13.8` in the
 plugin header while `Stable tag: 1.0.0` deliberately continues to identify the
 public WordPress.org release. RC packages are not published to WordPress.org SVN.
 The Stable tag moves to `2.0.0` only when the final release is promoted.
@@ -194,6 +196,9 @@ Administrators upgrading from version 0.2.3 should use the normal WordPress
 plugin-update workflow and confirm the plugin remains active.
 
 == Upgrade Notice ==
+
+= 2.0.0-rc13.8 =
+RC13 series build 8. Retires safely removed source attachments through WordPress lifecycle APIs, preserves remote-only AWVP Video identity and provenance, and makes immediate cleanup state explicit. WordPress.org remains on 1.0.0.
 
 = 2.0.0-rc13.7 =
 RC13 series build 7. Restores safe manual recovery controls for terminal finalization gaps and separates per-video retention policy selection from an explicit Remove local copies now action. WordPress.org remains on 1.0.0.
@@ -274,6 +279,14 @@ Renames the public plugin and package to ArgentWolf Video Processor and prepares
 the project for WordPress.org review while retaining existing data identifiers.
 
 == Changelog ==
+
+= 2.0.0-rc13.8 =
+* Persists Queued for immediate removal / Removal in progress states for accepted manual cleanup instead of exposing scheduled-cleanup implementation state.
+* Records a durable source-retirement tombstone before delete-all retirement and keeps the AWVP Video, remote identity, serving authority, and history after the local attachment is gone.
+* Fails closed when a Core Video block, legacy video shortcode, literal local video/source URL, or incomplete reference scan could be broken by source retirement.
+* Uses WordPress lifecycle APIs for source/media retirement: source-prune uses `wp_delete_file()` while delete-all retires the Media Library object through `wp_delete_attachment()`; attachment rows are never removed with raw SQL.
+* Reconciles already-completed RC13.7 delete-all records from the detached recovery cron so stale broken Media Library entries can be retired without restoring the deleted source.
+* Keeps verified PeerTube frontend/editor rendering available for remote-only AWVP Videos with no live attachment binding.
 
 = 2.0.0-rc13.7 =
 * Exposes Check now for terminal finalization gaps that still have an exact known remote asset; after a successful check, Use verified remote now can adopt the existing publication without replaying the unsafe finalizer.

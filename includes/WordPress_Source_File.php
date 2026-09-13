@@ -82,6 +82,16 @@ final class WordPress_Source_File
         return $relative===$identity['relative_path']&&!file_exists($path)&&!is_link($path);
     }
 
+    /** Confirm that the exact former source identity is absent without requiring an attachment post. */
+    public static function identity_absent(array $identity):bool
+    {
+        $identity=self::sanitize_identity($identity);if(array()===$identity)return false;
+        $uploads=wp_upload_dir();if(!is_array($uploads)||!empty($uploads['error'])||!is_string($uploads['basedir']??null)||''===$uploads['basedir'])return false;
+        $path=rtrim(wp_normalize_path((string)$uploads['basedir']),'/').'/'.$identity['relative_path'];
+        try{[$path,$relative]=self::confined_absent($path);}catch(RuntimeException){return false;}
+        return $relative===$identity['relative_path']&&!file_exists($path)&&!is_link($path);
+    }
+
     public static function delete(int $attachment_id,array $identity):bool
     {
         $identity=self::sanitize_identity($identity);if(array()===$identity||!self::matches($attachment_id,$identity))return false;

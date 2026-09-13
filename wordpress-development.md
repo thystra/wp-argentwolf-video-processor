@@ -47,7 +47,13 @@ and uploads locations, multisite layouts, and symlinked installations.
 
 Plugin configuration belongs in WordPress-managed storage such as the Options
 or Settings APIs unless the data is inherently file content. User-uploaded
-media should use WordPress's media/upload APIs.
+media should use WordPress's media/upload APIs. When intentionally retiring a
+Media Library attachment, use WordPress's attachment lifecycle (`wp_delete_attachment()`)
+rather than deleting its database rows directly. When a workflow intentionally
+keeps the attachment but removes one exact verified source file, use the reviewed
+WordPress file-deletion boundary (`wp_delete_file()`) after confinement and identity
+checks. Preserve any plugin provenance needed after retirement before invoking the
+WordPress deletion lifecycle.
 
 When a plugin must generate or manage files that are not ordinary Media Library
 uploads, use `wp_upload_dir()` at runtime and create a clearly plugin-owned

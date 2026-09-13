@@ -25,7 +25,8 @@ final class Local_Retention_Admin
     public function __construct(
         private readonly Local_Retention_Service $service,
         private readonly Archive_Of_Record_Policy_Store $archive_policy,
-        private readonly Local_Retention_Default_Policy_Store $default_policy
+        private readonly Local_Retention_Default_Policy_Store $default_policy,
+        private readonly Video_Reference_Index $references
     ) {
     }
 
@@ -280,6 +281,7 @@ final class Local_Retention_Admin
         $site_policy = $this->archive_policy->get();
         $wordpress_archive = Archive_Of_Record_Policy_Store::WORDPRESS === $site_policy['archive_of_record'];
         $default_policy = $this->default_policy->get();
+        $reference_scan_limited = $this->references->truncated();
         // phpcs:disable WordPress.Security.NonceVerification.Recommended -- Read-only redirect notice; it cannot mutate state.
         $retention_notice = sanitize_key(sanitize_text_field(wp_unslash($_GET['awvp_retention_notice'] ?? '')));
         // phpcs:enable WordPress.Security.NonceVerification.Recommended
@@ -287,6 +289,9 @@ final class Local_Retention_Admin
         <h2><?php esc_html_e('Local Retention', 'argentwolf-video-processor'); ?></h2>
         <div class="notice notice-info inline"><p><?php esc_html_e('Video serving choice and source retention policies are separate items. AWVP sets WordPress to retain the originals in your Media Library by default. Automatic original source file deletion is prevented while WordPress is marked as your Archive of Record. To automatically delete local files, mark WordPress as NOT the Archive of Record, indicating you either have a backup off-server or are comfortable with the chosen backend acting as your Archive of Record.', 'argentwolf-video-processor'); ?></p></div>
         <?php $this->render_notice($retention_notice); ?>
+        <?php if ($reference_scan_limited) : ?>
+            <div class="notice notice-warning inline"><p><?php esc_html_e('Post-reference discovery reached its safety limit of 5,000 posts. Source-removal requests fail closed until AWVP can verify that no non-AWVP post directly references the local attachment.', 'argentwolf-video-processor'); ?></p></div>
+        <?php endif; ?>
 
         <h3><?php esc_html_e('Archive of record for original videos', 'argentwolf-video-processor'); ?></h3>
         <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" style="max-width:70em">
@@ -418,7 +423,7 @@ final class Local_Retention_Admin
         } elseif (1 === preg_match('/^cleanup-(\d+)-(\d+)-(\d+)-(\d+)$/D', $notice, $m)) {
             $message = sprintf(
                 /* translators: 1: queued count, 2: already-current count, 3: refused count, 4: indeterminate count. */
-                __('Remove local copies result: %1$d queued, %2$d already queued, %3$d refused by safety checks, %4$d indeterminate.', 'argentwolf-video-processor'),
+                __('Remove local copies result: %1$d accepted for immediate removal, %2$d already queued or running, %3$d refused by safety checks, %4$d indeterminate.', 'argentwolf-video-processor'),
                 (int) $m[1], (int) $m[2], (int) $m[3], (int) $m[4]
             );
         } else {
@@ -470,6 +475,30 @@ final class Local_Retention_Admin
             Local_Retention_Policy::MODE_DELETE_ALL => __('Remove original and generated local delivery copies', 'argentwolf-video-processor'),
             default => __('Unknown retention mode', 'argentwolf-video-processor'),
         };
+        $source_label = match ($source) {
+            'present' => __('Source present', 'argentwolf-video-processor'),
+            'verified_remote' => __('Source retained; remote verified', 'argentwolf-video-processor'),
+            'cleanup_pending' => __('Source cleanup pending', 'argentwolf-video-processor'),
+            'removed' => __('Local source removed', 'argentwolf-video-processor'),
+            'missing' => __('Source missing', 'argentwolf-video-processor'),
+            'uploading' => __('Source upload in progress', 'argentwolf-video-processor'),
+            default => __('Source state needs review', 'argentwolf-video-processor'),
+        };
+        $cleanup_label = match ($cleanup) {
+            'held' => __('Manual cleanup only; nothing is scheduled automatically', 'argentwolf-video-processor'),
+            'pending' => __('Cleanup scheduled for later', 'argentwolf-video-processor'),
+            'queued' => __('Queued for immediate removal', 'argentwolf-video-processor'),
+            'eligible' => __('Ready for scheduled cleanup', 'argentwolf-video-processor'),
+            'running' => __('Removal in progress', 'argentwolf-video-processor'),
+            'complete' => __('Cleanup complete', 'argentwolf-video-processor'),
+            'blocked' => __('Cleanup blocked; local copies were kept', 'argentwolf-video-processor'),
+            'failed' => __('Cleanup failed; review History & Logs', 'argentwolf-video-processor'),
+            default => __('No cleanup pending', 'argentwolf-video-processor'),
+        };
+        $attachment_id = Video_Meta::sanitize_positive_id(get_post_meta($video_id, Video_Meta::ATTACHMENT_ID, true));
+        $direct_references = $attachment_id > 0 && ! $this->references->truncated()
+            ? $this->references->attachment_posts_for($attachment_id)
+            : array();
         ?>
         <tr data-search="<?php echo esc_attr($search); ?>">
             <th scope="row" class="check-column"><input type="checkbox" name="video_ids[]" value="<?php echo esc_attr((string) $video_id); ?>" <?php disabled($frozen); ?>><span class="screen-reader-text"><?php echo esc_html(sprintf(
@@ -479,10 +508,11 @@ final class Local_Retention_Admin
             )); ?></span></th>
             <td><strong>#<?php echo esc_html((string) $video_id); ?> — <?php echo esc_html('' !== $video_title ? $video_title : __('Untitled video', 'argentwolf-video-processor')); ?></strong></td>
             <td><?php if ($origin_id > 0) : ?>#<?php echo esc_html((string) $origin_id); ?> — <?php echo esc_html('' !== $origin_title ? $origin_title : __('Untitled post', 'argentwolf-video-processor')); ?><?php else : ?><em><?php esc_html_e('No origin post', 'argentwolf-video-processor'); ?></em><?php endif; ?></td>
-            <td><?php echo esc_html(array() === $authority ? __('Local serving', 'argentwolf-video-processor') : __('Verified remote serving', 'argentwolf-video-processor')); ?><br><span class="description"><?php echo esc_html('Source: ' . $source . '; cleanup: ' . $cleanup); ?></span></td>
+            <td><?php echo esc_html(array() === $authority ? __('Local serving', 'argentwolf-video-processor') : __('Verified remote serving', 'argentwolf-video-processor')); ?><br><span class="description"><?php echo esc_html($source_label . '; ' . $cleanup_label); ?></span></td>
             <td><strong><?php echo esc_html($policy_label); ?></strong>
                 <?php if ('' !== $mode_detail) : ?><br><span class="description"><?php echo esc_html($mode_detail); ?></span><?php endif; ?>
                 <?php if ($frozen) : ?><br><span class="description"><?php esc_html_e('Original-source cleanup is complete; this row is read-only.', 'argentwolf-video-processor'); ?></span><?php endif; ?>
+                <?php if (array() !== $direct_references) : ?><br><span class="description"><strong><?php esc_html_e('Source removal blocked: this local attachment is directly referenced by:', 'argentwolf-video-processor'); ?></strong> <?php foreach ($direct_references as $index => $reference) : ?><?php if ($index > 0) : ?>, <?php endif; ?><?php $edit_url = get_edit_post_link((int) $reference['id']); ?><?php if (is_string($edit_url) && '' !== $edit_url) : ?><a href="<?php echo esc_url($edit_url); ?>"><?php echo esc_html((string) $reference['title']); ?></a><?php else : ?><?php echo esc_html((string) $reference['title']); ?><?php endif; ?><?php endforeach; ?>. <?php esc_html_e('Convert those uses to an AWVP Video block before removing the local source.', 'argentwolf-video-processor'); ?></span><?php endif; ?>
                 <?php if ($wordpress_archive && in_array($mode, array(Local_Retention_Policy::MODE_DELETE_SOURCE_KEEP_DELIVERY, Local_Retention_Policy::MODE_DELETE_ALL), true)) : ?><br><span class="description"><strong><?php esc_html_e('Original deletion is currently blocked by the Archive of Record policy.', 'argentwolf-video-processor'); ?></strong></span><?php endif; ?>
             </td>
         </tr>

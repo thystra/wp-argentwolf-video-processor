@@ -63,6 +63,37 @@ final class Video_Reference_Index
             }
         );
 
+        return $this->post_rows($post_ids, $origin_post_id);
+    }
+
+
+    /**
+     * Return posts that directly reference one WordPress attachment through a
+     * core Video block, legacy [video] shortcode, or literal video/source URL.
+     * AWVP Video blocks are intentionally excluded because they remain valid
+     * after the local attachment is retired.
+     *
+     * @return list<array{id:int,title:string,status:string,post_type:string,is_origin:bool}>
+     */
+    public function attachment_posts_for(int $attachment_id): array
+    {
+        $this->build();
+        if ($attachment_id < 1) {
+            return array();
+        }
+        return $this->post_rows($this->by_attachment[$attachment_id] ?? array(), 0);
+    }
+
+    public function truncated(): bool
+    {
+        $this->build();
+        return $this->truncated;
+    }
+
+
+    /** @param list<int> $post_ids @return list<array{id:int,title:string,status:string,post_type:string,is_origin:bool}> */
+    private function post_rows(array $post_ids, int $origin_post_id): array
+    {
         $out = array();
         foreach ($post_ids as $post_id) {
             $post = get_post($post_id);
@@ -91,12 +122,6 @@ final class Video_Reference_Index
         return $out;
     }
 
-    public function truncated(): bool
-    {
-        $this->build();
-        return $this->truncated;
-    }
-
     private function build(): void
     {
         if (null !== $this->by_video && null !== $this->by_attachment) {
@@ -107,7 +132,7 @@ final class Video_Reference_Index
         $this->by_attachment = array();
 
         $ids = get_posts(array(
-            'post_type'      => 'any',
+            'post_type'      => self::content_post_types(),
             'post_status'    => 'any',
             'fields'         => 'ids',
             'posts_per_page' => self::MAX_POSTS + 1,
@@ -146,6 +171,44 @@ final class Video_Reference_Index
             }
             $this->collect_legacy_markup($content, $post_id);
         }
+    }
+
+
+    /**
+     * Scan only post types that can reasonably contain authored block/classic
+     * content. In particular, do not spend the safety limit on Media Library
+     * attachments; large libraries otherwise make destructive reference checks
+     * fail closed before AWVP has examined the site's actual content posts.
+     *
+     * @return array<int,string>|string
+     */
+    private static function content_post_types(): array|string
+    {
+        if (! function_exists('get_post_types')) {
+            return 'any';
+        }
+        $registered = get_post_types(array(), 'names');
+        if (! is_array($registered)) {
+            return 'any';
+        }
+
+        $always_content = array('wp_block', 'wp_template', 'wp_template_part');
+        $excluded = array('attachment', 'revision', Video_Post_Type::POST_TYPE, 'nav_menu_item', 'custom_css', 'customize_changeset', 'oembed_cache', 'user_request');
+        $types = array();
+        foreach ($registered as $raw_type) {
+            $type = is_string($raw_type) ? $raw_type : '';
+            if ('' === $type || in_array($type, $excluded, true)) {
+                continue;
+            }
+            if (in_array($type, $always_content, true)
+                || ! function_exists('post_type_supports')
+                || post_type_supports($type, 'editor')
+            ) {
+                $types[] = $type;
+            }
+        }
+        $types = array_values(array_unique($types));
+        return array() !== $types ? $types : 'any';
     }
 
     /** @param list<array<string,mixed>> $blocks */

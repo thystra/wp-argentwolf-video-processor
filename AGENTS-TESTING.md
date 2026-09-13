@@ -524,3 +524,6 @@ For the next harness iteration:
 
 An environment/verifier failure after candidate identity gates have passed does
 not by itself require rebuilding the candidate. Classify the failure first.
+## RC13.8 source-retirement regression
+
+Source-retirement changes must prove both WordPress lifecycle use and remote-only continuity. Dependency-free tests must cover direct-reference fail-closed behavior, durable source tombstones, `wp_delete_attachment()` retirement for delete-all, retained attachment behavior for source-prune/keep-HLS, completed-RC13.7 reconciliation, remote-only frontend/editor rendering, uninstall metadata ownership, and exact package payload assertions. The delete-all path must not use raw SQL to remove Media Library records or an ad-hoc unlink for the WordPress source.

@@ -177,7 +177,8 @@ for required_runtime_file in \
     Remote_Republish_Service.php \
     Serving_Health_Adapter.php \
     Serving_Health_Adapter_Factory.php \
-    Serving_Viability.php
+    Serving_Viability.php \
+    Source_Retirement_Record.php
 do
     if ! grep -qx "${SLUG}/includes/${required_runtime_file}" "${ZIP_MANIFEST}"; then
         echo "Release ZIP is missing includes/${required_runtime_file}." >&2

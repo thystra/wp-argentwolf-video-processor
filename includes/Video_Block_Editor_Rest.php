@@ -97,7 +97,7 @@ final class Video_Block_Editor_Rest
         $video_id = Video_Meta::sanitize_positive_id($request->get_param('video_id'));
         $state = $this->service->editor_state($video_id);
         return null === $state
-            ? $this->error('argentwolf_video_processor_editor_video_unavailable', __('This AWVP Video is unavailable or no longer has a usable local WordPress video.', 'argentwolf-video-processor'), 404)
+            ? $this->error('argentwolf_video_processor_editor_video_unavailable', __('This AWVP Video is unavailable or has no usable local or remote serving source.', 'argentwolf-video-processor'), 404)
             : rest_ensure_response($state);
     }
 

@@ -1,3 +1,13 @@
+## 2.0.0-rc13.8 - 2026-09-12
+
+- Treat **Remove local copies now** as a durable one-time command: accepted work is stored as **Queued for immediate removal**, advances through the detached worker, and no longer relies on a retention-delay sentinel. `0` continues to mean Never automatically clean up.
+- Add a durable source-retirement tombstone on the AWVP Video before delete-all retirement, preserving the former attachment ID/title/filename/MIME/path/size/exact source identity/task/time after the Media Library object is gone.
+- Fail closed before source retirement when WordPress direct-reference discovery is incomplete or another post still uses the local attachment through a Core Video block, supported legacy video shortcode, or literal video/source URL. AWVP Video block references remain valid because they target the durable AWVP Video ID.
+- Route destructive WordPress media lifecycle changes through WordPress APIs: source-prune/keep-HLS uses the exact confined `wp_delete_file()` boundary, while delete-all calls `wp_delete_attachment()` after tombstone/reference/source/remote verification. No Media Library row is removed with raw SQL and no source attachment is unlinked ad hoc.
+- Let delete-all leave a remote-only AWVP Video with no active attachment binding while preserving verified PeerTube serving, routing/history provenance, and frontend/editor rendering.
+- Reconcile already-completed RC13.7 delete-all records from the existing detached recovery cron so stale dead Media Library attachments can be retired safely without restoring or re-deleting their source bytes.
+- Add dependency-free regression coverage for tombstone validation, direct-reference blocking, WordPress attachment retirement, remote-only block/editor behavior, and RC13.7 completed-cleanup reconciliation.
+
 ## 2.0.0-rc13.7 - 2026-09-12
 
 - Restore a safe operator path for old terminal finalization gaps: when AWVP knows the exact remote asset but cannot safely replay the finalizer, Overview now exposes **Check now** for that existing publication and, after a fresh successful check, the existing **Use verified remote now** adoption path. The UI no longer tells operators to use an unavailable Resume action for this state.

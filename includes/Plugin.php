@@ -68,7 +68,7 @@ final class Plugin
         );
         $legacy_video_serving_bridge = new Legacy_Video_Serving_Bridge($video_serving);
         $archive_of_record_policy = new Archive_Of_Record_Policy_Store();
-        $local_retention_service = new Local_Retention_Service($peertube_tasks, $video_serving, $jobs, $archive_of_record_policy);
+        $local_retention_service = new Local_Retention_Service($peertube_tasks, $video_serving, $jobs, $archive_of_record_policy, $video_references);
         $video_block = new Video_Block($video_serving, $renderer);
         $peertube_publication_catalogs = new PeerTube_Publication_Catalog_Store();
         $peertube_publication_editor = new PeerTube_Publication_Editor_Service(
@@ -180,6 +180,7 @@ final class Plugin
         add_action('argentwolf_video_processor_task_enqueued', array($peertube_task_launcher, 'wake'), 10, 2);
         add_action(Activator::PEERTUBE_RECOVERY_HOOK, array($peertube_incomplete_work, 'recover'), 5);
         add_action(Activator::PEERTUBE_RECOVERY_HOOK, array($remote_republish, 'recover'), 7);
+        add_action(Activator::PEERTUBE_RECOVERY_HOOK, array($local_retention_service, 'reconcile_completed_retirements'), 8);
         add_action(Activator::PEERTUBE_RECOVERY_HOOK, array($peertube_task_launcher, 'recover'), 10);
         add_action(Activator::REMOTE_HEALTH_HOOK, array($remote_publication_health, 'run'));
         add_action(Activator::BACKEND_MAINTENANCE_HOOK, array($peertube_daily_maintenance, 'run'));
@@ -249,7 +250,7 @@ final class Plugin
                 }
             );
             $local_retention_default = new Local_Retention_Default_Policy_Store();
-            $local_retention_admin = new Local_Retention_Admin($local_retention_service, $archive_of_record_policy, $local_retention_default);
+            $local_retention_admin = new Local_Retention_Admin($local_retention_service, $archive_of_record_policy, $local_retention_default, $video_references);
             $video_routing_admin = new Video_Routing_Admin(
                 $this->backend_registry,
                 $video_publishing_defaults,

@@ -44,13 +44,11 @@ final class Video_Block
         $attachment_id = Video_Meta::sanitize_positive_id(
             get_post_meta($video_id, Video_Meta::ATTACHMENT_ID, true)
         );
-        if ($attachment_id < 1) {
-            return '';
-        }
 
         // Verified PeerTube authority is intentionally resolved before touching
-        // local source bytes. A retention policy may have removed the physical
-        // WordPress source after cutover while preserving the attachment record.
+        // local source bytes. Delete-all retention may retire the WordPress
+        // attachment entirely while the durable AWVP Video continues serving
+        // through its verified remote publication.
         $embed_url = null !== $this->serving ? $this->serving->peertube_embed_url($video_id) : '';
         if ('' !== $embed_url) {
             $title = get_the_title($video_id);
@@ -61,6 +59,9 @@ final class Video_Block
                 esc_attr($title)
             );
         } else {
+            if ($attachment_id < 1) {
+                return '';
+            }
             $attachment = get_post($attachment_id);
             $mime = (string) get_post_mime_type($attachment_id);
             $url = wp_get_attachment_url($attachment_id);

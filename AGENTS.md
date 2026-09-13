@@ -101,7 +101,9 @@ Existing legacy identifiers remain where compatibility requires them. New global
 
 ## Architecture invariants
 
-- Preserve every original WordPress attachment.
+- Preserve original WordPress attachments by default. An explicit, positively verified delete-all Local Retention operation may retire a source attachment only after AWVP records a source tombstone, proves no non-AWVP WordPress content directly references that attachment, and the detached worker revalidates the destructive safety boundary.
+- Source/media retirement must use WordPress lifecycle APIs: use `wp_delete_file()` for a retained attachment's exact source-file removal, `wp_delete_attachment()` when retiring the Media Library object, and WordPress post/meta APIs for object state. Do not delete Media Library rows with raw SQL or bypass WordPress attachment hooks with ad-hoc source-file removal.
+- The AWVP Video is the durable video identity. After delete-all source retirement it may remain remote-only with no live Media Library attachment, while preserving source tombstone, remote identity, serving authority, and history.
 - Never run FFmpeg inside the recurring WP-Cron callback or an administrator web
   request.
 - The recurring event may only inspect the queue and launch a detached worker.

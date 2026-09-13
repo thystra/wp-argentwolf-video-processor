@@ -154,12 +154,22 @@ final class Video_Block_Editor_Service
         $attachment_id = Video_Meta::sanitize_positive_id(
             get_post_meta($video_id, Video_Meta::ATTACHMENT_ID, true)
         );
-        if ($attachment_id < 1 || ! $this->valid_video_attachment($attachment_id)) {
+        $source_state = Video_Meta::sanitize_source_state(
+            get_post_meta($video_id, Video_Meta::SOURCE_STATE, true)
+        );
+        $tombstone = Source_Retirement_Record::sanitize(
+            get_post_meta($video_id, Video_Meta::SOURCE_TOMBSTONE, true)
+        );
+        $remote_authority = Video_Serving_Authority::sanitize(
+            get_post_meta($video_id, Video_Meta::SERVING_AUTHORITY, true)
+        );
+        $remote_only = 0 === $attachment_id && 'removed' === $source_state && array() !== $tombstone && array() !== $remote_authority;
+        if (! $remote_only && ($attachment_id < 1 || ! $this->valid_video_attachment($attachment_id))) {
             return null;
         }
 
-        $url = wp_get_attachment_url($attachment_id);
-        if (! is_string($url) || '' === $url) {
+        $url = $remote_only ? '' : wp_get_attachment_url($attachment_id);
+        if (! $remote_only && (! is_string($url) || '' === $url)) {
             return null;
         }
 
@@ -181,8 +191,13 @@ final class Video_Block_Editor_Service
                 'id'                => $video_id,
                 'origin_post_id'    => $origin_post_id,
                 'attachment_id'     => $attachment_id,
-                'attachment_url'    => esc_url_raw($url),
-                'attachment_title'  => sanitize_text_field((string) get_the_title($attachment_id)),
+                'attachment_url'    => $remote_only ? '' : esc_url_raw((string) $url),
+                'attachment_title'  => $remote_only
+                    ? sanitize_text_field((string) ($tombstone['attachment_title'] ?: $tombstone['filename']))
+                    : sanitize_text_field((string) get_the_title($attachment_id)),
+                'remote_only'       => $remote_only,
+                'remote_embed_url'  => $remote_only ? esc_url_raw((string) $remote_authority['embed_url']) : '',
+                'source_state'      => $source_state,
                 'destination_valid' => $destination_valid,
                 'destination'       => $destination_valid
                     ? array(
@@ -211,6 +226,9 @@ final class Video_Block_Editor_Service
     public function set_destination(int $video_id, string $mode, string $backend_id = ''): array
     {
         if (null === $this->video_post($video_id)) {
+            return array('status' => self::REFUSED);
+        }
+        if ('removed' === Video_Meta::sanitize_source_state(get_post_meta($video_id, Video_Meta::SOURCE_STATE, true))) {
             return array('status' => self::REFUSED);
         }
 

@@ -26,7 +26,8 @@ final class Local_Retention_Service
         private readonly Task_Repository $tasks,
         private readonly Video_Serving_Resolver $serving,
         private readonly Job_Repository $jobs,
-        private readonly ?Archive_Of_Record_Policy_Store $archive_policy=null
+        private readonly ?Archive_Of_Record_Policy_Store $archive_policy,
+        private readonly Video_Reference_Index $references
     ){}
 
     /**
@@ -76,6 +77,10 @@ final class Local_Retention_Service
         $policy=Local_Retention_Policy::create($mode,$grace_days,$user_id,$now);
         if(array()===$policy)return self::schedule_result(self::REFUSED);
         if(Local_Retention_Policy::deletes_source($policy)&&null!==$this->archive_policy&&!$this->archive_policy->source_deletion_allowed())return self::schedule_result(self::REFUSED);
+        if(Local_Retention_Policy::deletes_source($policy)){
+            $attachment_id=Video_Meta::sanitize_positive_id(get_post_meta($video_id,Video_Meta::ATTACHMENT_ID,true));
+            if($attachment_id<1||!$this->source_reference_safe($attachment_id))return self::schedule_result(self::REFUSED);
+        }
         if(!$this->master_allows_policy($policy,$master_authority))return self::schedule_result(self::REFUSED);
 
         update_post_meta($video_id,Video_Meta::MASTER_AUTHORITY,$master_authority);
@@ -128,7 +133,7 @@ final class Local_Retention_Service
         $state=Video_Meta::sanitize_source_state(get_post_meta($video_id,Video_Meta::SOURCE_STATE,true));
         if(!in_array($state,array('present','verified_remote'),true))return self::schedule_result(self::REFUSED);
         $attachment_id=Video_Meta::sanitize_positive_id(get_post_meta($video_id,Video_Meta::ATTACHMENT_ID,true));
-        if($attachment_id<1||!self::video_context_valid($video_id,$attachment_id)||!self::attachment_exclusive_to_video($attachment_id,$video_id))return self::schedule_result(self::REFUSED);
+        if($attachment_id<1||!self::video_context_valid($video_id,$attachment_id)||!self::attachment_exclusive_to_video($attachment_id,$video_id)||!$this->source_reference_safe($attachment_id))return self::schedule_result(self::REFUSED);
         if($this->local_job_active($attachment_id))return self::schedule_result(self::REFUSED);
         $existing=metadata_exists('post',$video_id,Video_Meta::LOCAL_RETENTION_EXECUTION)
             ?Local_Retention_Execution::sanitize(get_post_meta($video_id,Video_Meta::LOCAL_RETENTION_EXECUTION,true)):array();
@@ -162,6 +167,7 @@ final class Local_Retention_Service
         if(!in_array($state,array('present','verified_remote'),true))return self::schedule_result(self::REFUSED);
         $attachment_id=Video_Meta::sanitize_positive_id(get_post_meta($video_id,Video_Meta::ATTACHMENT_ID,true));
         if($attachment_id<1||!self::video_context_valid($video_id,$attachment_id)||!self::attachment_exclusive_to_video($attachment_id,$video_id))return self::schedule_result(self::REFUSED);
+        if(Local_Retention_Policy::deletes_source($policy)&&!$this->source_reference_safe($attachment_id))return self::schedule_result(self::REFUSED);
         if($this->local_job_active($attachment_id))return self::schedule_result(self::REFUSED);
 
         $source=Local_Retention_Policy::deletes_source($policy)?WordPress_Source_File::capture($attachment_id):array();
@@ -195,7 +201,7 @@ final class Local_Retention_Service
             :Local_Retention_Execution::create_remote($video_id,$attachment_id,$policy,$authority,$source,$attempt,$eligible,$now);
         if(array()===$execution)return self::schedule_result(self::REFUSED);
         update_post_meta($video_id,Video_Meta::LOCAL_RETENTION_EXECUTION,$execution);
-        update_post_meta($video_id,Video_Meta::CLEANUP_STATE,$eligible<=$now?'eligible':'pending');
+        update_post_meta($video_id,Video_Meta::CLEANUP_STATE,$manual?'queued':($eligible<=$now?'eligible':'pending'));
         if($execution!==Local_Retention_Execution::sanitize(get_post_meta($video_id,Video_Meta::LOCAL_RETENTION_EXECUTION,true)))return self::schedule_result(self::INDETERMINATE);
         $exec_sha=Local_Retention_Execution::immutable_sha256($execution);
         $payload=array(
@@ -231,6 +237,7 @@ final class Local_Retention_Service
             return self::worker_result(self::STATUS_COMPLETE,$id,$type,$this->tasks->complete($id,$lock,$now),0,'stale');
         }
         if(!self::video_context_valid($video,(int)$execution['attachment_id'])||!self::attachment_exclusive_to_video((int)$execution['attachment_id'],$video))return $this->block($id,$lock,$execution,$now,'AWVP Video or attachment ownership changed before cleanup.');
+        if(Local_Retention_Policy::deletes_source($policy)&&!$this->source_reference_safe((int)$execution['attachment_id']))return $this->block($id,$lock,$execution,$now,'Another WordPress post still directly references this local attachment; local bytes were kept.');
         if($now<(int)$execution['eligible_at'])return self::worker_result(self::STATUS_REQUEUED,$id,$type,$this->tasks->reschedule($id,$lock,(int)$execution['eligible_at'],'Retention grace period has not elapsed.',$now),(int)$execution['eligible_at'],'waiting');
         $master=Video_Meta::sanitize_master_authority(get_post_meta($video,Video_Meta::MASTER_AUTHORITY,true));
         if(Local_Retention_Policy::deletes_source($policy)&&null!==$this->archive_policy&&!$this->archive_policy->source_deletion_allowed())return $this->block($id,$lock,$execution,$now,'WordPress is now the archive of record; the original source was kept.');
@@ -244,6 +251,7 @@ final class Local_Retention_Service
         if(array()===$running||!$this->save_execution($video,$running,'running'))return self::worker_result(self::STATUS_FAILED,$id,$type,$this->tasks->fail($id,$lock,'Cleanup journal could not enter running state.',$now),0,'journal_indeterminate');
         if($this->local_job_active((int)$running['attachment_id']))return $this->block($id,$lock,$running,$now,'A local processing job raced with cleanup and local bytes were kept.');
         if(!self::video_context_valid($video,(int)$running['attachment_id'])||!self::attachment_exclusive_to_video((int)$running['attachment_id'],$video))return $this->block($id,$lock,$running,$now,'AWVP Video or attachment ownership changed after the cleanup fence.');
+        if(Local_Retention_Policy::deletes_source($policy)&&!$this->source_reference_safe((int)$running['attachment_id']))return $this->block($id,$lock,$running,$now,'Another WordPress post began directly referencing this local attachment after the cleanup fence; local bytes were kept.');
         $current_policy=$this->current_policy_for_execution($video,$running,$now,(bool)$payload['manual_cleanup']);
         if(array()===$current_policy)return $this->block($id,$lock,$running,$now,'Retention policy or archive authority changed after the cleanup fence; local bytes were kept.');
         $policy=$current_policy;
@@ -258,16 +266,18 @@ final class Local_Retention_Service
                 $source_policy=$this->current_policy_for_execution($video,$running,$now,(bool)$payload['manual_cleanup']);
                 if(array()===$source_policy||!Local_Retention_Policy::deletes_source($source_policy))return $this->block($id,$lock,$running,$now,'Source-deletion policy or archive authority changed immediately before physical source deletion.');
                 if(!$this->proof_matches($video,$running))return $this->block($id,$lock,$running,$now,'Required serving evidence changed immediately before physical source deletion.');
-                if(!WordPress_Source_File::matches((int)$running['attachment_id'],$running['source'])&&!(Local_Retention_Execution::STATUS_RUNNING===$execution['status']&&WordPress_Source_File::absent((int)$running['attachment_id'],$running['source'])))return $this->block($id,$lock,$running,$now,'WordPress source identity changed immediately before physical source deletion.');
-                $already_absent=Local_Retention_Execution::STATUS_RUNNING===$execution['status']&&WordPress_Source_File::absent((int)$running['attachment_id'],$running['source']);
-                if(!$already_absent&&!WordPress_Source_File::delete((int)$running['attachment_id'],$running['source']))throw new \RuntimeException('Physical WordPress source deletion could not be positively verified.');
-                $attachment=get_post((int)$running['attachment_id']);
-                if(!is_object($attachment)||'attachment'!==($attachment->post_type??null))throw new \RuntimeException('WordPress attachment identity did not survive physical cleanup.');
-                update_post_meta($video,Video_Meta::SOURCE_STATE,'removed');
-                if('removed'!==Video_Meta::sanitize_source_state(get_post_meta($video,Video_Meta::SOURCE_STATE,true)))throw new \RuntimeException('Source-state completion could not be persisted.');
+                $source_absent=Local_Retention_Execution::STATUS_RUNNING===$execution['status']&&$this->source_identity_absent((int)$running['attachment_id'],$running['source']);
+                if(!WordPress_Source_File::matches((int)$running['attachment_id'],$running['source'])&&!$source_absent)return $this->block($id,$lock,$running,$now,'WordPress source identity changed immediately before physical source deletion.');
+                if(Local_Retention_Policy::MODE_DELETE_ALL===$policy['mode']){
+                    if(!$this->retire_source_attachment($video,$running,$now,$source_absent))throw new \RuntimeException('WordPress source attachment retirement could not be positively verified.');
+                }else{
+                    if(!$source_absent&&!WordPress_Source_File::delete((int)$running['attachment_id'],$running['source']))throw new \RuntimeException('Physical WordPress source deletion could not be positively verified.');
+                    update_post_meta($video,Video_Meta::SOURCE_STATE,'removed');
+                    if('removed'!==Video_Meta::sanitize_source_state(get_post_meta($video,Video_Meta::SOURCE_STATE,true)))throw new \RuntimeException('Source-state completion could not be persisted.');
+                }
             }
         }catch(Throwable $e){
-            if(Local_Retention_Policy::deletes_source($policy)&&WordPress_Source_File::absent((int)$running['attachment_id'],$running['source'])){
+            if(Local_Retention_Policy::deletes_source($policy)&&$this->source_identity_absent((int)$running['attachment_id'],$running['source'])){
                 update_post_meta($video,Video_Meta::CLEANUP_STATE,'running');
                 return self::worker_result(self::STATUS_REQUEUED,$id,$type,$this->tasks->reschedule($id,$lock,$now+60,'Physical source is absent under a running cleanup journal; retrying local audit convergence.',$now),$now+60,'audit_retry');
             }
@@ -290,7 +300,7 @@ final class Local_Retention_Service
             $state=Video_Meta::sanitize_source_state(get_post_meta($video_id,Video_Meta::SOURCE_STATE,true));
             $cleanup=Video_Meta::sanitize_cleanup_state(get_post_meta($video_id,Video_Meta::CLEANUP_STATE,true));
             $policy=Local_Retention_Policy::sanitize(get_post_meta($video_id,Video_Meta::LOCAL_RETENTION_POLICY,true));
-            if('removed'===$state||in_array($cleanup,array('pending','eligible','running'),true)||('complete'===$cleanup&&array()!==$policy&&Local_Retention_Policy::destructive($policy)))return true;
+            if('removed'===$state||in_array($cleanup,array('pending','queued','eligible','running'),true)||('complete'===$cleanup&&array()!==$policy&&Local_Retention_Policy::destructive($policy)))return true;
         }
         return false;
     }
@@ -303,7 +313,7 @@ final class Local_Retention_Service
             $state=Video_Meta::sanitize_source_state(get_post_meta($video_id,Video_Meta::SOURCE_STATE,true));
             $cleanup=Video_Meta::sanitize_cleanup_state(get_post_meta($video_id,Video_Meta::CLEANUP_STATE,true));
             $policy=Local_Retention_Policy::sanitize(get_post_meta($video_id,Video_Meta::LOCAL_RETENTION_POLICY,true));
-            if('removed'===$state||'running'===$cleanup||('complete'===$cleanup&&array()!==$policy&&Local_Retention_Policy::destructive($policy)))return true;
+            if('removed'===$state||in_array($cleanup,array('queued','running'),true)||('complete'===$cleanup&&array()!==$policy&&Local_Retention_Policy::destructive($policy)))return true;
             $destination_exists=metadata_exists('post',$video_id,Video_Meta::DESTINATION);
             $destination=Video_Destination::resolve(get_post_meta($video_id,Video_Meta::DESTINATION,true),$destination_exists);
             if(array()===$destination||!Video_Destination::is_local($destination))return true;
@@ -328,6 +338,107 @@ final class Local_Retention_Service
         // phpcs:enable WordPress.DB.SlowDBQuery.slow_db_query_meta_key,WordPress.DB.SlowDBQuery.slow_db_query_meta_value
         if(!is_array($ids)||count($ids)>self::MAX_ATTACHMENT_REFERENCES)return null;
         return array_values(array_map('intval',$ids));
+    }
+
+    /**
+     * Reconcile attachments left behind by RC13.7 after a completed delete-all
+     * cleanup. Runs from the existing detached recovery cron and never from an
+     * administrator GET request.
+     */
+    public function reconcile_completed_retirements(): void
+    {
+        $now=time();
+        // This is upgrade debt reconciliation, not a permanent inventory scan. Query
+        // only source-removed Videos that still carry the obsolete attachment
+        // binding, so successfully retired rows disappear from later runs.
+        // phpcs:disable WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- Narrow recovery query over private AWVP Video metadata.
+        $ids=get_posts(array(
+            'post_type'=>Video_Post_Type::POST_TYPE,
+            'post_status'=>array('publish','future','draft','pending','private'),
+            'posts_per_page'=>-1,
+            'fields'=>'ids',
+            'orderby'=>'ID',
+            'order'=>'ASC',
+            'no_found_rows'=>true,
+            'meta_query'=>array(
+                'relation'=>'AND',
+                array('key'=>Video_Meta::SOURCE_STATE,'value'=>'removed','compare'=>'='),
+                array('key'=>Video_Meta::ATTACHMENT_ID,'compare'=>'EXISTS'),
+            ),
+        ));
+        // phpcs:enable WordPress.DB.SlowDBQuery.slow_db_query_meta_query
+        if(!is_array($ids))return;
+        foreach($ids as $raw){
+            $video_id=Video_Meta::sanitize_positive_id($raw);if($video_id<1)continue;
+            $attachment_id=Video_Meta::sanitize_positive_id(get_post_meta($video_id,Video_Meta::ATTACHMENT_ID,true));
+            if($attachment_id<1)continue;
+            $execution=Local_Retention_Execution::sanitize(get_post_meta($video_id,Video_Meta::LOCAL_RETENTION_EXECUTION,true));
+            if(array()===$execution||Local_Retention_Policy::MODE_DELETE_ALL!==($execution['mode']??null)||Local_Retention_Execution::STATUS_COMPLETE!==($execution['status']??null))continue;
+            if((int)$execution['attachment_id']!==$attachment_id||!$this->source_reference_safe($attachment_id)||!$this->proof_matches($video_id,$execution))continue;
+            $this->retire_source_attachment($video_id,$execution,$now,true);
+        }
+    }
+
+    private function source_reference_safe(int $attachment_id):bool
+    {
+        if($attachment_id<1||$this->references->truncated())return false;
+        return array()===$this->references->attachment_posts_for($attachment_id);
+    }
+
+    private function source_identity_absent(int $attachment_id,array $source):bool
+    {
+        return WordPress_Source_File::absent($attachment_id,$source)||WordPress_Source_File::identity_absent($source);
+    }
+
+    private function retire_source_attachment(int $video_id,array $execution,int $now,bool $source_absent):bool
+    {
+        $execution=Local_Retention_Execution::sanitize($execution);
+        if($video_id<1||$now<1||array()===$execution||Local_Retention_Policy::MODE_DELETE_ALL!==($execution['mode']??null))return false;
+        $attachment_id=(int)$execution['attachment_id'];$source=$execution['source'];
+        if($attachment_id<1||!$this->source_reference_safe($attachment_id))return false;
+        $tombstone=Source_Retirement_Record::sanitize(get_post_meta($video_id,Video_Meta::SOURCE_TOMBSTONE,true));
+        $attachment=get_post($attachment_id);
+        if(is_object($attachment)&&'attachment'===($attachment->post_type??null)){
+            if(array()===$tombstone){
+                // Persist attachment/source provenance before invoking the
+                // destructive WordPress attachment lifecycle. For a migrated
+                // RC13.7 record the source is already absent, so its completed
+                // execution time is an accurate source-removal time. A fresh
+                // delete-all records removed_at only after WordPress confirms
+                // attachment deletion.
+                $removed_at=$source_absent?(int)($execution['completed_at']??0):0;
+                if($source_absent&&$removed_at<1)$removed_at=$now;
+                $tombstone=Source_Retirement_Record::capture($attachment_id,$source,(int)$execution['task_id'],$removed_at);
+                if(array()===$tombstone)return false;
+                update_post_meta($video_id,Video_Meta::SOURCE_TOMBSTONE,$tombstone);
+                if($tombstone!==Source_Retirement_Record::sanitize(get_post_meta($video_id,Video_Meta::SOURCE_TOMBSTONE,true)))return false;
+            }
+            if(!$source_absent&&!WordPress_Source_File::matches($attachment_id,$source))return false;
+
+            // Delete-all retires the Media Library object through WordPress'
+            // attachment lifecycle. WordPress owns deletion of the attached
+            // source and attachment metadata; AWVP never unlinks the source or
+            // deletes attachment rows directly. Source-prune/keep-HLS uses the
+            // narrower WordPress_Source_File::delete() boundary instead because
+            // that mode intentionally keeps the attachment record.
+            $deleted=wp_delete_attachment($attachment_id,true);
+            if(false===$deleted||null!==get_post($attachment_id))return false;
+            if(!$this->source_identity_absent($attachment_id,$source))return false;
+            if((int)($tombstone['removed_at']??0)<1){
+                $tombstone=Source_Retirement_Record::with_removed_at($tombstone,$now);
+                if(array()===$tombstone)return false;
+                update_post_meta($video_id,Video_Meta::SOURCE_TOMBSTONE,$tombstone);
+                if($tombstone!==Source_Retirement_Record::sanitize(get_post_meta($video_id,Video_Meta::SOURCE_TOMBSTONE,true)))return false;
+            }
+        }elseif(array()===$tombstone){
+            return false;
+        }
+        if(!WordPress_Source_File::identity_absent($source))return false;
+        update_post_meta($video_id,Video_Meta::SOURCE_STATE,'removed');
+        delete_post_meta($video_id,Video_Meta::ATTACHMENT_ID);
+        return 'removed'===Video_Meta::sanitize_source_state(get_post_meta($video_id,Video_Meta::SOURCE_STATE,true))
+            &&0===Video_Meta::sanitize_positive_id(get_post_meta($video_id,Video_Meta::ATTACHMENT_ID,true))
+            &&array()!==Source_Retirement_Record::sanitize(get_post_meta($video_id,Video_Meta::SOURCE_TOMBSTONE,true));
     }
 
     /** @return array<string,mixed> */

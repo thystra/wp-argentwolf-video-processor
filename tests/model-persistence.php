@@ -141,6 +141,7 @@ $expected_meta = array(
     Video_Meta::INGEST_KIND,
     Video_Meta::MASTER_AUTHORITY,
     Video_Meta::SOURCE_STATE,
+    Video_Meta::SOURCE_TOMBSTONE,
     Video_Meta::DESTINATION,
     Video_Meta::PEERTUBE_PUBLICATION_PLAN,
     Video_Meta::PEERTUBE_PUBLICATION_LIFECYCLE,

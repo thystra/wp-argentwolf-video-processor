@@ -140,7 +140,9 @@ The **History & Logs** tab is a read-only view of bounded retained publication e
 
 R46.8 adds the explicit **Start migration** step for a `ready` plan. Starting is a one-way local commitment: AWVP revalidates current source/provider/default/thumbnail evidence, journals the exact migration plan, promotes its publication plan and target destination, and then invokes the existing durable publication synchronizer. Remote upload/publication and verified serving cutover continue through the already-qualified R46.5/R46.6 paths; R46.8 adds no parallel uploader or frontend path.
 
-R46.9 retention controls are exposed on the **Local Retention** tab. WordPress is the Archive of Record by default, so deletion of original Media Library videos is blocked unless an administrator explicitly changes that site-wide authority policy. The tab provides one **Server default retention policy** plus a compact searchable/filterable video list for bulk changes instead of requiring a full policy form for every video. The bulk list has its own **Policy to apply** selector, so an administrator can change selected videos without first changing the server default. A cleanup delay of `0` days means **Manual cleanup only**; a selected batch can snapshot the server delay, manual-only behavior, or a finite per-video delay without changing the site default. **Remove local copies now** is a separate explicit action: when WordPress is not the Archive of Record, it applies zero-day remove-all semantics to the selected videos and queues immediate cleanup without changing the server default. An operator may keep all local copies, remove only generated local delivery copies while retaining the original, remove the original while retaining positively verified AWVP-managed HLS delivery, or—only after verified remote publication—remove both the original and generated local delivery copies. Destructive work remains detached and fail-closed: the worker revalidates archive authority, the exact retained delivery proof (remote serving or local HLS), local-job quiescence, attachment ownership, effective policy, and exact source identity immediately before deletion. Physical-source cleanup never deletes the WordPress attachment record; any uncertainty keeps local data.
+R46.9 retention controls are exposed on the **Local Retention** tab. WordPress is the Archive of Record by default, so deletion of original Media Library videos is blocked unless an administrator explicitly changes that site-wide authority policy. The tab provides one **Server default retention policy** plus a compact searchable/filterable video list for selected-video changes. The list has its own **Policy for selected videos** selector, so an administrator can change checked videos without first changing the server default. A cleanup delay of `0` days means **Never automatically clean up**; finite 1-365 day values schedule automatic cleanup. **Remove local copies now** is a separate one-time command: when WordPress is not the Archive of Record it persists **Queued for immediate removal**, then the detached worker rechecks archive authority, retained-delivery proof, processing state, attachment ownership, direct WordPress references, and exact source identity before changing media.
+
+Managed-only cleanup keeps the original. Source-prune/keep-HLS removes only the exact original through WordPress's `wp_delete_file()` boundary and intentionally preserves the attachment because the retained local delivery remains attachment-scoped. Delete-all requires verified remote serving, records a durable source tombstone, and then retires the Media Library attachment through WordPress's `wp_delete_attachment()` lifecycle so a nonexistent local video is not left reusable in the Media Library. The AWVP Video remains as the durable remote-only identity with its serving authority, remote UUID, tombstone, and history. Core Video blocks, legacy video shortcodes, literal local video/source URLs, or an incomplete reference scan fail closed before attachment retirement. No attachment row is deleted with raw SQL and no WordPress source is removed through an ad-hoc unlink path.
 
 ## WP-CLI
 
@@ -188,10 +190,7 @@ notification/no-replay, drain, one-shot, and R44 matrices.
 
 Metadata removal applies to generated derivatives and adaptive renditions. Local
 processing does not alter the original source, which may retain its original
-metadata. R46.9 retention defaults to keeping all local copies; physical source
-deletion is available only after an explicit non-WordPress master-authority
-decision, delayed verified PeerTube cutover, and the fail-closed cleanup checks.
-The WordPress attachment record itself is preserved.
+metadata. R46.9 retention defaults to keeping all local copies; physical source deletion is available only after an explicit non-WordPress archive decision, verified retained serving, and fail-closed cleanup checks. Source-prune/keep-HLS preserves the attachment. Delete-all records source provenance and retires the Media Library attachment through WordPress's attachment lifecycle, while the AWVP Video remains as the remote-only durable identity.
 
 The public WordPress.org 1.0 release remains local and the plugin contains no
 telemetry. The 2.0 release-candidate line adds an opt-in, operator-configured
@@ -278,7 +277,7 @@ the same advisory registry with their own capability and NVD link.
 
 Public WordPress.org stable release: `1.0.0`.
 
-Current controlled development candidate: `2.0.0-rc13.7`. RC packages are built
+Current controlled development candidate: `2.0.0-rc13.8`. RC packages are built
 from reviewed Forgejo commits and are not published to WordPress.org SVN. The
 public Stable tag remains `1.0.0` until final `2.0.0` promotion.
 

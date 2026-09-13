@@ -91,6 +91,11 @@ $assert(str_contains($remote_without_source, '<iframe') && str_contains($remote_
 $GLOBALS['awvp_block_posts'][20]->url = 'https://example.test/uploads/local.mp4';
 $GLOBALS['awvp_block_posts'][20]->post_mime_type = 'video/mp4';
 
+unset($GLOBALS['awvp_block_meta'][101][Video_Meta::ATTACHMENT_ID]);
+$remote_after_retirement = $remote_block->render(array('videoId'=>101));
+$assert(str_contains($remote_after_retirement, '<iframe') && str_contains($remote_after_retirement, 'video.example.org/videos/embed/'), 'Remote-only AWVP Video stopped rendering after attachment retirement.');
+$GLOBALS['awvp_block_meta'][101][Video_Meta::ATTACHMENT_ID] = 20;
+
 $assert('' === $block->render(array()), 'Unbound block unexpectedly rendered frontend output.');
 $assert('' === $block->render(array('videoId'=>999)), 'Unknown AWVP Video unexpectedly rendered frontend output.');
 $GLOBALS['awvp_block_posts'][20]->post_mime_type = 'image/jpeg';
@@ -124,6 +129,10 @@ $assert(str_contains($js, "publication.plan_status === 'channel_mismatch'"), 'Pu
 $assert(str_contains($js, "lockPostSaving(editorialLockName)") && str_contains($js, "unlockPostSaving(editorialLockName)"), 'Editor does not lock only the publicational save boundary while review is unresolved.');
 $assert(str_contains($js, "['publish', 'future', 'private']"), 'Editor publication lock does not cover publish/schedule/private transitions.');
 $assert(str_contains($js, "origin_post_id"), 'Editor publication lock cannot distinguish the original anchor from reused blocks.');
+$assert(str_contains($js, "if (state.video.remote_only)"), 'Remote-only AWVP Videos still enter the local-source editorial publication gate.');
+$assert(str_contains($js, "state && state.video && !state.video.remote_only"), 'Remote-only AWVP Videos still load a mutable PeerTube publishing panel.');
+$assert(str_contains($js, "state.video.remote_only && state.video.remote_embed_url"), 'Remote-only AWVP Videos do not expose their verified remote preview in the editor.');
+$assert(str_contains($js, "allow: 'fullscreen; picture-in-picture'"), 'Remote-only editor iframe grants unexpected autoplay capability or lost the reviewed allow list.');
 $assert(str_contains($js, 'tagsDraftText') && str_contains($js, 'setTagsDraftText(value)'), 'PeerTube tag textarea does not preserve raw in-progress spaces/newlines.');
 $assert(1 === substr_count($js, "label: __('I reviewed these PeerTube publishing settings'"), 'Publication wizard does not expose one consolidated explicit-review checkbox.');
 foreach (array('I reviewed the PeerTube title','I reviewed the channel','I reviewed the PeerTube tags','I reviewed the final privacy','I reviewed the sensitive-content declaration') as $old_review_label) {

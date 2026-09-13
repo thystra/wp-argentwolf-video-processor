@@ -20,6 +20,9 @@ function sanitize_key(mixed $value): string
     return preg_replace('/[^a-z0-9_\-]/', '', $value) ?? '';
 }
 function esc_url_raw(string $url): string { return $url; }
+function wp_parse_url(string $url): array|false { return parse_url($url); }
+function sanitize_file_name(string $value): string { return preg_replace('/[^A-Za-z0-9._-]/', '-', $value) ?? ''; }
+function sanitize_mime_type(string $value): string { return preg_replace('/[^A-Za-z0-9.+\/-]/', '', $value) ?? ''; }
 function absint(mixed $value): int { return abs((int) $value); }
 function get_option(string $name, mixed $default = false): mixed
 {
@@ -121,6 +124,9 @@ require_once dirname(__DIR__) . '/includes/PeerTube_Migration_Execution.php';
 require_once dirname(__DIR__) . '/includes/Video_Publishing_Defaults.php';
 require_once dirname(__DIR__) . '/includes/Video_Publishing_Defaults_Store.php';
 require_once dirname(__DIR__) . '/includes/Video_Post_Type.php';
+require_once dirname(__DIR__) . '/includes/WordPress_Source_File.php';
+require_once dirname(__DIR__) . '/includes/Source_Retirement_Record.php';
+require_once dirname(__DIR__) . '/includes/Video_Serving_Authority.php';
 require_once dirname(__DIR__) . '/includes/Video_Meta.php';
 require_once dirname(__DIR__) . '/includes/Video_Block_Editor_Service.php';
 
@@ -242,6 +248,33 @@ $assert('pt-primary' === ($state['video']['destination']['backend_id'] ?? ''), '
 $assert('local' === ($state['site_default']['backend_id'] ?? ''), 'Editor state did not expose current site default separately from stored destination.');
 $option_ids = array_column($state['destinations'] ?? array(), 'backend_id');
 $assert(array('local','pt-primary') === $option_ids, 'Editor destination options drifted from active local/PeerTube backends.');
+
+// A retired local attachment leaves the durable AWVP Video usable as a remote-only block identity.
+unset($GLOBALS['awvp_editor_meta'][$video_id][Video_Meta::PEERTUBE_MIGRATION_EXECUTION]);
+$source_identity = array('relative_path'=>'2026/09/clip.mp4','bytes'=>123,'device'=>1,'inode'=>2,'mtime'=>3,'ctime'=>4);
+$GLOBALS['awvp_editor_meta'][$video_id][Video_Meta::SOURCE_STATE] = 'removed';
+$GLOBALS['awvp_editor_meta'][$video_id][Video_Meta::SOURCE_TOMBSTONE] = array(
+    'version'=>1,'former_attachment_id'=>20,'attachment_title'=>'Legacy Clip','filename'=>'clip.mp4','mime_type'=>'video/mp4',
+    'relative_path'=>'2026/09/clip.mp4','bytes'=>123,'source_identity'=>$source_identity,'retention_task_id'=>55,'removed_at'=>$now+40,
+);
+$GLOBALS['awvp_editor_meta'][$video_id][Video_Meta::SERVING_AUTHORITY] = array(
+    'version'=>2,'mode'=>'peertube','basis'=>'operator_verified_remote','backend_id'=>'pt-primary','channel_id'=>'77',
+    'anchor_post_id'=>10,'generation'=>2,'plan_sha256'=>str_repeat('a',64),'manifest_sha256'=>str_repeat('b',64),
+    'remote_asset_id'=>9,'remote_uuid'=>'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+    'embed_url'=>'https://video.example.org/videos/embed/remote-only','privacy_id'=>'2','verified_at'=>$now+40,
+);
+unset($GLOBALS['awvp_editor_meta'][$video_id][Video_Meta::ATTACHMENT_ID]);
+$remote_state = $service->editor_state($video_id);
+$assert(is_array($remote_state), 'Remote-only AWVP Video disappeared from editor state after attachment retirement.');
+$assert(true === ($remote_state['video']['remote_only'] ?? false), 'Retired attachment was not represented as remote-only editor state.');
+$assert(0 === ($remote_state['video']['attachment_id'] ?? -1) && '' === ($remote_state['video']['attachment_url'] ?? 'x'), 'Remote-only editor state still exposes a local attachment.');
+$assert('https://video.example.org/videos/embed/remote-only' === ($remote_state['video']['remote_embed_url'] ?? ''), 'Remote-only editor state lost verified PeerTube embed URL.');
+$assert(Video_Block_Editor_Service::REFUSED === $service->set_destination($video_id, 'local')['status'], 'Remote-only AWVP Video allowed destination mutation without attaching a new local source.');
+
+// Restore the local fixture for the remaining lock/binding tests.
+$GLOBALS['awvp_editor_meta'][$video_id][Video_Meta::ATTACHMENT_ID] = 20;
+$GLOBALS['awvp_editor_meta'][$video_id][Video_Meta::SOURCE_STATE] = 'present';
+unset($GLOBALS['awvp_editor_meta'][$video_id][Video_Meta::SOURCE_TOMBSTONE], $GLOBALS['awvp_editor_meta'][$video_id][Video_Meta::SERVING_AUTHORITY]);
 
 // Active lock makes the bind busy; stale lock is recovered safely.
 $lock_name_21 = 'argentwolf_video_processor_attachment_bind_lock_' . hash('sha256', '21');

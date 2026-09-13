@@ -245,7 +245,12 @@ final class Publication_History_Admin
         if ($attachment_id > 0) {
             $path = get_attached_file($attachment_id);
             if (is_string($path) && '' !== $path) {
-                $filename = basename($path);
+                $filename = wp_basename($path);
+            }
+        } elseif ($video_id > 0) {
+            $tombstone = Source_Retirement_Record::sanitize(get_post_meta($video_id, Video_Meta::SOURCE_TOMBSTONE, true));
+            if (array() !== $tombstone) {
+                $filename = (string) $tombstone['filename'];
             }
         }
         $origin_id = $video_id > 0 ? Video_Meta::sanitize_positive_id(get_post_meta($video_id, Video_Meta::ORIGIN_POST_ID, true)) : 0;

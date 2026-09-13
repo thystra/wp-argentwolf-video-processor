@@ -14,8 +14,19 @@ namespace {
 
     function get_posts(array $args): array
     {
-        unset($args);
+        $GLOBALS['awvp_reference_query_args'] = $args;
         return array_keys($GLOBALS['awvp_reference_posts']);
+    }
+
+    function get_post_types(array $args = array(), string $output = 'names'): array
+    {
+        unset($args, $output);
+        return array('post','page','attachment','revision','argent_video','wp_block','shop_order');
+    }
+
+    function post_type_supports(string $post_type, string $feature): bool
+    {
+        return 'editor' === $feature && in_array($post_type, array('post','page','shop_order'), true);
     }
 
     function get_post(int $post_id): ?object
@@ -83,6 +94,14 @@ namespace {
     $assert(true === ($rows[0]['is_origin'] ?? false), 'Stored origin post was not marked as origin.');
     $assert('draft' === ($rows[3]['status'] ?? ''), 'Reference post status was not preserved.');
     $assert(false === $index->truncated(), 'Small reference fixture was unexpectedly marked truncated.');
+    $scan_types = $GLOBALS['awvp_reference_query_args']['post_type'] ?? array();
+    $assert(is_array($scan_types) && ! in_array('attachment', $scan_types, true) && ! in_array('revision', $scan_types, true) && ! in_array('argent_video', $scan_types, true), 'Reference scan spent its safety limit on attachment/revision/AWVP post types.');
+    $assert(in_array('wp_block', $scan_types, true), 'Reference scan excluded reusable block content that can retain a direct attachment reference.');
+
+    $attachment_rows = $index->attachment_posts_for(200);
+    $attachment_ids = array_map(static fn(array $row): int => (int) $row['id'], $attachment_rows);
+    $assert(array(11,12,13) === $attachment_ids, 'Attachment-only reference discovery did not return core/shortcode/classic references.');
+    $assert(! in_array(10, $attachment_ids, true), 'AWVP Video block was incorrectly treated as a direct attachment reference.');
 
     $source = (string) file_get_contents(dirname(__DIR__) . '/includes/Video_Reference_Index.php');
     foreach (array('update_post_meta','delete_post_meta','wp_update_post','wp_delete_post','wp_remote_') as $forbidden) {

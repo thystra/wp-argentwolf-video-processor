@@ -129,6 +129,7 @@ final class Uninstall_Data
             '_argent_video_status',
             '_argentwolf_video_processor_local_delivery_rebuild_request',
             '_argentwolf_video_processor_remote_health_operator_check',
+            '_argentwolf_video_processor_source_tombstone',
         );
     }
 

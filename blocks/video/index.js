@@ -95,6 +95,9 @@
         if (!state || !state.video) {
             return { applicable: true, ready: false, detail: __('AWVP is still validating this video.', 'argentwolf-video-processor') };
         }
+        if (state.video.remote_only) {
+            return { applicable: false, ready: true, detail: '' };
+        }
         const originPostId = Number(state.video.origin_post_id || 0);
         if (originPostId > 0 && editorPostId > 0 && originPostId !== editorPostId) {
             return { applicable: false, ready: true, detail: '' };
@@ -169,7 +172,8 @@
             return function () { active = false; };
         }, [videoId]);
 
-        const publicationBackend = state && state.video && state.video.destination_valid && state.video.destination
+        const publicationBackend = state && state.video && !state.video.remote_only
+            && state.video.destination_valid && state.video.destination
             && state.video.destination.backend_id !== 'local'
             ? state.video.destination.backend_id : '';
 
@@ -600,8 +604,10 @@
                         ? el(Notice, { status: 'warning', isDismissible: false }, __('The stored destination is invalid. Choose an explicit destination to repair it.', 'argentwolf-video-processor')) : null,
                     el(SelectControl, {
                         label: __('Final destination', 'argentwolf-video-processor'), value: current, options: options,
-                        disabled: loading || saving || options.length === 0, onChange: chooseDestination,
-                        help: __('Destination selection remains planning state. Local WordPress playback stays authoritative until a later verified cutover.', 'argentwolf-video-processor')
+                        disabled: loading || saving || options.length === 0 || !!(state && state.video && state.video.remote_only), onChange: chooseDestination,
+                        help: state && state.video && state.video.remote_only
+                            ? __('This AWVP Video is remote-only because its local source was removed. Attach a new local source before changing its destination.', 'argentwolf-video-processor')
+                            : __('Destination selection remains planning state. Local WordPress playback stays authoritative until a later verified cutover.', 'argentwolf-video-processor')
                     })
                 ),
                 publicationPanel()
@@ -610,8 +616,20 @@
             loading ? el(Spinner) : null,
             state && state.video
                 ? el('div', null,
-                    el('strong', null, state.video.attachment_title || __('WordPress video', 'argentwolf-video-processor')),
-                    state.video.attachment_url ? el('video', { controls: true, preload: 'metadata', src: state.video.attachment_url, style: { width: '100%', marginTop: '0.75rem' } }) : null,
+                    el('strong', null, state.video.attachment_title || __('AWVP video', 'argentwolf-video-processor')),
+                    state.video.remote_only
+                        ? el(Notice, { status: 'info', isDismissible: false }, __('The local WordPress source was removed. This block continues to use the verified remote video.', 'argentwolf-video-processor'))
+                        : null,
+                    state.video.remote_only && state.video.remote_embed_url
+                        ? el('iframe', {
+                            src: state.video.remote_embed_url,
+                            title: state.video.attachment_title || __('AWVP video', 'argentwolf-video-processor'),
+                            loading: 'lazy',
+                            allow: 'fullscreen; picture-in-picture',
+                            allowFullScreen: true,
+                            style: { width: '100%', aspectRatio: '16 / 9', marginTop: '0.75rem', border: 0 }
+                        })
+                        : (state.video.attachment_url ? el('video', { controls: true, preload: 'metadata', src: state.video.attachment_url, style: { width: '100%', marginTop: '0.75rem' } }) : null),
                     el('p', null, state.video.destination_valid && state.video.destination
                         ? __('Destination:', 'argentwolf-video-processor') + ' ' + state.video.destination.label
                         : __('Destination needs review.', 'argentwolf-video-processor'))

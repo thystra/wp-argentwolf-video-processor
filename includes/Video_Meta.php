@@ -15,6 +15,7 @@ final class Video_Meta
     public const INGEST_KIND = '_argent_video_ingest_kind';
     public const MASTER_AUTHORITY = '_argent_video_master_authority';
     public const SOURCE_STATE = '_argent_video_source_state';
+    public const SOURCE_TOMBSTONE = '_argentwolf_video_processor_source_tombstone';
     public const DESTINATION = '_argent_video_destination';
     public const PEERTUBE_PUBLICATION_PLAN = '_argent_video_peertube_publication_plan';
     public const PEERTUBE_PUBLICATION_LIFECYCLE = '_argent_video_peertube_publication_lifecycle';
@@ -74,6 +75,10 @@ final class Video_Meta
             self::SOURCE_STATE => $base + array(
                 'type'              => 'string',
                 'sanitize_callback' => array(self::class, 'sanitize_source_state'),
+            ),
+            self::SOURCE_TOMBSTONE => $base + array(
+                'type'              => 'array',
+                'sanitize_callback' => array(self::class, 'sanitize_source_tombstone'),
             ),
             self::DESTINATION => $base + array(
                 'type'              => 'array',
@@ -215,6 +220,12 @@ final class Video_Meta
     }
 
     /** @return array<string, mixed> */
+    /** @return array<string,mixed> */
+    public static function sanitize_source_tombstone(mixed $value): array
+    {
+        return Source_Retirement_Record::sanitize($value);
+    }
+
     public static function sanitize_destination(mixed $value): array
     {
         return Video_Destination::sanitize($value);
@@ -379,7 +390,7 @@ final class Video_Meta
     {
         return self::enum(
             $value,
-            array('none', 'held', 'pending', 'eligible', 'running', 'complete', 'blocked', 'failed'),
+            array('none', 'held', 'pending', 'queued', 'eligible', 'running', 'complete', 'blocked', 'failed'),
             'none'
         );
     }

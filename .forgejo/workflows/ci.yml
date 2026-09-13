@@ -108,6 +108,7 @@ jobs:
           php tests/local-retention-policy.php
           php tests/archive-of-record-policy.php
           php tests/wordpress-source-file.php
+          php tests/source-retirement-record.php
           php tests/local-retention-service.php
           php tests/local-retention-admin.php
           php tests/peertube-migration-plan.php
@@ -242,6 +243,7 @@ jobs:
           grep -qx 'argentwolf-video-processor/includes/Remote_Health_Operator_Service.php' "${MANIFEST}"
           grep -qx 'argentwolf-video-processor/includes/Verified_Remote_Asset_Refresher.php' "${MANIFEST}"
           grep -qx 'argentwolf-video-processor/includes/PeerTube_Verified_Remote_Asset_Refresher.php' "${MANIFEST}"
+          grep -qx 'argentwolf-video-processor/includes/Source_Retirement_Record.php' "${MANIFEST}"
           grep -qx 'argentwolf-video-processor/includes/Local_Delivery_Rebuild_Request.php' "${MANIFEST}"
           grep -qx 'argentwolf-video-processor/includes/Local_Delivery_Rebuild_Service.php' "${MANIFEST}"
           grep -qx 'argentwolf-video-processor/includes/Remote_Republish_Request.php' "${MANIFEST}"

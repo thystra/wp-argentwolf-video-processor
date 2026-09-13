@@ -100,6 +100,7 @@ final class Video_Routing_Admin
             $serving = $this->serving->serving_candidate($video_id);
             $policy = Local_Retention_Policy::sanitize(get_post_meta($video_id, Video_Meta::LOCAL_RETENTION_POLICY, true));
             $remote_assets = null !== $this->remote_assets ? $this->remote_assets->serving_candidates_for_video($video_id) : array();
+            $tombstone = Source_Retirement_Record::sanitize(get_post_meta($video_id, Video_Meta::SOURCE_TOMBSTONE, true));
             $health = null !== $this->health ? $this->health->for_video($video_id) : array();
             $original_present = $attachment_id > 0 && array() !== WordPress_Source_File::capture($attachment_id);
             $local_delivery_present = $attachment_id > 0 && '' !== Local_Delivery_Evidence::available_hls_url($attachment_id);
@@ -108,6 +109,7 @@ final class Video_Routing_Admin
                 'video_title'       => sanitize_text_field((string) ($post->post_title ?? '')),
                 'attachment_id'     => $attachment_id,
                 'attachment_name'   => $this->attachment_name($attachment_id),
+                'source_tombstone'  => $tombstone,
                 'origin_post_id'    => $origin_post_id,
                 'references'        => $this->references->posts_for($video_id, $attachment_id, $origin_post_id),
                 'destination'       => $destination,
@@ -142,6 +144,13 @@ final class Video_Routing_Admin
                         __('Attachment #%1$d — %2$s', 'argentwolf-video-processor'),
                         (int) $row['attachment_id'],
                         (string) $row['attachment_name']
+                    )); ?></span>
+                <?php elseif (is_array($row['source_tombstone']) && array() !== $row['source_tombstone']) : ?>
+                    <br><span class="description"><?php echo esc_html(sprintf(
+                        /* translators: 1: former WordPress attachment ID, 2: former filename. */
+                        __('Local source retired — former attachment #%1$d (%2$s)', 'argentwolf-video-processor'),
+                        (int) $row['source_tombstone']['former_attachment_id'],
+                        (string) $row['source_tombstone']['filename']
                     )); ?></span>
                 <?php endif; ?>
             </td>
