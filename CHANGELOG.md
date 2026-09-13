@@ -1,3 +1,10 @@
+## 2.0.0-rc13.7 - 2026-09-12
+
+- Restore a safe operator path for old terminal finalization gaps: when AWVP knows the exact remote asset but cannot safely replay the finalizer, Overview now exposes **Check now** for that existing publication and, after a fresh successful check, the existing **Use verified remote now** adoption path. The UI no longer tells operators to use an unavailable Resume action for this state.
+- Separate Local Retention's site default from per-video bulk assignment. The cleanup list now has its own **Policy to apply** selector, so selected videos can receive Keep, managed-only cleanup, source-prune/keep-HLS, or remove-all behavior without changing the server default.
+- Rename the explicit destructive bulk action to **Remove local copies now** and make its meaning literal: when WordPress is not the Archive of Record, it applies a zero-day remove-original-and-generated-local-copies policy to the selected videos and queues the existing detached cleanup path. Verified remote serving, source identity, active-processing, archive, and managed-filesystem safety gates remain mandatory.
+- Add regression coverage for terminal finalizer recovery controls and for immediate remove-local-copies behavior when the server default remains **Keep all local copies**.
+
 ## 2.0.0-rc13.6 - 2026-09-12
 
 - Fix the live operator-verified remote recovery case exposed by video 7961: after a fresh healthy visitor-facing check, re-read the exact PeerTube publication and refresh stale local remote-asset visibility facts only when UUID, channel, reviewed final privacy, published state, and embed identity all match. The provider check is read-only and historical finalizer/applied-manifest state remains untouched.

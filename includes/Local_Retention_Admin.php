@@ -167,7 +167,9 @@ final class Local_Retention_Admin
         }
 
         $counts = array('applied'=>0, 'present'=>0, 'refused'=>0, 'indeterminate'=>0);
-        $mode = $this->default_policy->mode();
+        $mode = isset($_POST['selected_retention_mode']) && is_string($_POST['selected_retention_mode'])
+            ? Local_Retention_Default_Policy_Store::sanitize_mode(sanitize_key(wp_unslash($_POST['selected_retention_mode'])))
+            : '';
         $grace_mode = isset($_POST['grace_mode']) && is_string($_POST['grace_mode'])
             ? sanitize_key(wp_unslash($_POST['grace_mode']))
             : 'site';
@@ -230,28 +232,7 @@ final class Local_Retention_Admin
                 ++$counts['refused'];
                 continue;
             }
-            $policy = Local_Retention_Policy::sanitize(get_post_meta($video_id, Video_Meta::LOCAL_RETENTION_POLICY, true));
-            if (array() === $policy) {
-                $default_mode = $this->default_policy->mode();
-                if (Local_Retention_Policy::MODE_KEEP === $default_mode) {
-                    ++$counts['refused'];
-                    continue;
-                }
-                // Snapshot the currently displayed server default before queuing
-                // manual cleanup so the detached worker has durable policy authority.
-                $configured = $this->service->configure_for_site_policy(
-                    $video_id,
-                    $default_mode,
-                    $actor,
-                    $now,
-                    null
-                );
-                if (! in_array((string) ($configured['status'] ?? ''), array(Local_Retention_Service::APPLIED, Local_Retention_Service::PRESENT), true)) {
-                    ++$counts['refused'];
-                    continue;
-                }
-            }
-            $result = $this->service->cleanup_now($video_id, $actor, $now);
+            $result = $this->service->remove_local_copies_now($video_id, $actor, $now);
             $status = (string) ($result['status'] ?? Local_Retention_Service::INDETERMINATE);
             if (! array_key_exists($status, $counts)) {
                 $status = 'indeterminate';
@@ -326,7 +307,7 @@ final class Local_Retention_Admin
         </form>
 
         <h3><?php esc_html_e('Server default retention policy', 'argentwolf-video-processor'); ?></h3>
-        <p><?php esc_html_e('This is the retention policy applied to videos you select in the cleanup list below. Existing per-video policy remains unchanged until that video is selected and the default is applied again.', 'argentwolf-video-processor'); ?></p>
+        <p><?php esc_html_e('This is the default shown for videos that do not have a per-video override. Changing it does not rewrite existing video policies. The selected-video controls below let you choose a different policy without changing this server default.', 'argentwolf-video-processor'); ?></p>
         <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" style="max-width:70em;margin-bottom:1.5em">
             <input type="hidden" name="action" value="<?php echo esc_attr(self::ACTION_DEFAULT_POLICY); ?>">
             <?php wp_nonce_field(self::NONCE_DEFAULT_POLICY); ?>
@@ -374,10 +355,24 @@ final class Local_Retention_Admin
             </table>
             <p class="description" id="awvp-retention-filter-count"></p>
             <p>
-                <button type="submit" class="button button-primary" name="action" value="<?php echo esc_attr(self::ACTION_BULK_APPLY); ?>"><?php esc_html_e('Apply retention settings to selected videos', 'argentwolf-video-processor'); ?></button>
-                <button type="submit" class="button" name="action" value="<?php echo esc_attr(self::ACTION_BULK_CLEANUP); ?>"><?php esc_html_e('Clean up selected now', 'argentwolf-video-processor'); ?></button>
+                <label for="awvp-selected-retention-mode"><strong><?php esc_html_e('Policy for selected videos', 'argentwolf-video-processor'); ?></strong></label>
+                <select id="awvp-selected-retention-mode" name="selected_retention_mode">
+                    <option value="keep"<?php selected((string) $default_policy['mode'], Local_Retention_Policy::MODE_KEEP); ?>><?php esc_html_e('Keep all local copies', 'argentwolf-video-processor'); ?></option>
+                    <option value="delete_managed"<?php selected((string) $default_policy['mode'], Local_Retention_Policy::MODE_DELETE_MANAGED); ?>><?php esc_html_e('Keep original; remove generated local delivery copies', 'argentwolf-video-processor'); ?></option>
+                    <?php if (! $wordpress_archive) : ?>
+                        <option value="delete_source_keep_delivery"<?php selected((string) $default_policy['mode'], Local_Retention_Policy::MODE_DELETE_SOURCE_KEEP_DELIVERY); ?>><?php esc_html_e('Remove original; keep verified local HLS delivery copies', 'argentwolf-video-processor'); ?></option>
+                        <option value="delete_all"<?php selected((string) $default_policy['mode'], Local_Retention_Policy::MODE_DELETE_ALL); ?>><?php esc_html_e('Remove original and generated local delivery copies after verified remote publication', 'argentwolf-video-processor'); ?></option>
+                    <?php endif; ?>
+                </select>
+                <button type="submit" class="button button-primary" name="action" value="<?php echo esc_attr(self::ACTION_BULK_APPLY); ?>"><?php esc_html_e('Apply selected retention policy', 'argentwolf-video-processor'); ?></button>
+                <button type="submit" class="button" name="action" value="<?php echo esc_attr(self::ACTION_BULK_CLEANUP); ?>"<?php disabled($wordpress_archive); ?>><?php esc_html_e('Remove local copies now', 'argentwolf-video-processor'); ?></button>
             </p>
-            <p class="description"><?php esc_html_e('Clean up selected now bypasses only the waiting period. AWVP still requires the configured cleanup mode and every archive, serving, processing, source-identity, and managed-filesystem safety check.', 'argentwolf-video-processor'); ?></p>
+            <p class="description"><?php esc_html_e('The policy dropdown applies only to Apply selected retention policy and does not change the server default. Remove local copies now is a separate immediate action and does not use the dropdown.', 'argentwolf-video-processor'); ?></p>
+            <?php if ($wordpress_archive) : ?>
+                <p class="description"><?php esc_html_e('Remove local copies now is unavailable while WordPress is the Archive of Record. Change the archive policy first if the originals are safely retained elsewhere.', 'argentwolf-video-processor'); ?></p>
+            <?php else : ?>
+                <p class="description"><?php esc_html_e('Remove local copies now applies the remove-original-and-generated-local-copies policy to the checked videos and queues removal immediately. It does not change the server default. AWVP still requires verified remote serving and every source-identity, processing, archive, and managed-filesystem safety check.', 'argentwolf-video-processor'); ?></p>
+            <?php endif; ?>
         </form>
         <?php
     }
@@ -423,7 +418,7 @@ final class Local_Retention_Admin
         } elseif (1 === preg_match('/^cleanup-(\d+)-(\d+)-(\d+)-(\d+)$/D', $notice, $m)) {
             $message = sprintf(
                 /* translators: 1: queued count, 2: already-current count, 3: refused count, 4: indeterminate count. */
-                __('Manual cleanup result: %1$d queued, %2$d already queued, %3$d refused, %4$d indeterminate.', 'argentwolf-video-processor'),
+                __('Remove local copies result: %1$d queued, %2$d already queued, %3$d refused by safety checks, %4$d indeterminate.', 'argentwolf-video-processor'),
                 (int) $m[1], (int) $m[2], (int) $m[3], (int) $m[4]
             );
         } else {

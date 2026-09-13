@@ -111,6 +111,43 @@ final class Local_Retention_Service
         return $this->schedule_internal($video_id,$now,true,$user_id);
     }
 
+    /**
+     * Explicit administrator request to remove every local copy for one Video.
+     * This does not depend on the server default. It first requires a currently
+     * viable verified remote publication, then snapshots a zero-day delete-all
+     * policy and queues the normal detached cleanup path. The worker re-checks
+     * the same safety boundaries before deleting bytes.
+     *
+     * @return array{status:string,task_id:int,eligible_at:int}
+     */
+    public function remove_local_copies_now(int $video_id,int $user_id,int $now):array
+    {
+        if($video_id<1||$user_id<1||$now<1||null===$this->archive_policy||!$this->archive_policy->source_deletion_allowed())return self::schedule_result(self::REFUSED);
+        $video=get_post($video_id);
+        if(!is_object($video)||Video_Post_Type::POST_TYPE!==($video->post_type??null)||'trash'===($video->post_status??null))return self::schedule_result(self::REFUSED);
+        $state=Video_Meta::sanitize_source_state(get_post_meta($video_id,Video_Meta::SOURCE_STATE,true));
+        if(!in_array($state,array('present','verified_remote'),true))return self::schedule_result(self::REFUSED);
+        $attachment_id=Video_Meta::sanitize_positive_id(get_post_meta($video_id,Video_Meta::ATTACHMENT_ID,true));
+        if($attachment_id<1||!self::video_context_valid($video_id,$attachment_id)||!self::attachment_exclusive_to_video($attachment_id,$video_id))return self::schedule_result(self::REFUSED);
+        if($this->local_job_active($attachment_id))return self::schedule_result(self::REFUSED);
+        $existing=metadata_exists('post',$video_id,Video_Meta::LOCAL_RETENTION_EXECUTION)
+            ?Local_Retention_Execution::sanitize(get_post_meta($video_id,Video_Meta::LOCAL_RETENTION_EXECUTION,true)):array();
+        if(array()!==$existing&&Local_Retention_Execution::STATUS_RUNNING===($existing['status']??null))return self::schedule_result(self::REFUSED);
+        $authority=Video_Serving_Authority::sanitize(get_post_meta($video_id,Video_Meta::SERVING_AUTHORITY,true));
+        if(array()===$authority||!$this->required_remote_publications_verified($video_id))return self::schedule_result(self::REFUSED);
+        if(array()===WordPress_Source_File::capture($attachment_id))return self::schedule_result(self::REFUSED);
+
+        $configured=$this->configure_for_site_policy(
+            $video_id,
+            Local_Retention_Policy::MODE_DELETE_ALL,
+            $user_id,
+            $now,
+            0
+        );
+        if(!in_array($configured['status']??null,array(self::APPLIED,self::PRESENT),true))return self::schedule_result((string)($configured['status']??self::INDETERMINATE));
+        return $this->cleanup_now($video_id,$user_id,$now);
+    }
+
     /** @return array{status:string,task_id:int,eligible_at:int} */
     private function schedule_internal(int $video_id,int $now,bool $manual,int $actor_id):array
     {

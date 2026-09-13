@@ -184,7 +184,7 @@ The existing settings keys, queue table, attachment metadata, hook names, cron
 identifiers, Settings page slug, and `wp argent-video` command are retained for
 upgrade compatibility.
 
-This Forgejo release-candidate package identifies itself as `2.0.0-rc13.6` in the
+This Forgejo release-candidate package identifies itself as `2.0.0-rc13.7` in the
 plugin header while `Stable tag: 1.0.0` deliberately continues to identify the
 public WordPress.org release. RC packages are not published to WordPress.org SVN.
 The Stable tag moves to `2.0.0` only when the final release is promoted.
@@ -194,6 +194,9 @@ Administrators upgrading from version 0.2.3 should use the normal WordPress
 plugin-update workflow and confirm the plugin remains active.
 
 == Upgrade Notice ==
+
+= 2.0.0-rc13.7 =
+RC13 series build 7. Restores safe manual recovery controls for terminal finalization gaps and separates per-video retention policy selection from an explicit Remove local copies now action. WordPress.org remains on 1.0.0.
 
 = 2.0.0-rc13.6 =
 RC13 series build 6. Fixes adoption of a freshly verified PeerTube publication when local remote visibility is stale, records explicit recovery pass/fail/refusal history, and replaces customer-facing engineering terminology with plain language. WordPress.org remains on 1.0.0.
@@ -271,6 +274,12 @@ Renames the public plugin and package to ArgentWolf Video Processor and prepares
 the project for WordPress.org review while retaining existing data identifiers.
 
 == Changelog ==
+
+= 2.0.0-rc13.7 =
+* Exposes Check now for terminal finalization gaps that still have an exact known remote asset; after a successful check, Use verified remote now can adopt the existing publication without replaying the unsafe finalizer.
+* Replaces stale Resume guidance for terminal finalization gaps with the safe check-and-adopt path.
+* Adds a per-selection retention-policy dropdown so bulk policy changes do not require changing the server default.
+* Renames the immediate destructive action to Remove local copies now and makes it apply zero-day remove-all semantics to selected videos while retaining verified-remote, archive, processing, source-identity, and confined-filesystem safety gates.
 
 = 2.0.0-rc13.6 =
 * Re-verifies exact PeerTube provider state before operator adoption and refreshes stale local remote-asset visibility only after UUID, channel, reviewed final privacy, published state, and embed identity all match.

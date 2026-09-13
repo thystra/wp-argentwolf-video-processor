@@ -7,7 +7,7 @@ declare(strict_types=1);
 
 namespace ArgentVideo;
 
-/** Site-wide policy template applied by the Local Retention bulk workflow. */
+/** Site-wide default retention policy and initial bulk-selection choice. */
 final class Local_Retention_Default_Policy_Store
 {
     public const OPTION = 'argentwolf_video_processor_local_retention_default';

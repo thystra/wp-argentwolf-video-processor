@@ -55,7 +55,8 @@ namespace ArgentVideo {
         public function targets():array{return array('pt-primary'=>'PeerTube primary');}
     }
     final class Remote_Health_Operator_Service {
-        public function restore_available(int $video_id,int $asset_id,int $now):bool{unset($video_id,$now);return 55===$asset_id;}
+        public function __construct(public bool $restorable=false){}
+        public function restore_available(int $video_id,int $asset_id,int $now):bool{unset($video_id,$now);return $this->restorable&&55===$asset_id;}
     }
     final class Local_Delivery_Rebuild_Service {
         public function source_available(int $video_id):bool{return 101===$video_id;}
@@ -80,7 +81,7 @@ namespace {
     $assert=static function(bool $ok,string $m):void{if(!$ok){fwrite(STDERR,"FAIL: {$m}\n");exit(1);}};
     $op='upload_'.str_repeat('a',32);
     $GLOBALS['awvp_overview_meta'][101][Video_Meta::DESTINATION]=array('backend_id'=>'pt-primary','channel_id'=>'2');
-    $GLOBALS['awvp_overview_meta'][101][Video_Meta::PEERTUBE_PUBLICATION_EXECUTION]=array('operation_id'=>$op,'remote_uuid'=>'uuid');
+    $GLOBALS['awvp_overview_meta'][101][Video_Meta::PEERTUBE_PUBLICATION_EXECUTION]=array('operation_id'=>$op,'remote_uuid'=>'uuid','remote_asset_id'=>55);
     $GLOBALS['awvp_overview_meta'][101][Video_Meta::ATTACHMENT_ID]=20;
     $GLOBALS['awvp_overview_meta'][101][Video_Meta::ORIGIN_POST_ID]=10;
     $GLOBALS['awvp_overview_meta'][20]['_wp_attached_file']='2026/09/test5.mp4';
@@ -95,12 +96,15 @@ namespace {
     $assert(1===count($missingRows)&&true===($missingRows[0]['needs_attention']??false)&&str_contains((string)($missingRows[0]['status_label']??''),'restoring'),'Ready remote with a missing current-generation finalizer disappeared from Overview.');
 
     $terminalRecovery=new PeerTube_Incomplete_Work_Reconciler(array(101=>array('status'=>'finalizer_terminal','pending'=>true,'eligible'=>false,'resumable'=>false,'origin_at'=>900,'expires_at'=>0,'anchor_post_id'=>10)));
-    $overviewTerminal=new PeerTube_Overview_Admin($store,$terminalRecovery,new PeerTube_Event_Repository(),new Remote_Publication_Health_Repository(),new Video_Serving_Service());
+    $overviewTerminal=new PeerTube_Overview_Admin($store,$terminalRecovery,new PeerTube_Event_Repository(),new Remote_Publication_Health_Repository(),new Video_Serving_Service(),null,null,null,null,null,null,new \ArgentVideo\Remote_Health_Operator_Service());
     $terminalRows=$overviewTerminal->rows(1000);
     $assert(1===count($terminalRows)&&true===($terminalRows[0]['needs_attention']??false)&&str_contains((string)($terminalRows[0]['status_label']??''),'stopped before serving'),'Terminal finalization gap disappeared from Overview.');
+    $assert(55===(int)($terminalRows[0]['remote_asset_id']??0)&&true===($terminalRows[0]['health_check_available']??false),'Terminal finalization gap did not expose Check now for the existing known remote asset.');
+    $assert(false===($terminalRows[0]['health_restore_available']??true),'Terminal finalization gap exposed verified-remote adoption before a fresh successful check.');
+    $assert(str_contains((string)($terminalRows[0]['operator_guidance']??''),'Check now')&&str_contains((string)($terminalRows[0]['operator_guidance']??''),'Use verified remote now'),'Terminal finalization guidance still points to an unavailable or unsafe Resume path.');
 
     $health=new Remote_Publication_Health_Repository(array(55=>array('remote_asset_id'=>55,'video_post_id'=>101,'backend_id'=>'pt-primary','status'=>'missing','eligible'=>0,'failure_since'=>'2026-09-10 20:00:00','last_healthy_at'=>'2026-09-10 19:00:00','http_status'=>404,'message'=>'The published URL returned 404.')));
-    $overview=new PeerTube_Overview_Admin($store,new PeerTube_Incomplete_Work_Reconciler(),new PeerTube_Event_Repository(),$health,new Video_Serving_Service(),null,null,null,null,null,null,new \ArgentVideo\Remote_Health_Operator_Service(),new \ArgentVideo\Local_Delivery_Rebuild_Service());
+    $overview=new PeerTube_Overview_Admin($store,new PeerTube_Incomplete_Work_Reconciler(),new PeerTube_Event_Repository(),$health,new Video_Serving_Service(),null,null,null,null,null,null,new \ArgentVideo\Remote_Health_Operator_Service(true),new \ArgentVideo\Local_Delivery_Rebuild_Service());
     $rows=$overview->rows(1000);
     $assert(1===count($rows),'A missing remote publication was not surfaced in Needs Attention.');
     $assert(true===($rows[0]['needs_attention']??false),'Remote health issue was not marked as needing attention.');
@@ -117,7 +121,7 @@ namespace {
     // must remain recoverable through Check now -> Use verified remote now.
     $GLOBALS['awvp_overview_meta'][101][Video_Meta::PEERTUBE_PUBLICATION_EXECUTION]['remote_asset_id']=55;
     $healthyGap=new Remote_Publication_Health_Repository(array(55=>array('remote_asset_id'=>55,'video_post_id'=>101,'backend_id'=>'pt-primary','status'=>'healthy','eligible'=>1,'failure_since'=>'','last_healthy_at'=>'2026-09-12 15:00:00','http_status'=>200,'message'=>'Visitor-facing embed is healthy.')));
-    $overviewGap=new PeerTube_Overview_Admin($store,new PeerTube_Incomplete_Work_Reconciler(),new PeerTube_Event_Repository(),$healthyGap,new Video_Serving_Service(),null,null,null,new Remote_Republish_Service(),null,null,new \ArgentVideo\Remote_Health_Operator_Service(),new \ArgentVideo\Local_Delivery_Rebuild_Service());
+    $overviewGap=new PeerTube_Overview_Admin($store,new PeerTube_Incomplete_Work_Reconciler(),new PeerTube_Event_Repository(),$healthyGap,new Video_Serving_Service(),null,null,null,new Remote_Republish_Service(),null,null,new \ArgentVideo\Remote_Health_Operator_Service(true),new \ArgentVideo\Local_Delivery_Rebuild_Service());
     $gapRows=$overviewGap->rows(1002);
     $assert(1===count($gapRows)&&str_contains((string)($gapRows[0]['status_label']??''),'serving authority'),'Healthy remote without serving authority disappeared from Needs Attention.');
     $assert(55===(int)($gapRows[0]['remote_asset_id']??0)&&true===($gapRows[0]['health_check_available']??false),'Healthy authority gap did not expose Check now for the exact known remote asset.');

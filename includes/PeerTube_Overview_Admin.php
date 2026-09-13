@@ -561,7 +561,8 @@ final class PeerTube_Overview_Admin
                                 <?php if ((int) $event['http_status'] > 0) : ?><p><strong><?php esc_html_e('HTTP status:', 'argentwolf-video-processor'); ?></strong> <?php echo esc_html((string) $event['http_status']); ?></p><?php endif; ?>
                                 <p><?php echo esc_html((string) $event['message']); ?></p>
                                 <?php if ('' !== (string) $event['automatic_action']) : ?><p><strong><?php esc_html_e('Automatic action:', 'argentwolf-video-processor'); ?></strong> <?php echo esc_html((string) $event['automatic_action']); ?></p><?php endif; ?>
-                                <?php if ('' !== (string) $event['operator_action']) : ?><p><strong><?php esc_html_e('Suggested operator action:', 'argentwolf-video-processor'); ?></strong> <?php echo esc_html((string) $event['operator_action']); ?></p><?php endif; ?>
+                                <?php $operator_guidance = '' !== (string) ($row['operator_guidance'] ?? '') ? (string) $row['operator_guidance'] : (string) $event['operator_action']; ?>
+                                <?php if ('' !== $operator_guidance) : ?><p><strong><?php esc_html_e('Suggested operator action:', 'argentwolf-video-processor'); ?></strong> <?php echo esc_html($operator_guidance); ?></p><?php endif; ?>
                                 <?php if (array() !== $row['events']) : ?>
                                     <p><strong><?php esc_html_e('Recent activity', 'argentwolf-video-processor'); ?></strong></p>
                                     <ul>
@@ -1112,7 +1113,10 @@ final class PeerTube_Overview_Admin
             $backend_id = Backend_Identity::sanitize((string) ($destination['backend_id'] ?? ''));
         }
 
-        $remote_asset_id = is_array($health_issue) ? (int) ($health_issue['remote_asset_id'] ?? 0) : 0;
+        $execution_remote_asset_id = (int) ($execution['remote_asset_id'] ?? 0);
+        $remote_asset_id = is_array($health_issue)
+            ? (int) ($health_issue['remote_asset_id'] ?? 0)
+            : $execution_remote_asset_id;
         $checkable_statuses = array(
             Serving_Viability::HEALTHY,
             Serving_Viability::MISSING,
@@ -1121,12 +1125,27 @@ final class PeerTube_Overview_Admin
             Serving_Viability::TEMPORARILY_UNAVAILABLE,
             Serving_Viability::PROBE_INDETERMINATE,
         );
-        $health_check_available = null !== $this->health_operator && $remote_asset_id > 0 && is_array($health_issue)
-            && in_array((string) ($health_issue['status'] ?? ''), $checkable_statuses, true);
+        $terminal_finalizer = 'finalizer_terminal' === (string) ($recovery['status'] ?? '');
+        $terminal_authority_gap = false;
+        if ($terminal_finalizer && $execution_remote_asset_id > 0) {
+            $authority = Video_Serving_Authority::sanitize(
+                get_post_meta($video_id, Video_Meta::SERVING_AUTHORITY, true)
+            );
+            $terminal_authority_gap = array() === $authority
+                || $execution_remote_asset_id !== (int) ($authority['remote_asset_id'] ?? 0);
+        }
+        $health_check_available = null !== $this->health_operator && $remote_asset_id > 0
+            && (
+                (is_array($health_issue) && in_array((string) ($health_issue['status'] ?? ''), $checkable_statuses, true))
+                || $terminal_authority_gap
+            );
         $health_restore_available = null !== $this->health_operator && $remote_asset_id > 0
             && $this->health_operator->restore_available($video_id, $remote_asset_id, $now);
         $local_rebuild_available = null !== $this->local_rebuild && is_array($health_issue)
             && $this->local_rebuild->source_available($video_id);
+        $operator_guidance = $terminal_authority_gap
+            ? __('Run Check now to verify the existing PeerTube publication. If it passes, use Use verified remote now. Republish only when a new remote publication is intended.', 'argentwolf-video-processor')
+            : '';
 
         return array(
             'video_id' => $video_id,
@@ -1157,6 +1176,7 @@ final class PeerTube_Overview_Admin
             'health_check_available' => $health_check_available,
             'health_restore_available' => $health_restore_available,
             'local_rebuild_available' => $local_rebuild_available,
+            'operator_guidance' => $operator_guidance,
             'issue_fingerprint' => $fingerprint,
             'action_url' => '',
             'action_label' => '',

@@ -78,24 +78,24 @@ immediately before completion and then survives database persistence.
 
 ## 2.0 RC validation
 
-The active `2.0.0-rc13.6` payload upgrades from the exact public `1.0.0` package and
+The active `2.0.0-rc13.7` payload upgrades from the exact public `1.0.0` package and
 requires the exact candidate SHA-256 at invocation time until the canonical
-Forgejo RC artifact is selected. RC13.6 carries forward the RC13.3 clean/upgrade
+Forgejo RC artifact is selected. RC13.7 carries forward the RC13.3 clean/upgrade
 contract while exercising the RC9 live-test fixes, model DB schema version 3 /
 `argent_video_events` + `argent_video_publication_health`, explicit legacy 1.x
 migration adoption, visitor-facing public-URL serving qualification, and runtime
 serving cutover/failover foundations. Earlier RC packages remain immutable qualification or
-live-test evidence; creating RC13.6 does not rewrite their payloads, including the frozen RC13.3, RC13.2, and RC10 payloads.
+live-test evidence; creating RC13.7 does not rewrite their payloads, including the frozen RC13.3, RC13.2, and RC10 payloads.
 
 ```bash
 AWVP_RC_CANDIDATE_SHA256=<sha256-of-exact-candidate-zip> \
 ARTIFACT_DIR=/path/to/release-zips \
-bash tests/release-validation/run.sh 2.0.0-rc13.6
+bash tests/release-validation/run.sh 2.0.0-rc13.7
 ```
 
 The upgrade fixture creates a real WordPress `core/video` block while 1.0 is
 active, backed by a real uploads-tree attachment and an existing AWVP-managed
-local derivative. The RC13.6 upgrade must preserve the block's stored
+local derivative. The RC13.7 upgrade must preserve the block's stored
 `post_content`, attachment relationship and legacy processing metadata,
 source/derivative bytes, and completed legacy queue row. Merely upgrading must
 not mass-convert the Core Video block, create an AWVP Video object for it,
@@ -107,7 +107,7 @@ remote publication so the unchanged historical Core Video block must render the
 verified short-ID PeerTube iframe at runtime without altering stored content or
 the WordPress original source.
 
-RC13.6 additionally asserts the packaged operator-facing routing/history surfaces, zero-day manual-only retention default, source-prune/keep-HLS mode, cleanup-now with legacy queued-task compatibility, distinct operator-verified serving authority, explicit Check now / Use verified remote now / Rebuild local delivery recovery actions, registered durable recovery metadata, and separate Private/Unlisted pre-publication visibility. These assertions are runtime/package contracts only; the release harness does not contact PeerTube or production WordPress. RC13.6 also requires the verified-remote refresher interfaces/classes used by live operator adoption; live provider reconciliation itself remains a production acceptance test because the disposable harness intentionally performs no PeerTube action.
+RC13.7 additionally asserts the packaged operator-facing routing/history surfaces, zero-day manual-only retention default, source-prune/keep-HLS mode, cleanup-now with legacy queued-task compatibility, distinct operator-verified serving authority, explicit Check now / Use verified remote now / Rebuild local delivery recovery actions, registered durable recovery metadata, and separate Private/Unlisted pre-publication visibility. These assertions are runtime/package contracts only; the release harness does not contact PeerTube or production WordPress. RC13.7 also requires the verified-remote refresher interfaces/classes used by live operator adoption; live provider reconciliation itself remains a production acceptance test because the disposable harness intentionally performs no PeerTube action. RC13.7 additionally requires the explicit remove-local-copies service boundary used by the revised bulk retention UI; terminal-finalizer Check-now exposure remains covered by dependency-free Overview tests.
 
 The shared runner now collects independent Plugin Check modes and disposable case assertion failures through the end of the viable matrix, then exits nonzero with an aggregate summary. Global artifact/harness identity failures still stop immediately, and a case-local setup failure aborts only that disposable case.
 
