@@ -1,10 +1,11 @@
-## RC13.8 source retirement / RC13.9 embedding
+## RC13.8 source retirement / RC13.9 reconciliation / RC13.10 embedding
 
 - [x] RC13.8: keep AWVP Video as durable identity after verified delete-all source retirement.
 - [x] RC13.8: persist immediate-cleanup queued/running/completed presentation and a source-retirement tombstone.
 - [x] RC13.8: fail closed on direct non-AWVP WordPress attachment references or an incomplete reference scan.
 - [x] RC13.8: retire delete-all Media Library attachments only through WordPress attachment lifecycle APIs.
-- [ ] RC13.9: add provider-neutral embedding so any supported public PeerTube URL can be embedded without configuring that server as a publishing backend; design provider adapters for later YouTube support.
+- [x] RC13.9: let completed-cleanup reconciliation tolerate a newer serving verification timestamp only when durable remote publication identity is unchanged and current remote serving remains verified.
+- [ ] RC13.10: add provider-neutral embedding so any supported public PeerTube URL can be embedded without configuring that server as a publishing backend; design provider adapters for later YouTube support.
 
 # ArgentWolf Video Processor TODO
 

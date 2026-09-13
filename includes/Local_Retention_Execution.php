@@ -148,6 +148,17 @@ final class Local_Retention_Execution
     public static function authority_sha256(array $a):string{$a=Video_Serving_Authority::sanitize($a);if(array()===$a)return'';$j=wp_json_encode($a,JSON_UNESCAPED_SLASHES);return is_string($j)?hash('sha256','awvp-serving-authority:v1:'.$j):'';}
     public static function proof_kind(array $r):string{$r=self::sanitize($r);if(array()===$r)return'';return self::LEGACY_VERSION===$r['version']?self::PROOF_REMOTE:(string)$r['proof_kind'];}
     public static function proof_sha256(array $r):string{$r=self::sanitize($r);if(array()===$r)return'';return self::LEGACY_VERSION===$r['version']?(string)$r['authority_sha256']:(string)$r['proof_sha256'];}
+    public static function remote_identity_matches_authority(array $r,array $authority):bool
+    {
+        $r=self::sanitize($r);$authority=Video_Serving_Authority::sanitize($authority);
+        if(array()===$r||array()===$authority||self::VERSION!==$r['version']||self::PROOF_REMOTE!==$r['proof_kind'])return false;
+        return $r['backend_id']===$authority['backend_id']
+            &&(int)$r['serving_generation']===(int)$authority['generation']
+            &&hash_equals((string)$r['plan_sha256'],(string)$authority['plan_sha256'])
+            &&hash_equals((string)$r['manifest_sha256'],(string)$authority['manifest_sha256'])
+            &&(int)$r['remote_asset_id']===(int)$authority['remote_asset_id']
+            &&$r['remote_uuid']===$authority['remote_uuid'];
+    }
     public static function task_backend_id(array $r):?string{$r=self::sanitize($r);if(array()===$r)return null;return self::LEGACY_VERSION===$r['version']?null:(string)$r['backend_id'];}
     public static function task_remote_asset_id(array $r):?int{$r=self::sanitize($r);if(array()===$r)return null;$id=(int)$r['remote_asset_id'];return $id>0?$id:null;}
     public static function local_delivery(array $r):array{$r=self::sanitize($r);return array()!==$r&&self::VERSION===$r['version']&&self::PROOF_LOCAL_HLS===$r['proof_kind']?(array)$r['local_delivery']:array();}

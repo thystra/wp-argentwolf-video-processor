@@ -374,7 +374,7 @@ final class Local_Retention_Service
             if($attachment_id<1)continue;
             $execution=Local_Retention_Execution::sanitize(get_post_meta($video_id,Video_Meta::LOCAL_RETENTION_EXECUTION,true));
             if(array()===$execution||Local_Retention_Policy::MODE_DELETE_ALL!==($execution['mode']??null)||Local_Retention_Execution::STATUS_COMPLETE!==($execution['status']??null))continue;
-            if((int)$execution['attachment_id']!==$attachment_id||!$this->source_reference_safe($attachment_id)||!$this->proof_matches($video_id,$execution))continue;
+            if((int)$execution['attachment_id']!==$attachment_id||!$this->source_reference_safe($attachment_id)||!$this->completed_retirement_proof_matches($video_id,$execution))continue;
             $this->retire_source_attachment($video_id,$execution,$now,true);
         }
     }
@@ -467,6 +467,23 @@ final class Local_Retention_Service
         $authority=Video_Serving_Authority::sanitize(get_post_meta($video_id,Video_Meta::SERVING_AUTHORITY,true));
         return array()!==$authority
             &&hash_equals(Local_Retention_Execution::proof_sha256($execution),Local_Retention_Execution::authority_sha256($authority))
+            &&$this->required_remote_publications_verified($video_id);
+    }
+
+    /**
+     * Completed RC13.7 delete-all records may outlive the serving authority's
+     * verification timestamp. Preserve strict full-proof matching for active
+     * source deletion, but let upgrade reconciliation accept a newer verified_at
+     * only when every durable remote-publication identity field is unchanged.
+     */
+    private function completed_retirement_proof_matches(int $video_id,array $execution):bool
+    {
+        $execution=Local_Retention_Execution::sanitize($execution);
+        if(array()===$execution||Local_Retention_Execution::STATUS_COMPLETE!==($execution['status']??null)
+            ||Local_Retention_Policy::MODE_DELETE_ALL!==($execution['mode']??null))return false;
+        $authority=Video_Serving_Authority::sanitize(get_post_meta($video_id,Video_Meta::SERVING_AUTHORITY,true));
+        return array()!==$authority
+            &&Local_Retention_Execution::remote_identity_matches_authority($execution,$authority)
             &&$this->required_remote_publications_verified($video_id);
     }
 

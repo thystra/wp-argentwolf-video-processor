@@ -1,3 +1,10 @@
+## 2.0.0-rc13.9 - 2026-09-13
+
+- Fix completed RC13.7/RC13.8 delete-all attachment reconciliation after routine remote-health refresh advances serving-authority `verified_at`. The migration now compares the completed cleanup journal against durable publication identity (backend, generation, plan, manifest, remote asset, and UUID) while still requiring current verified remote serving.
+- Keep active destructive cleanup unchanged: source deletion continues to require the exact full serving-proof hash immediately before physical deletion. The relaxed comparison is limited to already-completed cleanup whose source bytes are already absent.
+- Fail closed when any durable remote-publication identity field changes, and add regression coverage for both timestamp-only refresh and remote-UUID drift.
+- Carry forward the RC13.8 qualification-harness correction so release payloads verify remote-only rendering behavior rather than an incidental implementation token.
+
 ## 2.0.0-rc13.8 - 2026-09-12
 
 - Treat **Remove local copies now** as a durable one-time command: accepted work is stored as **Queued for immediate removal**, advances through the detached worker, and no longer relies on a retention-delay sentinel. `0` continues to mean Never automatically clean up.

@@ -212,47 +212,47 @@ awvp_release_assert(
     && method_exists(\ArgentVideo\Local_Delivery_Rebuild_Service::class, 'request')
     && method_exists(\ArgentVideo\Local_Retention_Service::class, 'remove_local_copies_now')
     && method_exists(\ArgentVideo\Local_Retention_Service::class, 'reconcile_completed_retirements'),
-    'RC13.8 operator recovery/retention/source-retirement runtime methods are unavailable.'
+    'RC13.9 operator recovery/retention/source-retirement runtime methods are unavailable.'
 );
 awvp_release_assert(
     defined(\ArgentVideo\Video_Meta::class . '::SOURCE_TOMBSTONE')
     && '_argentwolf_video_processor_source_tombstone' === \ArgentVideo\Video_Meta::SOURCE_TOMBSTONE
     && registered_meta_key_exists('post', \ArgentVideo\Video_Meta::SOURCE_TOMBSTONE, \ArgentVideo\Video_Post_Type::POST_TYPE),
-    'RC13.8 source-retirement tombstone metadata is not registered.'
+    'RC13.9 source-retirement tombstone metadata is not registered.'
 );
 $service_source = (string) file_get_contents(WP_PLUGIN_DIR . '/argentwolf-video-processor/includes/Local_Retention_Service.php');
 awvp_release_assert(
     str_contains($service_source, 'wp_delete_attachment($attachment_id,true)')
     && str_contains($service_source, 'Source_Retirement_Record::capture')
     && ! str_contains($service_source, 'DELETE FROM'),
-    'RC13.8 WordPress attachment lifecycle contract is not packaged.'
+    'RC13.9 WordPress attachment lifecycle contract is not packaged.'
 );
 
 awvp_release_assert(
     interface_exists(\ArgentVideo\Video_Serving_Resolver::class)
     && class_exists(\ArgentVideo\Video_Block::class)
     && method_exists(\ArgentVideo\Video_Serving_Resolver::class, 'peertube_embed_url'),
-    'RC13.8 remote-only block serving interfaces are not packaged.'
+    'RC13.9 remote-only block serving interfaces are not packaged.'
 );
 
 $remote_only_video_id = wp_insert_post(
     array(
         'post_type'   => \ArgentVideo\Video_Post_Type::POST_TYPE,
         'post_status' => 'publish',
-        'post_title'  => 'RC13.8 remote-only qualification fixture',
+        'post_title'  => 'RC13.9 remote-only qualification fixture',
     ),
     true
 );
 awvp_release_assert(
     ! is_wp_error($remote_only_video_id) && (int) $remote_only_video_id > 0,
-    'RC13.8 remote-only block qualification fixture could not be created.'
+    'RC13.9 remote-only block qualification fixture could not be created.'
 );
 
 $remote_only_resolver = new class implements \ArgentVideo\Video_Serving_Resolver {
     public function peertube_embed_url(int $video_id): string
     {
         unset($video_id);
-        return 'https://video.example.test/videos/embed/rc13-8-remote-only';
+        return 'https://video.example.test/videos/embed/rc13-9-remote-only';
     }
 };
 $remote_only_block = new \ArgentVideo\Video_Block($remote_only_resolver);
@@ -261,9 +261,68 @@ wp_delete_post((int) $remote_only_video_id, true);
 
 awvp_release_assert(
     str_contains($remote_only_html, 'awvp-peertube-embed')
-    && str_contains($remote_only_html, 'https://video.example.test/videos/embed/rc13-8-remote-only')
+    && str_contains($remote_only_html, 'https://video.example.test/videos/embed/rc13-9-remote-only')
     && ! str_contains($remote_only_html, '<video'),
-    'RC13.8 remote-only AWVP Video did not render through its verified-remote serving resolver without a local attachment.'
+    'RC13.9 remote-only AWVP Video did not render through its verified-remote serving resolver without a local attachment.'
 );
 
-echo "AWVP_RC13_8_LIVEFIX_CONTRACT_PASS\n";
+awvp_release_assert(
+    method_exists(\ArgentVideo\Local_Retention_Execution::class, 'remote_identity_matches_authority'),
+    'RC13.9 completed-retirement durable remote-identity comparison is not packaged.'
+);
+$retirement_authority = \ArgentVideo\Video_Serving_Authority::sanitize(array(
+    'version' => 1,
+    'mode' => 'peertube',
+    'backend_id' => 'release-fixture',
+    'channel_id' => '2',
+    'anchor_post_id' => 1,
+    'generation' => 3,
+    'plan_sha256' => str_repeat('a', 64),
+    'manifest_sha256' => str_repeat('b', 64),
+    'remote_asset_id' => 6,
+    'remote_uuid' => 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+    'embed_url' => 'https://video.example.test/videos/embed/rc13-9-retirement',
+    'privacy_id' => '2',
+    'verified_at' => 1000,
+));
+$retirement_policy = \ArgentVideo\Local_Retention_Policy::create(
+    \ArgentVideo\Local_Retention_Policy::MODE_DELETE_ALL,
+    0,
+    1,
+    1000
+);
+$retirement_source = array(
+    'relative_path' => '2026/09/rc13-9-retirement.mp4',
+    'bytes' => 10,
+    'device' => 1,
+    'inode' => 2,
+    'mtime' => 3,
+    'ctime' => 4,
+);
+$retirement_execution = \ArgentVideo\Local_Retention_Execution::create_remote(
+    1,
+    2,
+    $retirement_policy,
+    $retirement_authority,
+    $retirement_source,
+    1,
+    1000,
+    1000
+);
+$newer_authority = $retirement_authority;
+$newer_authority['verified_at'] = 2000;
+awvp_release_assert(
+    array() !== $retirement_execution
+    && \ArgentVideo\Local_Retention_Execution::proof_sha256($retirement_execution)
+        !== \ArgentVideo\Local_Retention_Execution::authority_sha256($newer_authority)
+    && \ArgentVideo\Local_Retention_Execution::remote_identity_matches_authority($retirement_execution, $newer_authority),
+    'RC13.9 completed-retirement identity must tolerate verified_at refresh without weakening the active full-proof hash.'
+);
+$changed_authority = $newer_authority;
+$changed_authority['remote_uuid'] = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+awvp_release_assert(
+    ! \ArgentVideo\Local_Retention_Execution::remote_identity_matches_authority($retirement_execution, $changed_authority),
+    'RC13.9 completed-retirement identity did not fail closed after durable remote UUID drift.'
+);
+
+echo "AWVP_RC13_9_LIVEFIX_CONTRACT_PASS\n";

@@ -186,7 +186,7 @@ The existing settings keys, queue table, attachment metadata, hook names, cron
 identifiers, Settings page slug, and `wp argent-video` command are retained for
 upgrade compatibility.
 
-This Forgejo release-candidate package identifies itself as `2.0.0-rc13.8` in the
+This Forgejo release-candidate package identifies itself as `2.0.0-rc13.9` in the
 plugin header while `Stable tag: 1.0.0` deliberately continues to identify the
 public WordPress.org release. RC packages are not published to WordPress.org SVN.
 The Stable tag moves to `2.0.0` only when the final release is promoted.
@@ -196,6 +196,9 @@ Administrators upgrading from version 0.2.3 should use the normal WordPress
 plugin-update workflow and confirm the plugin remains active.
 
 == Upgrade Notice ==
+
+= 2.0.0-rc13.9 =
+RC13 series build 9. Fixes completed source-retirement reconciliation after normal remote verification refreshes the serving timestamp, while retaining strict fail-closed publication identity checks. WordPress.org remains on 1.0.0.
 
 = 2.0.0-rc13.8 =
 RC13 series build 8. Retires safely removed source attachments through WordPress lifecycle APIs, preserves remote-only AWVP Video identity and provenance, and makes immediate cleanup state explicit. WordPress.org remains on 1.0.0.
@@ -279,6 +282,12 @@ Renames the public plugin and package to ArgentWolf Video Processor and prepares
 the project for WordPress.org review while retaining existing data identifiers.
 
 == Changelog ==
+
+= 2.0.0-rc13.9 =
+* Allows already-completed delete-all migration to retire a stale Media Library attachment after routine remote verification advances only the serving-authority timestamp.
+* Requires backend, serving generation, publication plan, applied manifest, remote asset ID, and remote UUID to remain unchanged, and still requires current verified remote serving.
+* Leaves the active destructive cleanup proof unchanged: exact full serving-proof matching remains mandatory before physical source deletion.
+* Adds positive timestamp-refresh and negative durable-identity-drift regression coverage, and carries forward the corrected behavioral remote-only qualification assertion.
 
 = 2.0.0-rc13.8 =
 * Persists Queued for immediate removal / Removal in progress states for accepted manual cleanup instead of exposing scheduled-cleanup implementation state.
