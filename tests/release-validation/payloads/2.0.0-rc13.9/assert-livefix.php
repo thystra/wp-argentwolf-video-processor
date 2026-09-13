@@ -281,7 +281,7 @@ $retirement_authority = \ArgentVideo\Video_Serving_Authority::sanitize(array(
     'manifest_sha256' => str_repeat('b', 64),
     'remote_asset_id' => 6,
     'remote_uuid' => 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
-    'embed_url' => 'https://video.example.test/videos/embed/rc13-9-retirement',
+    'embed_url' => 'https://video.example.com/videos/embed/rc13-9-retirement',
     'privacy_id' => '2',
     'verified_at' => 1000,
 ));
