@@ -527,3 +527,27 @@ not by itself require rebuilding the candidate. Classify the failure first.
 ## RC13.8 source-retirement regression
 
 Source-retirement changes must prove both WordPress lifecycle use and remote-only continuity. Dependency-free tests must cover direct-reference fail-closed behavior, durable source tombstones, `wp_delete_attachment()` retirement for delete-all, retained attachment behavior for source-prune/keep-HLS, completed-RC13.7 reconciliation, remote-only frontend/editor rendering, uninstall metadata ownership, and exact package payload assertions. The delete-all path must not use raw SQL to remove Media Library records or an ad-hoc unlink for the WordPress source.
+
+### RC13.8 qualification harness amendment 1
+
+Failure signature: all six clean/upgrade matrix cases failed only in
+`assert-livefix.php` with `RC13.8 WordPress attachment lifecycle / remote-only
+rendering contract is not packaged`, while exact candidate byte identity and all
+preceding functional phases passed.
+
+Root cause: the payload used a brittle source-token assertion that required the
+string `Video_Serving_Authority` inside `Video_Block.php`. RC13.8 correctly
+implements remote-only rendering through the `Video_Serving_Resolver` interface,
+so the verifier asserted an implementation token that the working runtime does
+not and should not need to contain.
+
+Prevention rule: release payloads should test stable runtime contracts and
+observable behavior rather than incidental class-name text in source files.
+Source inspection remains appropriate only for negative/authority boundaries
+that cannot safely be exercised in a disposable WordPress fixture.
+
+Regression guard: the RC13.8 payload now creates a disposable AWVP Video with no
+attachment, supplies a `Video_Serving_Resolver`, and requires the dynamic AWVP
+block to render the remote PeerTube iframe without falling back to a local
+`<video>` element. The candidate ZIP remains byte-identical; this amendment is
+qualification-harness-only.

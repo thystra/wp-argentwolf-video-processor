@@ -221,13 +221,49 @@ awvp_release_assert(
     'RC13.8 source-retirement tombstone metadata is not registered.'
 );
 $service_source = (string) file_get_contents(WP_PLUGIN_DIR . '/argentwolf-video-processor/includes/Local_Retention_Service.php');
-$block_source = (string) file_get_contents(WP_PLUGIN_DIR . '/argentwolf-video-processor/includes/Video_Block.php');
 awvp_release_assert(
     str_contains($service_source, 'wp_delete_attachment($attachment_id,true)')
     && str_contains($service_source, 'Source_Retirement_Record::capture')
-    && ! str_contains($service_source, 'DELETE FROM')
-    && str_contains($block_source, 'Video_Serving_Authority'),
-    'RC13.8 WordPress attachment lifecycle / remote-only rendering contract is not packaged.'
+    && ! str_contains($service_source, 'DELETE FROM'),
+    'RC13.8 WordPress attachment lifecycle contract is not packaged.'
+);
+
+awvp_release_assert(
+    interface_exists(\ArgentVideo\Video_Serving_Resolver::class)
+    && class_exists(\ArgentVideo\Video_Block::class)
+    && method_exists(\ArgentVideo\Video_Serving_Resolver::class, 'peertube_embed_url'),
+    'RC13.8 remote-only block serving interfaces are not packaged.'
+);
+
+$remote_only_video_id = wp_insert_post(
+    array(
+        'post_type'   => \ArgentVideo\Video_Post_Type::POST_TYPE,
+        'post_status' => 'publish',
+        'post_title'  => 'RC13.8 remote-only qualification fixture',
+    ),
+    true
+);
+awvp_release_assert(
+    ! is_wp_error($remote_only_video_id) && (int) $remote_only_video_id > 0,
+    'RC13.8 remote-only block qualification fixture could not be created.'
+);
+
+$remote_only_resolver = new class implements \ArgentVideo\Video_Serving_Resolver {
+    public function peertube_embed_url(int $video_id): string
+    {
+        unset($video_id);
+        return 'https://video.example.test/videos/embed/rc13-8-remote-only';
+    }
+};
+$remote_only_block = new \ArgentVideo\Video_Block($remote_only_resolver);
+$remote_only_html = $remote_only_block->render(array('videoId' => (int) $remote_only_video_id));
+wp_delete_post((int) $remote_only_video_id, true);
+
+awvp_release_assert(
+    str_contains($remote_only_html, 'awvp-peertube-embed')
+    && str_contains($remote_only_html, 'https://video.example.test/videos/embed/rc13-8-remote-only')
+    && ! str_contains($remote_only_html, '<video'),
+    'RC13.8 remote-only AWVP Video did not render through its verified-remote serving resolver without a local attachment.'
 );
 
 echo "AWVP_RC13_8_LIVEFIX_CONTRACT_PASS\n";
