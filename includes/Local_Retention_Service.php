@@ -69,7 +69,7 @@ final class Local_Retention_Service
         $video=get_post($video_id);
         if(!is_object($video)||Video_Post_Type::POST_TYPE!==($video->post_type??null)||'trash'===($video->post_status??null))return self::schedule_result(self::REFUSED);
         $source_state=Video_Meta::sanitize_source_state(get_post_meta($video_id,Video_Meta::SOURCE_STATE,true));
-        if(in_array($source_state,array('removed','external'),true))return self::schedule_result(self::REFUSED);
+        if('removed'===$source_state)return self::schedule_result(self::REFUSED);
         $prior_execution=metadata_exists('post',$video_id,Video_Meta::LOCAL_RETENTION_EXECUTION)
             ?Local_Retention_Execution::sanitize(get_post_meta($video_id,Video_Meta::LOCAL_RETENTION_EXECUTION,true)):array();
         if('complete'===Video_Meta::sanitize_cleanup_state(get_post_meta($video_id,Video_Meta::CLEANUP_STATE,true))
@@ -236,7 +236,6 @@ final class Local_Retention_Service
         if(array()===$policy||array()===$execution||!hash_equals($payload['policy_sha256'],Local_Retention_Policy::sha256($policy))||!hash_equals($payload['execution_sha256'],Local_Retention_Execution::immutable_sha256($execution))){
             return self::worker_result(self::STATUS_COMPLETE,$id,$type,$this->tasks->complete($id,$lock,$now),0,'stale');
         }
-        if('external'===Video_Meta::sanitize_source_state(get_post_meta($video,Video_Meta::SOURCE_STATE,true)))return $this->block($id,$lock,$execution,$now,'External video identity cannot authorize local cleanup; local bytes were kept.');
         if(!self::video_context_valid($video,(int)$execution['attachment_id'])||!self::attachment_exclusive_to_video((int)$execution['attachment_id'],$video))return $this->block($id,$lock,$execution,$now,'AWVP Video or attachment ownership changed before cleanup.');
         if(Local_Retention_Policy::deletes_source($policy)&&!$this->source_reference_safe((int)$execution['attachment_id']))return $this->block($id,$lock,$execution,$now,'Another WordPress post still directly references this local attachment; local bytes were kept.');
         if($now<(int)$execution['eligible_at'])return self::worker_result(self::STATUS_REQUEUED,$id,$type,$this->tasks->reschedule($id,$lock,(int)$execution['eligible_at'],'Retention grace period has not elapsed.',$now),(int)$execution['eligible_at'],'waiting');
@@ -251,7 +250,6 @@ final class Local_Retention_Service
         $running=Local_Retention_Execution::transition($execution,Local_Retention_Execution::STATUS_RUNNING,$now);
         if(array()===$running||!$this->save_execution($video,$running,'running'))return self::worker_result(self::STATUS_FAILED,$id,$type,$this->tasks->fail($id,$lock,'Cleanup journal could not enter running state.',$now),0,'journal_indeterminate');
         if($this->local_job_active((int)$running['attachment_id']))return $this->block($id,$lock,$running,$now,'A local processing job raced with cleanup and local bytes were kept.');
-        if('external'===Video_Meta::sanitize_source_state(get_post_meta($video,Video_Meta::SOURCE_STATE,true)))return $this->block($id,$lock,$running,$now,'Source became external after the cleanup fence; local bytes were kept.');
         if(!self::video_context_valid($video,(int)$running['attachment_id'])||!self::attachment_exclusive_to_video((int)$running['attachment_id'],$video))return $this->block($id,$lock,$running,$now,'AWVP Video or attachment ownership changed after the cleanup fence.');
         if(Local_Retention_Policy::deletes_source($policy)&&!$this->source_reference_safe((int)$running['attachment_id']))return $this->block($id,$lock,$running,$now,'Another WordPress post began directly referencing this local attachment after the cleanup fence; local bytes were kept.');
         $current_policy=$this->current_policy_for_execution($video,$running,$now,(bool)$payload['manual_cleanup']);

@@ -495,6 +495,10 @@ network I/O, and do not blindly replay an indeterminate exposure-changing reques
 A short per-resource executor lock can serialize competing remote workers while
 leaving the local authority writer free to supersede the generation.
 
+### RC13.11 external-authoring scope reduction
+
+For 2.0, do not duplicate WordPress core embed authoring for public YouTube, Vimeo, or arbitrary PeerTube URLs. The AWVP block may choose existing local/managed-remote AWVP Video identities or bind WordPress Media Library video. Managed PeerTube serving may render through the reviewed iframe contract only when `Video_Serving_Service` returns verified serving authority. Do not reintroduce external provider URL parsing, external-video REST creation, or independent external-library lifecycle semantics without a separately justified post-2.0 feature.
+
 ### RC13.10 provider-neutral embed recognition
 
 Keep external video recognition separate from configured publishing backends. A public PeerTube URL is not evidence that its instance is an AWVP-managed PeerTube backend, and YouTube/Vimeo embedding does not imply upload or publication credentials. Normalize supported URL forms into a provider/origin/video identity and derive canonical/embed URLs from that identity rather than storing arbitrary iframe URLs supplied by the editor. Generated embed URLs must not request autoplay.

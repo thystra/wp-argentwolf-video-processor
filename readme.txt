@@ -8,7 +8,7 @@ Stable tag: 1.0.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-Processes local video for streaming, publishes to PeerTube, and embeds videos from PeerTube, YouTube, Vimeo, and other supported services.
+Processes local video for streaming and publishes selected videos to PeerTube.
 
 == Description ==
 
@@ -204,6 +204,11 @@ plugin-update workflow and confirm the plugin remains active.
 
 == Upgrade Notice ==
 
+= 2.0.0-rc13.11 =
+* Defers generic external-video URL ingestion/library records from the 2.0 release because WordPress already provides native YouTube, Vimeo, and embeddable PeerTube blocks.
+* Removes the AWVP public-URL authoring endpoint and external-video reusable-library surface while retaining the existing AWVP Video picker for local and managed remote-only records.
+* Retains the production-verified managed PeerTube iframe renderer for source-retired AWVP Videos, including lazy loading, strict-origin referrer policy, fullscreen/picture-in-picture only, and no autoplay.
+
 = 2.0.0-rc13.10 =
 RC13 series build 10. Adds provider-neutral PeerTube, YouTube, and Vimeo embedding through the AWVP Video block, with no autoplay and no external-embed retention authority. WordPress.org remains on 1.0.0.
 
@@ -292,6 +297,11 @@ Renames the public plugin and package to ArgentWolf Video Processor and prepares
 the project for WordPress.org review while retaining existing data identifiers.
 
 == Changelog ==
+
+= 2.0.0-rc13.11 =
+* Defers generic external-video URL ingestion/library records from the 2.0 release because WordPress already provides native YouTube, Vimeo, and embeddable PeerTube blocks.
+* Removes the AWVP public-URL authoring endpoint and external-video reusable-library surface while retaining the existing AWVP Video picker for local and managed remote-only records.
+* Retains the production-verified managed PeerTube iframe renderer for source-retired AWVP Videos, including lazy loading, strict-origin referrer policy, fullscreen/picture-in-picture only, and no autoplay.
 
 = 2.0.0-rc13.10 =
 * Adds one provider-neutral external-video identity and AWVP Video workflow for public PeerTube, YouTube, and Vimeo embeds.

@@ -163,17 +163,13 @@ final class Video_Block_Editor_Service
         $remote_authority = Video_Serving_Authority::sanitize(
             get_post_meta($video_id, Video_Meta::SERVING_AUTHORITY, true)
         );
-        $external_source = External_Video_Source::sanitize(
-            get_post_meta($video_id, Video_Meta::EXTERNAL_SOURCE, true)
-        );
-        $external = 0 === $attachment_id && 'external' === $source_state && array() !== $external_source;
         $remote_only = 0 === $attachment_id && 'removed' === $source_state && array() !== $tombstone && array() !== $remote_authority;
-        if (! $external && ! $remote_only && ($attachment_id < 1 || ! $this->valid_video_attachment($attachment_id))) {
+        if (! $remote_only && ($attachment_id < 1 || ! $this->valid_video_attachment($attachment_id))) {
             return null;
         }
 
-        $url = ($remote_only || $external) ? '' : wp_get_attachment_url($attachment_id);
-        if (! $remote_only && ! $external && (! is_string($url) || '' === $url)) {
+        $url = $remote_only ? '' : wp_get_attachment_url($attachment_id);
+        if (! $remote_only && (! is_string($url) || '' === $url)) {
             return null;
         }
 
@@ -181,8 +177,8 @@ final class Video_Block_Editor_Service
         $stored_destination = $has_destination
             ? get_post_meta($video_id, Video_Meta::DESTINATION, true)
             : null;
-        $destination = $external ? array() : Video_Destination::resolve($stored_destination, $has_destination);
-        $destination_valid = ! $external && array() !== $destination && null !== $this->destination_descriptor($destination);
+        $destination = Video_Destination::resolve($stored_destination, $has_destination);
+        $destination_valid = array() !== $destination && null !== $this->destination_descriptor($destination);
 
         $site_default = $this->resolved_site_default();
 
@@ -195,19 +191,12 @@ final class Video_Block_Editor_Service
                 'id'                => $video_id,
                 'origin_post_id'    => $origin_post_id,
                 'attachment_id'     => $attachment_id,
-                'attachment_url'    => ($remote_only || $external) ? '' : esc_url_raw((string) $url),
-                'attachment_title'  => $external
-                    ? sanitize_text_field((string) ($external_source['title'] ?: get_the_title($video_id)))
-                    : ($remote_only
-                        ? sanitize_text_field((string) ($tombstone['attachment_title'] ?: $tombstone['filename']))
-                        : sanitize_text_field((string) get_the_title($attachment_id))),
+                'attachment_url'    => $remote_only ? '' : esc_url_raw((string) $url),
+                'attachment_title'  => $remote_only
+                    ? sanitize_text_field((string) ($tombstone['attachment_title'] ?: $tombstone['filename']))
+                    : sanitize_text_field((string) get_the_title($attachment_id)),
                 'remote_only'       => $remote_only,
-                'external'          => $external,
-                'external_provider' => $external ? (string) $external_source['identity']['provider'] : '',
-                'external_url'      => $external ? esc_url_raw((string) $external_source['identity']['canonical_url']) : '',
-                'remote_embed_url'  => $external
-                    ? esc_url_raw((string) $external_source['identity']['embed_url'])
-                    : ($remote_only ? esc_url_raw((string) $remote_authority['embed_url']) : ''),
+                'remote_embed_url'  => $remote_only ? esc_url_raw((string) $remote_authority['embed_url']) : '',
                 'source_state'      => $source_state,
                 'destination_valid' => $destination_valid,
                 'destination'       => $destination_valid
@@ -269,16 +258,7 @@ final class Video_Block_Editor_Service
             $source = 'local';
             $provider = '';
             $suffix = __('WordPress media', 'argentwolf-video-processor');
-            if (true === ($video['external'] ?? false)) {
-                $source = 'external';
-                $provider = sanitize_key((string) ($video['external_provider'] ?? ''));
-                $suffix = match ($provider) {
-                    'peertube' => 'PeerTube',
-                    'youtube' => 'YouTube',
-                    'vimeo' => 'Vimeo',
-                    default => __('External video', 'argentwolf-video-processor'),
-                };
-            } elseif (true === ($video['remote_only'] ?? false)) {
+            if (true === ($video['remote_only'] ?? false)) {
                 $source = 'remote';
                 $provider = 'peertube';
                 $suffix = __('PeerTube remote-only', 'argentwolf-video-processor');
@@ -307,11 +287,7 @@ final class Video_Block_Editor_Service
         if (null === $this->video_post($video_id)) {
             return array('status' => self::REFUSED);
         }
-        if (in_array(
-            Video_Meta::sanitize_source_state(get_post_meta($video_id, Video_Meta::SOURCE_STATE, true)),
-            array('removed', 'external'),
-            true
-        )) {
+        if ('removed' === Video_Meta::sanitize_source_state(get_post_meta($video_id, Video_Meta::SOURCE_STATE, true))) {
             return array('status' => self::REFUSED);
         }
 

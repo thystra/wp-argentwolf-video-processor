@@ -16,8 +16,6 @@ final class Video_Meta
     public const MASTER_AUTHORITY = '_argent_video_master_authority';
     public const SOURCE_STATE = '_argent_video_source_state';
     public const SOURCE_TOMBSTONE = '_argentwolf_video_processor_source_tombstone';
-    public const EXTERNAL_SOURCE = '_argent_video_external_source';
-    public const EXTERNAL_CANONICAL_KEY = '_argent_video_external_canonical_key';
     public const DESTINATION = '_argent_video_destination';
     public const PEERTUBE_PUBLICATION_PLAN = '_argent_video_peertube_publication_plan';
     public const PEERTUBE_PUBLICATION_LIFECYCLE = '_argent_video_peertube_publication_lifecycle';
@@ -81,14 +79,6 @@ final class Video_Meta
             self::SOURCE_TOMBSTONE => $base + array(
                 'type'              => 'array',
                 'sanitize_callback' => array(self::class, 'sanitize_source_tombstone'),
-            ),
-            self::EXTERNAL_SOURCE => $base + array(
-                'type'              => 'array',
-                'sanitize_callback' => array(self::class, 'sanitize_external_source'),
-            ),
-            self::EXTERNAL_CANONICAL_KEY => $base + array(
-                'type'              => 'string',
-                'sanitize_callback' => array(self::class, 'sanitize_external_canonical_key'),
             ),
             self::DESTINATION => $base + array(
                 'type'              => 'array',
@@ -224,7 +214,7 @@ final class Video_Meta
     {
         return self::enum(
             $value,
-            array('present', 'uploading', 'verified_remote', 'cleanup_pending', 'removed', 'external', 'missing', 'error'),
+            array('present', 'uploading', 'verified_remote', 'cleanup_pending', 'removed', 'missing', 'error'),
             'error'
         );
     }
@@ -234,20 +224,6 @@ final class Video_Meta
     public static function sanitize_source_tombstone(mixed $value): array
     {
         return Source_Retirement_Record::sanitize($value);
-    }
-
-    /** @return array<string,mixed> */
-    public static function sanitize_external_source(mixed $value): array
-    {
-        return External_Video_Source::sanitize($value);
-    }
-
-    public static function sanitize_external_canonical_key(mixed $value): string
-    {
-        if (! is_string($value) || strlen($value) > 512 || trim($value) !== $value) {
-            return '';
-        }
-        return 1 === preg_match('/^v1\|(peertube|youtube|vimeo)\|[^\x00-\x1F\x7F|]{1,255}\|[^\x00-\x1F\x7F|]{1,191}$/D', $value) ? $value : '';
     }
 
     public static function sanitize_destination(mixed $value): array

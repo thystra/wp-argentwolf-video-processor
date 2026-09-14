@@ -70,7 +70,6 @@ final class Uninstall_Data
             'argentwolf_video_processor_migration_execute_lock_',
             'argentwolf_video_processor_legacy_adopt_lock_',
             'argentwolf_video_processor_attachment_bind_lock_',
-            'argentwolf_video_processor_external_bind_lock_',
         );
     }
 
@@ -102,8 +101,6 @@ final class Uninstall_Data
             '_argent_video_attachment_id',
             '_argent_video_cleanup_state',
             '_argent_video_destination',
-            '_argent_video_external_canonical_key',
-            '_argent_video_external_source',
             '_argent_video_ingest_kind',
             '_argent_video_job_id',
             '_argent_video_last_error',

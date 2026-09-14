@@ -122,6 +122,8 @@ compatibility fixture.
 
 ### RC13.10 provider-neutral embedding qualification
 
+RC13.11 removes the generic external-video assertion from the active clean/upgrade matrix because that authoring/library feature is deferred from 2.0. The RC13.11 payload still carries the full clean/upgrade, diagnostics, repeat-repair, uninstall, and RC13.9 remote-only livefix coverage, so the managed PeerTube source-retired renderer remains an exact-package release gate.
+
 RC13.10 adds `assert-external-embedding.php` to every clean-install and public-1.0.0-upgrade case. The installed exact package must prove canonical YouTube URL deduplication through the production REST/application boundary, privacy-enhanced YouTube rendering, Vimeo binding/rendering, deterministic public PeerTube verification with alias-to-authoritative-UUID convergence, external/remote selection visibility, no publishing destination for external records, no autoplay permission, and fail-closed local-retention authority. The PeerTube assertion uses an in-process deterministic public-API response; the disposable harness still performs no PeerTube/network action and continues to run with `WP_HTTP_BLOCK_EXTERNAL=true`.
 
 ### RC13.9 completed-retirement proof refresh retained by RC13.10

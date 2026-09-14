@@ -1,3 +1,10 @@
+## 2.0.0-rc13.11 - 2026-09-14
+
+- Defer generic external-video URL ingestion/library records from 2.0 after live testing confirmed WordPress already natively embeds YouTube, Vimeo, and embeddable PeerTube URLs.
+- Remove the AWVP external-video REST/application boundary, provider recognizers, durable external metadata, and external reusable-video selector path.
+- Keep the existing AWVP Video picker for local and managed remote-only records.
+- Preserve the production-verified managed PeerTube iframe renderer for source-retired videos with lazy loading, strict-origin referrer policy, fullscreen/picture-in-picture only, and no autoplay.
+
 ## 2.0.0-rc13.10 - 2026-09-14
 
 - Add provider-neutral public video embedding for PeerTube, YouTube, and Vimeo through the durable AWVP Video/block model.

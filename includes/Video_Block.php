@@ -7,7 +7,7 @@ declare(strict_types=1);
 
 namespace ArgentVideo;
 
-/** Dynamic AWVP Video block registration and provider-neutral rendering. */
+/** Dynamic AWVP Video block registration with verified managed-PeerTube rendering. */
 final class Video_Block
 {
     public const NAME = 'argentwolf-video-processor/video';
@@ -45,46 +45,6 @@ final class Video_Block
             get_post_meta($video_id, Video_Meta::ATTACHMENT_ID, true)
         );
 
-        $source_state = Video_Meta::sanitize_source_state(
-            get_post_meta($video_id, Video_Meta::SOURCE_STATE, true)
-        );
-
-        // External provider records are a distinct serving authority. They do
-        // not acquire local-retention or publishing authority merely because
-        // they can render, and visitor rendering must never perform provider
-        // HTTP. Only the durable, sanitized identity stored at bind time is
-        // consumed here.
-        if ('external' === $source_state) {
-            if ($attachment_id > 0) {
-                return '';
-            }
-            $external = External_Video_Source::sanitize(
-                get_post_meta($video_id, Video_Meta::EXTERNAL_SOURCE, true)
-            );
-            if (array() === $external) {
-                return '';
-            }
-            $identity = Video_Embed_Identity::sanitize($external['identity'] ?? null);
-            if (array() === $identity) {
-                return '';
-            }
-            $title = (string) ($external['title'] ?? '');
-            if ('' === $title) {
-                $title = get_the_title($video_id);
-            }
-            $title = is_string($title) && '' !== $title ? $title : __('Video', 'argentwolf-video-processor');
-            $player = $this->render_provider_iframe(
-                (string) $identity['embed_url'],
-                $title,
-                (string) $identity['provider']
-            );
-            if ('' === $player) {
-                return '';
-            }
-
-            return $this->wrap($video_id, $player);
-        }
-
         // Verified PeerTube authority is intentionally resolved before touching
         // local source bytes. Delete-all retention may retire the WordPress
         // attachment entirely while the durable AWVP Video continues serving
@@ -93,7 +53,7 @@ final class Video_Block
         if ('' !== $embed_url) {
             $title = get_the_title($video_id);
             $title = is_string($title) && '' !== $title ? $title : __('Video', 'argentwolf-video-processor');
-            $player = $this->render_provider_iframe($embed_url, $title, 'peertube');
+            $player = $this->render_peertube_iframe($embed_url, $title);
         } else {
             if ($attachment_id < 1) {
                 return '';
@@ -127,18 +87,14 @@ final class Video_Block
         return $this->wrap($video_id, $player);
     }
 
-    private function render_provider_iframe(string $embed_url, string $title, string $provider): string
+    private function render_peertube_iframe(string $embed_url, string $title): string
     {
-        $identity_provider = in_array($provider, array('peertube', 'youtube', 'vimeo'), true)
-            ? $provider
-            : '';
-        if ('' === $embed_url || '' === $identity_provider) {
+        if ('' === $embed_url) {
             return '';
         }
 
         return sprintf(
-            '<div class="awvp-provider-embed awvp-provider-embed--%s"><iframe src="%s" title="%s" loading="lazy" referrerpolicy="strict-origin-when-cross-origin" allow="fullscreen; picture-in-picture" allowfullscreen></iframe></div>',
-            esc_attr($identity_provider),
+            '<div class="awvp-provider-embed awvp-provider-embed--peertube"><iframe src="%s" title="%s" loading="lazy" referrerpolicy="strict-origin-when-cross-origin" allow="fullscreen; picture-in-picture" allowfullscreen></iframe></div>',
             esc_url($embed_url),
             esc_attr($title)
         );

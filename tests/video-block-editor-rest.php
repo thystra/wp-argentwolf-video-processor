@@ -67,12 +67,13 @@ namespace {
     $service = new \ArgentVideo\Video_Block_Editor_Service();
     $rest = new \ArgentVideo\Video_Block_Editor_Rest($service);
     $rest->register();
-    $assert(5 === count($GLOBALS['awvp_rest_routes']), 'Editor REST surface must register exactly five reviewed routes.');
+    $assert(4 === count($GLOBALS['awvp_rest_routes']), 'Editor REST surface must register exactly four reviewed routes.');
     foreach ($GLOBALS['awvp_rest_routes'] as [$namespace,$route,$args]) {
         $assert(\ArgentVideo\Video_Block_Editor_Rest::NAMESPACE === $namespace, 'Editor REST namespace drifted.');
         $assert(isset($args['permission_callback']) && is_callable($args['permission_callback']), 'Editor REST route omitted permission_callback.');
         $assert(in_array($args['methods'] ?? '', array('GET','POST'), true), 'Editor REST route acquired an unreviewed HTTP method.');
     }
+    $assert(! in_array('/editor/external-videos', array_column($GLOBALS['awvp_rest_routes'], 1), true), 'Deferred external-video route is still registered.');
 
     $bind_request = new WP_REST_Request(array('attachment_id'=>'20','origin_post_id'=>'10'));
     $assert(true === $rest->can_bind($bind_request), 'Authorized attachment bind was refused.');
@@ -80,7 +81,6 @@ namespace {
     $assert(false === $rest->can_bind($bind_request), 'Attachment bind did not require upload_files.');
     $GLOBALS['awvp_caps']['upload_files'] = true;
     $assert(false === $rest->can_bind(new WP_REST_Request(array('attachment_id'=>'020','origin_post_id'=>'10'))), 'Non-canonical attachment ID was accepted.');
-$assert(false === $rest->can_bind_external(new WP_REST_Request(array('origin_post_id'=>'10'))), 'External bind permission should fail closed when the external service is unavailable.');
     $assert(true === $rest->can_list_options(new WP_REST_Request()), 'Authorized existing-video option list was refused.');
 
     $options = $rest->options(new WP_REST_Request());

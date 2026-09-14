@@ -280,13 +280,17 @@ the same advisory registry with their own capability and NVD link.
 
 ## Current release lines
 
+### RC13.11 external-authoring scope reduction
+
+RC13.11 defers generic third-party URL ingestion from the 2.0 release. WordPress already provides native YouTube, Vimeo, and embeddable PeerTube blocks, while the RC13.10 AWVP URL path created durable library records with an independent lifecycle and additional health/UI semantics that are not required for ordinary embedding. AWVP therefore retains its existing-video picker for local and managed remote-only AWVP Videos and keeps the production-verified managed PeerTube iframe renderer, but removes generic external-video creation, canonical deduplication, and provider-specific YouTube/Vimeo/public-PeerTube ingestion from the 2.0 runtime.
+
 ### RC13.10 provider-neutral embedding
 
 RC13.10 adds end-to-end provider-neutral embedding for supported public PeerTube, YouTube, and Vimeo URLs. Authors can choose an existing AWVP Video, paste a supported public URL, or bind WordPress Media Library video through the same block. PeerTube URLs are positively verified before durable creation and matching managed PeerTube publications are reused rather than duplicated. External embeds render from durable local identity only, require no publishing credentials, perform no provider HTTP during visitor rendering, never request autoplay, and never become archive/retention authority for local source deletion.
 
 Public WordPress.org stable release: `1.0.0`.
 
-Current controlled development candidate: `2.0.0-rc13.10`. RC packages are built
+Current controlled development candidate: `2.0.0-rc13.11`. RC packages are built
 from reviewed Forgejo commits and are not published to WordPress.org SVN. The
 public Stable tag remains `1.0.0` until final `2.0.0` promotion.
 

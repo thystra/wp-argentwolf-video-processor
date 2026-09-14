@@ -2,8 +2,8 @@
 /**
  * Plugin Name: ArgentWolf Video Processor
  * Plugin URI: https://github.com/thystra/wp-argentwolf-video-processor
- * Description: Processes local video for streaming, publishes to PeerTube, and embeds videos from PeerTube, YouTube, Vimeo, and other supported services.
- * Version: 2.0.0-rc13.10
+ * Description: Processes local video for streaming and publishes selected videos to PeerTube.
+ * Version: 2.0.0-rc13.11
  * Requires at least: 6.4
  * Requires PHP: 8.1
  * Author: Alan Johnson
@@ -19,7 +19,7 @@ if (! defined('ABSPATH')) {
     exit;
 }
 
-define('ARGENT_VIDEO_VERSION', '2.0.0-rc13.10');
+define('ARGENT_VIDEO_VERSION', '2.0.0-rc13.11');
 define('ARGENT_VIDEO_FILE', __FILE__);
 define('ARGENT_VIDEO_DIR', plugin_dir_path(__FILE__));
 define('ARGENT_VIDEO_URL', plugin_dir_url(__FILE__));
@@ -27,15 +27,6 @@ define('ARGENT_VIDEO_URL', plugin_dir_url(__FILE__));
 require_once ARGENT_VIDEO_DIR . 'includes/Settings.php';
 require_once ARGENT_VIDEO_DIR . 'includes/Backend_Identity.php';
 require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Origin.php';
-require_once ARGENT_VIDEO_DIR . 'includes/Video_Embed_Provider.php';
-require_once ARGENT_VIDEO_DIR . 'includes/Video_Embed_Identity.php';
-require_once ARGENT_VIDEO_DIR . 'includes/YouTube_Embed_Provider.php';
-require_once ARGENT_VIDEO_DIR . 'includes/Vimeo_Embed_Provider.php';
-require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Embed_Provider.php';
-require_once ARGENT_VIDEO_DIR . 'includes/Video_Embed_Resolver.php';
-require_once ARGENT_VIDEO_DIR . 'includes/External_Video_Source.php';
-require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Public_Video_Verifier.php';
-require_once ARGENT_VIDEO_DIR . 'includes/External_Video_Source_Service.php';
 require_once ARGENT_VIDEO_DIR . 'includes/PeerTube_Connection_Input.php';
 require_once ARGENT_VIDEO_DIR . 'includes/Atomic_Option_Snapshot.php';
 require_once ARGENT_VIDEO_DIR . 'includes/Atomic_Option_Result.php';

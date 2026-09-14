@@ -352,21 +352,6 @@ final class PeerTube_Http_Client
     }
 
     /** @return array<string,mixed> */
-    public function get_public_video(string $video_id): array
-    {
-        $video_id = Video_Embed_Identity::sanitize_peertube_id($video_id);
-        if ('' === $video_id) {
-            throw new InvalidArgumentException('PeerTube public-video identity is outside the reviewed bound.');
-        }
-        return $this->request(
-            'GET',
-            '/api/v1/videos/' . rawurlencode($video_id),
-            self::MAX_METADATA_RESPONSE_BYTES,
-            'public'
-        );
-    }
-
-    /** @return array<string,mixed> */
     public function get_public_embed(string $embed_url): array
     {
         if (strlen($embed_url) > 2048 || 1 === preg_match('/[\x00-\x1F\x7F]/', $embed_url)) {

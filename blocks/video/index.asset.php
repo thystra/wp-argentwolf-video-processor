@@ -9,5 +9,5 @@ return array(
         'wp-element',
         'wp-i18n',
     ),
-    'version' => '2a0d69c7f9ac20b0',
+    'version' => 'fcbccdd2deab6855',
 );

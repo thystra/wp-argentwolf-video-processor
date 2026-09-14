@@ -5,7 +5,8 @@
 - [x] RC13.8: fail closed on direct non-AWVP WordPress attachment references or an incomplete reference scan.
 - [x] RC13.8: retire delete-all Media Library attachments only through WordPress attachment lifecycle APIs.
 - [x] RC13.9: let completed-cleanup reconciliation tolerate a newer serving verification timestamp only when durable remote publication identity is unchanged and current remote serving remains verified.
-- [x] RC13.10: add provider-neutral embedding for supported public PeerTube, YouTube, and Vimeo URLs without coupling embedding to configured publishing backends.
+- [x] RC13.10: prototype and qualify provider-neutral embedding for supported public PeerTube, YouTube, and Vimeo URLs.
+- [x] RC13.11: defer generic external-video authoring/library behavior from 2.0 after live product testing; retain the managed-PeerTube renderer and local/remote-only AWVP Video selection.
 
 # ArgentWolf Video Processor TODO
 
@@ -585,6 +586,14 @@
   WordPress update path.
 - [ ] Separately prove a clean public `1.0.0 -> 2.0.0` WordPress upgrade before
   declaring the 2.0 release closed.
+
+### RC13.11 external-authoring scope reduction
+
+- [x] Remove the generic public-video URL authoring endpoint and UI from the AWVP block.
+- [x] Remove provider-specific YouTube/Vimeo/arbitrary-public-PeerTube external ingestion and canonical external-library metadata.
+- [x] Keep reusable existing-video selection for local and managed remote-only AWVP Videos.
+- [x] Keep the production-verified managed PeerTube iframe renderer and no-autoplay contract.
+- [x] Remove external-video qualification phases while carrying forward the RC13.9 remote-only livefix assertion in the RC13.11 clean/upgrade matrix.
 
 ### RC13.10 provider-neutral embedding
 

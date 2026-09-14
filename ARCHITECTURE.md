@@ -141,6 +141,10 @@ The plugin defines separate lightweight schedules: five-minute local-processing 
 
 ### Provider-neutral external embed identity
 
+### RC13.11 external-authoring scope reduction
+
+RC13.11 supersedes the generic external-video runtime portion of RC13.10 for the 2.0 release. Ordinary third-party URL embedding remains WordPress-native. AWVP no longer creates durable YouTube/Vimeo/arbitrary-public-PeerTube library records or treats those providers as AWVP source types. The retained remote iframe path is limited to managed PeerTube serving authority already proven by AWVP publication/recovery state; visitor rendering remains network-free and no-autoplay. Existing-video selection remains available for local AWVP Videos and managed remote-only/source-retired AWVP Videos.
+
 RC13.10 introduces a provider-neutral external-video identity layer before changing editor or frontend behavior. Provider URL recognition is separate from publishing backends: YouTube and Vimeo identities never require publishing credentials, while PeerTube-shaped public URLs may originate on any safe public instance rather than only an administrator-configured backend. The canonical identity records provider, provider origin, provider video ID, canonical URL, and a safe embed URL derived from those fields; equivalent supported URL forms converge on one canonical key.
 
 This foundation performs no provider HTTP, creates no AWVP Video, changes no destination or serving authority, and grants no retention/archive proof. In particular, an external embed identity must never authorize WordPress source retirement. PeerTube's decentralized URL syntax means a later editor application boundary must positively verify the public PeerTube provider and reconcile provider aliases such as UUID versus short-UUID before durable creation when those aliases cannot be proven locally. Canonical generated embed URLs never request autoplay.
