@@ -122,6 +122,7 @@ jobs:
           php tests/local-processing-routing.php
           php tests/video-block-editor-rest.php
           php tests/video-block.php
+          php tests/video-embed-providers.php
           php tests/renderer-player.php
           php tests/task-repository.php
           php tests/peertube-upload-task-coordinator.php

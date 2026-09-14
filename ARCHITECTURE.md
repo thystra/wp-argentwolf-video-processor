@@ -139,6 +139,12 @@ The plugin defines separate lightweight schedules: five-minute local-processing 
 
 ## 2.0 remote publication, health, and failover
 
+### Provider-neutral external embed identity
+
+RC13.10 introduces a provider-neutral external-video identity layer before changing editor or frontend behavior. Provider URL recognition is separate from publishing backends: YouTube and Vimeo identities never require publishing credentials, while PeerTube-shaped public URLs may originate on any safe public instance rather than only an administrator-configured backend. The canonical identity records provider, provider origin, provider video ID, canonical URL, and a safe embed URL derived from those fields; equivalent supported URL forms converge on one canonical key.
+
+This foundation performs no provider HTTP, creates no AWVP Video, changes no destination or serving authority, and grants no retention/archive proof. In particular, an external embed identity must never authorize WordPress source retirement. PeerTube's decentralized URL syntax means a later editor application boundary must positively verify the public PeerTube provider and reconcile provider aliases such as UUID versus short-UUID before durable creation when those aliases cannot be proven locally. Canonical generated embed URLs never request autoplay.
+
 ### Publication authority versus serving health
 
 Durable publication authority answers whether a remote publication was legitimately reviewed, executed, and verified. `argent_video_publication_health` separately records the latest provider-independent observation of whether an ordinary unauthenticated visitor can actually consume the serving URL. Health degradation never erases publication history or serving provenance. Frontend rendering performs no provider HTTP; it reads only durable local authority/health state.

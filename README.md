@@ -275,6 +275,10 @@ the same advisory registry with their own capability and NVD link.
 
 ## Current release lines
 
+### RC13.10 provider-neutral embedding (development)
+
+RC13.10 begins with a network-free provider-neutral recognition layer for PeerTube, YouTube, and Vimeo URLs. It canonicalizes supported equivalent URL forms and derives no-autoplay embed URLs without changing current editor, serving, publication, or retention behavior. The external-video authoring/rendering workflow remains under development; the public plugin description is intentionally unchanged until that workflow lands end to end.
+
 Public WordPress.org stable release: `1.0.0`.
 
 Current controlled development candidate: `2.0.0-rc13.9`. RC packages are built

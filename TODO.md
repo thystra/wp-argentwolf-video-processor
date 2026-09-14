@@ -5,7 +5,7 @@
 - [x] RC13.8: fail closed on direct non-AWVP WordPress attachment references or an incomplete reference scan.
 - [x] RC13.8: retire delete-all Media Library attachments only through WordPress attachment lifecycle APIs.
 - [x] RC13.9: let completed-cleanup reconciliation tolerate a newer serving verification timestamp only when durable remote publication identity is unchanged and current remote serving remains verified.
-- [ ] RC13.10: add provider-neutral embedding so any supported public PeerTube URL can be embedded without configuring that server as a publishing backend; design provider adapters for later YouTube support.
+- [ ] RC13.10: add provider-neutral embedding for supported public PeerTube, YouTube, and Vimeo URLs without coupling embedding to configured publishing backends.
 
 # ArgentWolf Video Processor TODO
 
@@ -585,3 +585,12 @@
   WordPress update path.
 - [ ] Separately prove a clean public `1.0.0 -> 2.0.0` WordPress upgrade before
   declaring the 2.0 release closed.
+
+### RC13.10 provider-neutral embedding
+
+- [x] Add the network-free provider-neutral URL recognition/canonical-identity foundation for public PeerTube-shaped URLs, YouTube, and Vimeo, including no-autoplay canonical embed generation and equivalent-form deduplication.
+- [ ] Add the editor application boundary that verifies arbitrary public PeerTube instances/videos, reconciles UUID/short-UUID aliases where possible, and safely creates or reuses one durable AWVP Video identity.
+- [ ] Persist external-source identity independently from publishing destination/serving authority and prove external embeds cannot authorize local retention/source retirement.
+- [ ] Extend the block authoring UX with **Choose existing AWVP Video**, **Paste video URL**, and the existing WordPress Media Library path, including remote-only/external AWVP Video selection.
+- [ ] Render verified external PeerTube/YouTube/Vimeo identities through one provider-neutral iframe path with safe attributes, responsive layout, and no autoplay.
+- [ ] Update plugin header/README/WordPress.org-facing description only when the external embedding workflow actually lands end to end.

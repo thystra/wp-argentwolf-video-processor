@@ -495,6 +495,12 @@ network I/O, and do not blindly replay an indeterminate exposure-changing reques
 A short per-resource executor lock can serialize competing remote workers while
 leaving the local authority writer free to supersede the generation.
 
+### RC13.10 provider-neutral embed recognition
+
+Keep external video recognition separate from configured publishing backends. A public PeerTube URL is not evidence that its instance is an AWVP-managed PeerTube backend, and YouTube/Vimeo embedding does not imply upload or publication credentials. Normalize supported URL forms into a provider/origin/video identity and derive canonical/embed URLs from that identity rather than storing arbitrary iframe URLs supplied by the editor. Generated embed URLs must not request autoplay.
+
+The first recognition layer is deliberately read-only and network-free. For decentralized PeerTube, syntax recognition alone must not be treated as positive provider verification; the later editor application boundary may use safe bounded public HTTP to verify the instance/video and reconcile aliases before creating durable AWVP Video state. External identity alone is never serving-retention evidence and must not authorize local-source deletion.
+
 ### R46.6 serving boundary
 
 The AWVP dynamic block may render the verified PeerTube embed only through `Video_Serving_Service`; otherwise it must call the existing local `wp_video_shortcode()` path. Rendering performs local metadata/database reads only and never provider HTTP. The detached cutover writer is fed by R46.5b's positively verified publication state and stores only non-secret evidence.
