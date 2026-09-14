@@ -7,7 +7,7 @@ declare(strict_types=1);
 
 namespace ArgentVideo;
 
-/** R46.3b dynamic AWVP Video block registration and local-first rendering. */
+/** Dynamic AWVP Video block registration and provider-neutral rendering. */
 final class Video_Block
 {
     public const NAME = 'argentwolf-video-processor/video';
@@ -45,6 +45,46 @@ final class Video_Block
             get_post_meta($video_id, Video_Meta::ATTACHMENT_ID, true)
         );
 
+        $source_state = Video_Meta::sanitize_source_state(
+            get_post_meta($video_id, Video_Meta::SOURCE_STATE, true)
+        );
+
+        // External provider records are a distinct serving authority. They do
+        // not acquire local-retention or publishing authority merely because
+        // they can render, and visitor rendering must never perform provider
+        // HTTP. Only the durable, sanitized identity stored at bind time is
+        // consumed here.
+        if ('external' === $source_state) {
+            if ($attachment_id > 0) {
+                return '';
+            }
+            $external = External_Video_Source::sanitize(
+                get_post_meta($video_id, Video_Meta::EXTERNAL_SOURCE, true)
+            );
+            if (array() === $external) {
+                return '';
+            }
+            $identity = Video_Embed_Identity::sanitize($external['identity'] ?? null);
+            if (array() === $identity) {
+                return '';
+            }
+            $title = (string) ($external['title'] ?? '');
+            if ('' === $title) {
+                $title = get_the_title($video_id);
+            }
+            $title = is_string($title) && '' !== $title ? $title : __('Video', 'argentwolf-video-processor');
+            $player = $this->render_provider_iframe(
+                (string) $identity['embed_url'],
+                $title,
+                (string) $identity['provider']
+            );
+            if ('' === $player) {
+                return '';
+            }
+
+            return $this->wrap($video_id, $player);
+        }
+
         // Verified PeerTube authority is intentionally resolved before touching
         // local source bytes. Delete-all retention may retire the WordPress
         // attachment entirely while the durable AWVP Video continues serving
@@ -53,11 +93,7 @@ final class Video_Block
         if ('' !== $embed_url) {
             $title = get_the_title($video_id);
             $title = is_string($title) && '' !== $title ? $title : __('Video', 'argentwolf-video-processor');
-            $player = sprintf(
-                '<div class="awvp-peertube-embed"><iframe src="%s" title="%s" loading="lazy" allow="fullscreen; picture-in-picture" allowfullscreen></iframe></div>',
-                esc_url($embed_url),
-                esc_attr($title)
-            );
+            $player = $this->render_provider_iframe($embed_url, $title, 'peertube');
         } else {
             if ($attachment_id < 1) {
                 return '';
@@ -88,6 +124,28 @@ final class Video_Block
             return '';
         }
 
+        return $this->wrap($video_id, $player);
+    }
+
+    private function render_provider_iframe(string $embed_url, string $title, string $provider): string
+    {
+        $identity_provider = in_array($provider, array('peertube', 'youtube', 'vimeo'), true)
+            ? $provider
+            : '';
+        if ('' === $embed_url || '' === $identity_provider) {
+            return '';
+        }
+
+        return sprintf(
+            '<div class="awvp-provider-embed awvp-provider-embed--%s"><iframe src="%s" title="%s" loading="lazy" referrerpolicy="strict-origin-when-cross-origin" allow="fullscreen; picture-in-picture" allowfullscreen></iframe></div>',
+            esc_attr($identity_provider),
+            esc_url($embed_url),
+            esc_attr($title)
+        );
+    }
+
+    private function wrap(int $video_id, string $player): string
+    {
         $wrapper = function_exists('get_block_wrapper_attributes')
             ? get_block_wrapper_attributes(array('data-awvp-video-id' => (string) $video_id))
             : 'class="wp-block-argentwolf-video-processor-video" data-awvp-video-id="' . esc_attr((string) $video_id) . '"';

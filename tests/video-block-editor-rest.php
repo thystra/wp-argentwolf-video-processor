@@ -23,6 +23,7 @@ namespace ArgentVideo {
         public const APPLIED='applied'; public const PRESENT='present'; public const REFUSED='refused'; public const BUSY='busy'; public const INDETERMINATE='indeterminate';
         public array $bind_result = array('status'=>self::APPLIED,'video_id'=>101);
         public array $destination_result = array('status'=>self::APPLIED);
+        public array $options = array(array('id'=>101,'label'=>'A — WordPress media','source'=>'local','provider'=>''));
         public ?array $state = array(
             'video'=>array('id'=>101,'attachment_id'=>20,'attachment_url'=>'https://example.test/a.mp4','attachment_title'=>'A','destination_valid'=>true,'destination'=>array('backend_id'=>'local','label'=>'Local')),
             'site_default'=>array('backend_id'=>'local','label'=>'Local'),
@@ -31,6 +32,7 @@ namespace ArgentVideo {
         public array $bind_calls = array(); public array $destination_calls = array(); public array $state_calls = array();
         public function bind_local_attachment(int $attachment_id,int $origin_post_id,int $user_id): array { $this->bind_calls[]=func_get_args(); return $this->bind_result; }
         public function editor_state(int $video_id): ?array { $this->state_calls[]=$video_id; return $this->state; }
+        public function editor_options(int $limit=100): array { unset($limit); return $this->options; }
         public function set_destination(int $video_id,string $mode,string $backend_id=''): array { $this->destination_calls[]=func_get_args(); return $this->destination_result; }
     }
 }
@@ -65,7 +67,7 @@ namespace {
     $service = new \ArgentVideo\Video_Block_Editor_Service();
     $rest = new \ArgentVideo\Video_Block_Editor_Rest($service);
     $rest->register();
-    $assert(4 === count($GLOBALS['awvp_rest_routes']), 'Editor REST surface must register exactly four reviewed routes.');
+    $assert(5 === count($GLOBALS['awvp_rest_routes']), 'Editor REST surface must register exactly five reviewed routes.');
     foreach ($GLOBALS['awvp_rest_routes'] as [$namespace,$route,$args]) {
         $assert(\ArgentVideo\Video_Block_Editor_Rest::NAMESPACE === $namespace, 'Editor REST namespace drifted.');
         $assert(isset($args['permission_callback']) && is_callable($args['permission_callback']), 'Editor REST route omitted permission_callback.');
@@ -79,6 +81,14 @@ namespace {
     $GLOBALS['awvp_caps']['upload_files'] = true;
     $assert(false === $rest->can_bind(new WP_REST_Request(array('attachment_id'=>'020','origin_post_id'=>'10'))), 'Non-canonical attachment ID was accepted.');
 $assert(false === $rest->can_bind_external(new WP_REST_Request(array('origin_post_id'=>'10'))), 'External bind permission should fail closed when the external service is unavailable.');
+    $assert(true === $rest->can_list_options(new WP_REST_Request()), 'Authorized existing-video option list was refused.');
+
+    $options = $rest->options(new WP_REST_Request());
+    $assert($options instanceof WP_REST_Response && 101 === ($options->data['videos'][0]['id'] ?? 0), 'Existing-video option route did not return editable AWVP Video.');
+    $GLOBALS['awvp_caps']['edit_post'] = false;
+    $hidden_options = $rest->options(new WP_REST_Request());
+    $assert($hidden_options instanceof WP_REST_Response && array() === ($hidden_options->data['videos'] ?? null), 'Existing-video option route leaked a video the user cannot edit.');
+    $GLOBALS['awvp_caps']['edit_post'] = true;
 
     $response = $rest->bind($bind_request);
     $assert($response instanceof WP_REST_Response && 101 === ($response->data['video']['id'] ?? 0), 'Successful bind did not return bounded editor state.');

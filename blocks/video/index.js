@@ -16,6 +16,8 @@
     const { select, useSelect } = wp.data;
     const apiFetch = wp.apiFetch;
     const API_ROOT = '/argentwolf-video-processor/v1/editor/videos';
+    const EXTERNAL_API = '/argentwolf-video-processor/v1/editor/external-videos';
+    const OPTIONS_API = '/argentwolf-video-processor/v1/editor/video-options';
 
     function boundedError(error) {
         if (error && typeof error.message === 'string' && error.message.length > 0) {
@@ -88,6 +90,13 @@
         return ['publish', 'future', 'private'].indexOf(String(status || '')) !== -1;
     }
 
+    function providerLabel(provider) {
+        if (provider === 'peertube') return 'PeerTube';
+        if (provider === 'youtube') return 'YouTube';
+        if (provider === 'vimeo') return 'Vimeo';
+        return __('External video', 'argentwolf-video-processor');
+    }
+
     function editorialGateState(videoId, state, publication, publicationDraft, editorPostId) {
         if (videoId < 1) {
             return { applicable: true, ready: false, detail: __('Choose a WordPress video for this block.', 'argentwolf-video-processor') };
@@ -95,7 +104,7 @@
         if (!state || !state.video) {
             return { applicable: true, ready: false, detail: __('AWVP is still validating this video.', 'argentwolf-video-processor') };
         }
-        if (state.video.remote_only) {
+        if (state.video.remote_only || state.video.external) {
             return { applicable: false, ready: true, detail: '' };
         }
         const originPostId = Number(state.video.origin_post_id || 0);
@@ -147,6 +156,9 @@
         const [publicationError, setPublicationError] = useState('');
         const [replaceExisting, setReplaceExisting] = useState(false);
         const [tagsDraftText, setTagsDraftText] = useState('');
+        const [externalUrl, setExternalUrl] = useState('');
+        const [existingVideos, setExistingVideos] = useState([]);
+        const [optionsLoading, setOptionsLoading] = useState(videoId < 1);
 
         const editorPost = useSelect(function (selectStore) {
             const editor = selectStore('core/editor');
@@ -172,7 +184,24 @@
             return function () { active = false; };
         }, [videoId]);
 
+        useEffect(function () {
+            let active = true;
+            if (videoId > 0) {
+                setOptionsLoading(false);
+                return function () { active = false; };
+            }
+            setOptionsLoading(true);
+            apiFetch({ path: OPTIONS_API })
+                .then(function (response) {
+                    if (active) setExistingVideos(Array.isArray(response && response.videos) ? response.videos : []);
+                })
+                .catch(function (requestError) { if (active) setError(boundedError(requestError)); })
+                .finally(function () { if (active) setOptionsLoading(false); });
+            return function () { active = false; };
+        }, [videoId]);
+
         const publicationBackend = state && state.video && !state.video.remote_only
+            && !state.video.external
             && state.video.destination_valid && state.video.destination
             && state.video.destination.backend_id !== 'local'
             ? state.video.destination.backend_id : '';
@@ -242,6 +271,36 @@
                 })
                 .catch(function (requestError) { setError(boundedError(requestError)); })
                 .finally(function () { setSaving(false); });
+        }
+
+        function bindExternal() {
+            const originPostId = Number(select('core/editor').getCurrentPostId() || 0);
+            const url = String(externalUrl || '').trim();
+            if (!url || originPostId < 1) {
+                setError(__('AWVP needs a saved WordPress post and a supported public video URL.', 'argentwolf-video-processor'));
+                return;
+            }
+            setSaving(true);
+            setError('');
+            apiFetch({
+                path: EXTERNAL_API,
+                method: 'POST',
+                data: { url: url, origin_post_id: originPostId }
+            })
+                .then(function (response) {
+                    setState(response);
+                    setAttributes({ videoId: Number(response.video.id) });
+                    setExternalUrl('');
+                })
+                .catch(function (requestError) { setError(boundedError(requestError)); })
+                .finally(function () { setSaving(false); });
+        }
+
+        function chooseExisting(value) {
+            const selected = Number(value || 0);
+            if (selected < 1 || saving) return;
+            setError('');
+            setAttributes({ videoId: selected });
         }
 
         function chooseDestination(value) {
@@ -576,9 +635,42 @@
         }
 
         if (videoId < 1) {
+            const existingOptions = [{ label: __('Choose an existing AWVP Video…', 'argentwolf-video-processor'), value: '' }]
+                .concat(existingVideos.map(function (video) {
+                    return { label: video.label, value: String(video.id) };
+                }));
             return el('div', blockProps,
                 error ? el(Notice, { status: 'error', isDismissible: false }, error) : null,
-                el('p', null, __('Choose or upload a WordPress video. AWVP will bind the attachment to one durable AWVP Video and resolve the site destination default once for this new video.', 'argentwolf-video-processor')),
+                el('p', null, __('Choose an existing AWVP Video, paste a supported public video URL, or choose WordPress media.', 'argentwolf-video-processor')),
+                optionsLoading
+                    ? el(Spinner)
+                    : el(SelectControl, {
+                        label: __('Existing AWVP Video', 'argentwolf-video-processor'),
+                        value: '',
+                        options: existingOptions,
+                        disabled: saving || existingOptions.length < 2,
+                        onChange: chooseExisting,
+                        help: existingOptions.length < 2
+                            ? __('No reusable AWVP Videos are currently available to you.', 'argentwolf-video-processor')
+                            : __('Includes usable local, remote-only, and external AWVP Videos.', 'argentwolf-video-processor')
+                    }),
+                el('div', { style: { marginTop: '1rem' } },
+                    el(TextControl, {
+                        label: __('Public video URL', 'argentwolf-video-processor'),
+                        value: externalUrl,
+                        type: 'url',
+                        placeholder: 'https://…',
+                        disabled: saving,
+                        onChange: setExternalUrl,
+                        help: __('Supports public PeerTube, YouTube, and Vimeo video URLs. PeerTube URLs are verified before AWVP creates or reuses a video.', 'argentwolf-video-processor')
+                    }),
+                    el(Button, {
+                        variant: 'secondary',
+                        disabled: saving || !String(externalUrl || '').trim(),
+                        onClick: bindExternal
+                    }, saving ? __('Adding video…', 'argentwolf-video-processor') : __('Use public video URL', 'argentwolf-video-processor'))
+                ),
+                el('p', { style: { marginTop: '1rem' } }, __('Or choose a video from the WordPress Media Library:', 'argentwolf-video-processor')),
                 el(MediaUploadCheck, null,
                     el(MediaUpload, {
                         allowedTypes: ['video'], multiple: false, onSelect: bindMedia,
@@ -599,17 +691,25 @@
                     __('WordPress publication is blocked until AWVP editorial review is complete. Draft saving remains allowed. ', 'argentwolf-video-processor') + editorialGate.detail)
                 : null,
             el(InspectorControls, null,
-                el(PanelBody, { title: __('AWVP destination', 'argentwolf-video-processor'), initialOpen: true },
-                    state && !state.video.destination_valid
-                        ? el(Notice, { status: 'warning', isDismissible: false }, __('The stored destination is invalid. Choose an explicit destination to repair it.', 'argentwolf-video-processor')) : null,
-                    el(SelectControl, {
-                        label: __('Final destination', 'argentwolf-video-processor'), value: current, options: options,
-                        disabled: loading || saving || options.length === 0 || !!(state && state.video && state.video.remote_only), onChange: chooseDestination,
-                        help: state && state.video && state.video.remote_only
-                            ? __('This AWVP Video is remote-only because its local source was removed. Attach a new local source before changing its destination.', 'argentwolf-video-processor')
-                            : __('Destination selection remains planning state. Local WordPress playback stays authoritative until a later verified cutover.', 'argentwolf-video-processor')
-                    })
-                ),
+                state && state.video && state.video.external
+                    ? el(PanelBody, { title: __('External video', 'argentwolf-video-processor'), initialOpen: true },
+                        el('p', null, __('Provider:', 'argentwolf-video-processor') + ' ' + providerLabel(state.video.external_provider)),
+                        state.video.external_url
+                            ? el('p', null, el('a', { href: state.video.external_url, target: '_blank', rel: 'noopener noreferrer' }, __('Open canonical video page', 'argentwolf-video-processor')))
+                            : null,
+                        el('p', { className: 'description' }, __('External embedding is serving state only. It does not authorize local-source cleanup or create a publishing destination.', 'argentwolf-video-processor'))
+                    )
+                    : el(PanelBody, { title: __('AWVP destination', 'argentwolf-video-processor'), initialOpen: true },
+                        state && !state.video.destination_valid
+                            ? el(Notice, { status: 'warning', isDismissible: false }, __('The stored destination is invalid. Choose an explicit destination to repair it.', 'argentwolf-video-processor')) : null,
+                        el(SelectControl, {
+                            label: __('Final destination', 'argentwolf-video-processor'), value: current, options: options,
+                            disabled: loading || saving || options.length === 0 || !!(state && state.video && state.video.remote_only), onChange: chooseDestination,
+                            help: state && state.video && state.video.remote_only
+                                ? __('This AWVP Video is remote-only because its local source was removed. Attach a new local source before changing its destination.', 'argentwolf-video-processor')
+                                : __('Destination selection remains planning state. Local WordPress playback stays authoritative until a later verified cutover.', 'argentwolf-video-processor')
+                        })
+                    ),
                 publicationPanel()
             ),
             error ? el(Notice, { status: 'error', isDismissible: false }, error) : null,
@@ -620,26 +720,32 @@
                     state.video.remote_only
                         ? el(Notice, { status: 'info', isDismissible: false }, __('The local WordPress source was removed. This block continues to use the verified remote video.', 'argentwolf-video-processor'))
                         : null,
-                    state.video.remote_only && state.video.remote_embed_url
+                    state.video.external
+                        ? el(Notice, { status: 'info', isDismissible: false }, __('This AWVP Video embeds a public external video. No publishing credential is required and autoplay remains disabled.', 'argentwolf-video-processor'))
+                        : null,
+                    (state.video.remote_only || state.video.external) && state.video.remote_embed_url
                         ? el('iframe', {
                             src: state.video.remote_embed_url,
                             title: state.video.attachment_title || __('AWVP video', 'argentwolf-video-processor'),
                             loading: 'lazy',
+                            referrerPolicy: 'strict-origin-when-cross-origin',
                             allow: 'fullscreen; picture-in-picture',
                             allowFullScreen: true,
                             style: { width: '100%', aspectRatio: '16 / 9', marginTop: '0.75rem', border: 0 }
                         })
                         : (state.video.attachment_url ? el('video', { controls: true, preload: 'metadata', src: state.video.attachment_url, style: { width: '100%', marginTop: '0.75rem' } }) : null),
-                    el('p', null, state.video.destination_valid && state.video.destination
-                        ? __('Destination:', 'argentwolf-video-processor') + ' ' + state.video.destination.label
-                        : __('Destination needs review.', 'argentwolf-video-processor'))
+                    el('p', null, state.video.external
+                        ? __('Embedded from:', 'argentwolf-video-processor') + ' ' + providerLabel(state.video.external_provider)
+                        : (state.video.destination_valid && state.video.destination
+                            ? __('Destination:', 'argentwolf-video-processor') + ' ' + state.video.destination.label
+                            : __('Destination needs review.', 'argentwolf-video-processor')))
                 ) : null
         );
     }
 
     registerBlockType('argentwolf-video-processor/video', {
         title: __('ArgentWolf Video', 'argentwolf-video-processor'),
-        description: __('Bind a WordPress video to an AWVP Video, choose its destination, and review PeerTube publication intent.', 'argentwolf-video-processor'),
+        description: __('Choose an AWVP Video, use WordPress media, or embed supported PeerTube, YouTube, and Vimeo videos.', 'argentwolf-video-processor'),
         category: 'media', icon: 'video-alt3',
         attributes: { videoId: { type: 'integer', default: 0 } },
         edit: Edit,

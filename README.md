@@ -1,8 +1,13 @@
 # ArgentWolf Video Processor
 
-ArgentWolf Video Processor is a self-hosted WordPress plugin that queues video
-attachments and creates privacy-cleaned, streaming-friendly derivatives with
-the server's FFmpeg and FFprobe binaries.
+ArgentWolf Video Processor is a self-hosted WordPress video workflow that processes local media for streaming, publishes selected videos to PeerTube, and embeds supported public videos from PeerTube, YouTube, and Vimeo through one durable AWVP Video/block model.
+
+That single AWVP Video model covers three authoring paths: choose/reuse an
+existing AWVP Video, bind WordPress Media Library video for local processing or
+managed PeerTube publication, or paste a supported public provider URL. External
+embedding requires no publishing credentials. Playback never enables autoplay;
+provider embeds are generated from reviewed canonical identities rather than
+storing arbitrary iframe markup.
 
 The original attachment remains untouched. Generated outputs can:
 
@@ -275,13 +280,13 @@ the same advisory registry with their own capability and NVD link.
 
 ## Current release lines
 
-### RC13.10 provider-neutral embedding (development)
+### RC13.10 provider-neutral embedding
 
-RC13.10 begins with a network-free provider-neutral recognition layer for PeerTube, YouTube, and Vimeo URLs. It canonicalizes supported equivalent URL forms and derives no-autoplay embed URLs without changing current editor, serving, publication, or retention behavior. The external-video authoring/rendering workflow remains under development; the public plugin description is intentionally unchanged until that workflow lands end to end.
+RC13.10 adds end-to-end provider-neutral embedding for supported public PeerTube, YouTube, and Vimeo URLs. Authors can choose an existing AWVP Video, paste a supported public URL, or bind WordPress Media Library video through the same block. PeerTube URLs are positively verified before durable creation and matching managed PeerTube publications are reused rather than duplicated. External embeds render from durable local identity only, require no publishing credentials, perform no provider HTTP during visitor rendering, never request autoplay, and never become archive/retention authority for local source deletion.
 
 Public WordPress.org stable release: `1.0.0`.
 
-Current controlled development candidate: `2.0.0-rc13.9`. RC packages are built
+Current controlled development candidate: `2.0.0-rc13.10`. RC packages are built
 from reviewed Forgejo commits and are not published to WordPress.org SVN. The
 public Stable tag remains `1.0.0` until final `2.0.0` promotion.
 

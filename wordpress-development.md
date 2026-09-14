@@ -503,7 +503,7 @@ The first recognition layer is deliberately read-only and network-free. For dece
 
 ### R46.6 serving boundary
 
-The AWVP dynamic block may render the verified PeerTube embed only through `Video_Serving_Service`; otherwise it must call the existing local `wp_video_shortcode()` path. Rendering performs local metadata/database reads only and never provider HTTP. The detached cutover writer is fed by R46.5b's positively verified publication state and stores only non-secret evidence.
+The AWVP dynamic block renders managed PeerTube publication only through `Video_Serving_Service`, renders provider-neutral external video only from the sanitized durable `External_Video_Source` identity, and otherwise uses the existing local AWVP native-player path. Rendering performs local metadata/database reads only and never provider HTTP. External-source rendering does not create publication/serving authority and cannot be used as retention proof. The detached cutover writer is fed by R46.5b's positively verified publication state and stores only non-secret evidence.
 
 Periodic remote-publication health is post-cutover monitoring, not a substitute for first-publication execution. A remote asset enters periodic broken-publication monitoring only after the exact asset has durable prior public-serving qualification (`last_healthy_at`) or exact historical serving authority from an older installation. Before that boundary, private/processing/failure observations remain publication/finalizer state and must not generate periodic outage presentation or publication-health email alerts.
 
@@ -532,3 +532,9 @@ User-facing AWVP settings and editor text should describe actions in ordinary pu
 ### RC13.10 external-source application boundary
 
 External URL binding is intentionally separate from publishing destination selection. Supported YouTube/Vimeo identities are canonicalized locally; PeerTube-shaped URLs must pass the reviewed public-video verification boundary and converge to the authoritative public UUID before durable creation. The resulting AWVP Video uses `source_state=external`, has no local attachment or publishing destination, and must never be accepted as local-retention/source-retirement authority. Equivalent canonical identities reuse the existing external AWVP Video, while a verified PeerTube identity already managed by a configured backend reuses that managed AWVP Video instead of creating a duplicate.
+
+### RC13.10 provider-neutral authoring and rendering
+
+Keep block content provider-neutral by serializing only `videoId`. An unbound block offers three paths: choose an existing AWVP Video, paste a supported public video URL, or choose WordPress Media Library video. The existing-video picker must include usable local, remote-only, and external AWVP Videos and the REST boundary must filter results by the current user's `edit_post` capability.
+
+External frontend rendering consumes only the durable sanitized embed identity already stored on the AWVP Video. Never parse arbitrary provider URL input or perform provider HTTP during visitor rendering. Use one responsive iframe contract for PeerTube/YouTube/Vimeo with lazy loading, `strict-origin-when-cross-origin`, fullscreen/picture-in-picture only, and no autoplay permission. External records bypass the local/PeerTube publication editorial gate because they have no AWVP publishing destination; they remain outside local-retention/source-retirement authority.

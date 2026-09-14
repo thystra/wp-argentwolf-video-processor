@@ -5,11 +5,13 @@
   "title": "ArgentWolf Video",
   "category": "media",
   "icon": "video-alt3",
-  "description": "Bind a WordPress video to an AWVP Video and choose its final destination.",
+  "description": "Choose an AWVP Video, use WordPress media, or embed supported PeerTube, YouTube, and Vimeo videos.",
   "keywords": [
     "video",
     "media",
-    "peertube"
+    "peertube",
+    "youtube",
+    "vimeo"
   ],
   "textdomain": "argentwolf-video-processor",
   "attributes": {

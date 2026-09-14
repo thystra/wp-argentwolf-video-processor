@@ -1,3 +1,11 @@
+## 2.0.0-rc13.10 - 2026-09-14
+
+- Add provider-neutral public video embedding for PeerTube, YouTube, and Vimeo through the durable AWVP Video/block model.
+- Add block authoring paths to choose an existing local/remote-only/external AWVP Video, paste a supported public URL, or use WordPress Media Library video.
+- Verify arbitrary public PeerTube URLs before durable creation, converge supported aliases to the authoritative public UUID, and reuse matching AWVP-managed PeerTube videos.
+- Render external embeds from sanitized durable identity with responsive safe iframe attributes, strict referrer policy, no autoplay permission, and no provider HTTP on visitor requests.
+- Keep external-source identity independent from publishing destinations, serving authority, archive proof, and local-retention/source-retirement authority, including fail-closed cleanup-race fencing.
+
 ## 2.0.0-rc13.9 - 2026-09-13
 
 - Fix completed RC13.7/RC13.8 delete-all attachment reconciliation after routine remote-health refresh advances serving-authority `verified_at`. The migration now compares the completed cleanup journal against durable publication identity (backend, generation, plan, manifest, remote asset, and UUID) while still requiring current verified remote serving.

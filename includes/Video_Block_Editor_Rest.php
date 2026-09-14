@@ -40,6 +40,15 @@ final class Video_Block_Editor_Rest
         );
         register_rest_route(
             self::NAMESPACE,
+            '/editor/video-options',
+            array(
+                'methods'             => 'GET',
+                'callback'            => array($this, 'options'),
+                'permission_callback' => array($this, 'can_list_options'),
+            )
+        );
+        register_rest_route(
+            self::NAMESPACE,
             '/editor/videos/(?P<video_id>[1-9][0-9]*)',
             array(
                 'methods'             => 'GET',
@@ -102,6 +111,26 @@ final class Video_Block_Editor_Rest
         }
         $state['status'] = $result['status'];
         return rest_ensure_response($state);
+    }
+
+    public function can_list_options(\WP_REST_Request $request): bool
+    {
+        unset($request);
+        return current_user_can('upload_files');
+    }
+
+    public function options(\WP_REST_Request $request): \WP_REST_Response
+    {
+        unset($request);
+        $visible = array();
+        foreach ($this->service->editor_options() as $option) {
+            $video_id = Video_Meta::sanitize_positive_id($option['id'] ?? null);
+            if ($video_id < 1 || ! current_user_can('edit_post', $video_id)) {
+                continue;
+            }
+            $visible[] = $option;
+        }
+        return rest_ensure_response(array('videos' => $visible));
     }
 
     public function can_edit_video(\WP_REST_Request $request): bool

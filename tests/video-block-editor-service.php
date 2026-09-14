@@ -51,6 +51,21 @@ function get_post(int $post_id): object|false
 {
     return $GLOBALS['awvp_editor_posts'][$post_id] ?? false;
 }
+function get_posts(array $args = array()): array
+{
+    $ids = array();
+    $statuses = isset($args['post_status']) && is_array($args['post_status']) ? $args['post_status'] : array('publish');
+    foreach ($GLOBALS['awvp_editor_posts'] as $id => $post) {
+        if (! is_object($post)
+            || ($args['post_type'] ?? '') !== ($post->post_type ?? '')
+            || ! in_array((string) ($post->post_status ?? ''), $statuses, true)) {
+            continue;
+        }
+        $ids[] = (int) $id;
+    }
+    rsort($ids, SORT_NUMERIC);
+    return array_slice($ids, 0, max(0, (int) ($args['posts_per_page'] ?? count($ids))));
+}
 function get_post_mime_type(int $post_id): string|false
 {
     $post = $GLOBALS['awvp_editor_posts'][$post_id] ?? null;
@@ -321,5 +336,17 @@ $assert('youtube' === ($external_state['video']['external_provider'] ?? ''), 'Ex
 $assert('https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ' === ($external_state['video']['remote_embed_url'] ?? ''), 'External editor embed URL mismatch.');
 $assert(false === ($external_state['video']['destination_valid'] ?? true), 'External editor state acquired a publishing destination.');
 $assert(Video_Block_Editor_Service::REFUSED === $service->set_destination($external_id, 'local')['status'], 'External AWVP Video allowed publishing destination mutation.');
+
+$editor_options = $service->editor_options();
+$external_option = null;
+$local_option = null;
+foreach ($editor_options as $option) {
+    if ($external_id === ($option['id'] ?? 0)) $external_option = $option;
+    if ($video_id === ($option['id'] ?? 0)) $local_option = $option;
+}
+$assert(is_array($external_option), 'Existing-video selector omitted external AWVP Video.');
+$assert('external' === ($external_option['source'] ?? '') && 'youtube' === ($external_option['provider'] ?? ''), 'External selector option lost provider/source classification.');
+$assert(str_contains((string) ($external_option['label'] ?? ''), 'YouTube'), 'External selector option is not human-readable.');
+$assert(is_array($local_option) && 'local' === ($local_option['source'] ?? ''), 'Existing-video selector omitted usable local AWVP Video.');
 
 fwrite(STDOUT, "R46 video block editor service tests passed.\n");

@@ -2,7 +2,7 @@
  * Frontend containment for the dynamic ArgentWolf Video block.
  */
 .wp-block-argentwolf-video-processor-video,
-.wp-block-argentwolf-video-processor-video .awvp-peertube-embed {
+.wp-block-argentwolf-video-processor-video .awvp-provider-embed {
     max-width: 100%;
 }
 
@@ -13,14 +13,14 @@
     height: auto;
 }
 
-.wp-block-argentwolf-video-processor-video .awvp-peertube-embed {
+.wp-block-argentwolf-video-processor-video .awvp-provider-embed {
     position: relative;
     width: 100%;
     aspect-ratio: 16 / 9;
     overflow: hidden;
 }
 
-.wp-block-argentwolf-video-processor-video .awvp-peertube-embed iframe {
+.wp-block-argentwolf-video-processor-video .awvp-provider-embed iframe {
     display: block;
     width: 100%;
     max-width: 100%;

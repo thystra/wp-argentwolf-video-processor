@@ -5,7 +5,7 @@
 - [x] RC13.8: fail closed on direct non-AWVP WordPress attachment references or an incomplete reference scan.
 - [x] RC13.8: retire delete-all Media Library attachments only through WordPress attachment lifecycle APIs.
 - [x] RC13.9: let completed-cleanup reconciliation tolerate a newer serving verification timestamp only when durable remote publication identity is unchanged and current remote serving remains verified.
-- [ ] RC13.10: add provider-neutral embedding for supported public PeerTube, YouTube, and Vimeo URLs without coupling embedding to configured publishing backends.
+- [x] RC13.10: add provider-neutral embedding for supported public PeerTube, YouTube, and Vimeo URLs without coupling embedding to configured publishing backends.
 
 # ArgentWolf Video Processor TODO
 
@@ -591,6 +591,6 @@
 - [x] Add the network-free provider-neutral URL recognition/canonical-identity foundation for public PeerTube-shaped URLs, YouTube, and Vimeo, including no-autoplay canonical embed generation and equivalent-form deduplication.
 - [x] Add the editor application boundary that verifies arbitrary public PeerTube instances/videos, converges supported aliases to the authoritative public UUID, reuses an existing managed PeerTube AWVP Video when instance+UUID already match, and safely creates/reuses one durable external AWVP Video identity.
 - [x] Persist external-source identity independently from publishing destination/serving authority and prove external embeds cannot authorize local retention/source retirement, including a queued-cleanup race fence when source state changes to `external`.
-- [ ] Extend the block authoring UX with **Choose existing AWVP Video**, **Paste video URL**, and the existing WordPress Media Library path, including remote-only/external AWVP Video selection.
-- [ ] Render verified external PeerTube/YouTube/Vimeo identities through one provider-neutral iframe path with safe attributes, responsive layout, and no autoplay.
-- [ ] Update plugin header/README/WordPress.org-facing description only when the external embedding workflow actually lands end to end.
+- [x] Extend the block authoring UX with **Choose existing AWVP Video**, **Paste video URL**, and the existing WordPress Media Library path, including remote-only/external AWVP Video selection.
+- [x] Render verified external PeerTube/YouTube/Vimeo identities through one provider-neutral iframe path with safe attributes, responsive layout, and no autoplay.
+- [x] Update plugin header/README/WordPress.org-facing description now that the external embedding workflow is end to end.

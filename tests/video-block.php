@@ -44,12 +44,17 @@ function sanitize_key(mixed $value): string
 function sanitize_text_field(mixed $value): string { return trim(strip_tags((string) $value)); }
 
 require_once dirname(__DIR__) . '/includes/Backend_Identity.php';
+require_once dirname(__DIR__) . '/includes/PeerTube_Origin.php';
 require_once dirname(__DIR__) . '/includes/Video_Post_Type.php';
 require_once dirname(__DIR__) . '/includes/Video_Meta.php';
+require_once dirname(__DIR__) . '/includes/Video_Embed_Identity.php';
+require_once dirname(__DIR__) . '/includes/External_Video_Source.php';
 require_once dirname(__DIR__) . '/includes/Video_Serving_Resolver.php';
 require_once dirname(__DIR__) . '/includes/Video_Block.php';
 
 use ArgentVideo\Video_Block;
+use ArgentVideo\External_Video_Source;
+use ArgentVideo\Video_Embed_Identity;
 use ArgentVideo\Video_Meta;
 use ArgentVideo\Video_Post_Type;
 use ArgentVideo\Video_Serving_Resolver;
@@ -96,6 +101,35 @@ $remote_after_retirement = $remote_block->render(array('videoId'=>101));
 $assert(str_contains($remote_after_retirement, '<iframe') && str_contains($remote_after_retirement, 'video.example.org/videos/embed/'), 'Remote-only AWVP Video stopped rendering after attachment retirement.');
 $GLOBALS['awvp_block_meta'][101][Video_Meta::ATTACHMENT_ID] = 20;
 
+$GLOBALS['awvp_block_posts'][102] = (object) array('ID'=>102,'post_type'=>Video_Post_Type::POST_TYPE,'post_status'=>'publish');
+$youtube_identity = Video_Embed_Identity::create(Video_Embed_Identity::YOUTUBE, Video_Embed_Identity::YOUTUBE_ORIGIN, 'dQw4w9WgXcQ');
+$GLOBALS['awvp_block_meta'][102][Video_Meta::SOURCE_STATE] = 'external';
+$GLOBALS['awvp_block_meta'][102][Video_Meta::EXTERNAL_SOURCE] = External_Video_Source::create((array) $youtube_identity, 'External clip', 0);
+$external_html = $block->render(array('videoId'=>102));
+$assert(str_contains($external_html, 'awvp-provider-embed--youtube'), 'External YouTube AWVP Video did not use provider-neutral embed wrapper.');
+$assert(str_contains($external_html, 'https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ'), 'External YouTube AWVP Video lost durable privacy-enhanced embed URL.');
+$assert(str_contains($external_html, 'referrerpolicy="strict-origin-when-cross-origin"'), 'External provider iframe lost reviewed referrer policy.');
+$assert(! str_contains(strtolower($external_html), 'autoplay'), 'External provider iframe unexpectedly enables autoplay.');
+$assert(! str_contains($external_html, 'allow="autoplay'), 'External provider iframe grants autoplay capability.');
+
+$GLOBALS['awvp_block_posts'][103] = (object) array('ID'=>103,'post_type'=>Video_Post_Type::POST_TYPE,'post_status'=>'publish');
+$vimeo_identity = Video_Embed_Identity::create(Video_Embed_Identity::VIMEO, Video_Embed_Identity::VIMEO_ORIGIN, '123456789');
+$GLOBALS['awvp_block_meta'][103][Video_Meta::SOURCE_STATE] = 'external';
+$GLOBALS['awvp_block_meta'][103][Video_Meta::EXTERNAL_SOURCE] = External_Video_Source::create((array) $vimeo_identity, 'Vimeo clip', 0);
+$vimeo_html = $block->render(array('videoId'=>103));
+$assert(str_contains($vimeo_html, 'awvp-provider-embed--vimeo') && str_contains($vimeo_html, 'https://player.vimeo.com/video/123456789'), 'External Vimeo AWVP Video did not render from canonical durable identity.');
+
+$GLOBALS['awvp_block_posts'][104] = (object) array('ID'=>104,'post_type'=>Video_Post_Type::POST_TYPE,'post_status'=>'publish');
+$peertube_identity = Video_Embed_Identity::create(Video_Embed_Identity::PEERTUBE, 'https://video.example.org', '123e4567-e89b-42d3-a456-426614174000');
+$GLOBALS['awvp_block_meta'][104][Video_Meta::SOURCE_STATE] = 'external';
+$GLOBALS['awvp_block_meta'][104][Video_Meta::EXTERNAL_SOURCE] = External_Video_Source::create((array) $peertube_identity, 'PeerTube clip', 123);
+$peertube_external_html = $block->render(array('videoId'=>104));
+$assert(str_contains($peertube_external_html, 'awvp-provider-embed--peertube') && str_contains($peertube_external_html, 'https://video.example.org/videos/embed/123e4567-e89b-42d3-a456-426614174000'), 'External PeerTube AWVP Video did not render from verified canonical durable identity.');
+
+$GLOBALS['awvp_block_meta'][102][Video_Meta::ATTACHMENT_ID] = 20;
+$assert('' === $block->render(array('videoId'=>102)), 'External source state rendered despite acquiring an unexpected local attachment.');
+unset($GLOBALS['awvp_block_meta'][102][Video_Meta::ATTACHMENT_ID]);
+
 $assert('' === $block->render(array()), 'Unbound block unexpectedly rendered frontend output.');
 $assert('' === $block->render(array('videoId'=>999)), 'Unknown AWVP Video unexpectedly rendered frontend output.');
 $GLOBALS['awvp_block_posts'][20]->post_mime_type = 'image/jpeg';
@@ -117,7 +151,7 @@ $expected_script_version = substr(hash_file('sha256', dirname(__DIR__) . '/block
 $assert($expected_script_version === ($asset['version'] ?? null), 'AWVP block script version does not match shipped editor bytes.');
 $css = (string) file_get_contents(dirname(__DIR__) . '/blocks/video/style.css');
 $assert(str_contains($css, '.wp-block-argentwolf-video-processor-video video') && str_contains($css, 'max-width: 100%') && str_contains($css, 'height: auto'), 'AWVP local video stylesheet does not constrain native playback to the content container.');
-$assert(str_contains($css, '.awvp-peertube-embed') && str_contains($css, 'aspect-ratio: 16 / 9') && str_contains($css, '.awvp-peertube-embed iframe') && str_contains($css, 'height: 100%'), 'AWVP PeerTube embed stylesheet is not responsively contained.');
+$assert(str_contains($css, '.awvp-provider-embed') && str_contains($css, 'aspect-ratio: 16 / 9') && str_contains($css, '.awvp-provider-embed iframe') && str_contains($css, 'height: 100%'), 'AWVP provider embed stylesheet is not responsively contained.');
 
 
 $js = (string) file_get_contents(dirname(__DIR__) . '/blocks/video/index.js');
@@ -129,10 +163,14 @@ $assert(str_contains($js, "publication.plan_status === 'channel_mismatch'"), 'Pu
 $assert(str_contains($js, "lockPostSaving(editorialLockName)") && str_contains($js, "unlockPostSaving(editorialLockName)"), 'Editor does not lock only the publicational save boundary while review is unresolved.');
 $assert(str_contains($js, "['publish', 'future', 'private']"), 'Editor publication lock does not cover publish/schedule/private transitions.');
 $assert(str_contains($js, "origin_post_id"), 'Editor publication lock cannot distinguish the original anchor from reused blocks.');
-$assert(str_contains($js, "if (state.video.remote_only)"), 'Remote-only AWVP Videos still enter the local-source editorial publication gate.');
-$assert(str_contains($js, "state && state.video && !state.video.remote_only"), 'Remote-only AWVP Videos still load a mutable PeerTube publishing panel.');
-$assert(str_contains($js, "state.video.remote_only && state.video.remote_embed_url"), 'Remote-only AWVP Videos do not expose their verified remote preview in the editor.');
+$assert(str_contains($js, "if (state.video.remote_only || state.video.external)"), 'Remote-only/external AWVP Videos still enter the local-source editorial publication gate.');
+$assert(str_contains($js, "&& !state.video.external"), 'External AWVP Videos still load a mutable PeerTube publishing panel.');
+$assert(str_contains($js, "(state.video.remote_only || state.video.external) && state.video.remote_embed_url"), 'Remote-only/external AWVP Videos do not expose their reviewed iframe preview in the editor.');
 $assert(str_contains($js, "allow: 'fullscreen; picture-in-picture'"), 'Remote-only editor iframe grants unexpected autoplay capability or lost the reviewed allow list.');
+$assert(str_contains($js, "referrerPolicy: 'strict-origin-when-cross-origin'"), 'Provider iframe preview lost the reviewed referrer policy.');
+$assert(str_contains($js, "'/argentwolf-video-processor/v1/editor/external-videos'"), 'Block editor does not expose the provider-neutral URL application boundary.');
+$assert(str_contains($js, "'/argentwolf-video-processor/v1/editor/video-options'"), 'Block editor does not load reusable AWVP Video identities.');
+$assert(str_contains($js, "Includes usable local, remote-only, and external AWVP Videos."), 'Existing-video selector does not communicate the full reusable identity set.');
 $assert(str_contains($js, 'tagsDraftText') && str_contains($js, 'setTagsDraftText(value)'), 'PeerTube tag textarea does not preserve raw in-progress spaces/newlines.');
 $assert(1 === substr_count($js, "label: __('I reviewed these PeerTube publishing settings'"), 'Publication wizard does not expose one consolidated explicit-review checkbox.');
 foreach (array('I reviewed the PeerTube title','I reviewed the channel','I reviewed the PeerTube tags','I reviewed the final privacy','I reviewed the sensitive-content declaration') as $old_review_label) {
@@ -152,6 +190,7 @@ $assert(str_contains($bootstrap, "includes/Editorial_Publish_Validator.php") && 
 $assert(str_contains($bootstrap, "includes/Video_Serving_Authority.php") && str_contains($bootstrap, "includes/Video_Serving_Service.php") && str_contains($bootstrap, "includes/PeerTube_Serving_Cutover_Service.php"), 'R46.6 serving/cutover classes are not loaded by plugin bootstrap.');
 $block_source = (string) file_get_contents(dirname(__DIR__) . '/includes/Video_Block.php');
 $assert(str_contains($block_source, 'peertube_embed_url') && str_contains($block_source, '<iframe'), 'AWVP block has no verified PeerTube serving path.');
+$assert(str_contains($block_source, 'External_Video_Source::sanitize') && str_contains($block_source, 'render_provider_iframe'), 'AWVP block has no durable provider-neutral external rendering path.');
 $assert(! str_contains($block_source, 'wp_video_shortcode'), 'AWVP block still layers hls.js on WordPress MediaElement shortcode output.');
 $assert(str_contains($block_source, 'render_attachment_player'), 'AWVP block does not use the shared AWVP native local-player renderer.');
 foreach (array('wp_remote_', 'PeerTube_Api_Client', 'update_publication', 'update_privacy') as $forbidden) { $assert(! str_contains($block_source, $forbidden), 'Frontend block acquired provider-network/mutation authority: ' . $forbidden); }

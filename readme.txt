@@ -8,14 +8,21 @@ Stable tag: 1.0.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-Processes WordPress video locally or publishes selected videos to configured PeerTube servers.
+Processes local video for streaming, publishes to PeerTube, and embeds videos from PeerTube, YouTube, Vimeo, and other supported services.
 
 == Description ==
 
 ArgentWolf Video Processor keeps WordPress video sources by default and creates
 smaller derivatives suitable for browser playback on connections ranging from
 slow DSL to broadband. Version 2.0 can also publish selected videos to a
-configured PeerTube server.
+configured PeerTube server and embed supported public videos from PeerTube,
+YouTube, and Vimeo through the same AWVP Video block.
+
+The block uses one durable AWVP Video identity whether the source is local,
+managed on PeerTube, remote-only after safe local retirement, or an external
+public embed. Authors can choose an existing AWVP Video, use WordPress Media
+Library video, or paste a supported public provider URL. External embedding
+requires no publishing credentials, and AWVP never enables autoplay.
 
 The default configuration creates:
 
@@ -186,7 +193,7 @@ The existing settings keys, queue table, attachment metadata, hook names, cron
 identifiers, Settings page slug, and `wp argent-video` command are retained for
 upgrade compatibility.
 
-This Forgejo release-candidate package identifies itself as `2.0.0-rc13.9` in the
+This Forgejo release-candidate package identifies itself as `2.0.0-rc13.10` in the
 plugin header while `Stable tag: 1.0.0` deliberately continues to identify the
 public WordPress.org release. RC packages are not published to WordPress.org SVN.
 The Stable tag moves to `2.0.0` only when the final release is promoted.
@@ -196,6 +203,9 @@ Administrators upgrading from version 0.2.3 should use the normal WordPress
 plugin-update workflow and confirm the plugin remains active.
 
 == Upgrade Notice ==
+
+= 2.0.0-rc13.10 =
+RC13 series build 10. Adds provider-neutral PeerTube, YouTube, and Vimeo embedding through the AWVP Video block, with no autoplay and no external-embed retention authority. WordPress.org remains on 1.0.0.
 
 = 2.0.0-rc13.9 =
 RC13 series build 9. Fixes completed source-retirement reconciliation after normal remote verification refreshes the serving timestamp, while retaining strict fail-closed publication identity checks. WordPress.org remains on 1.0.0.
@@ -282,6 +292,13 @@ Renames the public plugin and package to ArgentWolf Video Processor and prepares
 the project for WordPress.org review while retaining existing data identifiers.
 
 == Changelog ==
+
+= 2.0.0-rc13.10 =
+* Adds one provider-neutral external-video identity and AWVP Video workflow for public PeerTube, YouTube, and Vimeo embeds.
+* Lets block authors choose an existing AWVP Video, paste a supported public video URL, or use WordPress Media Library video through the same block.
+* Verifies arbitrary public PeerTube videos before durable creation, converges supported aliases to the authoritative UUID, and reuses an already-managed PeerTube AWVP Video instead of duplicating it.
+* Renders external video from durable local identity only; visitor rendering performs no provider HTTP, uses responsive safe iframe attributes, and never requests autoplay.
+* Keeps external embedding separate from publishing credentials, serving authority, archive proof, and local-retention/source-retirement permission.
 
 = 2.0.0-rc13.9 =
 * Allows already-completed delete-all migration to retire a stale Media Library attachment after routine remote verification advances only the serving-authority timestamp.

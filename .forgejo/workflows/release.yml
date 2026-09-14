@@ -118,6 +118,9 @@ jobs:
           php tests/video-embed-providers.php
           php tests/peertube-public-video-verifier.php
           php tests/external-video-source-service.php
+          php tests/video-block-editor-service.php
+          php tests/video-block-editor-rest.php
+          php tests/video-block.php
           php tests/uninstall-data.php
           php tests/remote-health-operator.php
           php tests/peertube-verified-remote-asset-refresher.php

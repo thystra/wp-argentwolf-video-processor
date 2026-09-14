@@ -228,6 +228,74 @@ final class Video_Block_Editor_Service
     }
 
     /**
+     * Return a bounded, network-free list of AWVP Videos that currently have
+     * usable editor state. Capability filtering belongs to the REST boundary;
+     * this service only classifies durable video/source state.
+     *
+     * @return list<array{id:int,label:string,source:string,provider:string}>
+     */
+    public function editor_options(int $limit = 100): array
+    {
+        $limit = max(1, min(200, $limit));
+        $ids = get_posts(array(
+            'post_type'        => Video_Post_Type::POST_TYPE,
+            'post_status'      => array('publish', 'draft', 'pending', 'private', 'future'),
+            'fields'           => 'ids',
+            'posts_per_page'   => $limit,
+            'orderby'          => array('modified' => 'DESC', 'ID' => 'DESC'),
+            'no_found_rows'    => true,
+            'suppress_filters' => true,
+        ));
+        if (! is_array($ids)) {
+            return array();
+        }
+
+        $options = array();
+        foreach ($ids as $candidate) {
+            $video_id = Video_Meta::sanitize_positive_id($candidate);
+            if ($video_id < 1) {
+                continue;
+            }
+            $state = $this->editor_state($video_id);
+            if (null === $state || ! is_array($state['video'] ?? null)) {
+                continue;
+            }
+            $video = $state['video'];
+            $title = sanitize_text_field((string) ($video['attachment_title'] ?? ''));
+            if ('' === $title) {
+                $title = __('AWVP video', 'argentwolf-video-processor');
+            }
+
+            $source = 'local';
+            $provider = '';
+            $suffix = __('WordPress media', 'argentwolf-video-processor');
+            if (true === ($video['external'] ?? false)) {
+                $source = 'external';
+                $provider = sanitize_key((string) ($video['external_provider'] ?? ''));
+                $suffix = match ($provider) {
+                    'peertube' => 'PeerTube',
+                    'youtube' => 'YouTube',
+                    'vimeo' => 'Vimeo',
+                    default => __('External video', 'argentwolf-video-processor'),
+                };
+            } elseif (true === ($video['remote_only'] ?? false)) {
+                $source = 'remote';
+                $provider = 'peertube';
+                $suffix = __('PeerTube remote-only', 'argentwolf-video-processor');
+            }
+
+            $options[] = array(
+                'id'       => $video_id,
+                'label'    => $title . ' — ' . $suffix,
+                'source'   => $source,
+                'provider' => $provider,
+            );
+        }
+
+        return $options;
+    }
+
+    /**
      * Persist one concrete destination selection. `site_default` is resolved
      * now and stored as concrete backend/channel state; it is never a live
      * pointer that can reroute the existing video later.
