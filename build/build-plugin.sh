@@ -149,6 +149,15 @@ done
 
 for required_runtime_file in \
     Backend_Health_Incident_Store.php \
+    External_Video_Source.php \
+    External_Video_Source_Service.php \
+    PeerTube_Public_Video_Verifier.php \
+    Video_Embed_Provider.php \
+    Video_Embed_Identity.php \
+    Video_Embed_Resolver.php \
+    PeerTube_Embed_Provider.php \
+    YouTube_Embed_Provider.php \
+    Vimeo_Embed_Provider.php \
     Backend_Maintenance_Status_Store.php \
     Backend_Processing_Estimator.php \
     Backend_Serving_Priority_Store.php \

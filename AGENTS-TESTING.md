@@ -559,3 +559,20 @@ The RC13.7/RC13.8 migration path must not reuse the active-cleanup full authorit
 ## RC13.10 provider-neutral embed recognition regression
 
 Provider-neutral embedding must begin from canonical identity rather than arbitrary iframe HTML. Dependency-free tests must cover supported equivalent URL forms for PeerTube, YouTube, and Vimeo; stable provider/origin/video identity; derived canonical/embed URLs; malformed/credential-bearing/private-token refusal; and an explicit no-autoplay invariant. YouTube canonical embedding should use the privacy-enhanced `youtube-nocookie.com` origin. Public PeerTube recognition at this stage is syntax-only: it may recognize safe public PeerTube-shaped URLs, but later durable creation must positively verify the provider/video and reconcile numeric ID, UUID, and short-UUID aliases through a bounded public application boundary before claiming deduplication across different PeerTube identifiers. External embed identity alone is never retention/archive proof.
+
+## RC13.10 provider-neutral embedding qualification
+
+The exact-package clean-install and public-1.0.0-upgrade matrix must exercise the
+installed provider-neutral application/rendering boundary, not only source-level
+recognizers. At minimum it must prove equivalent YouTube URLs deduplicate to one
+AWVP Video, privacy-enhanced YouTube rendering, Vimeo rendering, deterministic
+public PeerTube verification with alias-to-authoritative-UUID convergence,
+existing-video visibility, absence of publishing destination authority for
+external records, no autoplay permission, and rejection of local-retention
+cleanup authority for `source_state=external`.
+
+The disposable release harness remains network-isolated with
+`WP_HTTP_BLOCK_EXTERNAL=true`; its PeerTube provider assertion must use a
+reviewed deterministic in-process public-API response rather than contacting a
+live instance. Live arbitrary-instance PeerTube acceptance remains a separate
+production/live gate.
