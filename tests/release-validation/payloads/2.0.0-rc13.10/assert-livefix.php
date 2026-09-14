@@ -260,10 +260,12 @@ $remote_only_html = $remote_only_block->render(array('videoId' => (int) $remote_
 wp_delete_post((int) $remote_only_video_id, true);
 
 awvp_release_assert(
-    str_contains($remote_only_html, 'awvp-peertube-embed')
+    str_contains($remote_only_html, 'awvp-provider-embed--peertube')
     && str_contains($remote_only_html, 'https://video.example.test/videos/embed/rc13-9-remote-only')
+    && str_contains($remote_only_html, 'allow="fullscreen; picture-in-picture"')
+    && ! str_contains(strtolower($remote_only_html), 'autoplay')
     && ! str_contains($remote_only_html, '<video'),
-    'RC13.9 remote-only AWVP Video did not render through its verified-remote serving resolver without a local attachment.'
+    'RC13.9 remote-only AWVP Video did not render through the RC13.10 provider-neutral verified-remote path without a local attachment.'
 );
 
 awvp_release_assert(

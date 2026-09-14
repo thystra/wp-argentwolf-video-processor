@@ -349,4 +349,8 @@ $assert('external' === ($external_option['source'] ?? '') && 'youtube' === ($ext
 $assert(str_contains((string) ($external_option['label'] ?? ''), 'YouTube'), 'External selector option is not human-readable.');
 $assert(is_array($local_option) && 'local' === ($local_option['source'] ?? ''), 'Existing-video selector omitted usable local AWVP Video.');
 
+
+$editor_service_source = (string) file_get_contents(dirname(__DIR__) . '/includes/Video_Block_Editor_Service.php');
+$assert(! str_contains($editor_service_source, "'suppress_filters' => true"), 'Editor reusable-video query regressed to Plugin Check-blocked suppress_filters=true.');
+
 fwrite(STDOUT, "R46 video block editor service tests passed.\n");

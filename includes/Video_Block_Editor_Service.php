@@ -244,7 +244,7 @@ final class Video_Block_Editor_Service
             'posts_per_page'   => $limit,
             'orderby'          => array('modified' => 'DESC', 'ID' => 'DESC'),
             'no_found_rows'    => true,
-            'suppress_filters' => true,
+            'suppress_filters' => false,
         ));
         if (! is_array($ids)) {
             return array();

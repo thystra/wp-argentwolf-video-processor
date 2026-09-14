@@ -81,6 +81,7 @@ final class External_Video_Source_Service
                 'post_type' => Video_Post_Type::POST_TYPE,
                 'post_status' => 'publish',
                 'post_title' => $post_title,
+                'post_name' => self::post_name_for_key($key),
                 'post_content' => '',
                 'post_author' => $user_id,
             ), true);
@@ -135,33 +136,36 @@ final class External_Video_Source_Service
 
     private function find_external(string $key): int
     {
-        $ids = get_posts(array(
-            'post_type' => Video_Post_Type::POST_TYPE,
-            'post_status' => 'any',
-            'fields' => 'ids',
-            'posts_per_page' => 2,
-            'meta_key' => Video_Meta::EXTERNAL_CANONICAL_KEY,
-            'meta_value' => $key,
-            'no_found_rows' => true,
-            'suppress_filters' => true,
-        ));
-        if (! is_array($ids)) {
-            return -1;
-        }
-        if (count($ids) > 1) {
-            return -1;
-        }
-        if (0 === count($ids)) {
+        $post = get_page_by_path(
+            self::post_name_for_key($key),
+            OBJECT,
+            Video_Post_Type::POST_TYPE
+        );
+        if (null === $post) {
             return 0;
         }
-        $id = Video_Meta::sanitize_positive_id($ids[0]);
-        $record = $id > 0 ? External_Video_Source::sanitize(get_post_meta($id, Video_Meta::EXTERNAL_SOURCE, true)) : array();
-        return array() !== $record && $key === ($record['identity']['canonical_key'] ?? '') ? $id : 0;
+        if (! is_object($post) || 'trash' === ($post->post_status ?? null)) {
+            return -1;
+        }
+        $id = Video_Meta::sanitize_positive_id($post->ID ?? 0);
+        if ($id < 1) {
+            return -1;
+        }
+        $record = External_Video_Source::sanitize(get_post_meta($id, Video_Meta::EXTERNAL_SOURCE, true));
+        return array() !== $record && $key === ($record['identity']['canonical_key'] ?? '') ? $id : -1;
+    }
+
+    private static function post_name_for_key(string $key): string
+    {
+        return 'external-' . hash('sha256', $key);
     }
 
     private function candidate_matches(int $video_id, int $origin_post_id, array $record, string $key): bool
     {
-        return $origin_post_id === Video_Meta::sanitize_positive_id(get_post_meta($video_id, Video_Meta::ORIGIN_POST_ID, true))
+        $post = get_post($video_id);
+        return is_object($post)
+            && self::post_name_for_key($key) === (string) ($post->post_name ?? '')
+            && $origin_post_id === Video_Meta::sanitize_positive_id(get_post_meta($video_id, Video_Meta::ORIGIN_POST_ID, true))
             && 'existing_remote' === Video_Meta::sanitize_ingest_kind(get_post_meta($video_id, Video_Meta::INGEST_KIND, true))
             && 'external_archive' === Video_Meta::sanitize_master_authority(get_post_meta($video_id, Video_Meta::MASTER_AUTHORITY, true))
             && 'external' === Video_Meta::sanitize_source_state(get_post_meta($video_id, Video_Meta::SOURCE_STATE, true))
