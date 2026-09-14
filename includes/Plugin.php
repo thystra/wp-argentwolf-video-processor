@@ -48,8 +48,16 @@ final class Plugin
         $peertube_secrets = new Managed_Backend_Secret_Store();
         $peertube_upload_policy = new PeerTube_Upload_Policy_Store($this->backend_registry);
         $video_block_editor_service = new Video_Block_Editor_Service($this->backend_registry, $video_publishing_defaults, $jobs);
-        $video_block_editor_rest = new Video_Block_Editor_Rest($video_block_editor_service);
         $peertube_remote_assets = new Remote_Asset_Repository();
+        $external_video_source = new External_Video_Source_Service(
+            new Video_Embed_Resolver(),
+            new PeerTube_Public_Video_Verifier(
+                static fn (string $origin): PeerTube_Http_Client => new PeerTube_Http_Client($origin)
+            ),
+            $this->backend_registry,
+            $peertube_remote_assets
+        );
+        $video_block_editor_rest = new Video_Block_Editor_Rest($video_block_editor_service, $external_video_source);
         $publication_health = new Remote_Publication_Health_Repository();
         $serving_priorities = new Backend_Serving_Priority_Store();
         $processing_estimator = new Backend_Processing_Estimator();

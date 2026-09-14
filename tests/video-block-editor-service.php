@@ -126,6 +126,8 @@ require_once dirname(__DIR__) . '/includes/Video_Publishing_Defaults_Store.php';
 require_once dirname(__DIR__) . '/includes/Video_Post_Type.php';
 require_once dirname(__DIR__) . '/includes/WordPress_Source_File.php';
 require_once dirname(__DIR__) . '/includes/Source_Retirement_Record.php';
+require_once dirname(__DIR__) . '/includes/Video_Embed_Identity.php';
+require_once dirname(__DIR__) . '/includes/External_Video_Source.php';
 require_once dirname(__DIR__) . '/includes/Video_Serving_Authority.php';
 require_once dirname(__DIR__) . '/includes/Video_Meta.php';
 require_once dirname(__DIR__) . '/includes/Video_Block_Editor_Service.php';
@@ -297,5 +299,27 @@ $source = (string) file_get_contents(dirname(__DIR__) . '/includes/Video_Block_E
 foreach (array('wp_remote_','PeerTube_Api_Client','PeerTube_Task','wp_schedule_','transition_post_status','wp_publish_post') as $forbidden) {
     $assert(! str_contains($source, $forbidden), 'Editor service acquired forbidden remote/scheduler/publish authority: ' . $forbidden);
 }
+
+
+// Provider-neutral external AWVP Video records are valid editor identities without a local attachment.
+$external_id = 777;
+$GLOBALS['awvp_editor_posts'][$external_id] = (object) array('ID'=>$external_id,'post_type'=>ArgentVideo\Video_Post_Type::POST_TYPE,'post_status'=>'publish','post_title'=>'External Clip');
+$identity = ArgentVideo\Video_Embed_Identity::create(
+    ArgentVideo\Video_Embed_Identity::YOUTUBE,
+    ArgentVideo\Video_Embed_Identity::YOUTUBE_ORIGIN,
+    'dQw4w9WgXcQ'
+);
+$GLOBALS['awvp_editor_meta'][$external_id] = array(
+    Video_Meta::SOURCE_STATE => 'external',
+    Video_Meta::EXTERNAL_SOURCE => ArgentVideo\External_Video_Source::create((array) $identity, 'External Clip', 0),
+    Video_Meta::EXTERNAL_CANONICAL_KEY => (string) $identity['canonical_key'],
+);
+$external_state = $service->editor_state($external_id);
+$assert(is_array($external_state), 'External AWVP Video should have editor state without a local attachment.');
+$assert(true === ($external_state['video']['external'] ?? false), 'External editor state flag missing.');
+$assert('youtube' === ($external_state['video']['external_provider'] ?? ''), 'External editor provider mismatch.');
+$assert('https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ' === ($external_state['video']['remote_embed_url'] ?? ''), 'External editor embed URL mismatch.');
+$assert(false === ($external_state['video']['destination_valid'] ?? true), 'External editor state acquired a publishing destination.');
+$assert(Video_Block_Editor_Service::REFUSED === $service->set_destination($external_id, 'local')['status'], 'External AWVP Video allowed publishing destination mutation.');
 
 fwrite(STDOUT, "R46 video block editor service tests passed.\n");

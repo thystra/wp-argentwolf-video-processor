@@ -84,6 +84,9 @@ function update_option(string $option, mixed $value, ?bool $autoload = null): bo
 require_once dirname(__DIR__) . '/includes/Backend_Identity.php';
 require_once dirname(__DIR__) . '/includes/Backend_Registry.php';
 require_once dirname(__DIR__) . '/includes/Video_Destination.php';
+require_once dirname(__DIR__) . '/includes/PeerTube_Origin.php';
+require_once dirname(__DIR__) . '/includes/Video_Embed_Identity.php';
+require_once dirname(__DIR__) . '/includes/External_Video_Source.php';
 require_once dirname(__DIR__) . '/includes/PeerTube_Publication_Plan.php';
 require_once dirname(__DIR__) . '/includes/PeerTube_Migration_Plan.php';
 require_once dirname(__DIR__) . '/includes/PeerTube_Migration_Execution.php';
@@ -142,6 +145,8 @@ $expected_meta = array(
     Video_Meta::MASTER_AUTHORITY,
     Video_Meta::SOURCE_STATE,
     Video_Meta::SOURCE_TOMBSTONE,
+    Video_Meta::EXTERNAL_SOURCE,
+    Video_Meta::EXTERNAL_CANONICAL_KEY,
     Video_Meta::DESTINATION,
     Video_Meta::PEERTUBE_PUBLICATION_PLAN,
     Video_Meta::PEERTUBE_PUBLICATION_LIFECYCLE,
@@ -187,6 +192,19 @@ $assert(
 $assert('unknown' === Video_Meta::sanitize_ingest_kind('NOT VALID'), 'Invalid ingest kind must fail safe.');
 $assert('unknown' === Video_Meta::sanitize_master_authority('NOT VALID'), 'Invalid master authority must fail safe.');
 $assert('error' === Video_Meta::sanitize_source_state('NOT VALID'), 'Invalid source state must fail safe.');
+$assert('external' === Video_Meta::sanitize_source_state('external'), 'External source state should be retained.');
+
+$external_identity = ArgentVideo\Video_Embed_Identity::create(
+    ArgentVideo\Video_Embed_Identity::YOUTUBE,
+    ArgentVideo\Video_Embed_Identity::YOUTUBE_ORIGIN,
+    'dQw4w9WgXcQ'
+);
+$external_source = ArgentVideo\External_Video_Source::create((array) $external_identity, 'Example', 123);
+$assert(array() !== $external_source, 'External source record should sanitize.');
+$assert(
+    (string) $external_identity['canonical_key'] === Video_Meta::sanitize_external_canonical_key((string) $external_identity['canonical_key']),
+    'External canonical key should be retained.'
+);
 $assert('none' === Video_Meta::sanitize_cleanup_state('NOT VALID'), 'Invalid cleanup state must fail safe.');
 
 $assert(42 === Video_Meta::sanitize_positive_id(42), 'Positive integer ID should be preserved.');

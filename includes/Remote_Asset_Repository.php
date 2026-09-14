@@ -301,7 +301,14 @@ final class Remote_Asset_Repository implements PeerTube_Remote_Asset_Store, Peer
     }
 
     /** @return array<string,mixed>|null */
-    private function find_by_backend_remote(string $backend_id, string $remote_id): ?array
+    public function find_by_backend_remote(string $backend_id, string $remote_id): ?array
+    {
+        $result = $this->lookup_by_backend_remote($backend_id, $remote_id);
+        return 'found' === $result['status'] ? $result['row'] : null;
+    }
+
+    /** @return array{status:string,row:array<string,mixed>|null} */
+    public function lookup_by_backend_remote(string $backend_id, string $remote_id): array
     {
         global $wpdb;
         try {
@@ -315,9 +322,12 @@ final class Remote_Asset_Repository implements PeerTube_Remote_Asset_Store, Peer
                 ARRAY_A
             );
         } catch (Throwable) {
-            return null;
+            return array('status'=>'indeterminate','row'=>null);
         }
-        return is_array($row) ? $row : null;
+        if (is_array($row)) {
+            return array('status'=>'found','row'=>$row);
+        }
+        return array('status'=>'absent','row'=>null);
     }
 
     /** @param array<string,mixed> $operation */

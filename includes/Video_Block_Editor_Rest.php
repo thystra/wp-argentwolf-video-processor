@@ -12,8 +12,10 @@ final class Video_Block_Editor_Rest
 {
     public const NAMESPACE = 'argentwolf-video-processor/v1';
 
-    public function __construct(private readonly Video_Block_Editor_Service $service)
-    {
+    public function __construct(
+        private readonly Video_Block_Editor_Service $service,
+        private readonly ?External_Video_Source_Service $external = null
+    ) {
     }
 
     public function register(): void
@@ -25,6 +27,15 @@ final class Video_Block_Editor_Rest
                 'methods'             => 'POST',
                 'callback'            => array($this, 'bind'),
                 'permission_callback' => array($this, 'can_bind'),
+            )
+        );
+        register_rest_route(
+            self::NAMESPACE,
+            '/editor/external-videos',
+            array(
+                'methods'             => 'POST',
+                'callback'            => array($this, 'bind_external'),
+                'permission_callback' => array($this, 'can_bind_external'),
             )
         );
         register_rest_route(
@@ -56,6 +67,41 @@ final class Video_Block_Editor_Rest
             && current_user_can('upload_files')
             && current_user_can('edit_post', $attachment_id)
             && current_user_can('edit_post', $origin_post_id);
+    }
+
+    public function can_bind_external(\WP_REST_Request $request): bool
+    {
+        $origin_post_id = Video_Meta::sanitize_positive_id($request->get_param('origin_post_id'));
+        return null !== $this->external
+            && $origin_post_id > 0
+            && current_user_can('upload_files')
+            && current_user_can('edit_post', $origin_post_id);
+    }
+
+    public function bind_external(\WP_REST_Request $request): \WP_REST_Response|\WP_Error
+    {
+        if (null === $this->external) {
+            return $this->error('argentwolf_video_processor_external_unavailable', __('External video embedding is unavailable.', 'argentwolf-video-processor'), 503);
+        }
+        $url = $request->get_param('url');
+        $origin_post_id = Video_Meta::sanitize_positive_id($request->get_param('origin_post_id'));
+        if (! is_string($url) || '' === trim($url)) {
+            return $this->error('argentwolf_video_processor_external_url_invalid', __('Paste a supported public video URL.', 'argentwolf-video-processor'), 400);
+        }
+        $result = $this->external->bind_url($url, $origin_post_id, get_current_user_id());
+        if (External_Video_Source_Service::BUSY === $result['status']) {
+            return $this->error('argentwolf_video_processor_external_busy', __('That external video is being added by another editor request. Try again.', 'argentwolf-video-processor'), 409);
+        }
+        if (! in_array($result['status'], array(External_Video_Source_Service::APPLIED, External_Video_Source_Service::PRESENT), true) || $result['video_id'] < 1) {
+            $status = External_Video_Source_Service::REFUSED === $result['status'] ? 400 : 502;
+            return $this->error('argentwolf_video_processor_external_bind_failed', __('The public video URL could not be verified and bound safely.', 'argentwolf-video-processor'), $status);
+        }
+        $state = $this->service->editor_state($result['video_id']);
+        if (null === $state) {
+            return $this->error('argentwolf_video_processor_editor_state_unavailable', __('The external AWVP Video was bound but its editor state could not be verified.', 'argentwolf-video-processor'), 500);
+        }
+        $state['status'] = $result['status'];
+        return rest_ensure_response($state);
     }
 
     public function can_edit_video(\WP_REST_Request $request): bool

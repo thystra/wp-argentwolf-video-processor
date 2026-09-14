@@ -528,3 +528,7 @@ Treat **Start migration** as a local one-way promotion transaction, not a remote
 ### Administrator/editor copy terminology
 
 User-facing AWVP settings and editor text should describe actions in ordinary publishing language. Use **publish** or **upload to the PeerTube server** instead of *dispatch* where the user is choosing or starting publication. Use **change** instead of *mutate*, **fixed** instead of *resolved* for corrected conditions, and **can no longer be changed** instead of *frozen*. Keep implementation vocabulary in code, state machines, technical diagnostics, and developer documentation when it is needed for precision.
+
+### RC13.10 external-source application boundary
+
+External URL binding is intentionally separate from publishing destination selection. Supported YouTube/Vimeo identities are canonicalized locally; PeerTube-shaped URLs must pass the reviewed public-video verification boundary and converge to the authoritative public UUID before durable creation. The resulting AWVP Video uses `source_state=external`, has no local attachment or publishing destination, and must never be accepted as local-retention/source-retirement authority. Equivalent canonical identities reuse the existing external AWVP Video, while a verified PeerTube identity already managed by a configured backend reuses that managed AWVP Video instead of creating a duplicate.

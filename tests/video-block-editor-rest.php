@@ -65,7 +65,7 @@ namespace {
     $service = new \ArgentVideo\Video_Block_Editor_Service();
     $rest = new \ArgentVideo\Video_Block_Editor_Rest($service);
     $rest->register();
-    $assert(3 === count($GLOBALS['awvp_rest_routes']), 'Editor REST surface must register exactly three reviewed routes.');
+    $assert(4 === count($GLOBALS['awvp_rest_routes']), 'Editor REST surface must register exactly four reviewed routes.');
     foreach ($GLOBALS['awvp_rest_routes'] as [$namespace,$route,$args]) {
         $assert(\ArgentVideo\Video_Block_Editor_Rest::NAMESPACE === $namespace, 'Editor REST namespace drifted.');
         $assert(isset($args['permission_callback']) && is_callable($args['permission_callback']), 'Editor REST route omitted permission_callback.');
@@ -78,6 +78,7 @@ namespace {
     $assert(false === $rest->can_bind($bind_request), 'Attachment bind did not require upload_files.');
     $GLOBALS['awvp_caps']['upload_files'] = true;
     $assert(false === $rest->can_bind(new WP_REST_Request(array('attachment_id'=>'020','origin_post_id'=>'10'))), 'Non-canonical attachment ID was accepted.');
+$assert(false === $rest->can_bind_external(new WP_REST_Request(array('origin_post_id'=>'10'))), 'External bind permission should fail closed when the external service is unavailable.');
 
     $response = $rest->bind($bind_request);
     $assert($response instanceof WP_REST_Response && 101 === ($response->data['video']['id'] ?? 0), 'Successful bind did not return bounded editor state.');
