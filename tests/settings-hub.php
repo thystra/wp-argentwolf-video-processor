@@ -112,6 +112,11 @@ $assert(
 
 $plugin = (string) file_get_contents(dirname(__DIR__) . '/includes/Plugin.php');
 $bootstrap = (string) file_get_contents(dirname(__DIR__) . '/argentwolf-video-processor.php');
+$settings_hub_source = (string) file_get_contents(dirname(__DIR__) . '/includes/Settings_Hub.php');
+$local_admin_source = (string) file_get_contents(dirname(__DIR__) . '/includes/Admin.php');
+$assert(str_contains($settings_hub_source, '$this->render_support_development();'), 'Overview does not render the Support development section.');
+$assert(str_contains($settings_hub_source, "Support development"), 'Unified settings hub does not own the Support development section.');
+$assert(! str_contains($local_admin_source, "Support development"), 'Local Processing still renders the Support development section.');
 $assert(str_contains($bootstrap, "includes/Settings_Hub.php"), 'Plugin bootstrap does not load the unified settings hub.');
 $assert(str_contains($plugin, '$settings_hub = new Settings_Hub('), 'Plugin does not compose the unified settings hub.');
 $assert(

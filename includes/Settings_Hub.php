@@ -67,6 +67,7 @@ final class Settings_Hub
                         } else {
                             $this->local->render_tab();
                         }
+                        $this->render_support_development();
                         break;
                     case self::TAB_HISTORY:
                         if (null !== $this->history) {
@@ -97,6 +98,15 @@ final class Settings_Hub
                 ?>
             </div>
         </div>
+        <?php
+    }
+
+    private function render_support_development(): void
+    {
+        ?>
+        <h2><?php esc_html_e('Support development', 'argentwolf-video-processor'); ?></h2>
+        <p><?php esc_html_e('ArgentWolf Video Processor is free software. Source code, issue tracking, and ways to support continued development are available on GitHub.', 'argentwolf-video-processor'); ?></p>
+        <p><a class="button button-secondary" href="<?php echo esc_url('https://github.com/thystra/wp-argentwolf-video-processor'); ?>" target="_blank" rel="noopener noreferrer"><?php esc_html_e('View project on GitHub', 'argentwolf-video-processor'); ?></a></p>
         <?php
     }
 

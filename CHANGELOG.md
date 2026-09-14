@@ -1,3 +1,9 @@
+## 2.0.0-rc13.12 - 2026-09-14
+
+- Move the Support development section from Local Processing to Overview so the local-processing tab remains focused on processing configuration and diagnostics.
+- Replace the unbound AWVP Video block's button-only media chooser with WordPress `MediaPlaceholder`, providing Media Library selection, direct upload, and drag-and-drop video upload in the block.
+- Keep video binding on the existing AWVP REST/application boundary; the editor change adds no publishing, serving, or provider authority.
+
 ## 2.0.0-rc13.11 - 2026-09-14
 
 - Defer generic external-video URL ingestion/library records from 2.0 after live testing confirmed WordPress already natively embeds YouTube, Vimeo, and embeddable PeerTube URLs.

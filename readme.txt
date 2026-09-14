@@ -193,7 +193,7 @@ The existing settings keys, queue table, attachment metadata, hook names, cron
 identifiers, Settings page slug, and `wp argent-video` command are retained for
 upgrade compatibility.
 
-This Forgejo release-candidate package identifies itself as `2.0.0-rc13.10` in the
+This Forgejo release-candidate package identifies itself as `2.0.0-rc13.12` in the
 plugin header while `Stable tag: 1.0.0` deliberately continues to identify the
 public WordPress.org release. RC packages are not published to WordPress.org SVN.
 The Stable tag moves to `2.0.0` only when the final release is promoted.
@@ -203,6 +203,9 @@ Administrators upgrading from version 0.2.3 should use the normal WordPress
 plugin-update workflow and confirm the plugin remains active.
 
 == Upgrade Notice ==
+
+= 2.0.0-rc13.12 =
+Moves Support development to Overview and adds direct drag-and-drop video upload to the AWVP Video block while retaining Media Library selection. No publishing or serving semantics change.
 
 = 2.0.0-rc13.11 =
 Defers AWVP external-URL ingestion for 2.0; use WordPress native embeds for YouTube, Vimeo, and public PeerTube. Keeps managed PeerTube publishing and the verified remote-only iframe renderer.
@@ -295,6 +298,11 @@ Renames the public plugin and package to ArgentWolf Video Processor and prepares
 the project for WordPress.org review while retaining existing data identifiers.
 
 == Changelog ==
+
+= 2.0.0-rc13.12 =
+* Moves Support development from Local Processing to Overview.
+* Adds WordPress MediaPlaceholder to an unbound AWVP Video block so authors can choose Media Library video, upload directly, or drag and drop a video for processing.
+* Keeps the existing video-binding REST/application boundary and does not change publishing, serving, or provider authority.
 
 = 2.0.0-rc13.11 =
 * Defers generic external-video URL ingestion/library records from the 2.0 release because WordPress already provides native YouTube, Vimeo, and embeddable PeerTube blocks.

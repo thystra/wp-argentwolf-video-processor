@@ -78,7 +78,7 @@ immediately before completion and then survives database persistence.
 
 ## 2.0 RC validation
 
-The active `2.0.0-rc13.10` payload upgrades from the exact public `1.0.0` package and
+The active `2.0.0-rc13.12` payload upgrades from the exact public `1.0.0` package and
 requires the exact candidate SHA-256 at invocation time until the canonical
 Forgejo RC artifact is selected. RC13.7 carries forward the RC13.3 clean/upgrade
 contract while exercising the RC9 live-test fixes, model DB schema version 3 /
@@ -90,7 +90,7 @@ live-test evidence; creating RC13.10 does not rewrite their payloads, including 
 ```bash
 AWVP_RC_CANDIDATE_SHA256=<sha256-of-exact-candidate-zip> \
 ARTIFACT_DIR=/path/to/release-zips \
-bash tests/release-validation/run.sh 2.0.0-rc13.10
+bash tests/release-validation/run.sh 2.0.0-rc13.12
 ```
 
 The upgrade fixture creates a real WordPress `core/video` block while 1.0 is
@@ -107,7 +107,7 @@ remote publication so the unchanged historical Core Video block must render the
 verified short-ID PeerTube iframe at runtime without altering stored content or
 the WordPress original source.
 
-RC13.10 carries forward the RC13.9/RC13.7 packaged operator-facing routing/history surfaces, zero-day manual-only retention default, source-prune/keep-HLS mode, cleanup-now with legacy queued-task compatibility, distinct operator-verified serving authority, explicit Check now / Use verified remote now / Rebuild local delivery recovery actions, registered durable recovery metadata, and separate Private/Unlisted pre-publication visibility. These assertions are runtime/package contracts only; the release harness does not contact PeerTube or production WordPress. RC13.10 also requires the verified-remote refresher interfaces/classes used by live operator adoption; live provider reconciliation itself remains a production acceptance test because the disposable harness intentionally performs no PeerTube action. RC13.10 carries forward RC13.9/RC13.8 source-retirement tombstone metadata, direct attachment-reference discovery, completed-cleanup attachment reconciliation, and WordPress attachment-lifecycle retirement while preserving remote-only AWVP Video rendering. The disposable harness performs no destructive production cleanup; live acceptance uses an already-cleaned RC13.7 fixture.
+RC13.12 carries forward the RC13.11/RC13.9/RC13.7 packaged operator-facing routing/history surfaces, zero-day manual-only retention default, source-prune/keep-HLS mode, cleanup-now with legacy queued-task compatibility, distinct operator-verified serving authority, explicit Check now / Use verified remote now / Rebuild local delivery recovery actions, registered durable recovery metadata, and separate Private/Unlisted pre-publication visibility. These assertions are runtime/package contracts only; the release harness does not contact PeerTube or production WordPress. RC13.12 also requires the verified-remote refresher interfaces/classes used by live operator adoption; live provider reconciliation itself remains a production acceptance test because the disposable harness intentionally performs no PeerTube action. RC13.12 carries forward RC13.9/RC13.8 source-retirement tombstone metadata, direct attachment-reference discovery, completed-cleanup attachment reconciliation, and WordPress attachment-lifecycle retirement while preserving remote-only AWVP Video rendering. The disposable harness performs no destructive production cleanup; live acceptance uses an already-cleaned RC13.7 fixture.
 
 The shared runner now collects independent Plugin Check modes and disposable case assertion failures through the end of the viable matrix, then exits nonzero with an aggregate summary. Global artifact/harness identity failures still stop immediately, and a case-local setup failure aborts only that disposable case.
 
@@ -123,6 +123,7 @@ compatibility fixture.
 ### RC13.10 provider-neutral embedding qualification
 
 RC13.11 removes the generic external-video assertion from the active clean/upgrade matrix because that authoring/library feature is deferred from 2.0. The RC13.11 payload still carries the full clean/upgrade, diagnostics, repeat-repair, uninstall, and RC13.9 remote-only livefix coverage, so the managed PeerTube source-retired renderer remains an exact-package release gate.
+RC13.12 carries that same runtime contract forward and adds source-level regression checks for the Overview support placement and the block-editor MediaPlaceholder drag/drop surface.
 
 RC13.10 adds `assert-external-embedding.php` to every clean-install and public-1.0.0-upgrade case. The installed exact package must prove canonical YouTube URL deduplication through the production REST/application boundary, privacy-enhanced YouTube rendering, Vimeo binding/rendering, deterministic public PeerTube verification with alias-to-authoritative-UUID convergence, external/remote selection visibility, no publishing destination for external records, no autoplay permission, and fail-closed local-retention authority. The PeerTube assertion uses an in-process deterministic public-API response; the disposable harness still performs no PeerTube/network action and continues to run with `WP_HTTP_BLOCK_EXTERNAL=true`.
 

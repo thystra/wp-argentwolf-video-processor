@@ -404,9 +404,6 @@ wp argent-video enqueue &lt;attachment-id&gt; --force
 wp argent-video scan --mode=smart
 wp argent-video scan --mode=adaptive
 wp argent-video worker --once</pre>
-            <h2><?php esc_html_e('Support development', 'argentwolf-video-processor'); ?></h2>
-            <p><?php esc_html_e('ArgentWolf Video Processor is free software. Source code, issue tracking, and ways to support continued development are available on GitHub.', 'argentwolf-video-processor'); ?></p>
-            <p><a class="button button-secondary" href="<?php echo esc_url('https://github.com/thystra/wp-argentwolf-video-processor'); ?>" target="_blank" rel="noopener noreferrer"><?php esc_html_e('View project on GitHub', 'argentwolf-video-processor'); ?></a></p>
         <?php
     }
 

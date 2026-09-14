@@ -290,7 +290,7 @@ RC13.10 adds end-to-end provider-neutral embedding for supported public PeerTube
 
 Public WordPress.org stable release: `1.0.0`.
 
-Current controlled development candidate: `2.0.0-rc13.11`. RC packages are built
+Current controlled development candidate: `2.0.0-rc13.12`. RC packages are built
 from reviewed Forgejo commits and are not published to WordPress.org SVN. The
 public Stable tag remains `1.0.0` until final `2.0.0` promotion.
 

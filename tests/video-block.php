@@ -136,6 +136,11 @@ $assert(str_contains($js, "referrerPolicy: 'strict-origin-when-cross-origin'"), 
 $assert(! str_contains($js, "'/argentwolf-video-processor/v1/editor/external-videos'"), 'Block editor retained the deferred external-video URL application boundary.');
 $assert(str_contains($js, "'/argentwolf-video-processor/v1/editor/video-options'"), 'Block editor does not load reusable AWVP Video identities.');
 $assert(str_contains($js, "Includes usable local and remote-only AWVP Videos."), 'Existing-video selector does not communicate the retained reusable identity set.');
+$assert(str_contains($js, 'MediaPlaceholder'), 'Unbound AWVP Video block does not expose the WordPress media placeholder.');
+$assert(str_contains($js, "accept: 'video/*'") && str_contains($js, "disableDropZone: saving"), 'AWVP Video media placeholder does not expose guarded video drag-and-drop upload.');
+$assert(str_contains($js, "title: __('Choose or Upload a video'"), 'AWVP Video media placeholder lost its upload/selection heading.');
+$assert(str_contains($js, 'Choose a video from the Media Library, upload one, or drag and drop a video file here for processing.'), 'AWVP Video media placeholder does not explain Media Library, upload, and drag/drop choices.');
+$assert(! str_contains($js, 'Choose a video from the WordPress Media Library:'), 'AWVP Video block retained the button-only media helper text after drag/drop was enabled.');
 $assert(str_contains($js, 'tagsDraftText') && str_contains($js, 'setTagsDraftText(value)'), 'PeerTube tag textarea does not preserve raw in-progress spaces/newlines.');
 $assert(1 === substr_count($js, "label: __('I reviewed these PeerTube publishing settings'"), 'Publication wizard does not expose one consolidated explicit-review checkbox.');
 foreach (array('I reviewed the PeerTube title','I reviewed the channel','I reviewed the PeerTube tags','I reviewed the final privacy','I reviewed the sensitive-content declaration') as $old_review_label) {

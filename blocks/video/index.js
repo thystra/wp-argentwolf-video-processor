@@ -11,7 +11,7 @@
         Button, CheckboxControl, Notice, PanelBody, SelectControl, Spinner,
         TextControl, TextareaControl, ToggleControl
     } = wp.components;
-    const { InspectorControls, MediaUpload, MediaUploadCheck, useBlockProps } = wp.blockEditor;
+    const { InspectorControls, MediaPlaceholder, MediaUpload, MediaUploadCheck, useBlockProps } = wp.blockEditor;
     const { __ } = wp.i18n;
     const { select, useSelect } = wp.data;
     const apiFetch = wp.apiFetch;
@@ -622,16 +622,21 @@
                             ? __('No reusable AWVP Videos are currently available to you.', 'argentwolf-video-processor')
                             : __('Includes usable local and remote-only AWVP Videos.', 'argentwolf-video-processor')
                     }),
-                el('p', { style: { marginTop: '1rem' } }, __('Choose a video from the WordPress Media Library:', 'argentwolf-video-processor')),
-                el(MediaUploadCheck, null,
-                    el(MediaUpload, {
-                        allowedTypes: ['video'], multiple: false, onSelect: bindMedia,
-                        render: function (media) {
-                            return el(Button, { variant: 'primary', onClick: media.open, disabled: saving },
-                                saving ? __('Binding video…', 'argentwolf-video-processor') : __('Choose WordPress video', 'argentwolf-video-processor'));
-                        }
-                    })
-                )
+                el(MediaPlaceholder, {
+                    accept: 'video/*',
+                    allowedTypes: ['video'],
+                    multiple: false,
+                    onSelect: bindMedia,
+                    onError: function (uploadError) { setError(boundedError(uploadError)); },
+                    disableDropZone: saving,
+                    disableMediaButtons: saving,
+                    labels: {
+                        title: __('Choose or Upload a video', 'argentwolf-video-processor'),
+                        instructions: saving
+                            ? __('Binding video…', 'argentwolf-video-processor')
+                            : __('Choose a video from the Media Library, upload one, or drag and drop a video file here for processing.', 'argentwolf-video-processor')
+                    }
+                })
             );
         }
 
