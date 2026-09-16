@@ -26,7 +26,7 @@ concurrency:
 
 jobs:
   release-candidate:
-    runs-on: forgejo-build
+    runs-on: forgejo-workstation
     timeout-minutes: 60
     env:
       ARGENT_VIDEO_CI_FFMPEG_VERSION: '8.1.2'
